@@ -18,9 +18,14 @@ const preamble = lines.slice(0, marks[0].i).join('\n').trim();
 const sections = marks.map((mk, idx) => ({
   n: mk.n,
   title: mk.title,
-  body: lines.slice(mk.i, idx + 1 < marks.length ? marks[idx + 1].i : lines.length).join('\n').trim(),
+  body: lines
+    .slice(mk.i, idx + 1 < marks.length ? marks[idx + 1].i : lines.length)
+    .join('\n')
+    .trim(),
 }));
-console.log(`preâmbulo: ${preamble.length} chars · seções: ${sections.length} (${sections[0].n}..${sections[sections.length - 1].n})`);
+console.log(
+  `preâmbulo: ${preamble.length} chars · seções: ${sections.length} (${sections[0].n}..${sections[sections.length - 1].n})`
+);
 
 const PARTS = [
   ['00-visao-e-personas', 1, 2],
@@ -49,7 +54,12 @@ PARTS.forEach(([name, from, to], i) => {
     `     Conteúdo idêntico ao artifact de origem; apenas convertido de HTML para Markdown. -->\n\n`;
   const body = (i === 0 ? preamble + '\n\n' : '') + chunk.map((c) => c.body).join('\n\n---\n\n');
   writeFileSync(`${SPEC_DIR}/${name}.md`, header + body + '\n', 'utf8');
-  idx.push({ file: `${name}.md`, from, to, titles: chunk.map((c) => `${String(c.n).padStart(2, '0')}. ${c.title}`) });
+  idx.push({
+    file: `${name}.md`,
+    from,
+    to,
+    titles: chunk.map((c) => `${String(c.n).padStart(2, '0')}. ${c.title}`),
+  });
   console.log(`  ${name}.md  seções ${pad(from)}-${pad(to)}  ${(header + body).length} chars`);
 });
 

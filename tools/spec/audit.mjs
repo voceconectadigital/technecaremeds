@@ -31,7 +31,9 @@ if (dupSec.length) err('SEC', `seções duplicadas: ${dupSec.join(', ')}`);
 /* 2 — referências §NN válidas */
 const refs = uniq([...doc.matchAll(/§(\d{1,2})/g)].map((m) => +m[1]));
 const secNums = new Set(secs.map((s) => s.n));
-refs.filter((r) => !secNums.has(r)).forEach((r) => err('REF', `referência §${r} aponta para seção inexistente`));
+refs
+  .filter((r) => !secNums.has(r))
+  .forEach((r) => err('REF', `referência §${r} aponta para seção inexistente`));
 info(`referências §NN distintas: ${refs.length}`);
 
 /* 3 — personas */
@@ -40,9 +42,14 @@ const declared = doc.match(/^(Dez|Oito|Nove|Dez|Onze) personas/m);
 info(`personas declaradas: "${declared ? declared[1] : '?'}" · blocos PER-xx: ${perBlocks.length}`);
 const word2num = { Oito: 8, Nove: 9, Dez: 10, Onze: 11 };
 if (declared && word2num[declared[1]] !== perBlocks.length) {
-  err('PER', `texto declara ${declared[1]} (${word2num[declared[1]]}) personas mas existem ${perBlocks.length} blocos`);
+  err(
+    'PER',
+    `texto declara ${declared[1]} (${word2num[declared[1]]}) personas mas existem ${perBlocks.length} blocos`
+  );
 }
-const perDup = [...doc.matchAll(/^#### (PER-\d{2})/gm)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) !== i);
+const perDup = [...doc.matchAll(/^#### (PER-\d{2})/gm)]
+  .map((m) => m[1])
+  .filter((v, i, a) => a.indexOf(v) !== i);
 if (perDup.length) err('PER', `PER duplicados: ${perDup.join(', ')}`);
 
 /* 4 — ADRs */
@@ -51,10 +58,16 @@ const adrRefs = all(/\b(ADR-\d{3})\b/g);
 info(`ADRs definidos: ${adrRows.length} · referenciados: ${adrRefs.length}`);
 const adrDup = adrRows.filter((v, i, a) => a.indexOf(v) !== i);
 if (adrDup.length) err('ADR', `ADR duplicado na tabela: ${adrDup.join(', ')}`);
-adrRefs.filter((r) => !adrRows.includes(r)).forEach((r) => err('ADR', `${r} é referenciado mas não existe na tabela de decisões`));
+adrRefs
+  .filter((r) => !adrRows.includes(r))
+  .forEach((r) => err('ADR', `${r} é referenciado mas não existe na tabela de decisões`));
 const adrNums = adrRows.map((a) => +a.slice(4)).sort((a, b) => a - b);
 for (let i = 1; i < adrNums.length; i++) {
-  if (adrNums[i] !== adrNums[i - 1] + 1) warn('ADR', `lacuna na numeração: ADR-${String(adrNums[i - 1]).padStart(3, '0')} → ADR-${String(adrNums[i]).padStart(3, '0')}`);
+  if (adrNums[i] !== adrNums[i - 1] + 1)
+    warn(
+      'ADR',
+      `lacuna na numeração: ADR-${String(adrNums[i - 1]).padStart(3, '0')} → ADR-${String(adrNums[i]).padStart(3, '0')}`
+    );
 }
 
 /* 5 — Open questions */
@@ -74,18 +87,27 @@ if (/Bloqueia MVP\?/.test(doc)) err('OQ', 'cabeçalho antigo "Bloqueia MVP?" ain
 /* 6 — Épicos */
 // um bloco pode definir mais de um épico no mesmo cabeçalho (ex.: "EPIC-008 · EPIC-009 — …")
 const epicBlocks = uniq(
-  [...doc.matchAll(/^#### (.*EPIC-\d{3}.*)$/gm)].flatMap((m) => [...m[1].matchAll(/EPIC-\d{3}/g)].map((x) => x[0]))
+  [...doc.matchAll(/^#### (.*EPIC-\d{3}.*)$/gm)].flatMap((m) =>
+    [...m[1].matchAll(/EPIC-\d{3}/g)].map((x) => x[0])
+  )
 );
 // épicos também podem ser definidos como linha da tabela "Demais épicos"
 const epicTableRows = all(/^\| \*\*(EPIC-\d{3})\*\*/gm);
 const epicDefined = uniq([...epicBlocks, ...epicTableRows]);
 const epicRefs = all(/\b(EPIC-\d{3})\b/g);
-info(`épicos definidos: ${epicDefined.length} (blocos ${epicBlocks.length} + tabela ${epicTableRows.length}) · referenciados: ${epicRefs.length}`);
-epicRefs.filter((e) => !epicDefined.includes(e)).forEach((e) => err('EPIC', `${e} é referenciado mas não está definido (sem bloco nem linha na tabela de épicos)`));
+info(
+  `épicos definidos: ${epicDefined.length} (blocos ${epicBlocks.length} + tabela ${epicTableRows.length}) · referenciados: ${epicRefs.length}`
+);
+epicRefs
+  .filter((e) => !epicDefined.includes(e))
+  .forEach((e) =>
+    err('EPIC', `${e} é referenciado mas não está definido (sem bloco nem linha na tabela de épicos)`)
+  );
 // backlog e roadmap devem apontar apenas para épicos definidos
 const epicNums = new Set(epicDefined.map((e) => e.slice(5)));
 [...doc.matchAll(/^\| BL-\d{3} \| (\d{3}|—) \|/gm)].forEach((m) => {
-  if (m[1] !== '—' && !epicNums.has(m[1])) err('BL', `item de backlog referencia épico ${m[1]}, que não está definido`);
+  if (m[1] !== '—' && !epicNums.has(m[1]))
+    err('BL', `item de backlog referencia épico ${m[1]}, que não está definido`);
 });
 
 /* 7 — Backlog */
@@ -102,7 +124,9 @@ const blSection = doc.slice(doc.indexOf('## 43.'), doc.indexOf('## 44.'));
 /* 8 — User stories */
 const usBlocks = all(/^#### (US-[A-Z]{2,3}-\d{3})/gm);
 info(`user stories com bloco: ${usBlocks.length}`);
-const usDup = [...doc.matchAll(/^#### (US-[A-Z]{2,3}-\d{3})/gm)].map((m) => m[1]).filter((v, i, a) => a.indexOf(v) !== i);
+const usDup = [...doc.matchAll(/^#### (US-[A-Z]{2,3}-\d{3})/gm)]
+  .map((m) => m[1])
+  .filter((v, i, a) => a.indexOf(v) !== i);
 if (usDup.length) err('US', `user story duplicada: ${usDup.join(', ')}`);
 // toda US com bloco precisa de pelo menos um critério de aceite
 usBlocks.forEach((id) => {
@@ -133,7 +157,9 @@ const required = [
   ['client_operation_id', 'HARD'],
   ['outbox', 'HARD'],
 ];
-required.forEach(([t, c]) => { if (!doc.includes(t)) err(c, `conceito obrigatório ausente: "${t}"`); });
+required.forEach(([t, c]) => {
+  if (!doc.includes(t)) err(c, `conceito obrigatório ausente: "${t}"`);
+});
 
 /* 11 — artefatos de conversão */
 // artefato real é ****TEXTO****; `****` entre crases é citação legítima no changelog
@@ -141,7 +167,8 @@ if (/\*\*\*\*[^\s`]/.test(doc)) err('FMT', 'artefato de negrito **** presente');
 if (/Lorem ipsum dolor/i.test(doc)) err('FMT', 'placeholder lorem ipsum real presente');
 
 /* 12 — integridade das tabelas markdown */
-let tbl = 0, bad = 0;
+let tbl = 0,
+  bad = 0;
 for (let i = 0; i < lines.length; i++) {
   if (!lines[i].startsWith('| ')) continue;
   if (!/^\|[\s-|:]+\|$/.test(lines[i + 1] || '')) continue;
@@ -151,7 +178,10 @@ for (let i = 0; i < lines.length; i++) {
   let j = i + 2;
   while (j < lines.length && lines[j].startsWith('|')) {
     const w = split(lines[j]).length;
-    if (w !== width) { bad++; warn('TBL', `linha ${j + 1}: ${w - 2} colunas, cabeçalho tem ${width - 2}`); }
+    if (w !== width) {
+      bad++;
+      warn('TBL', `linha ${j + 1}: ${w - 2} colunas, cabeçalho tem ${width - 2}`);
+    }
     j++;
   }
   i = j;
@@ -166,7 +196,16 @@ info(`blocos de código: ${fences / 2}`);
 /* saída */
 console.log(`\nAUDITORIA — ${file}\n${'='.repeat(60)}`);
 infos.forEach((i) => console.log('  · ' + i));
-if (warns.length) { console.log(`\nWARN (${warns.length}):`); warns.slice(0, 20).forEach((w) => console.log('  ! ' + w)); if (warns.length > 20) console.log(`  … +${warns.length - 20}`); }
-if (errors.length) { console.log(`\nERRO (${errors.length}):`); errors.forEach((e) => console.log('  ✗ ' + e)); }
-console.log(`\n${errors.length === 0 ? '✓ CONSISTENTE' : '✗ INCONSISTENTE'} — ${errors.length} erro(s), ${warns.length} aviso(s)\n`);
+if (warns.length) {
+  console.log(`\nWARN (${warns.length}):`);
+  warns.slice(0, 20).forEach((w) => console.log('  ! ' + w));
+  if (warns.length > 20) console.log(`  … +${warns.length - 20}`);
+}
+if (errors.length) {
+  console.log(`\nERRO (${errors.length}):`);
+  errors.forEach((e) => console.log('  ✗ ' + e));
+}
+console.log(
+  `\n${errors.length === 0 ? '✓ CONSISTENTE' : '✗ INCONSISTENTE'} — ${errors.length} erro(s), ${warns.length} aviso(s)\n`
+);
 process.exit(errors.length === 0 ? 0 : 1);

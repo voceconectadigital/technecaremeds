@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Auditoria de consistência da SPEC
+        run: npm run spec:audit
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatação
+        run: npm run format:check
+
+      # A suíte de isolamento roda contra PostgreSQL real (PGlite) e é
+      # bloqueante: nenhum vazamento cross-tenant entra em main.
+      - name: Testes
+        run: npm test
+
+      - name: Verificação de segredos versionados
+        run: node tools/ci/check-secrets.mjs

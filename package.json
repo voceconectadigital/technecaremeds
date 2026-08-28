@@ -1,0 +1,37 @@
+{
+  "name": "aurora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aurora — plataforma de gestão de ativos e manutenção",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "spec:build": "node tools/spec/build-v0.2.mjs",
+    "spec:audit": "node tools/spec/audit.mjs docs/AURORA-CMMS-SPEC-v0.2.md",
+    "verify": "npm run spec:audit && npm run typecheck && npm run lint && npm run test"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.1",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^2.1.9"
+  }
+}

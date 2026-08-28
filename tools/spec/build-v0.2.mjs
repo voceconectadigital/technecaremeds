@@ -17,7 +17,9 @@ const applied = [];
 function patch(id, from, to, expect = 1) {
   const count = doc.split(from).length - 1;
   if (count !== expect) {
-    throw new Error(`[${id}] anchor encontrado ${count}x, esperado ${expect}x:\n---\n${from.slice(0, 160)}\n---`);
+    throw new Error(
+      `[${id}] anchor encontrado ${count}x, esperado ${expect}x:\n---\n${from.slice(0, 160)}\n---`
+    );
   }
   doc = doc.split(from).join(to);
   applied.push(`${id} (${expect}x)`);
@@ -82,7 +84,8 @@ patch('P02e-classe-comercial', '| **MVP+**<br>F7–F8 |', '| **MVP COMERCIAL**<b
   doc = doc.split('| MVP+ |').join('| Comercial |');
   applied.push(`P02f marcadores MVP+ → Comercial (${n}x)`);
 }
-patch('P02g-legenda-metricas',
+patch(
+  'P02g-legenda-metricas',
   'Analytics é funcionalidade de primeira classe, nativa, dentro do RBAC.',
   'Analytics é funcionalidade de primeira classe, nativa, dentro do RBAC. Na coluna de fase: **✔** = Core Operacional · **Comercial** = MVP Comercial (F7–F8) · **Fase 2/3** = expansão.'
 );
@@ -361,26 +364,56 @@ patch(
    P12 — classificação A/B/C/D das demais open questions
    ============================================================ */
 const oqClasses = [
-  ['OQ-02', 'Fornecedor Arkmeds | Não, mas bloqueia F7 |',
-    'Fornecedor Arkmeds | **C** — externa e não bloqueia. O catálogo de métricas é construído com definições próprias e visíveis (§25). Conciliar com o sistema antigo é tarefa de migração, não de plataforma |'],
-  ['OQ-04', 'Cliente piloto | Não |',
-    'Cliente piloto | **B** — *default: metrologia permanece em F10.* O motor de documentos é genérico (§18), então antecipar é adicionar um `document_type`, não remodelar |'],
-  ['OQ-05', 'Cliente piloto | Não |',
-    'Cliente piloto | **B** — *default: dimensionar para o volume observado na auditoria* (27 mil ativos e 74 mil OS por organização) e validar com seeds de escala crescente. Réplica de leitura fica fora do Core Operacional |'],
-  ['OQ-07', 'Comercial / jurídico | Não — é configurável |',
-    'Comercial / jurídico | **A** — já resolvida na SPEC: o padrão de fábrica é **não pausar**, e `wait_reason.pauses_sla` é configurável por organização (§10) |'],
-  ['OQ-08', 'Responsável técnico / jurídico | Não, mas modelar já |',
-    'Responsável técnico / jurídico | **B** — *default: assinatura eletrônica simples com hash de conteúdo e trilha.* O campo `method` já prevê `icp_brasil` (§18); adicionar o provedor é aditivo, não migratório. **Não afirmamos validade jurídica** — isso depende de parecer externo |'],
-  ['OQ-09', 'Você / cliente | Não, mas afeta o modelo |',
-    'Você / cliente | **B** — *default: não integrar agora, mas reservar o campo.* `external_id` (nullable, único por organização + sistema de origem) entra em `customers`, `assets`, `work_orders` e `inventory_items` desde F2: custo desprezível agora, migração cara depois |'],
-  ['OQ-10', 'Você | Não |',
-    'Você | **C** — externa e não bloqueia. Instrumentar telemetria de assentos, ativos e OS desde F0 mantém qualquer modelo de cobrança viável |'],
-  ['OQ-11', 'Você / cliente piloto | Não |',
-    'Você / cliente piloto | **B** — *default: fora do Core Operacional.* O canal fica atrás da abstração de notificação (§23); adicionar WhatsApp é implementar um adaptador, não mudar o roteador |'],
-  ['OQ-12', 'Cliente piloto | Não |',
-    'Cliente piloto | **C** — módulo regulado próprio, fora do escopo atual. Não impacta o modelo de dados |'],
-  ['OQ-14', 'Você | Não |',
-    'Você | **C** — não bloqueia. `checklist_item.kind = auto_test` já está previsto (§14) e a importação por arquivo ou API é aditiva |'],
+  [
+    'OQ-02',
+    'Fornecedor Arkmeds | Não, mas bloqueia F7 |',
+    'Fornecedor Arkmeds | **C** — externa e não bloqueia. O catálogo de métricas é construído com definições próprias e visíveis (§25). Conciliar com o sistema antigo é tarefa de migração, não de plataforma |',
+  ],
+  [
+    'OQ-04',
+    'Cliente piloto | Não |',
+    'Cliente piloto | **B** — *default: metrologia permanece em F10.* O motor de documentos é genérico (§18), então antecipar é adicionar um `document_type`, não remodelar |',
+  ],
+  [
+    'OQ-05',
+    'Cliente piloto | Não |',
+    'Cliente piloto | **B** — *default: dimensionar para o volume observado na auditoria* (27 mil ativos e 74 mil OS por organização) e validar com seeds de escala crescente. Réplica de leitura fica fora do Core Operacional |',
+  ],
+  [
+    'OQ-07',
+    'Comercial / jurídico | Não — é configurável |',
+    'Comercial / jurídico | **A** — já resolvida na SPEC: o padrão de fábrica é **não pausar**, e `wait_reason.pauses_sla` é configurável por organização (§10) |',
+  ],
+  [
+    'OQ-08',
+    'Responsável técnico / jurídico | Não, mas modelar já |',
+    'Responsável técnico / jurídico | **B** — *default: assinatura eletrônica simples com hash de conteúdo e trilha.* O campo `method` já prevê `icp_brasil` (§18); adicionar o provedor é aditivo, não migratório. **Não afirmamos validade jurídica** — isso depende de parecer externo |',
+  ],
+  [
+    'OQ-09',
+    'Você / cliente | Não, mas afeta o modelo |',
+    'Você / cliente | **B** — *default: não integrar agora, mas reservar o campo.* `external_id` (nullable, único por organização + sistema de origem) entra em `customers`, `assets`, `work_orders` e `inventory_items` desde F2: custo desprezível agora, migração cara depois |',
+  ],
+  [
+    'OQ-10',
+    'Você | Não |',
+    'Você | **C** — externa e não bloqueia. Instrumentar telemetria de assentos, ativos e OS desde F0 mantém qualquer modelo de cobrança viável |',
+  ],
+  [
+    'OQ-11',
+    'Você / cliente piloto | Não |',
+    'Você / cliente piloto | **B** — *default: fora do Core Operacional.* O canal fica atrás da abstração de notificação (§23); adicionar WhatsApp é implementar um adaptador, não mudar o roteador |',
+  ],
+  [
+    'OQ-12',
+    'Cliente piloto | Não |',
+    'Cliente piloto | **C** — módulo regulado próprio, fora do escopo atual. Não impacta o modelo de dados |',
+  ],
+  [
+    'OQ-14',
+    'Você | Não |',
+    'Você | **C** — não bloqueia. `checklist_item.kind = auto_test` já está previsto (§14) e a importação por arquivo ou API é aditiva |',
+  ],
 ];
 oqClasses.forEach(([id, from, to]) => {
   const line = doc.split('\n').find((l) => l.startsWith(`| ${id} |`));
@@ -418,7 +451,11 @@ patch(
     ['024, 027, 021 (avançado)', 'EPIC-024, EPIC-027, EPIC-021 (avançado)'],
   ];
   roadmapCells.forEach(([f, t]) => patch(`P14-roadmap-${f.slice(0, 3)}`, `| ${f} |`, `| ${t} |`));
-  patch('P14-roadmap-013', '| Planos com tarefas, ciclos, geração automática de OS e conformidade | 013 |', '| Planos com tarefas, ciclos, geração automática de OS e conformidade | EPIC-013 |');
+  patch(
+    'P14-roadmap-013',
+    '| Planos com tarefas, ciclos, geração automática de OS e conformidade | 013 |',
+    '| Planos com tarefas, ciclos, geração automática de OS e conformidade | EPIC-013 |'
+  );
 
   // tabela "Demais épicos": | **004** Catálogos… -> | **EPIC-004** — Catálogos…
   const before = doc;
@@ -446,4 +483,6 @@ writeFileSync(OUT, doc, 'utf8');
 console.log('patches aplicados:');
 applied.forEach((a) => console.log('  ✓ ' + a));
 console.log(`\n${OUT}`);
-console.log(`  ${doc.length} chars · ${doc.split('\n').length} linhas · ${(doc.match(/^## /gm) || []).length} seções`);
+console.log(
+  `  ${doc.length} chars · ${doc.split('\n').length} linhas · ${(doc.match(/^## /gm) || []).length} seções`
+);
