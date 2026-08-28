@@ -1,0 +1,1918 @@
+<title>Auditoria TechneCare Arkmeds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;0,600;1,400&display=swap">
+<style>
+:root{
+  --ground:#F3F6F7; --surface:#FFFFFF; --surface-2:#E9EFF0; --surface-3:#DFE7E9;
+  --ink:#0E1618; --ink-2:#33474D; --muted:#65787E; --rule:#D5DEE0; --rule-2:#BECACD;
+  --accent:#15505C; --accent-2:#1E7686; --accent-soft:#DAE9EB;
+  --ok:#2C6A4B; --ok-bg:#E0EFE6; --warn:#855610; --warn-bg:#F6E9D3; --risk:#8B2E29; --risk-bg:#F6E1DF;
+  --shadow:0 1px 2px rgba(14,22,24,.05), 0 8px 24px -16px rgba(14,22,24,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0A1113; --surface:#111A1D; --surface-2:#172226; --surface-3:#1E2B30;
+    --ink:#E7EEEF; --ink-2:#B6C5C9; --muted:#8CA1A6; --rule:#243237; --rule-2:#31434A;
+    --accent:#74C6D2; --accent-2:#9FDCE4; --accent-soft:#14313A;
+    --ok:#83CCA6; --ok-bg:#14301F; --warn:#E0B56B; --warn-bg:#33280F; --risk:#E39B95; --risk-bg:#3A1E1C;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0A1113; --surface:#111A1D; --surface-2:#172226; --surface-3:#1E2B30;
+  --ink:#E7EEEF; --ink-2:#B6C5C9; --muted:#8CA1A6; --rule:#243237; --rule-2:#31434A;
+  --accent:#74C6D2; --accent-2:#9FDCE4; --accent-soft:#14313A;
+  --ok:#83CCA6; --ok-bg:#14301F; --warn:#E0B56B; --warn-bg:#33280F; --risk:#E39B95; --risk-bg:#3A1E1C;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+}
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1400px; margin:0 auto;}
+@media (max-width:1000px){ .wrap{grid-template-columns:minmax(0,1fr)} }
+
+/* ---- nav ---- */
+nav.toc{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--rule); background:var(--surface);
+  padding:28px 20px 60px;
+}
+@media (max-width:1000px){ nav.toc{position:static; height:auto; border-right:0; border-bottom:1px solid var(--rule)} }
+nav.toc .brand{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin-bottom:18px}
+nav.toc ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+nav.toc a{
+  display:grid; grid-template-columns:26px 1fr; gap:8px; align-items:baseline;
+  padding:5px 8px; border-radius:4px; text-decoration:none; color:var(--ink-2); font-size:13.2px; line-height:1.35;
+}
+nav.toc a:hover{background:var(--surface-2); color:var(--ink)}
+nav.toc a:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+nav.toc .n{font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+nav.toc .grp{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:16px 0 6px 8px}
+
+/* ---- main ---- */
+main{padding:0 44px 120px; min-width:0}
+@media (max-width:700px){ main{padding:0 20px 80px} nav.toc{padding:20px 16px 24px} }
+
+header.hero{
+  margin:0 -44px 0; padding:64px 44px 40px; border-bottom:1px solid var(--rule);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 60%, transparent), transparent 70%);
+}
+@media (max-width:700px){ header.hero{margin:0 -20px; padding:40px 20px 28px} }
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); margin:0 0 14px}
+h1{
+  font-family:"IBM Plex Serif",Georgia,serif; font-weight:600; font-size:clamp(30px,4.4vw,50px);
+  line-height:1.08; letter-spacing:-.015em; margin:0 0 16px; text-wrap:balance; max-width:19ch;
+}
+.dek{font-size:17.5px; color:var(--ink-2); max-width:62ch; margin:0 0 28px}
+.meta{display:flex; flex-wrap:wrap; gap:10px 28px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--muted)}
+.meta b{color:var(--ink-2); font-weight:500}
+
+section{padding-top:56px; scroll-margin-top:12px}
+h2{
+  font-family:"IBM Plex Serif",Georgia,serif; font-weight:600; font-size:clamp(22px,2.6vw,30px);
+  line-height:1.18; letter-spacing:-.01em; margin:0 0 6px; text-wrap:balance;
+  display:grid; grid-template-columns:auto 1fr; gap:14px; align-items:baseline;
+}
+h2 .num{font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:500; color:var(--accent); letter-spacing:.06em}
+h3{font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:17px; letter-spacing:-.005em; margin:32px 0 8px; color:var(--ink)}
+h4{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:11.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); margin:24px 0 6px}
+p{margin:0 0 12px; max-width:72ch}
+ul,ol{margin:0 0 14px; padding-left:20px; max-width:72ch}
+li{margin:0 0 5px}
+a{color:var(--accent); text-underline-offset:2px}
+code{font-family:"IBM Plex Mono",monospace; font-size:.87em; background:var(--surface-2); padding:1px 5px; border-radius:3px; color:var(--ink-2)}
+strong{font-weight:600}
+hr.rule{border:0; border-top:1px solid var(--rule); margin:40px 0 0}
+.lead{font-size:17px; color:var(--ink-2); max-width:70ch; margin-bottom:20px}
+
+/* ---- tables ---- */
+.tw{overflow-x:auto; border:1px solid var(--rule); border-radius:6px; background:var(--surface); margin:14px 0 20px; box-shadow:var(--shadow)}
+table{border-collapse:collapse; width:100%; font-size:13.4px; min-width:520px}
+th{
+  text-align:left; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:10.5px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  padding:10px 12px; border-bottom:1px solid var(--rule-2); background:var(--surface-2); white-space:nowrap;
+}
+td{padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--surface-2)}
+td b, td strong{color:var(--ink); font-weight:600}
+td code{font-size:11.8px; background:transparent; padding:0; color:var(--accent)}
+.num-col{font-variant-numeric:tabular-nums; font-family:"IBM Plex Mono",monospace; white-space:nowrap}
+
+/* ---- chips ---- */
+.chip{display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; padding:2px 7px; border-radius:3px; white-space:nowrap; vertical-align:middle}
+.c-alta{background:var(--ok-bg); color:var(--ok)}
+.c-media{background:var(--warn-bg); color:var(--warn)}
+.c-baixa{background:var(--risk-bg); color:var(--risk)}
+.c-p0{background:var(--risk-bg); color:var(--risk)}
+.c-p1{background:var(--warn-bg); color:var(--warn)}
+.c-p2{background:var(--surface-3); color:var(--ink-2)}
+.c-p3{background:var(--surface-2); color:var(--muted)}
+.c-acc{background:var(--accent-soft); color:var(--accent)}
+
+/* ---- callouts ---- */
+.note{
+  border-left:3px solid var(--accent); background:var(--surface); padding:14px 18px; margin:18px 0;
+  border-radius:0 6px 6px 0; box-shadow:var(--shadow); max-width:76ch;
+}
+.note.warn{border-left-color:var(--warn)}
+.note.risk{border-left-color:var(--risk)}
+.note p:last-child{margin-bottom:0}
+.note .lbl{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); display:block; margin-bottom:5px}
+
+/* ---- diagram / tree ---- */
+pre.tree{
+  font-family:"IBM Plex Mono",monospace; font-size:12.4px; line-height:1.55; overflow-x:auto;
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:16px 18px;
+  margin:14px 0 20px; color:var(--ink-2); box-shadow:var(--shadow);
+}
+pre.tree b{color:var(--ink); font-weight:600}
+pre.tree i{color:var(--muted); font-style:normal}
+
+/* ---- cards ---- */
+.grid{display:grid; gap:14px; margin:16px 0 22px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:6px; padding:16px 18px; box-shadow:var(--shadow)}
+.card h5{margin:0 0 6px; font-size:14px; font-weight:600; color:var(--ink); font-family:"IBM Plex Sans",sans-serif}
+.card p{font-size:13.5px; margin:0; color:var(--ink-2)}
+.card .k{font-family:"IBM Plex Mono",monospace; font-size:26px; font-weight:500; color:var(--accent); font-variant-numeric:tabular-nums; display:block; line-height:1.1; margin-bottom:2px}
+.card .kl{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+
+.pill-row{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 18px}
+.pill{font-size:12.5px; padding:3px 10px; border:1px solid var(--rule-2); border-radius:999px; color:var(--ink-2); background:var(--surface)}
+
+footer{margin-top:72px; padding-top:24px; border-top:1px solid var(--rule); font-size:13px; color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+</style>
+
+<div class="wrap">
+<nav class="toc">
+  <div class="brand">Auditoria · v2.69.0</div>
+  <div class="grp">Contexto</div>
+  <ol>
+    <li><a href="#s1"><span class="n">01</span><span>Resumo executivo</span></a></li>
+    <li><a href="#s2"><span class="n">02</span><span>Mapa do sistema</span></a></li>
+    <li><a href="#s3"><span class="n">03</span><span>Inventário de telas</span></a></li>
+  </ol>
+  <div class="grp">Domínio</div>
+  <ol>
+    <li><a href="#s4"><span class="n">04</span><span>Entidades</span></a></li>
+    <li><a href="#s5"><span class="n">05</span><span>Campos por entidade</span></a></li>
+    <li><a href="#s6"><span class="n">06</span><span>Relacionamentos</span></a></li>
+  </ol>
+  <div class="grp">Módulos</div>
+  <ol>
+    <li><a href="#s7"><span class="n">07</span><span>Ordens de serviço</span></a></li>
+    <li><a href="#s8"><span class="n">08</span><span>Equipamentos</span></a></li>
+    <li><a href="#s9"><span class="n">09</span><span>Planos / preventiva</span></a></li>
+    <li><a href="#s10"><span class="n">10</span><span>Agendamentos</span></a></li>
+    <li><a href="#s11"><span class="n">11</span><span>Certificados e laudos</span></a></li>
+    <li><a href="#s12"><span class="n">12</span><span>Orçamentos</span></a></li>
+    <li><a href="#s13"><span class="n">13</span><span>Estoque</span></a></li>
+    <li><a href="#s14"><span class="n">14</span><span>Relatórios</span></a></li>
+    <li><a href="#s15"><span class="n">15</span><span>Indicadores</span></a></li>
+    <li><a href="#s16"><span class="n">16</span><span>Robôs e automações</span></a></li>
+    <li><a href="#s17"><span class="n">17</span><span>Usuários e permissões</span></a></li>
+    <li><a href="#s18"><span class="n">18</span><span>BI</span></a></li>
+    <li><a href="#s19"><span class="n">19</span><span>Auditoria e histórico</span></a></li>
+  </ol>
+  <div class="grp">Análise</div>
+  <ol>
+    <li><a href="#s20"><span class="n">20</span><span>UX / UI</span></a></li>
+    <li><a href="#s21"><span class="n">21</span><span>Pesquisa externa</span></a></li>
+    <li><a href="#s22"><span class="n">22</span><span>Benchmark</span></a></li>
+    <li><a href="#s23"><span class="n">23</span><span>Modelo de dados</span></a></li>
+    <li><a href="#s24"><span class="n">24</span><span>Jornadas</span></a></li>
+    <li><a href="#s25"><span class="n">25</span><span>Matriz de permissões</span></a></li>
+  </ol>
+  <div class="grp">Proposta</div>
+  <ol>
+    <li><a href="#s26"><span class="n">26</span><span>MVP recomendado</span></a></li>
+    <li><a href="#s27"><span class="n">27</span><span>Roadmap</span></a></li>
+    <li><a href="#s28"><span class="n">28</span><span>Arquitetura técnica</span></a></li>
+    <li><a href="#s29"><span class="n">29</span><span>Diferenciais</span></a></li>
+    <li><a href="#s30"><span class="n">30</span><span>Backlog funcional</span></a></li>
+    <li><a href="#s31"><span class="n">31</span><span>Lacunas da auditoria</span></a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <p class="eyebrow">Engenharia reversa funcional · somente leitura</p>
+  <h1>Auditoria do TechneCare sobre a plataforma Arkmeds</h1>
+  <p class="dek">Levantamento funcional completo de um CMMS de engenharia clínica em produção — 87 rotas de menu, 42 estados de OS, 138 permissões, 13 métricas nativas — e a especificação de base para construir um produto superior.</p>
+  <div class="meta">
+    <span><b>Alvo</b> technecare.arkmeds.com</span>
+    <span><b>Versão</b> 2.69.0 (27/08/2026)</span>
+    <span><b>Data</b> 28/08/2026</span>
+    <span><b>Perfil usado</b> Eng. Clínico / Administrador</span>
+    <span><b>Escrita no sistema</b> nenhuma</span>
+  </div>
+</header>
+
+<section id="s1">
+<h2><span class="num">01</span><span>Resumo executivo</span></h2>
+
+<p class="lead">O Arkmeds é um <strong>CMMS/EAM vertical de engenharia clínica</strong> entregue como SaaS multiempresa. O TechneCare é uma instância (tenant) operada por uma prestadora de serviços de engenharia clínica que atende dezenas de hospitais — o que faz desta instância um caso de uso especialmente rico: ela exercita simultaneamente o modo "departamento interno de hospital" e o modo "prestador multicliente".</p>
+
+<div class="grid g3">
+  <div class="card"><span class="k">27.223</span><span class="kl">Equipamentos</span></div>
+  <div class="card"><span class="k">73.826</span><span class="kl">Ordens de serviço</span></div>
+  <div class="card"><span class="k">1.050</span><span class="kl">Empresas / setores</span></div>
+  <div class="card"><span class="k">826</span><span class="kl">Planos preventivos</span></div>
+  <div class="card"><span class="k">7.650</span><span class="kl">Certificados de calibração</span></div>
+  <div class="card"><span class="k">1.971</span><span class="kl">Solicitantes (portal)</span></div>
+  <div class="card"><span class="k">36/38</span><span class="kl">Usuários internos (licenças)</span></div>
+  <div class="card"><span class="k">2.265</span><span class="kl">Chamados</span></div>
+  <div class="card"><span class="k">4,4</span><span class="kl">Nota média de atendimento</span></div>
+</div>
+
+<h3>Que problemas a plataforma resolve</h3>
+<ol>
+  <li><strong>Inventário e rastreabilidade do parque tecnológico</strong> — cada equipamento tem prontuário completo: dados técnicos, patrimônio, ANVISA, criticidade, contrato, depreciação, QR Code, e todo o histórico de OS, calibrações, testes elétricos e laudos.</li>
+  <li><strong>Execução da manutenção</strong> — corretiva (via chamado do setor assistencial) e preventiva (via planos com geração automática de OS), com checklist, registro de horas, peças, protocolos de recolhimento/entrega e assinatura digital.</li>
+  <li><strong>Conformidade regulatória e metrológica</strong> — emissão de certificados de calibração com incerteza expandida e fator de abrangência (padrão ISO/IEC 17025), testes de segurança elétrica, qualificação térmica e laudos de obsolescência com ART/CREA.</li>
+  <li><strong>Gestão comercial do serviço</strong> — contratos, orçamentos com aprovação do cliente, faturamento com débito de estoque, receita recorrente vs. avulsa.</li>
+  <li><strong>Prestação de contas ao cliente</strong> — portal do solicitante, avaliação de chamados (CSAT 1–5), relatórios periódicos por e-mail e indicadores MTTR/MTBF/disponibilidade.</li>
+</ol>
+
+<h3>Leitura arquitetural em cinco frases</h3>
+<ul>
+  <li>O sistema é um <strong>Django monolítico</strong> (CSRF token, rotas <code>/model/verbo/id/</code>, Bootstrap + jQuery + DataTables + select2), com algumas telas novas em SPA (Chamados, Agenda, Kanban) e arquivos em <strong>AWS S3</strong>.</li>
+  <li>A entidade central não é "cliente" nem "unidade": é <strong>Empresa</strong>, uma tabela auto-relacionada e polimórfica (<code>tipo</code> ∈ Principal, Cliente Externo, Cliente Interno, Fornecedor, Local, Setor) com FK <code>superior</code>. Toda a hierarquia hospital → unidade → setor é feita nessa única tabela.</li>
+  <li><strong>Chamado e Ordem de Serviço são o mesmo registro</strong> — a tela de Chamados é uma fila de triagem sobre OS abertas por solicitantes. Não há entidade separada.</li>
+  <li>O motor de conhecimento técnico é a tripla <strong>Checklist → Procedimento → OS</strong>: o procedimento amarra checklists a tipo de equipamento + tipo de serviço + frequência, e a OS "puxa" os checklists aplicáveis.</li>
+  <li>O <strong>Plano</strong> é o coração da preventiva: define ciclo (data inicial + frequência + prazo), lista equipamentos com três flags de serviço (P = preventiva, C = calibração, E = teste elétrico) e, com <code>abertura_automatica</code>, materializa as OS do ciclo.</li>
+</ul>
+
+<h3>Onde a plataforma é forte</h3>
+<ul>
+  <li>Profundidade metrológica real (incerteza, padrões rastreados, VVC, critério de aceitação, correção de erro sistemático) — raro em CMMS genéricos.</li>
+  <li>Modelo de plano com ciclos e "ciclos anteriores", com conformidade medida.</li>
+  <li>RBAC granular de verdade: 138 permissões atômicas, incluindo permissões de <em>ocultar campos</em> na OS.</li>
+  <li>Auditoria com diff campo a campo em 34 modelos.</li>
+  <li>Aplicativo móvel (MARK II) com operação offline e integração com analisadores proprietários (Tesla, Otto, Waller) que preenchem checklists automaticamente.</li>
+</ul>
+
+<h3>Onde há oportunidade clara</h3>
+<ul>
+  <li><strong>Estados de OS sem máquina de estados</strong>: o cadastro de estado tem exatamente um campo (Descrição). Sem categoria, cor, SLA, transições permitidas nem flag terminal. Resultado observado: 42 estados criados pelo tenant, muitos redundantes ou grafados em caixa alta aleatória, e a semântica "ativa/inativa" fica hardcoded no código.</li>
+  <li><strong>Motor de automação anêmico</strong>: apenas 2 modelos (OS, Estoque) e 2 gatilhos (mudança de estado, estoque mínimo), com ação única de e-mail (webhook existe mas é marginal). Nada de SLA, escalonamento, WhatsApp ou regras compostas.</li>
+  <li><strong>Taxonomias sem governança</strong>: 651 tipos de equipamento, 360 problemas relatados, 344 origens de problema e 37 tipos de serviço em uso livre — com duplicatas evidentes ("Reposição de Oxigênio na unidade" cadastrado duas vezes; "Rodas travadas" como *tipo de serviço*).</li>
+  <li><strong>BI terceirizado</strong>: o menu "BI" é um link externo para um relatório do Google Looker Studio — fora do produto, fora do RBAC, fora do tema.</li>
+  <li><strong>UI datada</strong>: Bootstrap 3/4, densidade irregular, filtros em painéis modais, três gerações visuais convivendo na mesma sessão.</li>
+</ul>
+
+<div class="note">
+  <span class="lbl">Método e integridade da auditoria</span>
+  <p>Toda a coleta foi feita por navegação autenticada e leitura de DOM (<code>GET</code> + inspeção). <strong>Nenhum registro foi criado, alterado, excluído, assinado, aprovado, movimentado ou exportado.</strong> Nenhum botão de escrita foi acionado; formulários de edição foram abertos apenas para leitura da estrutura de campos e nunca submetidos. Filtros persistentes não foram salvos. Não houve teste de segurança, fuzzing ou tentativa de acesso fora do escopo do usuário autenticado.</p>
+</div>
+
+<h4>Legenda de confiança usada no documento</h4>
+<div class="pill-row">
+  <span class="chip c-alta">Alta</span><span class="pill">observado diretamente na plataforma</span>
+  <span class="chip c-media">Média</span><span class="pill">evidência forte (documentação pública, rótulo de campo, comportamento correlato)</span>
+  <span class="chip c-baixa">Baixa</span><span class="pill">hipótese de arquiteto, não comprovada</span>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s2">
+<h2><span class="num">02</span><span>Mapa completo do sistema</span></h2>
+<p class="lead">Árvore extraída do menu lateral renderizado (87 itens). O painel de controle não aparece no menu: é a rota raiz com três abas. "BI" é o único item que aponta para fora do domínio.</p>
+
+<pre class="tree"><b>PAINEL DE CONTROLE</b>  <i>/</i>
+ ├── Geral            <i>/?tab=geral</i>
+ ├── Planos           <i>/?tab=planos</i>
+ └── Agendamentos     <i>/?tab=agendamentos&amp;ag-tab=hoje|semana</i>
+
+<b>CADASTRO E CONSULTA</b>
+ ├── Empresas e clientes            <i>/cadastros/empresa/</i>
+ ├── Equipamentos                   <i>/cadastros/equipamento/</i>
+ ├── Contratos                      <i>/contrato/</i>
+ ├── Procedimentos
+ │    ├── Gerenciar procedimentos   <i>/cadastros/procedimento/</i>
+ │    └── Checklists                <i>/cadastros/checklist_novo/</i>
+ └── Campos gerenciais
+      ├── Estados de OS             <i>/cadastros/estado_ordem_servico/</i>
+      ├── Tipos de OS               <i>/cadastros/tipo_ordem_servico/</i>
+      ├── Tipos de origem de problema   <i>/cadastros/tipo_origem_problema/</i>
+      ├── Tipos de problemas relatados  <i>/cadastros/tipo_problema_relatado/</i>
+      ├── Tipos de equipamento      <i>/cadastros/tipo_equipamento/</i>
+      ├── Tipos de criticidades     <i>/cadastros/criticidade/</i>
+      ├── Quadro de trabalho        <i>/cadastros/oficina/</i>
+      └── Numeração de Documentos   <i>/cadastros/numeracao_documentos/</i>
+
+<b>SERVIÇOS</b>
+ ├── Chamados                       <i>/chamado/</i>
+ ├── Ordens de serviço              <i>/ordem_servico/</i>  <i>+ /kanban/  + /agenda/</i>
+ ├── Rascunho de ordens de serviço  <i>/ordem_servico/rascunho/</i>
+ ├── Planos e serviços recorrentes  <i>/?tab=planos</i>  →  <i>/plano/visual/{id}/</i>
+ ├── Transferências                 <i>/cadastros/transferencias/</i>
+ └── Protocolos
+      ├── Entrega                    <i>/protocolo/entrega/</i>
+      ├── Recolhimento               <i>/protocolo/recolhimento/</i>
+      └── Serviço                    <i>/protocolo/servico/</i>
+
+<b>CERTIFICADOS E LAUDOS</b>
+ ├── Certificado de calibração      <i>/calibracao/balanca/</i>
+ ├── Rascunho de calibração         <i>/calibracao/rascunho/</i>
+ ├── Certificados de padrões        <i>/calibracao/padrao/</i>
+ ├── Testes de segurança elétrica   <i>/tse/equipamento/</i>
+ ├── Laudos de obsolescência        <i>/servicos/baixa_patrimonial/</i>
+ └── Qualificações térmicas         <i>/validacao_termica/</i>
+
+<b>ORÇAMENTOS</b>
+ ├── Gerenciar orçamentos           <i>/orcamento/</i>
+ └── Configurações
+      ├── Cadastro de serviços       <i>/orcamento/servico/</i>
+      └── Motivos de reprovação      <i>/orcamento/motivo_reprovacao/</i>
+
+<b>ESTOQUE</b>
+ ├── Gerenciar estoque              <i>/estoque/peca/</i>
+ └── Configurações
+      ├── Tipos de peças             <i>/estoque/tipo_peca/</i>
+      ├── Categoria de peças         <i>/estoque/categoria_peca/</i>
+      └── Unidade de peças           <i>/estoque/unidade_peca/</i>
+
+<b>RELATÓRIOS</b>
+ ├── Análise de dados  <i>(exportação assíncrona: Gerar + Listar)</i>
+ │    ├── Equipamento    <i>/export/csv/equipamento/ · /cadastros/analise/list/</i>
+ │    ├── Calibrações    <i>/export/csv/calibracao/ · /calibracao/analise/list/</i>
+ │    ├── Orçamentos     <i>/export/csv/orcamento/ · /orcamento/analise/list/</i>
+ │    └── Ordem de Serviço <i>/export/csv/ordem_servico/ · /ordem_servico/analise/list/</i>
+ ├── Conclusão de OS                <i>/relatorio/ordem_servico_concluidas/</i>
+ ├── Controle patrimonial           <i>/relatorio/controle_patrimonial/ · /relatorio/patrimonial/list/</i>
+ ├── Estado de OS                   <i>/relatorio/ordem_servico_estado/</i>
+ ├── Registros de horas             <i>/relatorio/registro_horas/</i>
+ ├── Serviços terceirizados por empresa <i>/relatorio/servicos_prestados/</i>
+ ├── Vencimento de calibrações      <i>/relatorio/vencimento/</i>
+ ├── Produtividade da equipe        <i>/relatorio/produtividade_equipe/</i>
+ ├── Inclusão de peças              <i>/relatorio/inclusao_pecas/</i>
+ ├── Utilização de peças            <i>/relatorio/utilizacao_pecas/ (+ /list/)</i>
+ ├── Conformidade de planos         <i>/relatorio/planos/</i>
+ └── Cronograma de planos           <i>/relatorio/cronograma_planos/</i>
+
+<b>INDICADORES DE DESEMPENHO</b>
+ ├── Indicadores gerais             <i>/kpi/geral/</i>
+ └── Avaliações dos chamados        <i>/chamado/avaliacao/</i>
+
+<b>ROBÔS</b>
+ ├── Integração e notificação       <i>/automacao/</i>  <i>(e-mail | webhook)</i>
+ └── Relatório automático           <i>/kpi/relatorio/listar</i>
+
+<b>USUÁRIOS</b>
+ ├── Meus usuários                  <i>/usuarios/</i>
+ ├── Grupos de permissões           <i>/usuarios/grupos/</i>
+ └── Solicitantes                   <i>/usuarios/solicitante/</i>
+
+<b>FERRAMENTAS DE SISTEMA</b>
+ ├── Histórico                      <i>/model_history/</i>
+ └── Preferências                   <i>/preferences/</i>
+
+<b>BI</b>  →  <i>datastudio.google.com/reporting/711da4db-… (externo)</i>
+
+<b>FORA DO MENU</b>
+ ├── Perfil do usuário              <i>/usuarios/perfil/{id}</i>  <i>(Geral · Segurança · Assinatura)</i>
+ ├── Versões do software            <i>/versions/</i>  <i>(release notes em PDF no S3)</i>
+ ├── Central de ajuda (FAQ)         <i>arkmeds.crisp.help/pt-br/</i>
+ └── Chat de suporte (Crisp)        <i>widget global</i>
+</pre>
+
+<h3>Convenções de rota observadas</h3>
+<div class="tw"><table>
+<thead><tr><th>Padrão</th><th>Significado</th><th>Exemplo</th></tr></thead>
+<tbody>
+<tr><td><code>/modulo/</code></td><td>Listagem com filtros + DataTables</td><td><code>/cadastros/equipamento/</code></td></tr>
+<tr><td><code>/modulo/visual/{id}/</code></td><td>Ficha 360° (somente leitura + ações)</td><td><code>/ordem_servico/visual/152369/</code></td></tr>
+<tr><td><code>/modulo/{id}</code></td><td>Formulário de edição</td><td><code>/cadastros/equipamento/6637</code></td></tr>
+<tr><td><code>/modulo/novo/</code></td><td>Formulário de criação</td><td><code>/cadastros/estado_ordem_servico/novo</code></td></tr>
+<tr><td><code>/modulo/delete/{id}</code></td><td>Exclusão</td><td><code>/ordem_servico/delete/152369</code></td></tr>
+<tr><td><code>/modulo/ocultar/{id}/</code></td><td>Soft-hide (usado em campos gerenciais)</td><td><code>/cadastros/estado_ordem_servico/ocultar/112/</code></td></tr>
+<tr><td><code>/pdf/{modulo}/{id}/</code></td><td>Geração de PDF</td><td><code>/pdf/ordem_servico/152369/</code></td></tr>
+<tr><td><code>/export/csv/{modulo}/</code></td><td>Job assíncrono de exportação</td><td><code>/export/csv/equipamento/</code></td></tr>
+<tr><td><code>/model_history/{modulo}/{id}</code></td><td>Trilha de auditoria do registro</td><td><code>/model_history/equipamento/6637</code></td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s3">
+<h2><span class="num">03</span><span>Inventário de telas</span></h2>
+<p class="lead">Todas as telas visitadas ou identificadas, com objetivo e recursos. Rotas relativas a <code>https://technecare.arkmeds.com</code>.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Módulo</th><th>Tela</th><th>URL</th><th>Objetivo</th><th>Principais funcionalidades</th></tr></thead>
+<tbody>
+<tr><td>Painel</td><td><b>Geral</b></td><td><code>/?tab=geral</code></td><td>Visão executiva da operação</td><td>Cards de topo (Equipamentos, Empresas, Usuários, TMAC); KPIs Fluxo de Caixa / OS criadas / OS finalizadas com variação vs. mês anterior; atalhos configuráveis; pizza de OS por estado (clicável); Receita recorrente e avulsa (6 meses); Produtividade da equipe (30 dias, OS × Calibrações); Histórico de Atividades; "Editar Dashboard" com arrastar-e-soltar</td></tr>
+<tr><td>Painel</td><td><b>Planos</b></td><td><code>/?tab=planos</code></td><td>Saúde da manutenção preventiva</td><td>Pizza "Ciclos Anteriores / Em dia não iniciadas / Atrasadas"; mini-calendário; tabela de 826 planos com barra de progresso, situação e frequência; filtro Todos/Ativos/Finalizados; botão Cronograma</td></tr>
+<tr><td>Painel</td><td><b>Agendamentos</b></td><td><code>/?tab=agendamentos</code></td><td>Serviços do dia/semana</td><td>Tabela Plano · Equipamento · Serviço · Solicitante · Técnicos · Horário; filtros Hoje/Semana; ações em lote Abrir/Fechar/Cancelar</td></tr>
+
+<tr><td>Cadastro</td><td><b>Empresas e clientes</b></td><td><code>/cadastros/empresa/</code></td><td>Árvore organizacional e parceiros</td><td>Lista com Tipo (Cliente Externo/Interno, Fornecedor, Local, Setor); filtros nome, fantasia, tipo, CNPJ, e-mail, contato, cidade, UF, id, busca global; reenvio de e-mail de validação; Análise de Dados</td></tr>
+<tr><td>Cadastro</td><td><b>Ficha da empresa</b></td><td><code>/cadastros/empresa/visual/{id}/</code></td><td>Painel do cliente</td><td>Disponibilidade do mês, MTTR, MTBF (meses); Estado das OS (ativas/inativas); OS por setor ao longo do tempo; Estado dos equipamentos; ação "Criar chamado"</td></tr>
+<tr><td>Cadastro</td><td><b>Equipamentos</b></td><td><code>/cadastros/equipamento/</code></td><td>Inventário do parque</td><td>19 filtros, incluindo "Serviços a vencer" (Calibração / TSE / Preventiva) e "Possui QR Code"; Adicionar Múltiplos; Análise de Dados</td></tr>
+<tr><td>Cadastro</td><td><b>Ficha do equipamento</b></td><td><code>/cadastros/equipamento/visual/{id}/</code></td><td>Prontuário do ativo</td><td>Disponibilidade %, MTTR, MTBF; dados básicos; Visitas programadas (plano × tipo de serviço); risco de operação e criticidade; histórico de OS; Calibrações; TSE; Laudos de obsolescência; Qualificações térmicas; tabela de depreciação; menu Ações (criar calibração, TSE, chamado, OS, laudo); Imprimir; Histórico; Documentos</td></tr>
+<tr><td>Cadastro</td><td><b>Contratos</b></td><td><code>/contrato/</code></td><td>Contratos comerciais</td><td>Nome, apelido, contratante, data de início e final; vinculável ao equipamento</td></tr>
+<tr><td>Cadastro</td><td><b>Procedimentos</b></td><td><code>/cadastros/procedimento/</code></td><td>Biblioteca técnica (801 itens)</td><td>Escopo (Equipamento / Tipo de Equipamento / Setor), tipo de serviço, frequência, checklists vinculados, tabelas de calibração, resumo/escopo/conteúdo, anexo PDF ou DOC (10 MB), templates de impressão, padrões associados</td></tr>
+<tr><td>Cadastro</td><td><b>Checklists</b></td><td><code>/cadastros/checklist_novo/</code></td><td>Formulários de inspeção (212)</td><td>Construtor linha a linha: Tipo (Texto · Número · Opções · Teste Automático) + Descrição; persistido como JSON</td></tr>
+<tr><td>Cadastro</td><td><b>Campos gerenciais</b></td><td><code>/cadastros/…</code></td><td>Taxonomias do tenant</td><td>CRUD simples; "Combinar tipos" (merge) em estados e tipos de OS; ocultar em vez de excluir; numeração com prefixo, sufixo e número inicial por tipo de documento</td></tr>
+
+<tr><td>Serviços</td><td><b>Chamados</b></td><td><code>/chamado/</code></td><td>Fila de triagem do cliente</td><td>Cards Total / A atender (sem responsável) / Vencidas / Em andamento / A avaliar; badge de prioridade colorido; colunas Atendimento e Fechamento (SLA); telefone do solicitante; alerta sonoro; "Campos visíveis"; filtro por usuário conectado</td></tr>
+<tr><td>Serviços</td><td><b>OS — lista</b></td><td><code>/ordem_servico/</code></td><td>Base operacional (73.826)</td><td>25 filtros; seleção múltipla; edição e impressão por linha; Adicionar lote (múltiplas OS); Análise de dados; compartilhar URL do filtro</td></tr>
+<tr><td>Serviços</td><td><b>OS — Kanban</b></td><td><code>/ordem_servico/kanban/</code></td><td>Fluxo visual por estado</td><td>Colunas por estado com contadores; cartão com equipamento, número, tipo de serviço, solicitante, agendamento, responsável e cor de prioridade; adicionar OS direto na coluna</td></tr>
+<tr><td>Serviços</td><td><b>OS — Agenda</b></td><td><code>/agenda/</code></td><td>Programação de campo</td><td>Buckets "Serviços atrasados / não agendados (2.950) / dentro do prazo"; calendário semanal com arrastar-e-soltar; visão por Quadro de trabalho (recursos); imprimir; filtros</td></tr>
+<tr><td>Serviços</td><td><b>OS — ficha</b></td><td><code>/ordem_servico/visual/{id}/</code></td><td>Documento da ordem</td><td>Seções Dados Gerais · Observações de Usuário · Dados do Serviço · Dados do Solicitante · Instrumento/Equipamento · Horas Trabalhadas · Protocolos. Ações: Imprimir PDF, Fechar, Assinar e Fechar, Assinar como 2º solicitante, Executar Checklist, Criar orçamento, Criar laudo de obsolescência, Criar protocolos, Deletar</td></tr>
+<tr><td>Serviços</td><td><b>Rascunhos de OS</b></td><td><code>/ordem_servico/rascunho/</code></td><td>OS pendentes de sincronização</td><td>ID, Solicitante, Equipamento, ID da OS original</td></tr>
+<tr><td>Serviços</td><td><b>Plano</b></td><td><code>/plano/visual/{id}/</code></td><td>Programa de manutenção</td><td>Abas Dados Gerais · Equipamentos · Setores · Execução · Histórico; alternador Ciclo Atual / Ciclos Anteriores; progresso "X de Y OS completadas"; ação Finalizar</td></tr>
+<tr><td>Serviços</td><td><b>Transferências</b></td><td><code>/cadastros/transferencias/</code></td><td>Movimentação e empréstimo de ativos</td><td>Tipo (Transferência / Empréstimo), origem, destino, lista de equipamentos, data de retorno, status, ação "Retornar"</td></tr>
+<tr><td>Serviços</td><td><b>Protocolos</b></td><td><code>/protocolo/…</code></td><td>Custódia física do equipamento</td><td>Data, quem recolheu ou entregou, quem assinou, OS vinculada, protocolo de recolhimento correlato</td></tr>
+
+<tr><td>Certificados</td><td><b>Calibrações</b></td><td><code>/calibracao/balanca/</code></td><td>Metrologia (≈7.650 registros)</td><td>Editar, excluir, PDF, gerar novo a partir do anterior, histórico, liberar/ocultar ao solicitante; validade destacada</td></tr>
+<tr><td>Certificados</td><td><b>Editor de calibração</b></td><td><code>/calibracao/equipamento/editar/{id}</code></td><td>Emissão do certificado</td><td>Condições ambientais (T, UR, pressão + incertezas + padrões); tabelas de medição por ponto; resolução do padrão e do equipamento; faixa de uso; unidade; fator k (95 %); critério de aceitação; correção de erro sistemático; técnico executor, responsável técnico e responsável solicitante; Salvar rascunho / Analisar</td></tr>
+<tr><td>Certificados</td><td><b>Certificados de padrões</b></td><td><code>/calibracao/padrao/</code></td><td>Rastreabilidade metrológica</td><td>Número, padrão, data da calibração, órgão externo (ex.: ENGECAL, SURGICAL), validade</td></tr>
+<tr><td>Certificados</td><td><b>Testes de segurança elétrica</b></td><td><code>/tse/equipamento/</code></td><td>Ensaio elétrico</td><td>Número, equipamento, solicitante, técnico executor, data, validade; linhas vencidas destacadas</td></tr>
+<tr><td>Certificados</td><td><b>Laudos de obsolescência</b></td><td><code>/servicos/baixa_patrimonial/</code></td><td>Baixa patrimonial</td><td>Numeração própria; motivo; responsável técnico; parecer técnico-legal; assinatura; PDF; vínculo com OS e equipamento</td></tr>
+<tr><td>Certificados</td><td><b>Qualificações térmicas</b></td><td><code>/validacao_termica/</code></td><td>Validação de autoclaves e câmaras</td><td>Numeração, equipamento, geração assíncrona do laudo</td></tr>
+
+<tr><td>Orçamentos</td><td><b>Gerenciar orçamentos</b></td><td><code>/orcamento/</code></td><td>Ciclo comercial do reparo</td><td>Abas Pendentes · Aprovados em curso · Reprovados em curso · Faturados · Recusado · Cancelados; totalizador em R$; ações Aprovar, Reprovar (com motivo), Recusar, Cancelar, Faturar (com débito de estoque), Modificar (volta a Pendentes e exige nova assinatura), Histórico</td></tr>
+<tr><td>Orçamentos</td><td><b>Cadastro de serviços</b></td><td><code>/orcamento/servico/</code></td><td>Catálogo de serviços</td><td>Tipo de serviço, descrição, garantia (dias), valor (R$)</td></tr>
+<tr><td>Orçamentos</td><td><b>Motivos de reprovação</b></td><td><code>/orcamento/motivo_reprovacao/</code></td><td>Taxonomia de perda</td><td>4 motivos cadastrados</td></tr>
+
+<tr><td>Estoque</td><td><b>Gerenciar estoque</b></td><td><code>/estoque/peca/</code></td><td>Peças e insumos</td><td>Tipo, fornecedor, fabricante, código do fabricante, modelo, quantidade, estoque mínimo, unidade; entrada com NF, lote, valor de aquisição e de venda; nomenclatura da peça por empresa; imagem; importação de peças</td></tr>
+<tr><td>Estoque</td><td><b>Configurações</b></td><td><code>/estoque/…</code></td><td>Taxonomias de estoque</td><td>Tipos, categorias e unidades de peça</td></tr>
+
+<tr><td>Relatórios</td><td><b>12 relatórios + 4 exportações</b></td><td><code>/relatorio/… · /export/csv/…</code></td><td>Prestação de contas</td><td>Formulário de filtros → "Gerar Relatório" (PDF) ou job assíncrono com fila de downloads</td></tr>
+
+<tr><td>Indicadores</td><td><b>Indicadores gerais</b></td><td><code>/kpi/geral/</code></td><td>Painel analítico</td><td>Fluxo de caixa (fechamento de OS, 1 ano); Estado de equipamentos (Ativo 84,27 % · Manutenção 5,45 % · Desativado 10,27 %); Estado das OS (Ativas 2.950 · Inativas 70.876); Qualidade de chamado</td></tr>
+<tr><td>Indicadores</td><td><b>Avaliações dos chamados</b></td><td><code>/chamado/avaliacao/</code></td><td>Satisfação do cliente</td><td>Média 4,4; distribuição 1–5; filtros por empresa, técnico e nota; histórico da média e da quantidade; comentário por OS com responsável técnico</td></tr>
+
+<tr><td>Robôs</td><td><b>Integração e notificação</b></td><td><code>/automacao/</code></td><td>Automação</td><td>Automação = Modelo (OS · Estoque) + Tópico (Mudança de Estados · Estoque de Peças) + Ação (E-mail para destinatários verificados · Webhook)</td></tr>
+<tr><td>Robôs</td><td><b>Relatório automático</b></td><td><code>/kpi/relatorio/listar</code></td><td>Relatórios periódicos (máx. 5)</td><td>Título, descrição, destinatários, periodicidade (a cada N dias/semanas/meses/anos), data de início, ativo; seções com Módulo + Visualização + Agrupamento + Limites + filtros; preview; histórico de gerados</td></tr>
+
+<tr><td>Usuários</td><td><b>Meus usuários</b></td><td><code>/usuarios/</code></td><td>Equipe interna</td><td>Contador de licenças "36 de 38"; cargo; status de confirmação de e-mail</td></tr>
+<tr><td>Usuários</td><td><b>Grupos de permissões</b></td><td><code>/usuarios/grupos/</code></td><td>RBAC</td><td>9 grupos; tipo de usuário (Usuário · Solicitante); seleção múltipla sobre 138 permissões atômicas</td></tr>
+<tr><td>Usuários</td><td><b>Solicitantes</b></td><td><code>/usuarios/solicitante/</code></td><td>Portal do cliente (1.971)</td><td>Vínculo a N empresas e setores; status ativo/inativo; gerar senha; bloqueio</td></tr>
+
+<tr><td>Sistema</td><td><b>Histórico</b></td><td><code>/model_history/</code></td><td>Trilha de auditoria</td><td>Data, módulo (34 modelos), registro, número, usuário, ação (Criação · Edição · Exclusão), modificação campo a campo (valor anterior → novo)</td></tr>
+<tr><td>Sistema</td><td><b>Preferências</b></td><td><code>/preferences/</code></td><td>Configuração do tenant</td><td>6 abas: Geral · Formulários · Documentos · Notificações · Aplicativo · Calibração (≈40 chaves)</td></tr>
+<tr><td>BI</td><td><b>BI</b></td><td><code>datastudio.google.com/…</code></td><td>Análise externa</td><td>Relatório Looker Studio fora da aplicação</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s4">
+<h2><span class="num">04</span><span>Entidades do sistema</span></h2>
+<p class="lead">Lista consolidada a partir de três fontes convergentes: rotas do menu, formulários de cadastro e — a mais confiável — o filtro <em>Módulo</em> da tela de Histórico, que expõe os 34 modelos auditados pelo próprio sistema.</p>
+
+<h3>Modelos confirmados pela trilha de auditoria <span class="chip c-alta">Alta</span></h3>
+<div class="pill-row">
+<span class="pill">Empresas</span><span class="pill">Equipamentos</span><span class="pill">Tipo Equipamento</span><span class="pill">Procedimento</span><span class="pill">Novo Checklist</span><span class="pill">Plano</span><span class="pill">Contrato</span><span class="pill">Ordem de Serviço</span><span class="pill">Tipo Ordem Serviço</span><span class="pill">Estado Ordem Serviço</span><span class="pill">Tipo Origem Problema</span><span class="pill">Tipo Problema Relatado</span><span class="pill">Horas Trabalhadas</span><span class="pill">Chamado</span><span class="pill">Calibração</span><span class="pill">Certificado Padrão</span><span class="pill">Teste de Segurança Elétrica</span><span class="pill">Laudo de Obsolescência</span><span class="pill">Orçamento</span><span class="pill">Peça</span><span class="pill">Tipo Peça</span><span class="pill">Categoria de Peça</span><span class="pill">Itens Peça</span><span class="pill">Utilização de Peças</span><span class="pill">Nota Fiscal</span><span class="pill">Protocolo de Recolhimento</span><span class="pill">Protocolo de Entrega</span><span class="pill">Protocolo de Serviço</span><span class="pill">Oficina</span><span class="pill">Numeração</span><span class="pill">Automação</span><span class="pill">Usuário</span><span class="pill">Preferência</span>
+</div>
+
+<h3>Entidades observadas na interface mas ausentes do filtro de histórico</h3>
+<div class="pill-row">
+<span class="pill">Solicitante</span><span class="pill">Grupo de permissões</span><span class="pill">Criticidade</span><span class="pill">Transferência</span><span class="pill">Qualificação térmica</span><span class="pill">Incerteza / Padrão de medição</span><span class="pill">Serviço (catálogo de orçamento)</span><span class="pill">Motivo de reprovação</span><span class="pill">Motivo de baixa patrimonial</span><span class="pill">Unidade de medida</span><span class="pill">Relatório periódico</span><span class="pill">Avaliação de chamado</span><span class="pill">Agendamento</span><span class="pill">Anexo</span><span class="pill">Rascunho de OS</span><span class="pill">Rascunho de calibração</span><span class="pill">Job de exportação</span><span class="pill">Selo RBC</span><span class="pill">Atividade</span>
+</div>
+
+<h3>Papel de cada entidade nuclear</h3>
+<div class="tw"><table>
+<thead><tr><th>Entidade</th><th>Papel</th><th>Observação de projeto</th></tr></thead>
+<tbody>
+<tr><td><b>Empresa</b></td><td>Nó único da hierarquia organizacional e também cadastro de fornecedores</td><td>Auto-relacionada por <code>superior</code>; <code>tipo</code> distingue Principal, Cliente Externo, Cliente Interno, Fornecedor, Local e Setor. É o eixo de toda a segregação de dados.</td></tr>
+<tr><td><b>Equipamento</b></td><td>Ativo gerenciado; também representa <em>padrões</em> de calibração (<code>modo_uso</code> = Padrão)</td><td>Pertence a uma Empresa (normalmente do tipo Setor). Carrega SLA próprio, criticidade, contrato e dados de depreciação.</td></tr>
+<tr><td><b>Ordem de Serviço</b></td><td>Registro de trabalho — corretiva, preventiva, calibração, TSE, instalação, treinamento e mais 30 tipos</td><td>Também é o Chamado. Pode nascer de um Plano, de um Chamado ou manualmente.</td></tr>
+<tr><td><b>Plano</b></td><td>Programa recorrente que materializa OS por ciclo</td><td>Liga-se a equipamentos (com flags P/C/E) e a setores (flag P).</td></tr>
+<tr><td><b>Procedimento</b></td><td>Instrução técnica reutilizável</td><td>Amarra Checklists a tipo de serviço, tipo de equipamento e frequência; guarda templates de impressão e padrões exigidos.</td></tr>
+<tr><td><b>Checklist</b></td><td>Formulário de inspeção</td><td>Armazenado como JSON (<code>[{tipo, desc, appr[]}]</code>) — sem tabela de itens.</td></tr>
+<tr><td><b>Calibração</b></td><td>Certificado metrológico</td><td>Consome Padrões (equipamentos) e Incertezas; gera PDF; tem validade e liberação ao cliente.</td></tr>
+<tr><td><b>Orçamento</b></td><td>Proposta comercial derivada de uma OS</td><td>Contém itens de Peça e de Serviço; ao faturar, debita estoque.</td></tr>
+<tr><td><b>Peça</b></td><td>Item de estoque</td><td>Entradas com NF e lote; nomenclatura e preço por empresa.</td></tr>
+<tr><td><b>Usuário × Solicitante</b></td><td>Duas classes de conta distintas</td><td>Usuário = equipe interna (licenciado, com custo/hora e assinatura). Solicitante = contato do cliente, ilimitado, com acesso restrito às suas empresas.</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s5">
+<h2><span class="num">05</span><span>Campos identificados por entidade</span></h2>
+<p class="lead">Campos lidos diretamente dos formulários (nome técnico do input + rótulo). Onde há enumeração, os valores reais do tenant estão listados.</p>
+
+<h3>Empresa <span class="chip c-alta">Alta</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Campo</th><th>Rótulo</th><th>Tipo / valores</th></tr></thead>
+<tbody>
+<tr><td><code>nome</code></td><td>Nome *</td><td>texto</td></tr>
+<tr><td><code>apelido</code></td><td>Nome fantasia</td><td>texto</td></tr>
+<tr><td><code>tipo</code></td><td>Tipo *</td><td>Cliente Externo · Cliente Interno · Fornecedor · Local · Setor <i>(+ Principal, visível no filtro)</i></td></tr>
+<tr><td><code>superior</code></td><td>Superior</td><td>FK para Empresa — define a árvore</td></tr>
+<tr><td><code>cnpj</code></td><td>CPF/CNPJ</td><td>texto</td></tr>
+<tr><td><code>cep, rua, numero, complemento, bairro, cidade, estado</code></td><td>aba ENDEREÇO</td><td>UF em lista fechada de 27</td></tr>
+<tr><td><code>contato, email, telefone1, telefone2, fax</code></td><td>aba CONTATO</td><td><code>fax</code> aparece com rótulo "Outros"</td></tr>
+<tr><td><code>observacoes, anexos</code></td><td>aba OBSERVAÇÕES</td><td>texto longo + upload múltiplo</td></tr>
+<tr><td>—</td><td>Status de e-mail</td><td>coluna de lista; ação "Reenviar" validação</td></tr>
+<tr><td>—</td><td>Campos PMOC</td><td>surgem no cadastro quando a preferência <em>Habilitar PMOC</em> está ligada</td></tr>
+</tbody></table></div>
+
+<h3>Equipamento <span class="chip c-alta">Alta</span></h3>
+<p>Cada campo abaixo marcado com ◐ possui um checkbox <em>"Mostrar na OS"</em> — o tenant escolhe quais atributos do ativo são impressos no cabeçalho da ordem de serviço. É um detalhe de produto muito bem resolvido.</p>
+<div class="tw"><table>
+<thead><tr><th>Grupo</th><th>Campos</th></tr></thead>
+<tbody>
+<tr><td><b>Identificação</b></td><td>◐ <code>tipo</code> (651 opções) · ◐ <code>fabricante</code> · ◐ <code>modelo</code> · ◐ <code>identificacao</code> (TAG) · ◐ <code>numero_serie</code> · ◐ <code>patrimonio</code> · ◐ <code>numero_inmetro</code> (Portaria INMETRO) · <code>registro_anvisa</code> · <code>descricao</code></td></tr>
+<tr><td><b>Situação e uso</b></td><td>◐ <code>estado</code> (Ativo · Desativado · Em Manutenção) · ◐ <code>modo_uso</code> (Equipamento · Padrão) · <code>has_qr_code</code> (derivado)</td></tr>
+<tr><td><b>Organização</b></td><td>◐ <code>proprietario</code> (FK Empresa) · <code>oficina</code> (Quadro de Trabalho)</td></tr>
+<tr><td><b>Risco e SLA</b></td><td>◐ <code>prioridade</code> (Não urgente · Pouco urgente · Urgente · Muito urgente · Emergente) · <code>tipo_criticidade</code> (6 níveis) · <code>criticidade</code> (descrição) · <code>risco_operacao</code> · <code>tempo_atendimento</code> (min) · <code>tempo_fechamento</code> (min)</td></tr>
+<tr><td><b>Ciclo de vida e finanças</b></td><td>◐ <code>data_fabricacao</code> · ◐ <code>data_aquisicao</code> · ◐ <code>valor_compra</code> · ◐ <code>valor_residual</code> · ◐ <code>vida_util</code> (anos) · <code>garantia</code></td></tr>
+<tr><td><b>Contrato</b></td><td><code>tipo_contrato</code> (Sem Contrato — Equipamento Próprio · Comodato · Empréstimo · Aluguel · Manutenção) · <code>contratante</code> · <code>contrato</code> (FK)</td></tr>
+<tr><td><b>Manutenção</b></td><td><code>procedimento</code> (M2M, 241 opções) · <code>plano</code> (M2M, 827 opções)</td></tr>
+<tr><td><b>Outros</b></td><td><code>observacoes</code> · <code>anexos</code></td></tr>
+</tbody></table></div>
+
+<h3>Ordem de Serviço <span class="chip c-alta">Alta</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Campo</th><th>Rótulo</th><th>Notas</th></tr></thead>
+<tbody>
+<tr><td><code>numero</code></td><td>Número *</td><td>Gerado pela regra de Numeração de Documentos (prefixo + sequência)</td></tr>
+<tr><td><code>data_criacao</code></td><td>Data de Criação *</td><td>Editável mediante permissão específica</td></tr>
+<tr><td><code>tipo_ordem_servico</code></td><td>Tipo de OS</td><td><code>1 = Equipamento</code> · <code>2 = Serviço</code></td></tr>
+<tr><td><code>estado</code></td><td>Estado *</td><td>42 opções no tenant</td></tr>
+<tr><td><code>origem</code></td><td>Atendimento *</td><td>Interno · Externo</td></tr>
+<tr><td><code>responsavel</code></td><td>Responsável Técnico</td><td>FK Usuário (37)</td></tr>
+<tr><td><code>tecnicos_executores</code></td><td>Técnicos Executores</td><td>M2M Usuário (36)</td></tr>
+<tr><td><code>solicitante</code></td><td>Solicitante *</td><td>FK Empresa (setor que pediu)</td></tr>
+<tr><td><code>localizacao</code></td><td>Localização</td><td>FK Empresa tipo Local (filtrável por preferência)</td></tr>
+<tr><td><code>equipamento</code></td><td>Equipamento *</td><td>FK Equipamento</td></tr>
+<tr><td><code>padroes</code></td><td>Padrões</td><td>M2M Equipamento com <code>modo_uso = Padrão</code> (38)</td></tr>
+<tr><td><code>tipo_servico</code></td><td>Tipo de Serviço *</td><td>37 tipos cadastrados</td></tr>
+<tr><td><code>problema</code></td><td>Problema Relatado</td><td>360 opções</td></tr>
+<tr><td><code>origem_problema</code></td><td>Origem do Problema</td><td>344 opções</td></tr>
+<tr><td><code>oficina</code></td><td>Quadro de Trabalho</td><td>ENG CLÍNICA · ENG CLÍNICA ROTA</td></tr>
+<tr><td><code>setor_executante</code></td><td>Setor Executante</td><td>Empresa que executa (BE CARE, TÉCHNE CARE, TÉCHNE CARE AT)</td></tr>
+<tr><td><code>terceiros</code></td><td>Serviços Terceirizados Por</td><td>FK Empresa (fornecedor)</td></tr>
+<tr><td><code>data_hora_inicio</code> / <code>data_hora_fim</code></td><td>Agendamento</td><td>Alimenta a Agenda e o Kanban</td></tr>
+<tr><td><code>prioridade</code></td><td>Prioridade *</td><td>5 níveis, herdada do equipamento</td></tr>
+<tr><td><code>descricao_servico</code></td><td>Descrição do Serviço</td><td>Laudo do técnico</td></tr>
+<tr><td><code>observacoes</code> / <code>observacoes_adm</code></td><td>Observações · Observações de Usuário</td><td>Dois campos distintos (técnico × solicitante)</td></tr>
+<tr><td><code>campo_extra</code></td><td>Campo Extra</td><td>Rótulo definido em Preferências — único campo personalizado do sistema</td></tr>
+<tr><td><code>imprimir_utilizacao_pecas</code></td><td>Imprimir utilização de peças</td><td>Sim/Não</td></tr>
+<tr><td>—</td><td>Abas <b>Serviços</b> e <b>Peças</b></td><td>Itens com peça, quantidade, unidade de medida e observações; serviços do catálogo com observações</td></tr>
+<tr><td>—</td><td>Anexos</td><td>Upload na OS; permissão específica para excluir</td></tr>
+</tbody></table></div>
+
+<h3>Plano <span class="chip c-alta">Alta</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Campo</th><th>Rótulo</th><th>Valores</th></tr></thead>
+<tbody>
+<tr><td><code>nome</code></td><td>Título *</td><td>texto</td></tr>
+<tr><td><code>setor_responsavel</code></td><td>Setor Responsável</td><td>FK Empresa (469 opções)</td></tr>
+<tr><td><code>responsavel</code></td><td>Responsável</td><td>FK Usuário</td></tr>
+<tr><td><code>tecnicos_executores</code></td><td>Técnicos Executores</td><td>M2M Usuário</td></tr>
+<tr><td><code>data_inicial</code></td><td>Data Inicial *</td><td>início do 1º ciclo</td></tr>
+<tr><td><code>frequencia_execucao</code></td><td>Frequência *</td><td>Diário · 2 em 2 dias · Semanal · Quinzenal · Mensal · Bimestral · Trimestral · Quadrimestral · Semestral · Anual · Bianual · Trienal · Quadrienal</td></tr>
+<tr><td><code>prazo_execucao</code></td><td>Prazo para Execução (dias)</td><td>define a janela do ciclo</td></tr>
+<tr><td><code>abertura_automatica</code></td><td>Abertura automática</td><td>Sim/Não — gera as OS do ciclo</td></tr>
+<tr><td><code>contagem_dias</code></td><td>Contagem de dias</td><td>Arredondar / Não arredondar</td></tr>
+<tr><td><code>descricao</code>, <code>observacao</code></td><td>Descrição · Observações</td><td>texto</td></tr>
+<tr><td>—</td><td>Equipamentos</td><td>M2M com flags <b>P</b> (Preventiva), <b>C</b> (Calibração), <b>E</b> (Teste de Segurança Elétrica)</td></tr>
+<tr><td>—</td><td>Setores</td><td>M2M com flag <b>P</b></td></tr>
+</tbody></table></div>
+
+<h3>Certificado de calibração <span class="chip c-alta">Alta</span></h3>
+<div class="tw"><table>
+<thead><tr><th>Bloco</th><th>Campos</th></tr></thead>
+<tbody>
+<tr><td><b>Identificação</b></td><td>Número * · Solicitante * · Equipamento * · Ordem de Serviço · Imprimir informações na OS</td></tr>
+<tr><td><b>Procedimento</b></td><td>Procedimento * · Observações · Tabelas *</td></tr>
+<tr><td><b>Condições ambientais</b></td><td>Local · Temperatura ambiente * · Incerteza (Temperatura) * · Padrão de Temperatura · Umidade relativa * · Incerteza (Umidade) * · Padrão de Umidade · Pressão atmosférica · Incerteza (Pressão) · Padrão de Pressão</td></tr>
+<tr><td><b>Tabela de medição</b> (por ponto)</td><td>Padrão utilizado · Incerteza (sensor + faixa + vencimento do padrão) · Tipo de medida · Resolução do padrão * · Resolução do equipamento * · Faixa de uso (de–até) · Capacidade (de–até) · Unidade * · Fator de Confiabilidade * (k para 95 %) · Incluir critério de aceitação · Valor máximo do critério · Corrigir erro sistemático · leituras repetidas por ponto</td></tr>
+<tr><td><b>Finalização</b></td><td>Data de Criação * · Data de Emissão * · Validade · Técnico Executor * · Responsável Técnico * · Responsável Solicitante · Análise de resultados</td></tr>
+<tr><td><b>Ações</b></td><td>Salvar · Salvar rascunho · Analisar · Liberar ao solicitante</td></tr>
+</tbody></table></div>
+
+<h3>Usuário interno <span class="chip c-alta">Alta</span></h3>
+<p><code>nome</code>, <code>email</code>, <code>empresas</code> (M2M), <code>oficinas</code> (quadros de trabalho), <code>password</code>, <code>data_nascimento</code>, <code>cargo</code>, <b><code>custo_hora</code></b>, <code>is_ferias</code> (Férias Sim/Não), <b><code>jornada_diaria</code></b> (h), <code>conselho_profissional</code>, <code>crea</code> (nº de registro), <code>portaria</code>, <code>telefone</code>, <code>groups</code> (grupos de permissão), <b><code>assinatura</code></b> (imagem), <code>avatar</code>, <code>workperiod</code>.</p>
+<p><em>Solicitante:</em> nome, cargo, empresas (N setores), e-mail, status ativo/inativo, senha gerada pelo sistema, flag bloqueado.</p>
+
+<h3>Peça e movimentação <span class="chip c-alta">Alta</span></h3>
+<p><b>Peça:</b> <code>tipo</code>, <code>categoria</code>, <code>quadros_de_trabalho</code>, <code>unidade</code>, <code>fabricante</code>, <code>codigo_fabricante</code>, <code>modelo</code>, <code>estoque_minimo</code>, <code>observacoes</code>, <code>imagem</code>, <code>codigo_interno</code>, e uma tabela filha <b>Nomenclatura por Empresa</b> (nomenclatura, empresa, valor de venda).<br>
+<b>Entrada de estoque:</b> quantidade, fornecedor, número da nota fiscal, lote da peça, valor de aquisição, valor de venda.</p>
+
+<h3>Chamado (formulário do solicitante) <span class="chip c-alta">Alta</span></h3>
+<p>Tipo de Chamado (Equipamento · Serviço) → Empresa/Setor → Localização → Equipamento * → Problema Relatado * → Observações → Anexo. Sete campos: deliberadamente enxuto. Criticidade e Prioridade só aparecem se a preferência correspondente estiver ativa.</p>
+</section>
+<hr class="rule">
+
+<section id="s6">
+<h2><span class="num">06</span><span>Relacionamentos</span></h2>
+
+<h3>A árvore organizacional é uma tabela só</h3>
+<pre class="tree"><b>Empresa</b> (tipo=Principal)      → TÉCHNE CARE
+   │
+   ├── <b>Empresa</b> (tipo=Cliente Externo/Interno)   → FHEMIG · HOSPITAL JOÃO XXIII · SCMG …
+   │      │
+   │      ├── <b>Empresa</b> (tipo=Setor)   → HJXXIII - AMBULATÓRIO - SALA 05 - PEDIATRIA
+   │      │        └── <b>Equipamento</b> (proprietario = Setor)
+   │      └── <b>Empresa</b> (tipo=Local)    → usada como "Localização" na OS
+   │
+   └── <b>Empresa</b> (tipo=Fornecedor)      → MHEDICA SERVICE · JVD …
+                                          usada em: peça.fornecedor, OS.terceiros,
+                                          equipamento.contratante
+</pre>
+<p><span class="chip c-alta">Alta</span> — confirmado pelo campo <code>superior</code> no cadastro e pela ficha do laudo, que exibe <em>"Superior: FHEMIG - HOSPITAL JOÃO XXIII"</em> para um setor.</p>
+
+<h3>Grafo funcional principal</h3>
+<pre class="tree">                      ┌─────────────── <b>CONTRATO</b> ───────────────┐
+                      │                                          │
+   <b>EMPRESA</b> (cliente) ─┴─→ <b>EMPRESA</b> (setor) ──→ <b>EQUIPAMENTO</b> ←──┘
+        │                       │                    │
+        │                       │                    ├──→ <b>PLANO</b> (M2M, flags P/C/E)
+        │                       │                    │        │
+        │                       │                    │        └──→ ciclo → <b>AGENDAMENTO</b>
+        │                       │                    │                        │
+        ├──→ <b>SOLICITANTE</b> ──→ <b>CHAMADO</b> ═══════════════════════════════════╪══╗
+        │         │                                  │                        ▼  ║
+        │         │                                  └──→ <b>ORDEM DE SERVIÇO</b> ◄──╝
+        │         │                                             │
+        │         │  avaliação (1–5) ◄──────────────────────────┤
+        │         │  assinatura      ◄──────────────────────────┤
+        │                                                       │
+        │                    ┌──────────────────────────────────┼───────────────────┐
+        │                    │            │           │         │         │         │
+        │                <b>CHECKLIST</b>   <b>HORAS</b>      <b>PEÇAS</b>   <b>SERVIÇOS</b>  <b>PROTOCOLOS</b>  <b>ANEXOS</b>
+        │                 executado   trabalhadas   (estoque)  (catálogo)  R/E/S
+        │                    ▲            │           │         │
+        │             <b>PROCEDIMENTO</b>      │           │         │
+        │                    ▲            │           └────┬────┘
+        │              <b>TIPO EQUIP.</b>       │                ▼
+        │                                 │           <b>ORÇAMENTO</b> ──→ faturar ──→ debita estoque
+        │                                 ▼                │
+        │                          <b>PRODUTIVIDADE</b>          └──→ aprovação do <b>SOLICITANTE</b>
+        │                          custo_hora × horas
+        │
+        └──→ <b>CERTIFICADOS</b>: Calibração · TSE · Qualificação Térmica · Laudo de Obsolescência
+                    ▲
+                <b>PADRÃO</b> (equipamento modo_uso=Padrão) ──→ <b>CERTIFICADO DE PADRÃO</b> (órgão externo)
+</pre>
+
+<h3>Relações confirmadas, uma a uma</h3>
+<div class="tw"><table>
+<thead><tr><th>Relação</th><th>Cardinalidade</th><th>Evidência</th><th>Confiança</th></tr></thead>
+<tbody>
+<tr><td>Empresa → Empresa (superior)</td><td>1:N recursivo</td><td>Campo <code>superior</code> no cadastro; ficha de laudo exibindo o superior</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Equipamento → Empresa (proprietário)</td><td>N:1</td><td>Campo obrigatório <code>proprietario</code>; ficha exibe "Proprietário: … - UTI II"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Equipamento ↔ Plano</td><td>N:N com atributos P/C/E</td><td>Aba Equipamentos do plano com três checkboxes por linha</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Setor ↔ Plano</td><td>N:N com atributo P</td><td>Aba Setores do plano</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Plano → OS</td><td>1:N por ciclo</td><td>Aba Execução lista OS pré-criadas sem número; ficha da OS mostra "Plano: …"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Equipamento → OS</td><td>1:N</td><td>Ficha do equipamento lista 14 OS</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Chamado ≡ OS</td><td>1:1 (mesma linha)</td><td>Link do chamado aponta para <code>/ordem_servico/visual/152234/</code></td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Orçamento</td><td>1:N</td><td>Ação "Criar orçamento" na OS; coluna "Ordem Serviço" no orçamento</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Orçamento → Peça / Serviço</td><td>1:N cada</td><td>Abas Peças e Serviços; modal "Peças a Faturar"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Orçamento faturado → baixa de estoque</td><td>evento</td><td>Modal: "Somente serão debitadas do estoque caso selecione alguma peça"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Calibração / TSE / Laudo / Qualificação</td><td>1:N</td><td>Campo "Ordem de Serviço" no editor de calibração; coluna OS no laudo</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Calibração → Padrões</td><td>N:N</td><td>Selects "Padrão de Temperatura/Umidade/Pressão" e padrão por tabela de medição</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Padrão → Certificado de Padrão</td><td>1:N</td><td>Tela de certificados de padrões com órgão externo e validade</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Procedimento → Checklist</td><td>N:N</td><td>Multiselect "Checklists" no procedimento</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Procedimento → Tipo de Equipamento / Equipamento / Setor</td><td>N:N (escopo)</td><td>Campo "Tipo Procedimento" com três escopos</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Checklist executado</td><td>1:N</td><td>Ação "Executar Checklist"; modal com "Aprovar Tudo"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Horas trabalhadas</td><td>1:N</td><td>Seção na ficha; relatório de registro de horas; permissão "deletar Horas Trabalhadas"</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Protocolo (R/E/S)</td><td>1:N</td><td>Três seções na ficha; protocolo de entrega referencia o de recolhimento</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>OS → Avaliação</td><td>1:0..1</td><td>Tela de avaliações mostra nota + comentário por número de OS</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Equipamento → Contrato</td><td>N:1</td><td>Campos <code>tipo_contrato</code>, <code>contratante</code>, <code>contrato</code></td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Transferência → Equipamentos</td><td>1:N</td><td>Coluna "Equipamentos" com vários ativos por transferência</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Usuário → Empresas / Oficinas</td><td>N:N</td><td>Campos <code>empresas</code> e <code>oficinas</code> no cadastro de usuário</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Peça → Nomenclatura por Empresa</td><td>1:N</td><td>Tabela filha no cadastro da peça, com valor de venda por cliente</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Agendamento como entidade própria</td><td>—</td><td>Provável projeção de <code>data_hora_inicio/fim</code> + técnicos da OS, não tabela separada</td><td><span class="chip c-media">Média</span></td></tr>
+<tr><td>Multitenancy por schema/DB separado</td><td>—</td><td>Subdomínio por cliente (<code>technecare.</code>, <code>ebserh.</code>, <code>cieng.</code>, <code>x.</code>) e prefixo de storage <code>technecare1/</code> sugerem isolamento por tenant</td><td><span class="chip c-media">Média</span></td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s7">
+<h2><span class="num">07</span><span>Ordens de serviço</span></h2>
+<p class="lead">73.826 registros. É o módulo com mais superfície: três visualizações, 25 filtros, 42 estados, 37 tipos de serviço, 10 ações de documento e integração com praticamente todos os outros módulos.</p>
+
+<h3>Os 42 estados cadastrados <span class="chip c-alta">Alta</span></h3>
+<p>Apenas os IDs 1, 2 e 3 são de sistema (<b>Aberta</b>, <b>Fechada</b>, <b>Cancelada</b>). Todos os demais foram criados pelo tenant. A distribuição real, lida no gráfico do painel:</p>
+<div class="tw"><table>
+<thead><tr><th>Estado</th><th class="num-col">Qtd.</th><th>Estado</th><th class="num-col">Qtd.</th><th>Estado</th><th class="num-col">Qtd.</th></tr></thead>
+<tbody>
+<tr><td>Aguardando peças</td><td class="num-col">789</td><td>Aguardando envio do orçamento</td><td class="num-col">106</td><td>Aguardando liberação da unidade</td><td class="num-col">11</td></tr>
+<tr><td>Análise concluída — Gerar orçamento</td><td class="num-col">328</td><td>MANUTENÇÃO EXTERNA</td><td class="num-col">45</td><td>Aguardando Liberação do setor</td><td class="num-col">8</td></tr>
+<tr><td>fechada</td><td class="num-col">312</td><td>Aguardando chegada das peças</td><td class="num-col">44</td><td>Aguardando empresa externa</td><td class="num-col">8</td></tr>
+<tr><td>Aberta</td><td class="num-col">306</td><td>Em execução</td><td class="num-col">42</td><td>Encaminhado para Orç. Externo</td><td class="num-col">7</td></tr>
+<tr><td>Equipamento Sem Reparo</td><td class="num-col">232</td><td>Empréstimo</td><td class="num-col">37</td><td>Em espera</td><td class="num-col">7</td></tr>
+<tr><td>Reparo externo</td><td class="num-col">182</td><td>EM DESLOCAMENTO</td><td class="num-col">15</td><td>Atendimento programado</td><td class="num-col">6</td></tr>
+<tr><td>Aguardando aprovação do orçamento</td><td class="num-col">175</td><td>Equipamento parado p/ manutenção</td><td class="num-col">12</td><td>Aguardando orç. pelo fornecedor</td><td class="num-col">5</td></tr>
+<tr><td>Orçamento Reprovado</td><td class="num-col">128</td><td>Aguardando Calibração</td><td class="num-col">4</td><td>Em Análise Assistência NL</td><td class="num-col">5</td></tr>
+<tr><td>Em análise</td><td class="num-col">111</td><td>NECESSIDADE DE PREVENTIVA</td><td class="num-col">4</td><td>Demais estados (≤ 3 cada)</td><td class="num-col">—</td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+<span class="lbl">Achado central</span>
+<p>O cadastro de estado tem <strong>um único campo: Descrição</strong>. Não há categoria, cor, ordem, flag terminal, SLA nem transições permitidas. A separação "Ativas × Inativas" que o painel exibe é hardcoded: Ativas = Aberta + Em execução + Aguardando Peças + Aguardando aprovação do orçamento + <em>Outros</em>; Inativas = Fechada + Cancelada. Consequências observadas: o tenant criou "fechada" (minúscula) além da "Fechada" de sistema, com 312 OS presas fora da contagem correta; estados de negócio ("Empréstimo", "Equipamento Vendido") convivem com estados de fila ("Aguardando peças"); e não há como impedir uma transição inválida.</p>
+</div>
+
+<h3>Ciclo de vida reconstruído a partir dos dados existentes</h3>
+<pre class="tree">          <b>[origem]</b>
+   Chamado do solicitante ──┐
+   Plano (ciclo)  ──────────┼──→ <b>ABERTA</b>
+   Criação manual ──────────┘        │
+                                     ├──→ Atendimento programado ──→ EM DESLOCAMENTO
+                                     ▼
+                                <b>EM ANÁLISE</b>
+                                     │
+              ┌──────────────────────┼──────────────────────────┐
+              ▼                      ▼                          ▼
+      <b>EM EXECUÇÃO</b>         Análise concluída —        Equipamento Sem Reparo
+              │              Gerar orçamento                    │
+              │                      │                          ▼
+              │                      ▼                  Laudo de Obsolescência
+              │        Aguardando envio do orçamento            │
+              │                      │                          ▼
+              │                      ▼                     <b>FECHADA</b>
+              │        Aguardando aprovação do orçamento
+              │              │                │
+              │      Orçamento aprovado   Orçamento Reprovado
+              │              │                │
+              ▼              ▼                ▼
+      Aguardando peças / chegada das peças / Reparo externo /
+      MANUTENÇÃO EXTERNA / CALIBRAÇÃO EXTERNA / Aguardando empresa externa
+                             │
+                             ▼
+                   Em manutenção / aguardando conclusão
+                             │
+                             ▼
+                     Serviço finalizado
+                             │
+                    ┌────────┴────────┐
+                    ▼                 ▼
+              Assinar e Fechar   Aguardando NF para envio
+                    │                 │
+                    ▼                 ▼
+                <b>FECHADA</b>  ──→ avaliação (1–5) ──→ faturamento
+
+   Em qualquer ponto: <b>CANCELADA</b>
+</pre>
+<p><span class="chip c-media">Média</span> — o encadeamento é inferido pela semântica dos nomes, pelos volumes e pelas ações disponíveis. O sistema <em>não</em> declara transições; qualquer estado pode ir a qualquer outro.</p>
+
+<h3>Tipos de serviço (37) e o que revelam</h3>
+<p><b>Manutenção:</b> preventiva · corretiva · preditiva. <b>Metrologia e conformidade:</b> Calibração · Teste de segurança elétrica · Teste Funcional · Teste inicial · Qualificação · Certificação · Análise Técnica. <b>Ciclo de vida do ativo:</b> Instalação · Desinstalação · Atualização · Atualização de Software · Baixa Patrimonial · Devolução · Entrega de acessórios · Demonstração. <b>Comercial e contratual:</b> Locação · Empréstimo (grafado de duas formas) · Venda de produto/serviço · Garantia Magnamed · Garantia Magnamed/MS · MC Em Processo de Compra · Acompanhamento de Serviço Terceirizado. <b>Rotina de campo:</b> Visita técnica · Ronda · Treinamento · Coleta de Água Hemodiálise · Reposição de Oxigênio na unidade (duplicado). <b>Projetos:</b> Mamute — Instalação · Projeto CEMIG — Instalação. <b>Ruído:</b> "Rodas travadas", "Teclado com defeito" — sintomas cadastrados como tipo de serviço.</p>
+
+<div class="note">
+<span class="lbl">Lição de modelagem</span>
+<p>"Tipo de serviço" está sobrecarregado: é ao mesmo tempo <em>natureza do trabalho</em> (preventiva/corretiva), <em>disciplina técnica</em> (calibração/TSE), <em>evento comercial</em> (locação/venda) e, por erro de uso, <em>sintoma</em>. No nosso produto isso deve ser decomposto em <strong>work_order_type</strong> (natureza, fechado e de sistema) × <strong>service_catalog</strong> (o que foi feito, aberto) × <strong>failure_code</strong> (o que houve, taxonomia própria).</p>
+</div>
+
+<h3>Elementos anexos à OS</h3>
+<div class="tw"><table>
+<thead><tr><th>Elemento</th><th>Existe?</th><th>Como funciona</th></tr></thead>
+<tbody>
+<tr><td>Checklist</td><td>Sim</td><td>Puxado do Procedimento aplicável ao tipo de equipamento + tipo de serviço; execução com "Aprovar Tudo"; impressão configurável (vazio, template secundário, sem coluna de avaliação)</td></tr>
+<tr><td>Registro de horas</td><td>Sim</td><td>Entidade "Horas Trabalhadas"; automático ou manual; permite lançamento futuro se a preferência estiver ativa; registro simultâneo opcional; base do custo (custo_hora × horas) e da produtividade</td></tr>
+<tr><td>Peças</td><td>Sim</td><td>Aba na OS com peça, quantidade, unidade e observação; reserva e utilização; impressão opcional</td></tr>
+<tr><td>Serviços</td><td>Sim</td><td>Itens do catálogo de serviços com valor e garantia</td></tr>
+<tr><td>Custos e valores</td><td>Parcial</td><td>Não há campo de custo na OS; o valor vem do orçamento e das peças. Permissão dedicada "Pode visualizar valores nas ordens de serviço"</td></tr>
+<tr><td>Deslocamento</td><td>Não</td><td>Só existe como <em>estado</em> ("EM DESLOCAMENTO"). Sem quilometragem, sem geolocalização, sem custo de viagem</td></tr>
+<tr><td>Anexos e fotos</td><td>Sim</td><td>Upload na OS; impressão opcional dos anexos no PDF; permissão separada para excluir anexos</td></tr>
+<tr><td>Assinatura</td><td>Sim</td><td>Duas assinaturas (solicitante e "segundo solicitante"); validação por código enviado por e-mail; estados em que o solicitante pode assinar são configuráveis; coleta pelo app móvel</td></tr>
+<tr><td>Aprovações</td><td>Via orçamento</td><td>Não há workflow de aprovação da OS em si; o único gate formal é o orçamento</td></tr>
+<tr><td>SLA</td><td>Parcial</td><td>Tempo de atendimento e de fechamento vivem no <em>equipamento</em>, não na OS; a tela de Chamados mostra "Vencidas"; existe a métrica "% de chamados cumpridos dentro do prazo"</td></tr>
+<tr><td>Comentários / thread</td><td>Não</td><td>Apenas dois campos de texto livre (Observações e Observações de Usuário). Não há histórico conversacional</td></tr>
+<tr><td>Histórico</td><td>Sim</td><td>Via trilha de auditoria global, com diff campo a campo</td></tr>
+<tr><td>Faturamento</td><td>Sim</td><td>Pelo orçamento (aba Faturados) e pelo relatório de serviços terceirizados por empresa</td></tr>
+</tbody></table></div>
+
+<h3>Operações em lote</h3>
+<p>"Adicionar lote" abre o modal <em>Múltiplas ordens de serviço</em>, que gera várias OS de uma vez. A aba Execução do plano permite <b>Abrir</b>, <b>Finalizar</b> e <b>Cancelar</b> várias OS selecionadas. A Agenda permite arrastar serviços não agendados para o calendário.</p>
+</section>
+<hr class="rule">
+
+<section id="s8">
+<h2><span class="num">08</span><span>Equipamentos</span></h2>
+<p class="lead">27.223 ativos, 84,27 % ativos, 5,45 % em manutenção, 10,27 % desativados. A ficha do equipamento é a melhor tela do produto: reúne indicadores, programação futura e todo o histórico documental em uma página.</p>
+
+<h3>Ciclo de vida observado</h3>
+<pre class="tree"><b>Cadastro</b> (manual · em lote · pelo app · importação)
+   │  identificação, TAG, série, patrimônio, ANVISA, INMETRO, QR Code
+   ▼
+<b>Alocação</b> → proprietário = Empresa (setor) · quadro de trabalho · contrato (comodato/aluguel/…)
+   │
+   ▼
+<b>Classificação de risco</b> → criticidade (6 níveis) · risco de operação · prioridade (5 níveis)
+   │                          · tempo de atendimento (min) · tempo de fechamento (min)   ← SLA do ativo
+   ▼
+<b>Programação</b> → vinculação a Planos (P/C/E) e Procedimentos
+   │
+   ▼
+<b>Operação</b> ─┬─→ Chamado → OS corretiva
+             ├─→ OS preventiva (plano)
+             ├─→ Calibração → Certificado (validade)
+             ├─→ Teste de Segurança Elétrica → Certificado (validade)
+             ├─→ Qualificação Térmica → Laudo
+             └─→ Transferência / Empréstimo entre setores
+   │
+   ▼
+<b>Fim de vida</b> → Laudo de Obsolescência → estado Desativado → baixa patrimonial
+   │
+   ▼
+<b>Financeiro</b> → Tabela de Depreciação (vida útil, valor de compra, valor residual, data de aquisição)
+</pre>
+
+<h3>Checklist de capacidades</h3>
+<div class="tw"><table>
+<thead><tr><th>Capacidade</th><th>Status</th><th>Detalhe</th></tr></thead>
+<tbody>
+<tr><td>QR Code</td><td><span class="chip c-alta">Sim</span></td><td>Filtro "Possui QR Code"; artigo de ajuda "Como gerar e vincular QR Codes"; leitura pelo app abre a ficha ou o chamado</td></tr>
+<tr><td>Código de barras</td><td><span class="chip c-baixa">Não observado</span></td><td>Nenhum campo ou ação dedicada</td></tr>
+<tr><td>Patrimônio · nº de série · TAG</td><td><span class="chip c-alta">Sim</span></td><td>Três identificadores independentes; bloqueio de duplicidade configurável por campo</td></tr>
+<tr><td>Fabricante e modelo</td><td><span class="chip c-media">Texto livre</span></td><td>São campos <code>text</code>, não FKs — não há catálogo de fabricantes nem de modelos</td></tr>
+<tr><td>Documentos e fotos</td><td><span class="chip c-alta">Sim</span></td><td>Menu "Documentos" na ficha; campo <code>anexos</code> múltiplo</td></tr>
+<tr><td>Histórico</td><td><span class="chip c-alta">Sim</span></td><td>OS, calibrações, TSE, laudos, qualificações + trilha de auditoria</td></tr>
+<tr><td>Garantia</td><td><span class="chip c-alta">Sim</span></td><td>Campo <code>garantia</code>; estado "VERIFICANDO ACIONAMENTO DE GARANTIA"</td></tr>
+<tr><td>Calibração / preventiva programada</td><td><span class="chip c-alta">Sim</span></td><td>Via Planos, com "Visitas Programadas" na ficha</td></tr>
+<tr><td>Criticidade</td><td><span class="chip c-alta">Sim</span></td><td>6 tipos + descrição textual + risco de operação numérico</td></tr>
+<tr><td>Disponibilidade / tempo de parada</td><td><span class="chip c-alta">Sim</span></td><td>Ficha mostra "Disponibilidade 50", MTTR 122 dias, MTBF 121 dias — calculados sobre o período de OS abertas</td></tr>
+<tr><td>Depreciação</td><td><span class="chip c-alta">Sim</span></td><td>Tabela calculada; alerta explícito quando faltam os 4 campos necessários</td></tr>
+<tr><td>Árvore de ativos / componentes</td><td><span class="chip c-baixa">Não</span></td><td>Equipamento não tem pai/filho. Um ventilador e seu circuito são registros irmãos</td></tr>
+<tr><td>Medidores / horímetro</td><td><span class="chip c-baixa">Não</span></td><td>Sem leitura de contadores; manutenção só por calendário, nunca por uso</td></tr>
+<tr><td>Geolocalização</td><td><span class="chip c-baixa">Não</span></td><td>Localização é uma FK para Empresa tipo Local, não coordenada</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s9">
+<h2><span class="num">09</span><span>Planos e manutenção preventiva</span></h2>
+<p class="lead">"Plano" no Arkmeds significa <strong>programa recorrente de manutenção</strong> — não é contrato nem pacote comercial (contrato é entidade separada). É o mecanismo que transforma política de manutenção em ordens de serviço.</p>
+
+<h3>Anatomia de um plano</h3>
+<div class="grid g2">
+  <div class="card"><h5>Definição</h5><p>Título · setor responsável · responsável · técnicos executores · descrição · observações.</p></div>
+  <div class="card"><h5>Ritmo</h5><p>Data inicial + frequência (13 opções, de diário a quadrienal) + prazo de execução em dias + regra de arredondamento de contagem.</p></div>
+  <div class="card"><h5>Escopo</h5><p>Aba <b>Equipamentos</b> com três flags por linha — P (preventiva), C (calibração), E (teste elétrico) — e aba <b>Setores</b> com a flag P.</p></div>
+  <div class="card"><h5>Materialização</h5><p><code>abertura_automatica</code> = Sim gera as OS do ciclo. A aba <b>Execução</b> lista as OS previstas, separadas em M. Preventivas / Calibrações / T. Segurança Elétrica, com ações em lote Abrir · Finalizar · Cancelar.</p></div>
+</div>
+
+<h3>Ciclos</h3>
+<p>Cada plano roda em ciclos fechados. Exemplo real lido: <em>CEPAI — PLANO DE PREV/CAL — BALANÇA</em>, primeira execução em 20/07/2023, frequência Anual, ciclo atual 20/07/2026 → 19/07/2027, prazo 364 dias (325 restantes), progresso "0 de 8 OS completadas", situação Em andamento. A ficha alterna entre <b>Ciclo Atual</b> e <b>Ciclos Anteriores</b>, e o plano pode ser <b>Finalizado</b> (encerrado, sai da conformidade ativa).</p>
+
+<h3>Fluxo funcional</h3>
+<pre class="tree">definir Plano (título, frequência, prazo, responsáveis)
+      │
+      ├─→ adicionar Equipamentos  ──→ marcar P / C / E por equipamento
+      ├─→ adicionar Setores       ──→ marcar P
+      │
+      ▼
+início do ciclo (data_inicial, depois +frequência)
+      │
+      ├─ abertura_automatica = Sim ──→ <b>gera as OS do ciclo</b> (uma por equipamento × flag)
+      └─ abertura_automatica = Não ──→ OS ficam "previstas" e são abertas manualmente
+      │
+      ▼
+OS entram na <b>Agenda</b> como "Serviços não agendados" (2.950 hoje)
+      │
+      ├─→ técnico agenda (arrastar no calendário) ──→ Agendamento
+      ├─→ executa (app, offline) ──→ Checklist do Procedimento
+      └─→ fecha ──→ progresso do ciclo avança
+      │
+      ▼
+<b>Conformidade</b>: Relatório de Conformidade de Planos + pizza do painel
+      (Ciclos Anteriores · Em dia não iniciadas · Atrasadas · Em dia iniciadas)
+      │
+      ▼
+fim do ciclo → novo ciclo automático  ·  ou  Finalizar plano
+</pre>
+
+<h3>Regras e alertas ligados a planos</h3>
+<ul>
+  <li>Preferência: <em>"Desabilitar a geração de OS's para equipamentos incluídos em planos após o início do ciclo atual"</em> — equipamento adicionado no meio do ciclo só entra no próximo.</li>
+  <li>Preferência: <em>"Liberar acompanhamento de planos para solicitante"</em> — expõe ao cliente se as OS estão em dia/atrasadas e iniciadas/não iniciadas, além dos ciclos anteriores.</li>
+  <li>Notificação: <em>"Habilitar o envio de e-mail para início de ciclo dos planos"</em>.</li>
+  <li>Relatórios dedicados: <b>Conformidade de planos</b> (filtros por tipo de serviço, empresa, quadro, tipo de equipamento, estado, planos) e <b>Cronograma de planos</b> (com período amostral e dados dos equipamentos).</li>
+</ul>
+
+<div class="note warn">
+<span class="lbl">Limitações do modelo de plano</span>
+<p>Não há <strong>rota</strong> (o quadro de trabalho é um agrupamento estático, não um roteiro otimizado); não há <strong>janela de manutenção</strong> por setor; não há gatilho por <strong>uso</strong> (horas de operação, ciclos de esterilização); a frequência é fixa por plano — não é possível ter preventiva semestral e calibração anual no mesmo plano para o mesmo equipamento sem criar dois planos; e o progresso é contagem simples de OS fechadas, sem ponderação por criticidade.</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s10">
+<h2><span class="num">10</span><span>Agendamentos</span></h2>
+<p class="lead">Existem <strong>duas superfícies</strong> de agendamento, com propósitos diferentes — e essa duplicidade é em si um achado de UX.</p>
+
+<div class="grid g2">
+<div class="card"><h5>Aba "Agendamentos" do painel</h5><p>Lista tabular dos serviços de hoje ou da semana: Plano · Equipamento · Serviço · Solicitante · Técnicos · Horário. Ações em lote Abrir / Fechar / Cancelar. É a visão do coordenador ao abrir o sistema.</p></div>
+<div class="card"><h5>Agenda de OS (<code>/agenda/</code>)</h5><p>Ferramenta de programação: painel lateral com três baldes (Atrasados · Não agendados · Dentro do prazo) e calendário semanal com arrastar-e-soltar. Alterna entre visão de lista, visão de recursos (por Quadro de trabalho, expansível) e calendário.</p></div>
+</div>
+
+<div class="tw"><table>
+<thead><tr><th>Aspecto</th><th>Situação</th></tr></thead>
+<tbody>
+<tr><td>Fonte do evento</td><td>Campos <code>data_hora_inicio</code> / <code>data_hora_fim</code> da própria OS <span class="chip c-media">Média</span></td></tr>
+<tr><td>Recursos</td><td>Agrupamento por <b>Quadro de trabalho</b> (ENG CLÍNICA, ENG CLÍNICA ROTA), com linhas expansíveis — provavelmente técnicos</td></tr>
+<tr><td>Arrastar e soltar</td><td>Sim, do balde de não agendados para o calendário</td></tr>
+<tr><td>Cores e estados</td><td>Baldes semaforizados (vermelho/azul/verde); cartões do Kanban usam ponto colorido de prioridade</td></tr>
+<tr><td>Recorrência</td><td>Não no agendamento — a recorrência vive no Plano</td></tr>
+<tr><td>Conflitos / capacidade</td><td>Não observado. Sem checagem de sobreposição, sem carga por técnico, sem jornada aplicada ao calendário (apesar de <code>jornada_diaria</code> existir no usuário)</td></tr>
+<tr><td>Vínculo com cliente e equipamento</td><td>Herdado da OS</td></tr>
+<tr><td>Impressão</td><td>Botão de impressão da agenda</td></tr>
+<tr><td>Volume atual</td><td><b>2.950 serviços não agendados</b> — exatamente o total de OS ativas. Na prática, a equipe não usa o agendamento</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s11">
+<h2><span class="num">11</span><span>Certificados e laudos</span></h2>
+<p class="lead">É aqui que o Arkmeds se diferencia de um CMMS genérico. São seis famílias documentais, cada uma com numeração, validade, responsável técnico e PDF próprios.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Documento</th><th>Numeração</th><th>Validade</th><th>Assinatura</th><th>Particularidades</th></tr></thead>
+<tbody>
+<tr><td><b>Certificado de calibração</b></td><td>Série própria (ex.: 5301021), configurável</td><td>Sim (1 ano típico)</td><td>Técnico executor + Responsável técnico + Responsável solicitante</td><td>Condições ambientais com incerteza; tabelas de medição por ponto; fator k para 95 %; critério de aceitação; correção de erro sistemático; VVC opcional no PDF; liberação ao cliente manual ou automática</td></tr>
+<tr><td><b>Rascunho de calibração</b></td><td>—</td><td>—</td><td>—</td><td>Fila de certificados em elaboração ("Salvar rascunho")</td></tr>
+<tr><td><b>Certificado de padrão</b></td><td>Série própria (ex.: 2024007661)</td><td>Sim</td><td>Órgão externo (ENGECAL, SURGICAL…)</td><td>Fecha a cadeia de rastreabilidade: um padrão vencido invalida as calibrações que dependem dele. O sistema mostra o vencimento do padrão dentro do editor de calibração</td></tr>
+<tr><td><b>Teste de segurança elétrica</b></td><td>Série própria</td><td>Sim</td><td>Técnico executor</td><td>Alimentado automaticamente pelo analisador Arkmeds Tesla via checklist do tipo "Teste Automático"</td></tr>
+<tr><td><b>Laudo de obsolescência</b></td><td>Formato ano+sequência (2026011000180)</td><td>—</td><td>Ação "Assinar"</td><td>Motivo, parecer técnico com fundamentação legal (ex.: Resolução SEPLAG 37/2010), declaração de ausência de conflito de interesses, referência a ART/CREA. Gerável a partir da OS ou do equipamento</td></tr>
+<tr><td><b>Qualificação térmica</b></td><td>Sequencial simples</td><td>—</td><td>—</td><td>Compilação assíncrona do PDF (autoclaves, câmaras de conservação, freezers)</td></tr>
+</tbody></table></div>
+
+<h3>Rastreabilidade metrológica</h3>
+<pre class="tree"><b>Órgão acreditado</b> (RBC / laboratório externo)
+        │  emite
+        ▼
+<b>Certificado de Padrão</b>  (nº, data, validade)
+        │  qualifica
+        ▼
+<b>Padrão</b> = Equipamento com modo_uso = "Padrão"   <i>(38 no tenant: Tesla, Otto, Fluke, Contec…)</i>
+        │  é usado em
+        ▼
+<b>Certificado de Calibração</b> do equipamento do cliente
+        │  referencia
+        ▼
+<b>Procedimento</b> (tabelas de calibração, escopo, conteúdo) + <b>Incerteza</b> por sensor/faixa
+</pre>
+
+<h3>Preferências que governam os documentos</h3>
+<ul>
+<li>Imprimir todos os valores verdadeiros convencionais (VVC) no PDF · imprimir valor nominal · imprimir validade do padrão.</li>
+<li>Liberação automática do certificado ao solicitante · esconder assinatura do contratante.</li>
+<li>Imprimir rodapé da empresa no laudo de qualificação térmica.</li>
+<li>E-mail mensal com vencimento de calibrações · e-mail de vencimento de certificados de padrões · e-mail na liberação de certificado.</li>
+</ul>
+</section>
+<hr class="rule">
+
+<section id="s12">
+<h2><span class="num">12</span><span>Orçamentos</span></h2>
+<p class="lead">Módulo comercial completo, com estados próprios, aprovação pelo cliente e integração com estoque no faturamento. Pouco usado neste tenant (1 registro), mas totalmente instrumentado.</p>
+
+<h3>Processo</h3>
+<pre class="tree"><b>OS</b> em "Análise concluída — Gerar orçamento"
+   │
+   ▼ Ação "Criar orçamento" — quatro modalidades:
+   │   · Ordem de serviço específica   · Peças
+   │   · Peças e Serviços              · Serviços
+   ▼
+<b>PENDENTE</b>  (nº · OS · tipo · solicitante · data · validade · valor)
+   │   itens: peças (com NF/lote) + serviços (com garantia e valor)
+   │
+   ├──→ estado da OS: "Aguardando envio do orçamento" → "Aguardando aprovação do orçamento"
+   │
+   ├─ solicitante <b>APROVA</b>  ──→ <b>APROVADO EM CURSO</b> ──→ execução ──→ <b>FATURADO</b>
+   │                                                              │
+   │                                                              └→ modal "Peças a Faturar"
+   │                                                                 debita o estoque
+   ├─ solicitante <b>REPROVA</b> ──→ motivo obrigatório  ──→ <b>REPROVADO EM CURSO</b>
+   │        (Valor muito alto · Tempo de entrega muito longo ·
+   │         Serviço não autorizado · Falta de recursos financeiros)
+   │
+   ├─ <b>RECUSADO</b>   (não editável)
+   ├─ <b>CANCELADO</b>  (não editável)
+   └─ <b>MODIFICAR</b>  ──→ volta para Pendentes e exige nova assinatura
+</pre>
+
+<h3>Campos e recursos</h3>
+<ul>
+<li><b>Cabeçalho:</b> Número · Ordem de Serviço · Tipo · Solicitante · Data de Criação · Validade · Valor. Totalizador em R$ por aba.</li>
+<li><b>Itens de peça:</b> peça · quantidade · nota fiscal/lote. <b>Itens de serviço:</b> serviço do catálogo (tipo, descrição, garantia em dias, valor) · observações.</li>
+<li><b>Governança:</b> histórico do orçamento; permissão dedicada "Pode movimentar Orçamento" (é justamente a permissão que o grupo Solicitante possui); tour guiado na tela.</li>
+<li><b>Ausências:</b> não há desconto, imposto, condição de pagamento, markup, margem, nem versionamento explícito de proposta (a "Modificação" sobrescreve).</li>
+</ul>
+</section>
+<hr class="rule">
+
+<section id="s13">
+<h2><span class="num">13</span><span>Estoque</span></h2>
+<p class="lead">Estoque de peças orientado a manutenção: simples no cadastro, mas com dois recursos incomuns — nomenclatura e preço por cliente, e rastreio por nota fiscal e lote.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Aspecto</th><th>Situação</th><th>Detalhe</th></tr></thead>
+<tbody>
+<tr><td>Produtos / peças</td><td><span class="chip c-alta">Sim</span></td><td>Tipo (FK), categoria (FK), unidade (FK), fabricante, código do fabricante, modelo, código interno, imagem, observações</td></tr>
+<tr><td>Categorias e tipos</td><td><span class="chip c-alta">Sim</span></td><td>Telas próprias em Estoque › Configurações</td></tr>
+<tr><td>Unidades de medida</td><td><span class="chip c-alta">Sim</span></td><td>Entidade separada, com permissões próprias de criar/editar/excluir</td></tr>
+<tr><td>Fornecedores</td><td><span class="chip c-alta">Sim</span></td><td>Reaproveita Empresa tipo Fornecedor</td></tr>
+<tr><td>Saldo e estoque mínimo</td><td><span class="chip c-alta">Sim</span></td><td>Colunas Quantidade e Estoque Mínimo; robô de alerta por peça (17 alertas cadastrados neste tenant)</td></tr>
+<tr><td>Entradas</td><td><span class="chip c-alta">Sim</span></td><td>Quantidade, fornecedor, nº da nota fiscal, lote, valor de aquisição, valor de venda</td></tr>
+<tr><td>Saídas</td><td><span class="chip c-alta">Sim</span></td><td>Por utilização em OS e por faturamento de orçamento (modal de débito)</td></tr>
+<tr><td>Reservas</td><td><span class="chip c-media">Sim</span></td><td>Preferência "Imprimir peças reservadas e serviços em OS" indica o conceito de reserva</td></tr>
+<tr><td>Locais de estoque</td><td><span class="chip c-media">Parcial</span></td><td>Não há almoxarifado como entidade; a segregação é por <b>Quadro de Trabalho</b> na peça</td></tr>
+<tr><td>Inventário / contagem</td><td><span class="chip c-baixa">Não observado</span></td><td>Sem tela de inventário cíclico ou ajuste com justificativa</td></tr>
+<tr><td>Custo médio / curva ABC</td><td><span class="chip c-baixa">Não</span></td><td>Só valor de aquisição e de venda por entrada</td></tr>
+<tr><td>Preço por cliente</td><td><span class="chip c-alta">Sim</span></td><td>Tabela "Nomenclatura Peça por Empresa": nomenclatura + empresa + valor de venda — permite o mesmo item ter nome e preço diferentes por hospital</td></tr>
+<tr><td>Importação</td><td><span class="chip c-alta">Sim</span></td><td>Botão "Importar peças"</td></tr>
+<tr><td>Relatórios</td><td><span class="chip c-alta">Sim</span></td><td>Inclusão de peças (por tipo, categoria, lote, quadro, data) e Utilização de peças</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s14">
+<h2><span class="num">14</span><span>Relatórios</span></h2>
+<p class="lead">Doze relatórios em PDF com formulário de filtros, mais quatro exportações assíncronas em planilha. Nenhum foi executado nesta auditoria — os filtros foram lidos, mas o botão "Gerar" nunca foi acionado.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Relatório</th><th>Rota</th><th>Filtros observados</th><th>Finalidade</th></tr></thead>
+<tbody>
+<tr><td><b>Conclusão de OS</b></td><td><code>/relatorio/ordem_servico_concluidas/</code></td><td>Tipo de relatório · Gráficos · Empresa * · Quadro de trabalho · Tipo de serviço · Período</td><td>Prestação de contas do que foi entregue no período</td></tr>
+<tr><td><b>Estado de OS</b></td><td><code>/relatorio/ordem_servico_estado/</code></td><td>Empresa * · Quadro de trabalho · Período *</td><td>Fotografia do backlog por estado</td></tr>
+<tr><td><b>Controle patrimonial</b></td><td><code>/relatorio/controle_patrimonial/</code> + <code>/patrimonial/list/</code></td><td>—</td><td>Inventário patrimonial; geração assíncrona com fila (ID, número, usuário, data, disponibilidade)</td></tr>
+<tr><td><b>Registros de horas</b></td><td><code>/relatorio/registro_horas/</code></td><td>Tipo de relatório · Empresas · Técnicos · Período</td><td>Apuração de horas por técnico e por cliente</td></tr>
+<tr><td><b>Serviços terceirizados por empresa</b></td><td><code>/relatorio/servicos_prestados/</code></td><td>Empresa · Quadro · Serviço terceirizado por · Período * · Imprimir valor * · Imprimir campo extra *</td><td>Fechamento de terceiros; base de faturamento</td></tr>
+<tr><td><b>Vencimento de calibrações</b></td><td><code>/relatorio/vencimento/</code></td><td>Período * · Quadro de trabalho</td><td>Antecipação de vencimentos metrológicos</td></tr>
+<tr><td><b>Produtividade da equipe</b></td><td><code>/relatorio/produtividade_equipe/</code></td><td>Técnico * · Quadro · Data *</td><td>Volume de OS e calibrações por técnico</td></tr>
+<tr><td><b>Inclusão de peças</b></td><td><code>/relatorio/inclusao_pecas/</code></td><td>Tipo de peça · Categoria · Lote · Quadros · Data *</td><td>Entradas de estoque no período</td></tr>
+<tr><td><b>Utilização de peças</b></td><td><code>/relatorio/utilizacao_pecas/</code> + <code>/list/</code></td><td>—</td><td>Consumo por OS; geração assíncrona</td></tr>
+<tr><td><b>Conformidade de planos</b></td><td><code>/relatorio/planos/</code></td><td>Tipo de serviço · Empresa · Quadro · Tipo de equipamento · Estado · Planos</td><td>Aderência ao programa preventivo — o relatório mais importante para contrato</td></tr>
+<tr><td><b>Cronograma de planos</b></td><td><code>/relatorio/cronograma_planos/</code></td><td>Tipo de equipamento * · Setor · Tipo de serviço · Empresa · Quadro · Setores · Estado · Planos · Dados dos equipamentos * · Período amostral</td><td>Cronograma anual entregue ao cliente</td></tr>
+<tr><td><b>Análise de dados</b> (4 domínios)</td><td><code>/export/csv/{equipamento, calibracao, orcamento, ordem_servico}/</code></td><td>—</td><td>Exportação para planilha; cada geração vira um job com fila e link de download</td></tr>
+</tbody></table></div>
+
+<div class="note">
+<span class="lbl">Padrão arquitetural relevante</span>
+<p>Relatórios e exportações pesados rodam como <strong>jobs assíncronos com fila e histórico</strong> (<code>/cadastros/analise/list/</code>, <code>/relatorio/patrimonial/list/</code>, compilação de laudos térmicos). É a decisão certa para volumes desta ordem e deve ser replicada no nosso produto desde o MVP.</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s15">
+<h2><span class="num">15</span><span>Indicadores de desempenho</span></h2>
+<p class="lead">Os indicadores estão em três lugares: cards do painel, tela <em>Indicadores gerais</em>, e — o mais rico — o construtor de <em>Relatório automático</em>, que expõe o catálogo completo de métricas do produto.</p>
+
+<h3>Catálogo de métricas nativas <span class="chip c-alta">Alta</span></h3>
+<p>Lidas do seletor "Módulo" do construtor de relatórios periódicos. Estas são <em>todas</em> as métricas que o motor sabe calcular:</p>
+<div class="tw"><table>
+<thead><tr><th>Métrica</th><th>Leitura de negócio</th><th>Equivale a</th></tr></thead>
+<tbody>
+<tr><td>Ordens de Serviço</td><td>Contagem de OS</td><td>Volume / demanda</td></tr>
+<tr><td>Tempo médio de serviços (dias)</td><td>Da abertura ao fechamento</td><td><b>MTTR</b></td></tr>
+<tr><td>Tempo médio entre serviços (dias)</td><td>Intervalo entre OS do mesmo ativo</td><td><b>MTBF</b></td></tr>
+<tr><td>Tempo por estado da ordem de serviço (horas)</td><td>Quanto tempo a OS ficou em cada estado</td><td>Análise de gargalo / lead time por etapa</td></tr>
+<tr><td>Média de minutos gastos por ordem de serviço</td><td>Horas apontadas ÷ nº de OS</td><td>Esforço médio</td></tr>
+<tr><td>Horas gastas</td><td>Soma de horas trabalhadas</td><td>Capacidade consumida</td></tr>
+<tr><td>Serviços iniciados por concluídos (%)</td><td>Taxa de conclusão</td><td>Backlog / throughput</td></tr>
+<tr><td>Porcentagem de chamados cumpridos dentro do prazo</td><td>Aderência ao tempo de atendimento/fechamento</td><td><b>SLA</b></td></tr>
+<tr><td>Número de equipamentos por número de OSs</td><td>Densidade do parque</td><td>Carga por ativo</td></tr>
+<tr><td>Porcentagem de OS por número de equipamentos</td><td>Idem, normalizado</td><td>Taxa de falha do parque</td></tr>
+<tr><td>Gastos com manutenções (R$)</td><td>Custo total do período</td><td>Custo de manutenção</td></tr>
+<tr><td>Custo de substituição do parque tecnológico (R$)</td><td>Valor de reposição do inventário</td><td>Base do indicador seguinte</td></tr>
+<tr><td>Gastos com manutenções ÷ custo de substituição</td><td>Razão custo-manutenção / valor do parque</td><td><b>CMMS ratio</b> — benchmark clássico de engenharia clínica (referência de mercado ≈ 5 %)</td></tr>
+</tbody></table></div>
+<p>Cada métrica pode ser cruzada por <b>Agrupamento</b> (Equipamento · Tipo de equipamento · Empresa · Mês · Semana · Dia · Dia da semana · Problema relatado · Origem de problema · Tipos de serviço · Colaboradores), renderizada como <b>Barra · Linha · Tabela · Pizza</b>, limitada aos <b>5/10/50/100 maiores ou menores</b>, ancorada em <b>Data de abertura</b> ou <b>Data de fechamento</b>, e filtrada por empresa, tipo de equipamento, tipo de OS, responsável técnico, problema relatado, origem de problema, estados, oficinas e estado do equipamento.</p>
+
+<h3>Indicadores exibidos nas telas</h3>
+<div class="tw"><table>
+<thead><tr><th>Onde</th><th>Indicador</th><th>Definição observada</th></tr></thead>
+<tbody>
+<tr><td>Painel — topo</td><td>Equipamentos · Empresas · Usuários</td><td>Contagens do tenant</td></tr>
+<tr><td>Painel — topo</td><td><b>TMAC</b></td><td>Exibido como duração ("1 dia(s), 0:51:31"). Pela sigla e pelo formato: <em>Tempo Médio de Atendimento de Chamado</em>. <span class="chip c-media">Média</span> — a plataforma não exibe a fórmula em nenhum tooltip</td></tr>
+<tr><td>Painel</td><td>Fluxo de caixa</td><td>"Baseado no fechamento das ordens de serviço do último ano", com variação vs. mês anterior</td></tr>
+<tr><td>Painel</td><td>OS criadas / OS finalizadas</td><td>Mês corrente com variação percentual vs. mês anterior</td></tr>
+<tr><td>Painel</td><td>Receita: recorrente e avulsa</td><td>Últimos 6 meses — separa contrato de serviço eventual</td></tr>
+<tr><td>Painel</td><td>Produtividade da equipe</td><td>Pessoas mais ativas nos últimos 30 dias, com OS e Calibrações em séries distintas</td></tr>
+<tr><td>Indicadores gerais</td><td>Estado de equipamentos</td><td>Ativo 84,27 % (22.942) · Manutenção 5,45 % (1.484) · Desativado 10,27 % (2.797)</td></tr>
+<tr><td>Indicadores gerais</td><td>Estado das OS</td><td>Ativas 2.950 (Aberta 306 · Em execução 42 · Aguardando Peças 789 · Outros 1.501) · Inativas 70.876 (Cancelada 497 · Fechada 70.379)</td></tr>
+<tr><td>Indicadores gerais</td><td>Qualidade de chamado</td><td>Excelente · Bom · Neutro · Ruim · Péssimo, sobre todos os chamados fechados</td></tr>
+<tr><td>Ficha da empresa</td><td>Disponibilidade do mês · MTTR · MTBF (meses)</td><td>Por cliente</td></tr>
+<tr><td>Ficha do equipamento</td><td>Disponibilidade · MTTR · MTBF</td><td>Por ativo</td></tr>
+<tr><td>Avaliações</td><td>Nota média 4,4 e distribuição</td><td>7.527 · 3.817 · 1.363 · 172 · 148 (de 5 a 1)</td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+<span class="lbl">Não inventamos fórmulas</span>
+<p>A plataforma <strong>não documenta na interface</strong> como calcula Disponibilidade, MTTR, MTBF ou TMAC — não há tooltip, ajuda contextual nem legenda. Os botões de ajuda existem no DOM (<code>#fluxo-admin-help</code>, <code>#oscriada-admin-help</code> etc.) mas não exibem conteúdo. As equivalências acima são leituras dos rótulos e das unidades, não fórmulas confirmadas. Métricas de <b>backlog</b>, <b>reincidência</b> e <b>taxa preventiva × corretiva</b> não existem como indicador nativo — só podem ser obtidas indiretamente por agrupamento em "Tipos de serviço".</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s16">
+<h2><span class="num">16</span><span>Robôs e automações</span></h2>
+<p class="lead">"Robôs" é o nome comercial de um motor de regras muito simples. A promessa do menu é maior que a capacidade real.</p>
+
+<h3>Anatomia de uma automação</h3>
+<pre class="tree"><b>Automação</b> = Descrição + Model + Tópico + Ação
+
+  Model   ∈ { Ordem de Serviço , Estoque }          ← apenas 2
+  Tópico  ∈ { Mudança de Estados , Estoque de Peças } ← apenas 2
+  Ação    ∈ { E-mail (lista de destinatários verificados) , Webhook }
+
+  Parâmetros do tópico "Mudança de Estados":
+      estado inicial  →  estado final     (ambos sobre os 42 estados)
+  Parâmetros do tópico "Estoque de Peças":
+      peça(s) monitorada(s) → dispara ao atingir o estoque mínimo
+</pre>
+
+<p><b>No tenant há 20 automações:</b> 3 do tipo "OS das preventivas executadas" (mudança de estado → e-mail) e 17 alertas de estoque mínimo por família de peça (filtros de osmose, cabos ECG, sensores de SpO2, mangueiras, baterias…). Todas com ação de e-mail; nenhuma usando webhook.</p>
+
+<h3>O que existe e o que não existe</h3>
+<div class="tw"><table>
+<thead><tr><th>Recurso</th><th>Status</th><th>Nota</th></tr></thead>
+<tbody>
+<tr><td>Regra por mudança de estado da OS</td><td><span class="chip c-alta">Sim</span></td><td>Único gatilho de workflow</td></tr>
+<tr><td>Alerta de estoque mínimo</td><td><span class="chip c-alta">Sim</span></td><td>Por peça</td></tr>
+<tr><td>Webhook</td><td><span class="chip c-alta">Sim</span></td><td>"Toda vez que ocorrer o evento escolhido, essas informações serão enviadas para o endereço selecionado"; assistente "Crie seu Trigger" com filtro por empresa</td></tr>
+<tr><td>Geração automática de OS</td><td><span class="chip c-alta">Sim, mas fora dos Robôs</span></td><td>Vive no Plano (<code>abertura_automatica</code>), não no motor de automação</td></tr>
+<tr><td>Notificações por e-mail programadas</td><td><span class="chip c-alta">Sim, mas em Preferências</span></td><td>7 gatilhos fixos: vencimento de calibrações (mensal), vencimento de contratos (mensal), chamado fechado, liberação de certificado, chamado aberto, vencimento de certificados de padrões, início de ciclo de planos</td></tr>
+<tr><td>Relatório periódico por e-mail</td><td><span class="chip c-alta">Sim</span></td><td>Módulo separado, limite de 5 relatórios</td></tr>
+<tr><td>Regras por data / vencimento</td><td><span class="chip c-baixa">Não</span></td><td>Não é possível criar "se calibração vence em 30 dias, então X"</td></tr>
+<tr><td>Escalonamento por SLA</td><td><span class="chip c-baixa">Não</span></td><td>Sem regra de tempo em estado</td></tr>
+<tr><td>WhatsApp / SMS / push</td><td><span class="chip c-baixa">Não</span></td><td>Somente e-mail e webhook</td></tr>
+<tr><td>Condições compostas</td><td><span class="chip c-baixa">Não</span></td><td>Um gatilho, um filtro, uma ação</td></tr>
+<tr><td>Ações internas (atribuir, mudar estado, criar OS)</td><td><span class="chip c-baixa">Não</span></td><td>A automação só notifica; não altera dados</td></tr>
+</tbody></table></div>
+<p><b>Governança de e-mail:</b> destinatários precisam ter e-mail verificado; endereços não validados entram em lista de bloqueio, com fluxo de reenvio da validação. Detalhe maduro, raramente visto em CMMS.</p>
+</section>
+<hr class="rule">
+
+<section id="s17">
+<h2><span class="num">17</span><span>Usuários e permissões</span></h2>
+<p class="lead">Duas classes de conta, nove grupos e <strong>138 permissões atômicas</strong> — o RBAC mais granular que se encontra em um CMMS desta faixa. E também um dos pontos mais frágeis na configuração real deste tenant.</p>
+
+<h3>Classes de conta</h3>
+<div class="grid g2">
+<div class="card"><h5>Usuário <span class="chip c-acc">36 de 38 licenças</span></h5><p>Equipe interna. Tem custo/hora, jornada diária, conselho profissional e nº de registro (CREA), portaria, assinatura digital, foto, vínculo a empresas e a quadros de trabalho, flag de férias. Consome licença.</p></div>
+<div class="card"><h5>Solicitante <span class="chip c-acc">1.971 · praticamente ilimitado</span></h5><p>Contato do cliente. Vinculado a N empresas/setores, com status ativo/inativo, geração de senha pelo sistema e flag de bloqueio. Não consome licença — é o modelo de portal do cliente.</p></div>
+</div>
+
+<h3>Grupos cadastrados</h3>
+<div class="tw"><table>
+<thead><tr><th class="num-col">ID</th><th>Grupo</th><th>Classe</th><th>Nº de permissões</th></tr></thead>
+<tbody>
+<tr><td class="num-col">1</td><td>Manutenção</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">2</td><td>Calibração</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">3</td><td>Administração</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">5</td><td>Administrador Médio</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">6</td><td>Cadastro Equipamentos / Clientes</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">7</td><td>Preferências do Solicitante</td><td><b>Solicitante</b></td><td><b>21</b></td></tr>
+<tr><td class="num-col">8</td><td>Técnico</td><td>Usuário</td><td><b>101</b></td></tr>
+<tr><td class="num-col">9</td><td>Supervisor</td><td>Usuário</td><td>—</td></tr>
+<tr><td class="num-col">10</td><td>"." <em>(grupo sem nome)</em></td><td>Usuário</td><td>—</td></tr>
+</tbody></table></div>
+
+<h3>Famílias de permissão</h3>
+<div class="tw"><table>
+<thead><tr><th>Família</th><th>Padrão</th><th>Exemplos</th></tr></thead>
+<tbody>
+<tr><td><b>CRUD por entidade</b></td><td><code>Pode {adicionar|editar|deletar|listar} X</code></td><td>ordem de serviço, equipamento, empresa, peça, plano, procedimento, checklist, contrato, calibração, TSE, certificado padrão, qualificação térmica, baixa patrimonial, orçamento, transferência, solicitante, usuário, grupo, integração, incerteza, unidade de medida, registro de horas, rascunho, relatório periódico, selo RBC, serviço, motivo de reprovação, quadro de trabalho, tipos gerenciais…</td></tr>
+<tr><td><b>Ocultar UI</b></td><td><code>Esconder …</code></td><td>botão Diagnóstico de Orçamento na OS; campos Atendimento, Campo Extra, Imprimir Utilização de Peças, Tipo de OS; tópicos Detalhamento do Serviço, Gerenciais, Padrões Utilizados, Registro de Horas</td></tr>
+<tr><td><b>Relatórios</b></td><td><code>Gerar relatório de …</code></td><td>10 permissões, uma por relatório</td></tr>
+<tr><td><b>Ações sensíveis da OS</b></td><td>—</td><td>editar data de criação · editar data de conclusão · editar OS fechada · editar OS cancelada · editar responsável técnico · editar campos gerenciais · editar observação · fechar OS · deletar anexos · deletar horas trabalhadas</td></tr>
+<tr><td><b>Visibilidade financeira e analítica</b></td><td>—</td><td>visualizar valores nas OS · visualizar KPI financeiros · visualizar KPI geral · visualizar BI · visualizar histórico · visualizar localização · visualizar como administrador</td></tr>
+<tr><td><b>Metrologia</b></td><td>—</td><td>liberar calibração · adicionar incerteza · adicionar selo RBC · atribuir responsável técnico a colaboradores</td></tr>
+</tbody></table></div>
+
+<h3>O conjunto do Solicitante — o portal do cliente, na prática</h3>
+<p>As 21 permissões do grupo 7 definem exatamente o que um cliente vê: <em>listar</em> chamados, OS, orçamentos, planos, contratos, empresa, equipamento, calibrações, certificados de padrão, TSE e laudos de obsolescência; <em>visualizar</em> equipamento, anexo na OS, BI e relatório periódico; <em>gerar</em> os relatórios de conclusão de OS, controle patrimonial, ordem de serviço e planos; <em>adicionar chamado</em>; e <em>movimentar orçamento</em> (aprovar/reprovar). É um portal de leitura + duas ações.</p>
+
+<div class="note risk">
+<span class="lbl">Achado de governança</span>
+<p>O grupo <b>Técnico</b> acumula <strong>101 das 138 permissões</strong>, incluindo <em>adicionar empresa</em>, <em>adicionar grupo</em>, <em>adicionar plano</em>, <em>adicionar solicitante</em> e criação de tipos gerenciais. Isso é sintoma de um problema de produto, não só de configuração: como não existem <em>papéis pré-definidos</em> (o sistema entrega grupos vazios para o cliente montar), o caminho de menor esforço é marcar quase tudo. Um produto novo deve entregar <strong>papéis padrão prontos e testados</strong> (Admin, Gestor, Supervisor, Técnico, Metrologista, Financeiro, Cliente) e tratar a permissão granular como exceção, não como ponto de partida.</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s18">
+<h2><span class="num">18</span><span>BI</span></h2>
+<p class="lead">O item "BI" do menu principal é um link externo para um relatório do <strong>Google Looker Studio</strong> (<code>datastudio.google.com/reporting/711da4db-8138-4998-b4b7-2f784e58e5e8</code>). Não é uma tela do produto.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Pergunta</th><th>Resposta</th><th>Confiança</th></tr></thead>
+<tbody>
+<tr><td>É funcionalidade nativa?</td><td>Não. É um relatório hospedado no Looker Studio, aberto em nova aba</td><td><span class="chip c-alta">Alta</span></td></tr>
+<tr><td>Está sob o RBAC do produto?</td><td>Existe a permissão "Pode visualizar BI", que apenas controla a exibição do item de menu. O acesso ao relatório em si é governado pelo Google</td><td><span class="chip c-media">Média</span></td></tr>
+<tr><td>Como os dados chegam lá?</td><td>Não observável de dentro do produto. Provável conector sobre uma cópia/extração da base do tenant</td><td><span class="chip c-baixa">Baixa</span></td></tr>
+<tr><td>É por tenant?</td><td>O ID do relatório está fixo no HTML deste tenant, sugerindo um relatório por cliente</td><td><span class="chip c-media">Média</span></td></tr>
+<tr><td>Substitui os indicadores nativos?</td><td>Não. Convive com Indicadores gerais e com o construtor de relatórios periódicos</td><td><span class="chip c-alta">Alta</span></td></tr>
+</tbody></table></div>
+
+<div class="note">
+<span class="lbl">Implicação para o nosso produto</span>
+<p>Terceirizar o BI resolve o "temos BI" no material comercial, mas cria três dívidas: o dado sai do perímetro de permissões do produto, o cliente vê uma interface completamente diferente, e qualquer mudança de indicador vira trabalho manual de consultoria. Como a plataforma já possui um <em>motor de métricas com 13 indicadores, agrupamentos e visualizações</em> (seção 15), a decisão certa é investir nele e entregar <strong>dashboards nativos configuráveis</strong>, deixando a exportação/conector como recurso avançado.</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s19">
+<h2><span class="num">19</span><span>Auditoria e histórico</span></h2>
+<p class="lead">O sistema registra alterações com <strong>diff campo a campo</strong> em 34 modelos. É um dos pontos mais fortes da plataforma e um requisito não negociável em ambiente hospitalar regulado.</p>
+
+<h3>O que é registrado</h3>
+<div class="tw"><table>
+<thead><tr><th>Dimensão</th><th>Registrado?</th><th>Como aparece</th></tr></thead>
+<tbody>
+<tr><td>Data e hora</td><td><span class="chip c-alta">Sim</span></td><td>28/08/2026 17:24:22</td></tr>
+<tr><td>Usuário</td><td><span class="chip c-alta">Sim</span></td><td>Nome completo</td></tr>
+<tr><td>Módulo (entidade)</td><td><span class="chip c-alta">Sim</span></td><td>34 opções no filtro</td></tr>
+<tr><td>Registro afetado</td><td><span class="chip c-alta">Sim</span></td><td>Descrição legível + número/ID</td></tr>
+<tr><td>Ação</td><td><span class="chip c-alta">Sim</span></td><td>Criação · Edição · Exclusão</td></tr>
+<tr><td>Campo alterado</td><td><span class="chip c-alta">Sim</span></td><td>"numero editado", "Certificado Padrão", "Registro de Anexo - Criação"</td></tr>
+<tr><td>Valor anterior → novo</td><td><span class="chip c-alta">Sim</span></td><td><code>(Em branco) → 54296784578</code> · <code>2024007596 → 2023004867</code></td></tr>
+<tr><td>Endereço IP</td><td><span class="chip c-baixa">Não</span></td><td>Nenhuma coluna ou filtro de IP/sessão</td></tr>
+<tr><td>Trilha por registro</td><td><span class="chip c-alta">Sim</span></td><td><code>/model_history/{modelo}/{id}</code> — acessível pela ficha do equipamento e da calibração</td></tr>
+<tr><td>Feed em tempo real</td><td><span class="chip c-alta">Sim</span></td><td>Widget "Histórico de Atividades" no painel, com ícone por tipo de ação e link para o registro</td></tr>
+<tr><td>Retenção / imutabilidade</td><td><span class="chip c-baixa">Não observável</span></td><td>Não há indicação de política de retenção nem de proteção contra edição do log</td></tr>
+</tbody></table></div>
+<p><b>Modelos auditados:</b> Empresas · Equipamentos · Tipo Equipamento · Procedimento · Novo Checklist · Plano · Contrato · Ordem de Serviço · Tipo OS · Estado OS · Tipo Origem Problema · Tipo Problema Relatado · Horas Trabalhadas · Chamado · Calibração · Certificado Padrão · Teste de Segurança Elétrica · Laudo de Obsolescência · Orçamento · Peça · Tipo Peça · Categoria de Peça · Itens Peça · Utilização de Peças · Nota Fiscal · Protocolo de Recolhimento · Protocolo de Serviço · Protocolo de Entrega · Oficina · Numeração · Automação · Usuário · Preferência.</p>
+</section>
+<hr class="rule">
+
+<section id="s20">
+<h2><span class="num">20</span><span>Auditoria de UX / UI</span></h2>
+<p class="lead">A plataforma tem <strong>três gerações visuais convivendo</strong>: telas Django clássicas (Bootstrap + DataTables + select2), telas intermediárias com cards temáticos, e telas SPA modernas (Chamados, Agenda, Kanban). A costura entre elas é visível a cada clique.</p>
+
+<h3>Pontos fortes</h3>
+<div class="grid g2">
+<div class="card"><h5>Fichas 360° realmente úteis</h5><p>Equipamento, empresa e plano concentram indicadores, programação futura e histórico documental em uma página. O usuário raramente precisa de uma segunda aba.</p></div>
+<div class="card"><h5>Três visualizações da mesma base de OS</h5><p>Lista densa, Kanban por estado e Agenda com arrastar-e-soltar — cada uma para um papel diferente (analista, coordenador, programador).</p></div>
+<div class="card"><h5>Filtros profundos e compartilháveis</h5><p>25 filtros na OS, 19 no equipamento, com "Copiar URL" e "Compartilhar". Filtro por "Serviços a vencer" é especialmente inteligente.</p></div>
+<div class="card"><h5>"Mostrar na OS" por campo do equipamento</h5><p>Deixar o cliente escolher quais atributos do ativo aparecem no cabeçalho da OS é uma solução elegante para um problema real de documentação.</p></div>
+<div class="card"><h5>Contexto financeiro no lugar certo</h5><p>Tabela de depreciação na ficha do equipamento, com mensagem explícita dizendo <em>quais</em> quatro campos faltam para o cálculo. Erro que ensina.</p></div>
+<div class="card"><h5>Feed de atividades no painel</h5><p>Cada linha é clicável e leva ao registro. Transforma auditoria em navegação.</p></div>
+<div class="card"><h5>Ocultar em vez de excluir</h5><p>Taxonomias usam <code>ocultar/{id}</code>, preservando integridade referencial do histórico. Decisão correta.</p></div>
+<div class="card"><h5>Ajuda embarcada</h5><p>FAQ fixo na barra lateral, chat de suporte em todas as telas, tours guiados ("Iniciar Tour" em Orçamentos), link de versão para as release notes.</p></div>
+</div>
+
+<h3>Pontos fracos e problemas de UX</h3>
+<div class="tw"><table>
+<thead><tr><th>Problema</th><th>Onde</th><th>Impacto</th></tr></thead>
+<tbody>
+<tr><td><b>Três linguagens visuais na mesma sessão</b></td><td>Chamados (SPA) → Ordens de serviço (Django) → Painel (híbrido)</td><td>Quebra o modelo mental; padrões de filtro, paginação e botões mudam de tela para tela</td></tr>
+<tr><td><b>Densidade descontrolada</b></td><td>Lista de OS com 13 colunas em 25 linhas; truncamento agressivo ("HOSPITAL NOSSA SENHORA…", "ELETROCARDIÓGRAFO FK0…")</td><td>O usuário não consegue ler o dado sem hover ou clique</td></tr>
+<tr><td><b>Filtros escondidos em painéis modais</b></td><td>Empresas, Equipamentos, TSE, Laudos</td><td>Não há indicação persistente de <em>quais</em> filtros estão ativos</td></tr>
+<tr><td><b>Selects gigantes sem hierarquia</b></td><td>Tipo de equipamento (651 opções), Problema relatado (360), Origem do problema (344), Destinatários (milhares em lista plana)</td><td>Combos com milhares de itens; o navegador chega a travar (a renderização de algumas telas excedeu 30 s durante a auditoria)</td></tr>
+<tr><td><b>Formulários muito longos sem salvamento parcial</b></td><td>Equipamento (39 campos + 4 abas), Calibração (rolagem de várias telas)</td><td>Risco de perda de trabalho; só a calibração tem "Salvar rascunho"</td></tr>
+<tr><td><b>Estados sem cor nem categoria</b></td><td>Lista e Kanban de OS</td><td>42 estados em texto puro; impossível ler a fila de relance</td></tr>
+<tr><td><b>Feedback de erro genérico</b></td><td>Modal de checklist exibindo apenas "Erro!"</td><td>Não diz o que houve nem o que fazer</td></tr>
+<tr><td><b>Placeholder em produção</b></td><td>Modal de checklist com "Lorem ipsum dolor sit amet" e "Descrição N/A"</td><td>Erosão de confiança</td></tr>
+<tr><td><b>Nomenclatura interna vazando</b></td><td>Rota de calibração é <code>/calibracao/balanca/</code>; "Oficina" no código × "Quadro de trabalho" na tela; "Baixa patrimonial" × "Laudo de obsolescência"; "Model" e "Tópico" no cadastro de automação</td><td>O usuário aprende dois vocabulários</td></tr>
+<tr><td><b>Duplicatas e ruído nas taxonomias</b></td><td>"Reposição de Oxigênio na unidade" duas vezes; "fechada" além de "Fechada"; "Emprestimo" e "Empréstimo de equipamento"; tipos de serviço que são sintomas</td><td>Relatórios e indicadores ficam fragmentados</td></tr>
+<tr><td><b>Grupo de permissões chamado "."</b></td><td>Usuários › Grupos</td><td>Nada impede nome vazio ou sem sentido; sem descrição de grupo</td></tr>
+<tr><td><b>Limites arbitrários expostos</b></td><td>"Número máximo de relatórios (5) atingido"; "36 de 38" usuários</td><td>Limite comunicado como bloqueio, sem caminho de resolução</td></tr>
+<tr><td><b>BI fora do produto</b></td><td>Menu BI</td><td>Muda de domínio, de identidade visual e de modelo de permissão</td></tr>
+<tr><td><b>Sem tema escuro, sem responsividade real</b></td><td>Toda a aplicação</td><td>Uso em campo depende inteiramente do app MARK II</td></tr>
+<tr><td><b>Acessibilidade</b></td><td>Toda a aplicação</td><td>Ações de linha são ícones sem rótulo textual nem <code>title</code>; contraste do texto secundário sobre o teal do cabeçalho é baixo; ordem de foco não evidente</td></tr>
+<tr><td><b>Ausência de busca global</b></td><td>Cabeçalho</td><td>Existe "Buscar cadastros" apenas dentro de listas específicas; não há um campo único para achar "patrimônio 7737"</td></tr>
+</tbody></table></div>
+
+<h3>Elementos que parecem datados</h3>
+<ul>
+<li>Paginação numerada com "…2954" (2.954 páginas) em vez de rolagem virtual ou busca.</li>
+<li>Cabeçalho de página com ilustração de circuito e tipografia display de 2018.</li>
+<li>Botões "Aplicar Filtros / Limpar / Cancelar" repetidos em modais Bootstrap.</li>
+<li>Ícones FontAwesome 4 e cores de badge não semânticas.</li>
+<li>Erro de digitação persistente no botão "Pŕoximo" (presente em várias telas).</li>
+<li>Rodapé "© 2020 Arkmeds" na página pública de versões.</li>
+</ul>
+
+<h3>O que devemos manter no nosso produto</h3>
+<div class="pill-row">
+<span class="pill">Ficha 360° do ativo</span><span class="pill">Três visões da OS (lista/kanban/agenda)</span><span class="pill">Flags P/C/E por equipamento no plano</span><span class="pill">Ciclos de plano com conformidade</span><span class="pill">"Mostrar na OS" por campo</span><span class="pill">Ocultar em vez de excluir</span><span class="pill">Combinar/mesclar taxonomias</span><span class="pill">Numeração de documentos configurável</span><span class="pill">Auditoria com diff campo a campo</span><span class="pill">Verificação de e-mail antes de notificar</span><span class="pill">Jobs assíncronos com fila para exportações</span><span class="pill">Avaliação de chamado 1–5 com comentário</span><span class="pill">Preço e nomenclatura de peça por cliente</span><span class="pill">Rastreabilidade padrão → certificado</span>
+</div>
+
+<h3>O que deve ser melhorado</h3>
+<div class="pill-row">
+<span class="pill">Estados com categoria, cor e transições</span><span class="pill">Taxonomias com governança e merge assistido</span><span class="pill">Busca global</span><span class="pill">Selects com busca assíncrona e agrupamento</span><span class="pill">Filtros persistentes e visíveis (chips)</span><span class="pill">Formulários em etapas com autosave</span><span class="pill">Mensagens de erro acionáveis</span><span class="pill">Uma única linguagem visual</span><span class="pill">Tema claro/escuro</span><span class="pill">Web responsiva de verdade</span><span class="pill">BI nativo</span><span class="pill">Papéis padrão prontos</span>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s21">
+<h2><span class="num">21</span><span>Pesquisa externa</span></h2>
+<p class="lead">Funcionalidades documentadas publicamente que <strong>não são evidentes</strong> na navegação da instância TechneCare — em geral porque vivem no app móvel, no hardware ou em módulos não contratados por este tenant.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Funcionalidade</th><th>O que a fonte diz</th><th>Status na instância</th></tr></thead>
+<tbody>
+<tr><td><b>App MARK II</b></td><td>App de gestão de ativos (iOS e Android) que combina calibração, inventário e análise, com operação offline e sincronização ao reconectar. Executa OS, executa checklist, cria equipamento e empresa, cria OS, registra horas, coleta assinatura do cliente, navega pela árvore de ativos e lê QR Code</td><td>Confirmado indiretamente: aba <em>Aplicativo</em> em Preferências ("Troca de estado ao sincronizar", "Estados de OS não selecionáveis pelo aplicativo", "Tipo de registro de hora"), módulo de Rascunhos de OS e link para a Play Store dentro da OS</td></tr>
+<tr><td><b>Analisadores proprietários</b></td><td>Linha de analisadores e simuladores de alta precisão: <b>Tesla</b> (segurança elétrica), <b>Otto</b> (qualificação térmica), <b>Waller</b> e outros, com "conexão perfeita" e teste automatizado</td><td>Confirmado nos dados: padrões cadastrados como "ANALISADOR DE SEGURANÇA ELÉTRICA ARKMEDS TESLA" e "Qualificador térmico ARKMEDS OTTO"; tipo de item de checklist <b>"Teste Automático"</b> é o ponto de integração</td></tr>
+<tr><td><b>Integração com ERPs</b></td><td>API e webhooks para SAP, TOTVS, MV e Tasy, além de plataformas de IoT e CLPs</td><td>Só o webhook é visível na interface. Não há tela de API keys, catálogo de endpoints nem log de integração. A categoria "Integração" da central de ajuda está <b>vazia</b></td></tr>
+<tr><td><b>IA e gêmeos digitais</b></td><td>"Gêmeos digitais identificam padrões de falha e geram ordens de serviço preventivas automaticamente"; artigo de ajuda "Geração de OS corretiva com IA"</td><td>Não observado na instância. Nenhum menu, indicador ou registro relacionado</td></tr>
+<tr><td><b>Conformidade normativa</b></td><td>Aderência a ANVISA, RDC 509, NBR 15943, ABNT NBR ISO/IEC 17025, ONA e Joint Commission</td><td>Coerente com o que se vê: campo Registro ANVISA, incerteza expandida e fator de abrangência na calibração, laudos com ART/CREA</td></tr>
+<tr><td><b>LGPD</b></td><td>Categoria dedicada na central de ajuda</td><td>Não há tela de LGPD no produto (consentimento, anonimização, exportação de dados do titular)</td></tr>
+<tr><td><b>Multi-instância</b></td><td>Subdomínios por cliente: <code>technecare.</code>, <code>ebserh.</code>, <code>cieng.</code>, <code>x.</code>, <code>usa.</code>, <code>lr.</code>, <code>tesla.</code></td><td>Reforça a hipótese de isolamento por tenant</td></tr>
+<tr><td><b>Ritmo de produto</b></td><td>Release notes públicas desde 01/04/2019; da 1.32.0 à 2.69.0 — releases praticamente semanais em 2026</td><td>Confirmado em <code>/versions/</code>, com PDF por versão hospedado em S3</td></tr>
+<tr><td><b>Ecossistema de conteúdo</b></td><td>Blog "Arkmeds Academy", "Escola de Engenharia Clínica", canal no YouTube, presença em feiras (Hospitalar)</td><td>Estratégia de marketing educacional — relevante para o nosso posicionamento</td></tr>
+</tbody></table></div>
+
+<h4>Fontes consultadas</h4>
+<ul>
+<li><a href="https://arkmeds.com/engenharia-clinica/">Arkmeds — Engenharia Clínica</a></li>
+<li><a href="https://arkmeds.com/en/maintenance-management-platform/">Arkmeds — Plataforma de Gestão da Manutenção</a></li>
+<li><a href="https://arkmeds.crisp.help/pt-br/">Central de ajuda Arkmeds</a> — 13 categorias: Cadastro e Consulta, Aplicativo, Serviços, Calibração, Usuários, Planos, Analisadores e simuladores, Relatórios, Orçamentos, Integração, LGPD, Estoque, Robôs</li>
+<li><a href="https://arkmeds.crisp.help/pt-br/article/checklist-x-procedimento-x-ordem-de-servico-ek5o1j/">Checklist × Procedimento × Ordem de Serviço</a></li>
+<li><a href="https://arkmeds.crisp.help/pt-br/article/manual-para-solicitantes-bje963/">Manual para solicitantes</a></li>
+<li><a href="https://arkmeds.crisp.help/pt-br/category/aplicativo-1xwdonm/">Central de ajuda — categoria Aplicativo (MARK II)</a></li>
+<li><a href="https://arkmeds.crisp.help/pt-br/category/robos-18fl13l/">Central de ajuda — categoria Robôs</a></li>
+<li><a href="https://apps.apple.com/br/app/mark-ii/id6482589834">Mark II na App Store</a></li>
+<li><a href="https://blog.arkmeds.com/engenharia-clinica/">Arkmeds Academy — Engenharia clínica</a></li>
+<li><a href="https://bhtec.org.br/2025/10/16/arkmeds-aposta-em-tecnologia-e-capacitacao-para-transformar-a-engenharia-clinica/">BHTEC — Arkmeds aposta em tecnologia e capacitação</a></li>
+</ul>
+</section>
+<hr class="rule">
+
+<section id="s22">
+<h2><span class="num">22</span><span>Benchmark</span></h2>
+<p class="lead">Dois eixos de comparação: CMMS verticais de engenharia clínica no Brasil (concorrência direta) e CMMS/FSM globais modernos (referência de experiência).</p>
+
+<h3>Concorrência direta — Brasil</h3>
+<div class="tw"><table>
+<thead><tr><th>Player</th><th>Posicionamento</th><th>O que o diferencia</th><th>O que aprender</th></tr></thead>
+<tbody>
+<tr><td><b>Arkmeds</b></td><td>CMMS vertical de engenharia clínica desde 2015, cloud, com hardware próprio</td><td>Metrologia profunda + analisadores proprietários + app offline + academia de conteúdo</td><td>O hardware é o fosso competitivo, não o software</td></tr>
+<tr><td><b>Neovero</b></td><td>CMMS/EAM para engenharia clínica, eletromedicina e manutenção hospitalar; 18 anos, 600+ unidades</td><td>Escala de base instalada e cobertura de infraestrutura predial além do clínico</td><td>Cobrir predial + clínico no mesmo produto amplia o ticket</td></tr>
+<tr><td><b>Engeman</b></td><td>CMMS/EAM horizontal com 25+ anos, vertical hospitalar como oferta</td><td>Robustez industrial, planos de manutenção maduros, base multi-setor</td><td>Maturidade de EAM (estoque, compras, contratos) supera a de nichos verticais</td></tr>
+<tr><td><b>Philips Tasy</b></td><td>ERP hospitalar completo (assistencial + financeiro)</td><td>Está dentro do hospital; é o "sistema de registro" da instituição</td><td>Nosso produto precisa <em>integrar</em> com o ERP hospitalar, não competir com ele</td></tr>
+<tr><td><b>GT Effort</b></td><td>CMMS de engenharia clínica</td><td>Player regional</td><td>Mercado fragmentado — há espaço para experiência superior</td></tr>
+</tbody></table></div>
+
+<h3>Referência global de experiência</h3>
+<div class="tw"><table>
+<thead><tr><th>Produto</th><th>O que faz melhor que o Arkmeds</th><th>Aplicável ao nosso produto?</th></tr></thead>
+<tbody>
+<tr><td><b>Limble</b></td><td>Interface moderna e de baixo atrito; anexar checklist, peças, fotos e manuais direto na OS; onboarding sem consultoria</td><td>Sim — é o padrão de UX a perseguir</td></tr>
+<tr><td><b>MaintainX</b></td><td>Colaboração em tempo real na OS (thread com fotos), procedimentos digitais, status de ativo customizáveis para análise de causa raiz</td><td>Sim — a thread na OS é a maior lacuna do Arkmeds</td></tr>
+<tr><td><b>UpKeep</b></td><td>Arquitetura mobile-first de verdade; gestão de peças, itens faturáveis e alertas de estoque baixo</td><td>Sim — mobile-first e faturamento por item</td></tr>
+<tr><td><b>Fiix</b> (Rockwell)</td><td>Analítica com IA e manutenção preditiva sobre dados de sensores/CLP</td><td>Fase avançada — depende de IoT no parque</td></tr>
+<tr><td><b>eMaint / Brightly / Nuvolo</b></td><td>EAM hospitalar com integração a ITSM e a ServiceNow; gestão de capital e planejamento de substituição</td><td>Parcialmente — planejamento de substituição do parque é subexplorado no Brasil</td></tr>
+</tbody></table></div>
+
+<h3>Lacunas de mercado que viram oportunidade</h3>
+<ol>
+<li><strong>Thread colaborativa na OS.</strong> Nenhum dos verticais brasileiros trata a OS como conversa. Hoje o técnico usa WhatsApp e o registro se perde.</li>
+<li><strong>Máquina de estados configurável de verdade.</strong> O mercado inteiro entrega "cadastro de status"; ninguém entrega transições, SLA por estado e ações automáticas.</li>
+<li><strong>Portal do cliente como produto.</strong> O portal do Arkmeds é um subconjunto de permissões, não uma experiência desenhada. Um portal bonito é argumento de venda para o hospital.</li>
+<li><strong>Planejamento de substituição do parque.</strong> Os dados já existem (vida útil, valor de compra, custo acumulado de manutenção, criticidade) mas ninguém entrega a recomendação "estes 40 ativos devem ser substituídos no próximo orçamento".</li>
+<li><strong>IA aplicada ao texto livre.</strong> Há 73 mil descrições de serviço e 360 problemas relatados — matéria-prima ideal para sugestão de diagnóstico, deduplicação de taxonomia e resumo automático de OS.</li>
+<li><strong>Gestão de contrato e SLA como módulo.</strong> Contrato existe como cadastro documental, não como instrumento com escopo, indicadores, multa e medição mensal.</li>
+</ol>
+</section>
+<hr class="rule">
+
+<section id="s23">
+<h2><span class="num">23</span><span>Modelo de dados conceitual</span></h2>
+<p class="lead">Proposta para o <strong>nosso</strong> produto, informada pelo que o Arkmeds acertou e corrigindo o que ele carrega como dívida — sobretudo a Empresa polimórfica e a ausência de máquina de estados.</p>
+
+<h3>Hierarquia conceitual</h3>
+<pre class="tree"><b>Organização</b> (tenant)
+ ├── <b>Clientes</b>                    <i>(hospital, rede, cliente interno)</i>
+ │    └── <b>Unidades</b>               <i>(prédio, campus, base do SAMU)</i>
+ │         └── <b>Setores</b>           <i>(UTI II, Centro Cirúrgico, CME)</i>
+ │              └── <b>Ativos</b>
+ │                   ├── Ordens de serviço
+ │                   ├── Planos de manutenção
+ │                   ├── Certificados e laudos
+ │                   ├── Documentos e mídias
+ │                   └── Leituras de medidor
+ ├── <b>Fornecedores</b>                <i>(entidade separada de Cliente)</i>
+ ├── <b>Contratos</b>                   <i>(escopo, SLA, vigência, medição)</i>
+ ├── <b>Equipes</b> e <b>Membros</b>          <i>(custo/hora, jornada, habilidades)</i>
+ ├── <b>Solicitantes</b>                <i>(usuários do portal, escopados por setor)</i>
+ ├── <b>Almoxarifados</b> → <b>Itens</b> → <b>Movimentos</b>
+ └── <b>Catálogos</b>                   <i>(procedimentos, checklists, serviços, taxonomias)</i>
+</pre>
+
+<div class="note">
+<span class="lbl">Decisão de modelagem nº 1</span>
+<p><strong>Separar a árvore de localização do cadastro de parceiros.</strong> O Arkmeds usa <code>empresa.tipo</code> para representar cliente, unidade, setor <em>e</em> fornecedor na mesma tabela. Isso torna impossível dar campos próprios a cada conceito (um setor não tem CNPJ; um fornecedor não tem setor pai) e força consultas recursivas em toda parte. Proposta: <code>customers</code> + <code>locations</code> (árvore com <code>parent_id</code> e <code>kind</code> ∈ site/building/floor/department) + <code>suppliers</code> separado.</p>
+</div>
+
+<div class="note">
+<span class="lbl">Decisão de modelagem nº 2</span>
+<p><strong>Estado é uma máquina, não um texto.</strong> <code>work_order_statuses</code> ganha <code>category</code> (open · in_progress · blocked · waiting_customer · done · cancelled), <code>color</code>, <code>is_terminal</code>, <code>counts_as_downtime</code>, <code>sla_paused</code> e <code>position</code>; <code>work_order_status_transitions</code> declara o que pode ir para onde e sob qual permissão. Isso resolve, de uma vez, o Kanban, os indicadores, o SLA e a governança das 42 descrições soltas.</p>
+</div>
+
+<h3>Entidades prováveis do banco</h3>
+<div class="tw"><table>
+<thead><tr><th>Tabela</th><th>Objetivo</th><th>Principais campos</th><th>Relacionamentos</th></tr></thead>
+<tbody>
+<tr><td><code>organizations</code></td><td>Tenant</td><td>name, slug, timezone, locale, plan, settings(jsonb)</td><td>raiz de tudo</td></tr>
+<tr><td><code>customers</code></td><td>Cliente atendido</td><td>name, trade_name, tax_id, kind(external/internal), contact, address</td><td>→ locations, contracts, requesters</td></tr>
+<tr><td><code>locations</code></td><td>Árvore física</td><td>parent_id, kind(site/building/floor/department), name, code, geo</td><td>self-FK; ← assets</td></tr>
+<tr><td><code>suppliers</code></td><td>Fornecedor / terceiro</td><td>name, tax_id, contact, categories[]</td><td>← parts, work_orders.outsourced_to</td></tr>
+<tr><td><code>assets</code></td><td>Ativo gerenciado</td><td>tag, serial_number, asset_number, model_id, manufacturer_id, category_id, status, criticality_id, priority, anvisa_reg, inmetro_reg, purchase_date, purchase_value, residual_value, useful_life_years, warranty_until, response_sla_min, resolution_sla_min, qr_token, parent_asset_id</td><td>→ location, customer, contract; ← work_orders, certificates, meters</td></tr>
+<tr><td><code>asset_categories</code> · <code>manufacturers</code> · <code>asset_models</code></td><td>Catálogo normalizado <em>(o Arkmeds usa texto livre)</em></td><td>name, code, manufacturer_id, spec(jsonb)</td><td>← assets</td></tr>
+<tr><td><code>criticality_levels</code></td><td>Matriz de risco</td><td>name, score, color, sla_multiplier</td><td>← assets</td></tr>
+<tr><td><code>meters</code> · <code>meter_readings</code></td><td>Manutenção por uso <em>(inexistente no Arkmeds)</em></td><td>asset_id, unit, value, read_at, source</td><td>→ maintenance_plans</td></tr>
+<tr><td><code>work_orders</code></td><td>Ordem de serviço / chamado</td><td>number, type, status_id, priority, asset_id, requester_id, assignee_id, team_id, opened_at, scheduled_start, scheduled_end, started_at, closed_at, due_at, reported_problem_id, failure_cause_id, description, resolution, source(portal/plan/manual/app/api), plan_cycle_id, extra(jsonb)</td><td>hub central</td></tr>
+<tr><td><code>work_order_statuses</code> · <code>_transitions</code></td><td>Máquina de estados</td><td>ver decisão nº 2</td><td>← work_orders</td></tr>
+<tr><td><code>work_order_assignees</code></td><td>Técnicos executores</td><td>work_order_id, user_id, role</td><td>N:N</td></tr>
+<tr><td><code>work_order_comments</code></td><td>Thread colaborativa <em>(lacuna do Arkmeds)</em></td><td>author_id, body, visibility(internal/customer), attachments[]</td><td>→ work_orders</td></tr>
+<tr><td><code>time_entries</code></td><td>Horas trabalhadas</td><td>work_order_id, user_id, started_at, ended_at, minutes, kind(labor/travel), cost_snapshot</td><td>base de custo e produtividade</td></tr>
+<tr><td><code>work_order_parts</code> · <code>work_order_services</code></td><td>Consumo</td><td>item_id, qty, unit, unit_price, lot_id</td><td>→ inventory, quotes</td></tr>
+<tr><td><code>attachments</code></td><td>Mídia polimórfica</td><td>owner_type, owner_id, kind(photo_before/photo_after/doc/signature), storage_key, mime, size</td><td>qualquer entidade</td></tr>
+<tr><td><code>signatures</code></td><td>Assinatura eletrônica</td><td>work_order_id, signer_name, signer_doc, role, image_key, code_verified_at, ip, hash</td><td>→ work_orders</td></tr>
+<tr><td><code>maintenance_plans</code></td><td>Programa recorrente</td><td>name, frequency, interval, lead_days, window_days, auto_open, rounding, owner_id, team_id, first_run_at, active</td><td>→ plan_targets, plan_cycles</td></tr>
+<tr><td><code>plan_targets</code></td><td>Escopo do plano</td><td>plan_id, target_type(asset/location/category), target_id, services[] <i>(preventiva, calibração, TSE…)</i></td><td>substitui as flags P/C/E</td></tr>
+<tr><td><code>plan_cycles</code></td><td>Ciclo executado</td><td>plan_id, seq, starts_at, ends_at, status, expected_count, done_count</td><td>← work_orders</td></tr>
+<tr><td><code>procedures</code></td><td>Instrução técnica</td><td>title, service_type_id, scope_type, frequency, summary, scope, content, template_key</td><td>→ checklists, required_standards</td></tr>
+<tr><td><code>checklists</code> · <code>checklist_items</code></td><td>Formulário <em>(tabela, não JSON)</em></td><td>label, kind(text/number/option/auto_test/photo/signature), options[], min, max, unit, required, position</td><td>→ procedures</td></tr>
+<tr><td><code>checklist_responses</code> · <code>_answers</code></td><td>Execução</td><td>work_order_id, checklist_id, item_id, value, verdict, photo_key, measured_by</td><td>→ work_orders</td></tr>
+<tr><td><code>calibration_certificates</code></td><td>Certificado metrológico</td><td>number, asset_id, work_order_id, procedure_id, issued_at, valid_until, ambient(jsonb), k_factor, acceptance_criteria, systematic_correction, verdict, released_at</td><td>→ calibration_points, standards</td></tr>
+<tr><td><code>calibration_points</code></td><td>Tabela de medição</td><td>certificate_id, nominal, readings[], std_resolution, dut_resolution, unit, uncertainty, error, verdict</td><td>→ certificate</td></tr>
+<tr><td><code>standards</code> · <code>standard_certificates</code></td><td>Rastreabilidade</td><td>asset_id, uncertainty_profile, external_lab, issued_at, valid_until</td><td>→ calibration_certificates</td></tr>
+<tr><td><code>electrical_safety_tests</code> · <code>thermal_qualifications</code> · <code>obsolescence_reports</code></td><td>Demais laudos</td><td>number, asset_id, work_order_id, technician_id, issued_at, valid_until, verdict, payload(jsonb)</td><td>→ assets</td></tr>
+<tr><td><code>document_number_series</code></td><td>Numeração</td><td>doc_type, prefix, suffix, next_value, active</td><td>usado por todos os documentos</td></tr>
+<tr><td><code>quotes</code> · <code>quote_items</code></td><td>Orçamento</td><td>number, work_order_id, customer_id, status, valid_until, subtotal, discount, tax, total, approved_by, rejection_reason_id</td><td>→ work_orders, inventory</td></tr>
+<tr><td><code>service_catalog</code></td><td>Serviços vendáveis</td><td>service_type_id, description, warranty_days, price</td><td>← quote_items</td></tr>
+<tr><td><code>inventory_items</code> · <code>warehouses</code> · <code>stock_lots</code> · <code>stock_movements</code></td><td>Estoque</td><td>sku, name, category, unit, min_qty, avg_cost; lot(invoice_no, lot_code, qty, unit_cost); movement(kind, qty, ref_type, ref_id)</td><td>← work_order_parts, quotes</td></tr>
+<tr><td><code>customer_item_prices</code></td><td>Preço e nome por cliente</td><td>item_id, customer_id, alias, sale_price</td><td>herdado do Arkmeds</td></tr>
+<tr><td><code>contracts</code> · <code>contract_slas</code></td><td>Contrato como instrumento</td><td>customer_id, kind, starts_at, ends_at, scope, billing_model; sla(priority, response_min, resolution_min, coverage_hours, penalty)</td><td>→ assets, work_orders</td></tr>
+<tr><td><code>asset_transfers</code></td><td>Transferência / empréstimo</td><td>kind, from_location, to_location, assets[], status, due_back_at, approved_by</td><td>→ assets</td></tr>
+<tr><td><code>custody_protocols</code></td><td>Recolhimento / entrega / serviço</td><td>work_order_id, kind, handled_by, signed_by, signed_at</td><td>→ work_orders</td></tr>
+<tr><td><code>users</code> · <code>teams</code> · <code>team_members</code></td><td>Equipe</td><td>name, email, hourly_cost, daily_hours, council, registration_no, signature_key, on_vacation</td><td>→ work_orders</td></tr>
+<tr><td><code>requesters</code></td><td>Portal do cliente</td><td>name, email, role, blocked, customer_id</td><td>→ requester_scopes (locations[])</td></tr>
+<tr><td><code>roles</code> · <code>permissions</code> · <code>role_permissions</code> · <code>user_roles</code></td><td>RBAC</td><td>slug, name, is_system, scope</td><td>papéis padrão prontos</td></tr>
+<tr><td><code>automation_rules</code></td><td>Motor de regras</td><td>trigger(event/schedule/condition), conditions(jsonb), actions(jsonb), active</td><td>muito além dos "Robôs"</td></tr>
+<tr><td><code>notifications</code> · <code>notification_channels</code></td><td>Entrega</td><td>channel(email/push/whatsapp/webhook), template, recipients, verified_at</td><td>→ automation_rules</td></tr>
+<tr><td><code>satisfaction_surveys</code></td><td>CSAT</td><td>work_order_id, score(1–5), comment, answered_at</td><td>→ work_orders</td></tr>
+<tr><td><code>saved_views</code> · <code>dashboards</code> · <code>dashboard_widgets</code></td><td>BI nativo</td><td>owner, filters(jsonb), metric, group_by, viz, limit</td><td>substitui o Looker Studio</td></tr>
+<tr><td><code>export_jobs</code> · <code>report_schedules</code></td><td>Processamento assíncrono</td><td>kind, params, status, file_key, requested_by</td><td>padrão herdado do Arkmeds</td></tr>
+<tr><td><code>audit_logs</code></td><td>Trilha</td><td>actor_id, entity_type, entity_id, action, changes(jsonb), ip, user_agent, at</td><td>global; acrescenta IP, que o Arkmeds não tem</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s24">
+<h2><span class="num">24</span><span>Jornadas principais</span></h2>
+
+<h3>Jornada 1 — Onboarding de um novo cliente e seu parque</h3>
+<pre class="tree">Cliente (hospital) → Unidades → Setores
+      ↓
+Importação do inventário (planilha) → Ativos com TAG, série, patrimônio
+      ↓
+Classificação: categoria, criticidade, prioridade, SLA (atendimento / fechamento)
+      ↓
+Geração e impressão de QR Codes → colagem nos ativos
+      ↓
+Criação dos Planos (preventiva · calibração · TSE) com frequência por categoria
+      ↓
+Vinculação de Procedimentos e Checklists por tipo de equipamento
+      ↓
+Cadastro dos Solicitantes do cliente e envio de acesso ao portal
+      ↓
+Primeiro ciclo abre → OS previstas entram na Agenda
+</pre>
+
+<h3>Jornada 2 — Manutenção corretiva (o fluxo mais frequente)</h3>
+<pre class="tree">Enfermeiro no setor lê o QR Code (ou entra no portal)
+      ↓
+Abre <b>Chamado</b>: equipamento + problema relatado + observação + foto
+      ↓
+Fila "A atender" (sem responsável) — prioridade herdada do ativo · SLA inicia
+      ↓
+Coordenador triaga → atribui responsável técnico e quadro de trabalho → agenda
+      ↓
+Técnico recebe no app (offline) → executa → checklist → fotos antes/depois → horas
+      ↓
+      ├─ resolveu ────────────────→ Serviço finalizado
+      ├─ falta peça ──────────────→ Aguardando peças → reserva/compra → retoma
+      ├─ precisa orçamento ───────→ Análise concluída → <b>Orçamento</b> → cliente aprova
+      └─ sem reparo viável ───────→ <b>Laudo de obsolescência</b> → baixa patrimonial
+      ↓
+Assinatura do solicitante (app ou portal, com código por e-mail) → <b>Fechada</b>
+      ↓
+Avaliação 1–5 + comentário → alimenta CSAT e produtividade
+      ↓
+Indicadores: MTTR, disponibilidade, SLA cumprido, custo (horas × custo/hora + peças)
+</pre>
+
+<h3>Jornada 3 — Manutenção preventiva do ciclo</h3>
+<pre class="tree">Plano ativo → início do ciclo (data + frequência)
+      ↓
+abertura automática gera N OS (uma por ativo × serviço marcado)
+      ↓
+Agenda: baldes "não agendados" → coordenador distribui por técnico e semana
+      ↓
+Técnico executa em rota (vários ativos do mesmo setor no mesmo dia)
+      ↓
+Checklist do Procedimento aplicável → aprovações item a item
+      ↓
+Se serviço = Calibração → certificado com padrões, incertezas e validade
+Se serviço = TSE       → teste automático pelo analisador → certificado
+      ↓
+Fechamento → progresso do ciclo avança ("12 de 40 OS completadas")
+      ↓
+Relatório de Conformidade de Planos → entregue ao cliente / usado em auditoria ONA
+</pre>
+
+<h3>Jornada 4 — Orçamento e faturamento</h3>
+<pre class="tree">OS em análise → técnico conclui diagnóstico
+      ↓
+Cria orçamento (peças e/ou serviços) → valor, validade
+      ↓
+Estado da OS: Aguardando envio → Aguardando aprovação do orçamento
+      ↓
+Solicitante recebe, abre no portal e <b>aprova</b> ou <b>reprova com motivo</b>
+      ↓
+Aprovado → execução → faturamento → débito das peças no estoque
+Reprovado → registro do motivo → alimenta análise de perda
+</pre>
+
+<h3>Jornada 5 — Ciclo metrológico</h3>
+<pre class="tree">Padrão calibrado por laboratório acreditado → Certificado de Padrão (validade)
+      ↓
+Padrão é usado em calibrações do parque do cliente
+      ↓
+Calibração: condições ambientais → pontos de medição → incerteza expandida (k 95 %)
+      ↓
+Critério de aceitação → veredito → certificado com validade
+      ↓
+Liberação ao solicitante (manual ou automática) → e-mail de liberação
+      ↓
+30 dias antes do vencimento → e-mail mensal de vencimentos + relatório
+      ↓
+Plano gera nova OS de calibração no próximo ciclo
+</pre>
+
+<h3>Jornada 6 — Prestação de contas mensal</h3>
+<pre class="tree">Fim do mês
+      ↓
+Relatório periódico automático (seções configuradas) → e-mail aos destinatários
+      ↓
+Gestor abre Indicadores: OS criadas/finalizadas, MTTR, MTBF, disponibilidade,
+      conformidade de planos, CSAT, custo × custo de substituição do parque
+      ↓
+Reunião com o cliente → contrato, medição, plano de substituição de ativos
+</pre>
+</section>
+<hr class="rule">
+
+<section id="s25">
+<h2><span class="num">25</span><span>Matriz de permissões provável</span></h2>
+<p class="lead">Papéis derivados dos grupos existentes, dos cargos reais dos usuários e do conjunto de permissões observado. Marcado o que é <span class="chip c-alta">confirmado</span> pelos grupos lidos e o que é <span class="chip c-baixa">proposta</span> nossa.</p>
+
+<h3>Papéis observados no tenant <span class="chip c-alta">Alta</span></h3>
+<p>Grupos: Administração · Administrador Médio · Supervisor · Técnico · Calibração · Manutenção · Cadastro Equipamentos / Clientes · Preferências do Solicitante · "." <br>
+Cargos livres nos usuários: Engenheira clínica · Engenheiro eletricista · Técnico em Equipamentos Médicos · Técnico de Eletrônica · Técnico · Gestor administrativo.</p>
+
+<h3>Matriz recomendada para o nosso produto</h3>
+<div class="tw"><table>
+<thead><tr><th>Capacidade</th><th>Admin</th><th>Gestor</th><th>Supervisor</th><th>Técnico</th><th>Metrologista</th><th>Financeiro</th><th>Cliente</th></tr></thead>
+<tbody>
+<tr><td>Configurar organização e preferências</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Gerenciar usuários, papéis e licenças</td><td>✔</td><td>parcial</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Cadastrar clientes, unidades e setores</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Cadastrar e editar ativos</td><td>✔</td><td>✔</td><td>✔</td><td>criar no app</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Criar e editar planos</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Abrir chamado</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>✔</td></tr>
+<tr><td>Triar e atribuir OS</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Executar OS (checklist, horas, peças, fotos)</td><td>✔</td><td>—</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>—</td></tr>
+<tr><td>Fechar OS</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>—</td></tr>
+<tr><td>Editar OS fechada ou cancelada</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Emitir certificado de calibração</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td><td>—</td><td>—</td></tr>
+<tr><td>Liberar certificado ao cliente</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>✔</td><td>—</td><td>—</td></tr>
+<tr><td>Emitir laudo de obsolescência</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Criar orçamento</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>—</td><td>✔</td><td>—</td></tr>
+<tr><td>Aprovar / reprovar orçamento</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td><td>✔</td></tr>
+<tr><td>Faturar</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td><td>—</td></tr>
+<tr><td>Movimentar estoque</td><td>✔</td><td>✔</td><td>✔</td><td>consumir</td><td>—</td><td>✔</td><td>—</td></tr>
+<tr><td>Ver valores e custos</td><td>✔</td><td>✔</td><td>parcial</td><td>—</td><td>—</td><td>✔</td><td>só orçamento</td></tr>
+<tr><td>Ver indicadores operacionais</td><td>✔</td><td>✔</td><td>✔</td><td>próprios</td><td>próprios</td><td>—</td><td>do seu escopo</td></tr>
+<tr><td>Ver indicadores financeiros</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td><td>—</td></tr>
+<tr><td>Ver trilha de auditoria</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>Assinar OS como cliente</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✔</td></tr>
+<tr><td>Avaliar atendimento</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>✔</td></tr>
+<tr><td>Escopo de dados</td><td>tudo</td><td>tudo</td><td>suas equipes</td><td>suas OS</td><td>suas OS</td><td>tudo</td><td><b>seus setores</b></td></tr>
+</tbody></table></div>
+
+<div class="note">
+<span class="lbl">Princípio</span>
+<p>Herdar do Arkmeds o <em>vocabulário</em> de permissões (verbos por entidade + ações sensíveis nomeadas) e a ideia de <em>permissão que esconde campo</em>. Não herdar a entrega de grupos vazios: papéis padrão prontos, com um editor granular reservado a quem realmente precisa. Escopo de dados deve ser dimensão de primeira classe (organização → cliente → unidade → setor → equipe), não um multiselect de empresas.</p>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s26">
+<h2><span class="num">26</span><span>MVP recomendado</span></h2>
+<p class="lead">Critério de corte: <em>é possível operar um contrato real de engenharia clínica com isto?</em> Tudo que não passa nesse teste sai do MVP, por mais atraente que pareça.</p>
+
+<h3>Dentro do MVP</h3>
+<div class="tw"><table>
+<thead><tr><th>Bloco</th><th>Escopo mínimo</th><th>Por quê</th></tr></thead>
+<tbody>
+<tr><td><b>Organização e acesso</b></td><td>Multiempresa; árvore cliente → unidade → setor; papéis padrão (Admin, Gestor, Supervisor, Técnico, Cliente); convite por e-mail; escopo de dados por setor</td><td>Sem isso não há operação multicliente nem portal</td></tr>
+<tr><td><b>Ativos</b></td><td>Cadastro com TAG/série/patrimônio, categoria, fabricante e modelo normalizados, criticidade, prioridade, SLA, garantia, anexos, QR Code; importação por planilha; ficha 360°</td><td>É o cadastro-base de todo o resto</td></tr>
+<tr><td><b>Ordens de serviço</b></td><td>Tipos de sistema (corretiva, preventiva, calibração, TSE, instalação, inspeção); <b>máquina de estados com categorias e transições</b>; prioridade; responsável e executores; agendamento; descrição e resolução; anexos e fotos; thread de comentários; horas trabalhadas; peças consumidas; PDF</td><td>Núcleo operacional</td></tr>
+<tr><td><b>Chamados / portal do cliente</b></td><td>Abertura por QR Code ou portal; acompanhamento; assinatura; avaliação 1–5 com comentário</td><td>É o que o hospital enxerga — e o que se vende</td></tr>
+<tr><td><b>Planos preventivos</b></td><td>Frequência, prazo, ciclos, escopo por ativo/categoria/setor com lista de serviços; geração automática de OS; painel de conformidade do ciclo</td><td>Sem preventiva não há contrato de engenharia clínica</td></tr>
+<tr><td><b>Procedimentos e checklists</b></td><td>Construtor com tipos texto/número/opções/foto; vínculo a categoria + tipo de serviço; execução na OS com resultado por item</td><td>É o conteúdo técnico que sustenta a auditoria</td></tr>
+<tr><td><b>Mobile PWA offline</b></td><td>Minhas OS, execução com checklist, fotos, horas, peças, assinatura no dedo, leitura de QR; fila de sincronização</td><td>O trabalho acontece no corredor do hospital, sem sinal</td></tr>
+<tr><td><b>Estoque básico</b></td><td>Itens, unidade, saldo, estoque mínimo, entrada com NF e lote, saída por OS, alerta de mínimo</td><td>Peça parada é a principal causa de OS travada (789 OS "Aguardando peças" hoje)</td></tr>
+<tr><td><b>Indicadores</b></td><td>OS abertas/fechadas, backlog, MTTR, MTBF, disponibilidade, cumprimento de SLA, conformidade de planos, preventiva × corretiva, CSAT</td><td>É a razão de o gestor abrir o sistema</td></tr>
+<tr><td><b>Auditoria</b></td><td>Trilha com diff campo a campo, ator, IP e data; feed de atividades</td><td>Requisito regulatório, não opcional</td></tr>
+<tr><td><b>Documentos</b></td><td>Numeração configurável por tipo; PDF de OS com logo do cliente</td><td>O papel ainda é o entregável</td></tr>
+</tbody></table></div>
+
+<h3>Fora do MVP (deliberadamente)</h3>
+<p>Certificados de calibração com incerteza · qualificação térmica · orçamento e faturamento · contratos com SLA contratual · transferências e protocolos de custódia · automações configuráveis · relatórios periódicos por e-mail · dashboards personalizáveis · integrações com ERP · IA.</p>
+</section>
+<hr class="rule">
+
+<section id="s27">
+<h2><span class="num">27</span><span>Roadmap</span></h2>
+
+<div class="grid g2">
+<div class="card">
+<h5>MVP — "Operar" <span class="chip c-acc">meses 1–5</span></h5>
+<p>Tudo da seção 26. Meta: substituir planilha + WhatsApp em <b>um</b> contrato piloto, com preventiva rodando e portal do cliente no ar.</p>
+</div>
+<div class="card">
+<h5>Fase 2 — "Comprovar" <span class="chip c-acc">meses 6–9</span></h5>
+<p><b>Metrologia:</b> certificados de calibração com padrões, incertezas, pontos de medição, fator k, critério de aceitação, validade e liberação ao cliente; certificados de padrão com laboratório externo; TSE.<br>
+<b>Comercial:</b> orçamentos com aprovação no portal, catálogo de serviços, faturamento com baixa de estoque.<br>
+<b>Contratos:</b> escopo, vigência, SLA por prioridade, medição mensal.<br>
+<b>Relatórios:</b> conformidade de planos, conclusão de OS, vencimentos, produtividade, com agendamento por e-mail.</p>
+</div>
+<div class="card">
+<h5>Fase 3 — "Escalar" <span class="chip c-acc">meses 10–15</span></h5>
+<p><b>Automação:</b> motor de regras com gatilhos por evento, data e condição; ações de notificar, atribuir, mudar estado e criar OS; canais e-mail, push e WhatsApp.<br>
+<b>Planejamento:</b> agenda com capacidade, jornada e rota; carga por técnico.<br>
+<b>BI nativo:</b> dashboards configuráveis com as métricas do catálogo, drill-down e visões salvas compartilháveis.<br>
+<b>Laudos:</b> obsolescência e qualificação térmica.<br>
+<b>Governança:</b> transferências, protocolos de custódia, inventário cíclico.<br>
+<b>API pública</b> + webhooks + conectores para TOTVS/SAP/MV/Tasy.</p>
+</div>
+<div class="card">
+<h5>Fase 4 — "Antecipar" <span class="chip c-acc">meses 16+</span></h5>
+<p><b>IA assistiva:</b> resumo automático de OS, sugestão de diagnóstico a partir do histórico, deduplicação de taxonomias, busca em linguagem natural sobre o histórico.<br>
+<b>Preditivo:</b> ingestão de medidores e sensores IoT; manutenção baseada em condição; alerta de reincidência.<br>
+<b>Capital:</b> planejamento de substituição do parque (vida útil × custo acumulado × criticidade).<br>
+<b>Marketplace</b> de procedimentos e checklists por categoria de equipamento.<br>
+<b>Multi-idioma</b> e expansão além do clínico (predial, industrial).</p>
+</div>
+</div>
+</section>
+<hr class="rule">
+
+<section id="s28">
+<h2><span class="num">28</span><span>Arquitetura técnica recomendada</span></h2>
+<p class="lead">Recomendação, não implementação. As escolhas abaixo priorizam velocidade de entrega do MVP sem hipotecar a Fase 3.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Camada</th><th>Recomendação</th><th>Racional</th></tr></thead>
+<tbody>
+<tr><td><b>Frontend web</b></td><td>React + TypeScript + Vite; TanStack Query e Table; Zod; um design system próprio sobre primitivos acessíveis (Radix); virtualização de listas</td><td>Listas de 70 mil linhas e formulários de 40 campos exigem tabela virtualizada e validação declarativa desde o dia 1</td></tr>
+<tr><td><b>Mobile</b></td><td>PWA instalável com IndexedDB e fila de sincronização; câmera e leitor de QR nativos do navegador; app nativo só se push confiável e leitura de NFC virarem requisito</td><td>Uma base de código; o Arkmeds precisou de app nativo em 2019, hoje o PWA cobre 90 % do caso</td></tr>
+<tr><td><b>Backend</b></td><td>PostgreSQL como núcleo. Duas opções defensáveis: <b>(a)</b> Supabase (Postgres + Auth + Storage + Realtime + Edge Functions) para chegar rápido ao piloto; <b>(b)</b> API própria (NestJS ou FastAPI) sobre Postgres gerenciado quando as regras de estado, numeração e cálculo metrológico ficarem densas</td><td>Recomendação: começar em (a) e manter toda a lógica de domínio em funções e migrations versionadas, de modo que migrar para (b) seja troca de camada de transporte, não reescrita</td></tr>
+<tr><td><b>Multitenancy</b></td><td><code>organization_id</code> em todas as tabelas + Row Level Security no Postgres; escopo adicional por cliente/unidade/setor aplicado na policy</td><td>Isolamento por linha com RLS é mais simples de operar que schema por tenant e suporta relatórios cruzados</td></tr>
+<tr><td><b>Autenticação</b></td><td>E-mail + senha, magic link para solicitantes, SSO (SAML/OIDC) para hospitais na Fase 3; MFA opcional; sessão curta para perfis administrativos</td><td>O portal precisa de atrito zero; o backoffice precisa de rigor</td></tr>
+<tr><td><b>Storage</b></td><td>Object storage com URLs assinadas de curta duração; buckets separados para mídia de OS, documentos de ativo, certificados e assinaturas; miniaturas geradas no upload</td><td>Fotos de OS dominam o volume; certificados exigem retenção longa</td></tr>
+<tr><td><b>Assíncrono</b></td><td>Fila durável (pg-boss, Redis ou SQS) para PDF, exportação, relatórios periódicos, geração de ciclos de plano e envio de notificações; tabela <code>jobs</code> visível ao usuário</td><td>Copiar o acerto do Arkmeds: o usuário vê a fila e baixa quando ficar pronto</td></tr>
+<tr><td><b>PDF</b></td><td>Renderização server-side a partir de HTML com templates versionados por organização</td><td>Certificado e OS impressa são o entregável contratual</td></tr>
+<tr><td><b>Domínio</b></td><td>Máquina de estados declarativa; motor de numeração transacional; motor de recorrência de planos; calculadora metrológica isolada e com testes de regressão</td><td>São as quatro peças que não podem ter bug</td></tr>
+<tr><td><b>Auditoria</b></td><td>Trigger de banco escrevendo <code>audit_logs</code> com diff em JSONB + contexto de ator e IP propagado pela aplicação</td><td>Auditoria na aplicação sempre tem furos; no banco, não</td></tr>
+<tr><td><b>Soft delete</b></td><td><code>deleted_at</code> em entidades de negócio; <em>arquivar</em> em vez de excluir nas taxonomias (o "ocultar" do Arkmeds); exclusão física só por rotina administrativa</td><td>Histórico de 8 anos não pode quebrar por um <code>DELETE</code></td></tr>
+<tr><td><b>Observabilidade</b></td><td>Logs estruturados, tracing, monitor de erros de front, métricas de fila e de tempo de resposta das listas</td><td>Telas que travam por 30 s foram observadas no alvo — é um problema de produto</td></tr>
+<tr><td><b>Qualidade</b></td><td>Testes de domínio (estados, recorrência, metrologia, permissões) e E2E dos 6 fluxos da seção 24; seeds realistas com dezenas de milhares de registros</td><td>Performance só aparece com volume real</td></tr>
+<tr><td><b>Segurança e LGPD</b></td><td>Criptografia em repouso e em trânsito; política de retenção; exportação e anonimização do titular; registro de consentimento; papéis de suporte com acesso temporário e auditado</td><td>O Arkmeds tem "Permitir login do usuário suporte" — bom conceito, precisa de expiração e log</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s29">
+<h2><span class="num">29</span><span>Diferenciais do nosso produto</span></h2>
+<div class="tw"><table>
+<thead><tr><th>Diferencial</th><th>Descrição</th><th>Classificação</th></tr></thead>
+<tbody>
+<tr><td>Interface moderna e consistente</td><td>Uma única linguagem visual, tema claro e escuro, densidade calibrada por papel</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>PWA mobile-first para técnico</td><td>Instalável, rápido, desenhado para uma mão e para corredor de hospital</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>Funcionamento offline</td><td>Fila de sincronização com resolução de conflito explícita e visível</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>QR Code em ativos + leitura pelo celular</td><td>Do QR ao chamado em dois toques, sem login para o solicitante já autenticado</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>Máquina de estados configurável</td><td>Categoria, cor, transições permitidas, SLA que pausa, ações automáticas por estado</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>Gestão de SLA nativa</td><td>SLA por contrato × prioridade × cobertura horária, com relógio visível e escalonamento</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>Busca global</td><td>Um campo que encontra patrimônio, série, OS, cliente, peça e documento</td><td><span class="chip c-p0">Essencial</span></td></tr>
+<tr><td>Checklist inteligente</td><td>Itens condicionais, faixas numéricas com veredito automático, foto obrigatória em item reprovado</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Fotos antes/depois</td><td>Par obrigatório configurável por tipo de serviço, com marca d'água de data e ativo</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Assinatura digital no dedo</td><td>Coleta no app com validação por código e hash do documento assinado</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Thread na OS</td><td>Comentários com menção, anexos e visibilidade interna × cliente — substitui o WhatsApp</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Portal do cliente desenhado</td><td>Não um subconjunto de permissões: painel próprio, meus equipamentos, meus chamados, meus certificados, meus indicadores</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Dashboards em tempo real</td><td>Widgets configuráveis sobre o catálogo de métricas, com drill-down até a OS</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Notificações multicanal</td><td>E-mail, push e WhatsApp, com preferência por usuário e por evento</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Automações sem código</td><td>"Quando X e Y, então Z" com gatilhos de evento, data e condição</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Relatórios personalizados</td><td>Construtor com visões salvas, compartilháveis e agendáveis</td><td><span class="chip c-p1">Importante</span></td></tr>
+<tr><td>Agenda com capacidade e rota</td><td>Jornada do técnico, conflito, carga da semana e agrupamento por setor</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>Geolocalização opcional</td><td>Check-in no ativo, com consentimento e sem rastreamento contínuo</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>IA — resumo automático de OS</td><td>Resumo do atendimento a partir de checklist, comentários e horas</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>IA — sugestão de diagnóstico</td><td>"Ativos deste modelo com este sintoma foram resolvidos assim em 82 % dos casos"</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>IA — higiene de taxonomia</td><td>Detecta e propõe fusão de duplicatas (o problema real do tenant auditado)</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>Busca em linguagem natural no histórico</td><td>"Quais ventiladores da UTI 2 falharam por bateria nos últimos 6 meses?"</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>Gestão de contratos</td><td>Escopo, indicadores contratados, medição mensal, glosa e reajuste</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>Planejamento de substituição do parque</td><td>Ranking de ativos candidatos a troca por vida útil, custo acumulado e criticidade</td><td><span class="chip c-p2">Diferencial</span></td></tr>
+<tr><td>Alertas preditivos</td><td>Reincidência, desvio de MTBF, tendência de custo por ativo</td><td><span class="chip c-p3">Futuro</span></td></tr>
+<tr><td>Manutenção por condição (IoT)</td><td>Medidores, sensores e CLP alimentando gatilhos de plano</td><td><span class="chip c-p3">Futuro</span></td></tr>
+<tr><td>Marketplace de procedimentos</td><td>Biblioteca compartilhada por categoria de equipamento</td><td><span class="chip c-p3">Futuro</span></td></tr>
+<tr><td>Integração com analisadores</td><td>Leitura direta de instrumentos de calibração e segurança elétrica</td><td><span class="chip c-p3">Futuro</span></td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s30">
+<h2><span class="num">30</span><span>Backlog funcional</span></h2>
+<p class="lead">Prioridade: <span class="chip c-p0">P0</span> MVP · <span class="chip c-p1">P1</span> Fase 2 · <span class="chip c-p2">P2</span> Fase 3 · <span class="chip c-p3">P3</span> Fase 4. Complexidade em escala relativa (B/M/A/MA). Origem: <b>ARKMEDS</b> (observado), <b>BENCHMARK</b> (concorrência), <b>MELHORIA</b> (proposta nossa).</p>
+
+<div class="tw"><table>
+<thead><tr><th>ID</th><th>Módulo</th><th>Funcionalidade</th><th>Prio</th><th>Compl.</th><th>Origem</th></tr></thead>
+<tbody>
+<tr><td class="num-col">ORG-01</td><td>Organização</td><td>Multiempresa com <code>organization_id</code> e RLS</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">ORG-02</td><td>Organização</td><td>Árvore cliente → unidade → setor (tabela própria, não polimórfica)</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">ORG-03</td><td>Organização</td><td>Cadastro de fornecedores separado de clientes</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">ORG-04</td><td>Organização</td><td>Preferências por organização (chaves tipadas, com busca)</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">ORG-05</td><td>Organização</td><td>Branding por cliente no PDF e no portal</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">USR-01</td><td>Usuários</td><td>Papéis padrão prontos (7 papéis) + editor granular</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">USR-02</td><td>Usuários</td><td>Escopo de dados por cliente / unidade / setor / equipe</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">USR-03</td><td>Usuários</td><td>Solicitantes (portal) sem consumo de licença</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">USR-04</td><td>Usuários</td><td>Custo/hora, jornada diária, conselho e registro profissional, férias</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">USR-05</td><td>Usuários</td><td>Assinatura digital armazenada no perfil</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">USR-06</td><td>Usuários</td><td>Permissões que ocultam campos e blocos da OS</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">USR-07</td><td>Usuários</td><td>SSO SAML/OIDC + MFA</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>BENCHMARK</td></tr>
+<tr><td class="num-col">USR-08</td><td>Usuários</td><td>Acesso de suporte temporário, com prazo e log</td><td><span class="chip c-p2">P2</span></td><td>B</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">AST-01</td><td>Ativos</td><td>Cadastro completo com TAG, série, patrimônio, ANVISA, INMETRO</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-02</td><td>Ativos</td><td>Catálogo normalizado de fabricante, modelo e categoria</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">AST-03</td><td>Ativos</td><td>Criticidade, prioridade e SLA (atendimento/fechamento) por ativo</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-04</td><td>Ativos</td><td>QR Code: geração, impressão em etiqueta e resolução por token</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-05</td><td>Ativos</td><td>Ficha 360° com indicadores, programação e documentos</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-06</td><td>Ativos</td><td>Importação por planilha com validação e pré-visualização</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-07</td><td>Ativos</td><td>Bloqueio de duplicidade configurável por campo</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-08</td><td>Ativos</td><td>Dados financeiros e tabela de depreciação</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-09</td><td>Ativos</td><td>"Mostrar na OS" por campo do ativo</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AST-10</td><td>Ativos</td><td>Hierarquia pai/filho (equipamento → componente/acessório)</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>BENCHMARK</td></tr>
+<tr><td class="num-col">AST-11</td><td>Ativos</td><td>Medidores e leituras (horas, ciclos)</td><td><span class="chip c-p3">P3</span></td><td>M</td><td>BENCHMARK</td></tr>
+
+<tr><td class="num-col">OS-01</td><td>Ordens</td><td>CRUD de OS com tipos de sistema e catálogo de serviços separados</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">OS-02</td><td>Ordens</td><td>Máquina de estados: categoria, cor, terminal, pausa de SLA, transições</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">OS-03</td><td>Ordens</td><td>Lista virtualizada com filtros persistentes em chips e URL compartilhável</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-04</td><td>Ordens</td><td>Kanban por estado com arrastar-e-soltar validado pelas transições</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-05</td><td>Ordens</td><td>Responsável técnico + múltiplos executores</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-06</td><td>Ordens</td><td>Registro de horas com custo (manual e cronômetro)</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-07</td><td>Ordens</td><td>Peças consumidas com baixa de estoque</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-08</td><td>Ordens</td><td>Anexos e fotos antes/depois</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">OS-09</td><td>Ordens</td><td>Thread de comentários com visibilidade interna × cliente</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>BENCHMARK</td></tr>
+<tr><td class="num-col">OS-10</td><td>Ordens</td><td>PDF da OS com template por organização</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-11</td><td>Ordens</td><td>Numeração configurável (prefixo, sufixo, sequência) por documento</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-12</td><td>Ordens</td><td>Criação em lote e edição em massa</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-13</td><td>Ordens</td><td>Campos personalizados por organização e por tipo de OS</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">OS-14</td><td>Ordens</td><td>Terceirização: fornecedor executante e acompanhamento</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">OS-15</td><td>Ordens</td><td>Protocolos de recolhimento, entrega e serviço</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">CHM-01</td><td>Chamados</td><td>Abertura pelo portal e por QR Code, com formulário mínimo</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CHM-02</td><td>Chamados</td><td>Fila de triagem com "sem responsável", "vencidas" e "em andamento"</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CHM-03</td><td>Chamados</td><td>Avaliação 1–5 com comentário e obrigatoriedade configurável</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CHM-04</td><td>Chamados</td><td>Assinatura do solicitante com validação por código</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">PLN-01</td><td>Planos</td><td>Plano com frequência, prazo, ciclos e abertura automática</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PLN-02</td><td>Planos</td><td>Escopo por ativo, categoria ou setor com lista de serviços</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PLN-03</td><td>Planos</td><td>Painel de conformidade do ciclo (em dia / atrasadas / iniciadas)</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PLN-04</td><td>Planos</td><td>Cronograma anual exportável para o cliente</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PLN-05</td><td>Planos</td><td>Frequência por serviço dentro do mesmo plano</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">PLN-06</td><td>Planos</td><td>Gatilho por medidor/uso além do calendário</td><td><span class="chip c-p3">P3</span></td><td>A</td><td>BENCHMARK</td></tr>
+
+<tr><td class="num-col">PRC-01</td><td>Procedimentos</td><td>Procedimento vinculando checklist + categoria + tipo de serviço</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PRC-02</td><td>Procedimentos</td><td>Construtor de checklist (texto, número com faixa, opções, foto)</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">PRC-03</td><td>Procedimentos</td><td>Itens em tabela relacional (não JSON) com versionamento</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">PRC-04</td><td>Procedimentos</td><td>Itens condicionais e veredito automático por faixa</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">MOB-01</td><td>Mobile</td><td>PWA instalável com "Minhas OS" e execução completa</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">MOB-02</td><td>Mobile</td><td>Offline com fila de sincronização e resolução de conflito</td><td><span class="chip c-p0">P0</span></td><td>MA</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">MOB-03</td><td>Mobile</td><td>Leitura de QR Code e câmera integrada</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">MOB-04</td><td>Mobile</td><td>Assinatura no dedo com hash do documento</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">MOB-05</td><td>Mobile</td><td>Criação de ativo e de OS em campo</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">MOB-06</td><td>Mobile</td><td>Check-in por geolocalização (opcional, com consentimento)</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>BENCHMARK</td></tr>
+
+<tr><td class="num-col">EST-01</td><td>Estoque</td><td>Itens, unidades, saldo, estoque mínimo</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">EST-02</td><td>Estoque</td><td>Entrada com nota fiscal, lote e custo</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">EST-03</td><td>Estoque</td><td>Alerta de estoque mínimo</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">EST-04</td><td>Estoque</td><td>Almoxarifados como entidade e transferência entre eles</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">EST-05</td><td>Estoque</td><td>Preço e nomenclatura da peça por cliente</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">EST-06</td><td>Estoque</td><td>Reserva de peça vinculada à OS</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">EST-07</td><td>Estoque</td><td>Inventário cíclico e ajuste com justificativa</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>BENCHMARK</td></tr>
+<tr><td class="num-col">EST-08</td><td>Estoque</td><td>Custo médio e curva ABC</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>BENCHMARK</td></tr>
+
+<tr><td class="num-col">CAL-01</td><td>Metrologia</td><td>Certificado de calibração com pontos, incerteza e fator k</td><td><span class="chip c-p1">P1</span></td><td>MA</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-02</td><td>Metrologia</td><td>Padrões e certificados de padrão com laboratório externo</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-03</td><td>Metrologia</td><td>Critério de aceitação e correção de erro sistemático</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-04</td><td>Metrologia</td><td>Bloqueio de emissão com padrão vencido</td><td><span class="chip c-p1">P1</span></td><td>B</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">CAL-05</td><td>Metrologia</td><td>Liberação do certificado ao cliente (manual/automática) + e-mail</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-06</td><td>Metrologia</td><td>Teste de segurança elétrica com certificado</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-07</td><td>Metrologia</td><td>Laudo de obsolescência com parecer e assinatura</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-08</td><td>Metrologia</td><td>Qualificação térmica</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CAL-09</td><td>Metrologia</td><td>Integração com analisadores (importação de leituras)</td><td><span class="chip c-p3">P3</span></td><td>MA</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">ORC-01</td><td>Orçamentos</td><td>Orçamento a partir da OS com itens de peça e serviço</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">ORC-02</td><td>Orçamentos</td><td>Aprovação/reprovação pelo cliente no portal, com motivo</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">ORC-03</td><td>Orçamentos</td><td>Desconto, impostos e condição de pagamento</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">ORC-04</td><td>Orçamentos</td><td>Versionamento da proposta (v1, v2…) em vez de sobrescrita</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">ORC-05</td><td>Orçamentos</td><td>Faturamento com baixa de estoque por lote</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">CTR-01</td><td>Contratos</td><td>Contrato com vigência, escopo e ativos cobertos</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">CTR-02</td><td>Contratos</td><td>SLA contratual por prioridade e cobertura horária</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">CTR-03</td><td>Contratos</td><td>Medição mensal e relatório de aderência</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">CTR-04</td><td>Contratos</td><td>Alerta de vencimento de contrato</td><td><span class="chip c-p2">P2</span></td><td>B</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">AGD-01</td><td>Agenda</td><td>Calendário com arrastar-e-soltar e baldes de pendências</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AGD-02</td><td>Agenda</td><td>Visão por recurso (técnico/equipe) com carga da semana</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AGD-03</td><td>Agenda</td><td>Capacidade, jornada e detecção de conflito</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">AGD-04</td><td>Agenda</td><td>Agrupamento por setor e sugestão de rota</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>BENCHMARK</td></tr>
+
+<tr><td class="num-col">IND-01</td><td>Indicadores</td><td>Catálogo de métricas (13 do Arkmeds + backlog e reincidência)</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">IND-02</td><td>Indicadores</td><td>Agrupamentos, visualizações e limites</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">IND-03</td><td>Indicadores</td><td>Dashboards configuráveis com drill-down até a OS</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IND-04</td><td>Indicadores</td><td>Definição visível de cada métrica (tooltip com fórmula)</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IND-05</td><td>Indicadores</td><td>Preventiva × corretiva e reincidência como métricas nativas</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">REL-01</td><td>Relatórios</td><td>Relatórios operacionais em PDF (conclusão, estado, conformidade)</td><td><span class="chip c-p1">P1</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">REL-02</td><td>Relatórios</td><td>Exportação assíncrona com fila visível</td><td><span class="chip c-p0">P0</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">REL-03</td><td>Relatórios</td><td>Construtor de relatório com seções e preview</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">REL-04</td><td>Relatórios</td><td>Agendamento por e-mail sem limite artificial</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">AUT-01</td><td>Automação</td><td>Regras evento → condição → ação (notificar, atribuir, mudar estado, criar OS)</td><td><span class="chip c-p2">P2</span></td><td>MA</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">AUT-02</td><td>Automação</td><td>Gatilhos por data e vencimento (calibração, contrato, garantia)</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">AUT-03</td><td>Automação</td><td>Escalonamento por SLA estourado</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">AUT-04</td><td>Automação</td><td>Canais e-mail, push e WhatsApp com verificação de destinatário</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">AUT-05</td><td>Automação</td><td>Webhooks assinados com reenvio e log de entrega</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">POR-01</td><td>Portal</td><td>Painel do cliente com seus ativos, chamados e indicadores</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">POR-02</td><td>Portal</td><td>Acompanhamento de planos (em dia, atrasado, ciclos anteriores)</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">POR-03</td><td>Portal</td><td>Biblioteca de certificados e laudos liberados</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+
+<tr><td class="num-col">SIS-01</td><td>Sistema</td><td>Trilha de auditoria com diff, ator e IP</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">SIS-02</td><td>Sistema</td><td>Soft delete e arquivamento de taxonomias</td><td><span class="chip c-p0">P0</span></td><td>B</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">SIS-03</td><td>Sistema</td><td>Busca global unificada</td><td><span class="chip c-p0">P0</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">SIS-04</td><td>Sistema</td><td>Mesclagem assistida de taxonomias duplicadas</td><td><span class="chip c-p1">P1</span></td><td>M</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">SIS-05</td><td>Sistema</td><td>API pública REST + chaves e escopos</td><td><span class="chip c-p2">P2</span></td><td>A</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">SIS-06</td><td>Sistema</td><td>Conectores TOTVS / SAP / MV / Tasy</td><td><span class="chip c-p3">P3</span></td><td>MA</td><td>ARKMEDS</td></tr>
+<tr><td class="num-col">SIS-07</td><td>Sistema</td><td>LGPD: exportação e anonimização do titular, consentimento</td><td><span class="chip c-p2">P2</span></td><td>M</td><td>MELHORIA</td></tr>
+
+<tr><td class="num-col">IA-01</td><td>IA</td><td>Resumo automático da OS</td><td><span class="chip c-p3">P3</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IA-02</td><td>IA</td><td>Sugestão de diagnóstico pelo histórico do modelo</td><td><span class="chip c-p3">P3</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IA-03</td><td>IA</td><td>Higiene de taxonomia (detecção de duplicatas)</td><td><span class="chip c-p3">P3</span></td><td>M</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IA-04</td><td>IA</td><td>Busca em linguagem natural sobre o histórico</td><td><span class="chip c-p3">P3</span></td><td>A</td><td>MELHORIA</td></tr>
+<tr><td class="num-col">IA-05</td><td>IA</td><td>Planejamento de substituição do parque</td><td><span class="chip c-p3">P3</span></td><td>A</td><td>BENCHMARK</td></tr>
+</tbody></table></div>
+</section>
+<hr class="rule">
+
+<section id="s31">
+<h2><span class="num">31</span><span>O que a auditoria não conseguiu responder</span></h2>
+<p class="lead">Lacunas honestas. Nenhuma delas poderia ser resolvida sem gravar dados no ambiente de produção — o que estava expressamente vedado.</p>
+
+<div class="tw"><table>
+<thead><tr><th>Pergunta em aberto</th><th>Por que ficou aberta</th><th>Como responder depois</th></tr></thead>
+<tbody>
+<tr><td><b>Quais transições de estado o sistema permite?</b></td><td>Só se descobre mudando o estado de uma OS</td><td>Perguntar a um usuário-chave; ou observar em ambiente de demonstração</td></tr>
+<tr><td><b>Fórmulas exatas de Disponibilidade, MTTR, MTBF e TMAC</b></td><td>A interface não exibe definição; os botões de ajuda não retornam conteúdo</td><td>Suporte Arkmeds ou documentação contratual do cliente</td></tr>
+<tr><td><b>O que significa exatamente TMAC</b></td><td>Sigla sem legenda; formato de duração</td><td>Idem acima</td></tr>
+<tr><td><b>Como a abertura automática de OS do plano é disparada</b></td><td>Job agendado não observável de fora</td><td>Documentação ou suporte</td></tr>
+<tr><td><b>Comportamento do plano quando um ativo é transferido no meio do ciclo</b></td><td>Exigiria executar uma transferência</td><td>Entrevista com o coordenador da operação</td></tr>
+<tr><td><b>Como funciona o rascunho de OS e a resolução de conflito na sincronização</b></td><td>A lista estava carregando e não há registros de exemplo acessíveis</td><td>Testar no app MARK II em ambiente de homologação</td></tr>
+<tr><td><b>Payload e eventos disponíveis no webhook</b></td><td>O assistente "Crie seu Trigger" só foi aberto até a etapa de filtro; concluir criaria uma automação</td><td>Solicitar documentação de integração (a categoria de ajuda está vazia)</td></tr>
+<tr><td><b>Se existe API REST pública e qual sua superfície</b></td><td>Não há tela de credenciais; o material comercial afirma que existe</td><td>Solicitar ao fornecedor</td></tr>
+<tr><td><b>Como o BI do Looker Studio é alimentado</b></td><td>Fora do produto</td><td>Perguntar ao cliente/fornecedor</td></tr>
+<tr><td><b>Conteúdo dos demais grupos de permissão</b></td><td>Foram lidos apenas os grupos 7 (Solicitante) e 8 (Técnico), para limitar a navegação</td><td>Leitura direta dos grupos 1, 2, 3, 5, 6, 9 e 10 — é read-only e pode ser feita a qualquer momento</td></tr>
+<tr><td><b>Estrutura do orçamento preenchido</b></td><td>Existe apenas 1 orçamento no tenant e ele não estava listado nas abas</td><td>Filtrar por período amplo, ou pedir um exemplo ao cliente</td></tr>
+<tr><td><b>Layout dos PDFs (OS, certificado, laudo)</b></td><td>A geração de PDF é processamento e, em alguns casos, registra evento</td><td>Pedir exemplos já emitidos ao cliente</td></tr>
+<tr><td><b>Modelo de licenciamento e preço</b></td><td>Só se observa o limite "36 de 38 usuários" e "máximo de 5 relatórios"</td><td>Proposta comercial do fornecedor</td></tr>
+<tr><td><b>Isolamento real entre tenants</b></td><td>Testar seria acesso indevido — expressamente fora de escopo</td><td>Documentação de segurança do fornecedor</td></tr>
+<tr><td><b>Retenção e imutabilidade do log de auditoria</b></td><td>Não observável pela interface</td><td>Documentação do fornecedor</td></tr>
+<tr><td><b>Como o "Teste Automático" do checklist recebe dados do analisador</b></td><td>Requer o hardware</td><td>Documentação da linha Tesla/Otto ou demonstração</td></tr>
+<tr><td><b>Se há campos personalizados além do "Campo Extra"</b></td><td>Só um campo livre foi encontrado, definido em Preferências</td><td>Confirmar com o fornecedor</td></tr>
+</tbody></table></div>
+
+<div class="note">
+<span class="lbl">Encerramento</span>
+<p>Esta auditoria foi conduzida integralmente em modo leitura. Nenhum registro do ambiente TechneCare foi criado, alterado, excluído, assinado, aprovado, movimentado, exportado ou notificado. Nenhum projeto, código, banco de dados ou componente foi criado — o único artefato produzido é este documento.</p>
+</div>
+</section>
+
+<footer>
+<p>Auditoria funcional e visual · technecare.arkmeds.com v2.69.0 · 28 de agosto de 2026 · perfil Eng. Clínico/Administrador · escopo somente leitura.</p>
+</footer>
+</main>
+</div>

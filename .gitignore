@@ -1,0 +1,31 @@
+# dependências
+node_modules/
+.pnp.*
+# build
+dist/
+build/
+out/
+*.tsbuildinfo
+# ambiente — NUNCA versionar valores reais
+.env
+.env.*
+!.env.example
+# testes e cobertura
+coverage/
+.vitest/
+test-results/
+playwright-report/
+# dados locais de teste (PGlite)
+.pgdata/
+*.pglite
+# ferramentas
+.turbo/
+.cache/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+# supabase local
+supabase/.temp/
+supabase/.branches/
