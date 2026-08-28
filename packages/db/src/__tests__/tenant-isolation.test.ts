@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { newId, buildContext } from '@aurora/domain';
 import { withTenant } from '../client';
+import { assertAppRoleIsSafe, inspectCurrentRole, UnsafeDatabaseRoleError } from '../guards';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '../testing/harness';
 
 const ORG_A = newId();
@@ -265,5 +266,18 @@ describe('falha fechada', () => {
     await expect(withTenant(t.db, { organizationId: '' } as never, async () => undefined)).rejects.toThrow(
       /contexto de organização/i
     );
+  });
+});
+
+describe('guardas de boot (§37)', () => {
+  it('identifica o papel corrente', async () => {
+    const priv = await inspectCurrentRole(t.db);
+    expect(priv.role).toBeTruthy();
+  });
+
+  it('recusa papel que ignora RLS, e permite liberação explícita em dev', async () => {
+    // no harness a conexão é superusuário fora de transação: caso adversarial ideal
+    await expect(assertAppRoleIsSafe(t.db, false)).rejects.toThrow(UnsafeDatabaseRoleError);
+    await expect(assertAppRoleIsSafe(t.db, true)).resolves.toBeTruthy();
   });
 });

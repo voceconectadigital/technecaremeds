@@ -1,0 +1,197 @@
+/**
+ * Aurora — teste de adversário multitenant na camada HTTP (SPEC v0.2 §37).
+ *
+ * A suíte de banco prova que o PostgreSQL isola. Esta prova que a API não
+ * abre um caminho por cima disso — que é onde a maioria dos vazamentos
+ * realmente acontece.
+ *
+ * Tentativas cobertas:
+ *   · trocar o cabeçalho de organização para o tenant alheio
+ *   · usar credencial de um tenant e pedir dados do outro
+ *   · chamar endpoint sem credencial
+ *   · usar credencial de usuário desativado / membership removido
+ *   · forjar identidade inexistente
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import request from 'supertest';
+import type { INestApplication } from '@nestjs/common';
+import { newId } from '@aurora/domain';
+import { createTestDatabase, seedOrganization, type TestDatabase } from '@aurora/db/testing/harness';
+import { loadEnv } from '@aurora/config';
+import { createApp } from '../bootstrap';
+
+const ORG_A = newId(),
+  USER_A = newId(),
+  MEM_A = newId();
+const ORG_B = newId(),
+  USER_B = newId(),
+  MEM_B = newId();
+
+const EMAIL_A = 'ana@org-a.test';
+const EMAIL_B = 'bruno@org-b.test';
+const tokenFor = (email: string) => `local:${email}:${email}`;
+
+let t: TestDatabase;
+let app: INestApplication;
+let http: ReturnType<typeof request>;
+
+beforeAll(async () => {
+  t = await createTestDatabase();
+  await seedOrganization(
+    t,
+    { organizationId: ORG_A, userId: USER_A, membershipId: MEM_A },
+    {
+      slug: 'org-a',
+      name: 'Organização A',
+      email: EMAIL_A,
+      userName: 'Ana',
+    }
+  );
+  await seedOrganization(
+    t,
+    { organizationId: ORG_B, userId: USER_B, membershipId: MEM_B },
+    {
+      slug: 'org-b',
+      name: 'Organização B',
+      email: EMAIL_B,
+      userName: 'Bruno',
+    }
+  );
+
+  const env = loadEnv({
+    DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+    NODE_ENV: 'test',
+    AURORA_LOG_LEVEL: 'fatal',
+  } as NodeJS.ProcessEnv);
+
+  app = await createApp({ db: t.db, env });
+  await app.init();
+  http = request(app.getHttpServer());
+}, 90_000);
+
+afterAll(async () => {
+  await app?.close();
+  await t?.close();
+});
+
+describe('saúde', () => {
+  it('liveness responde sem credencial', async () => {
+    const r = await http.get('/v1/health/live');
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe('ok');
+  });
+
+  it('readiness verifica o banco', async () => {
+    const r = await http.get('/v1/health/ready');
+    expect(r.status).toBe(200);
+    expect(r.body.checks.database).toBe('ok');
+  });
+});
+
+describe('autenticação', () => {
+  it('sem credencial: 401 com problem details e request_id', async () => {
+    const r = await http.get('/v1/organizations/current');
+    expect(r.status).toBe(401);
+    expect(r.body.code).toBe('unauthenticated');
+    expect(r.body.request_id).toBeTruthy();
+    expect(JSON.stringify(r.body)).not.toMatch(/at .*\.ts:\d+/); // sem stack trace
+  });
+
+  it('credencial malformada: 401', async () => {
+    const r = await http.get('/v1/organizations/current').set('authorization', 'Bearer lixo');
+    expect(r.status).toBe(401);
+  });
+
+  it('identidade inexistente: 403, sem revelar se a organização existe', async () => {
+    const r = await http
+      .get('/v1/organizations/current')
+      .set('authorization', `Bearer ${tokenFor('ninguem@lugar.test')}`);
+    expect(r.status).toBe(403);
+    expect(r.body.code).toBe('forbidden');
+  });
+});
+
+describe('isolamento na camada HTTP', () => {
+  it('A recebe a própria organização', async () => {
+    const r = await http.get('/v1/organizations/current').set('authorization', `Bearer ${tokenFor(EMAIL_A)}`);
+    expect(r.status).toBe(200);
+    expect(r.body.slug).toBe('org-a');
+    expect(r.body.seats_used).toBe(1);
+  });
+
+  it('B recebe a própria organização', async () => {
+    const r = await http.get('/v1/organizations/current').set('authorization', `Bearer ${tokenFor(EMAIL_B)}`);
+    expect(r.status).toBe(200);
+    expect(r.body.slug).toBe('org-b');
+  });
+
+  it('ADVERSÁRIO: A força o cabeçalho de organização para o tenant de B', async () => {
+    const r = await http
+      .get('/v1/organizations/current')
+      .set('authorization', `Bearer ${tokenFor(EMAIL_A)}`)
+      .set('x-aurora-organization', ORG_B);
+    expect(r.status).toBe(403);
+    expect(JSON.stringify(r.body)).not.toContain('org-b');
+  });
+
+  it('ADVERSÁRIO: A força cabeçalho com uuid inexistente', async () => {
+    const r = await http
+      .get('/v1/organizations/current')
+      .set('authorization', `Bearer ${tokenFor(EMAIL_A)}`)
+      .set('x-aurora-organization', newId());
+    expect(r.status).toBe(403);
+  });
+
+  it('a listagem de membros só mostra gente da própria organização', async () => {
+    const a = await http
+      .get('/v1/organizations/current/members')
+      .set('authorization', `Bearer ${tokenFor(EMAIL_A)}`);
+    expect(a.status).toBe(200);
+    expect(a.body.items).toHaveLength(1);
+    expect(a.body.items[0].email).toBe(EMAIL_A);
+
+    const b = await http
+      .get('/v1/organizations/current/members')
+      .set('authorization', `Bearer ${tokenFor(EMAIL_B)}`);
+    expect(b.body.items[0].email).toBe(EMAIL_B);
+    expect(JSON.stringify(b.body)).not.toContain(EMAIL_A);
+  });
+
+  it('membership removido perde acesso imediatamente', async () => {
+    await t.raw(`UPDATE aurora.memberships SET status = 'removed' WHERE id = $1`, [MEM_B]);
+    const r = await http.get('/v1/organizations/current').set('authorization', `Bearer ${tokenFor(EMAIL_B)}`);
+    expect(r.status).toBe(403);
+    await t.raw(`UPDATE aurora.memberships SET status = 'active' WHERE id = $1`, [MEM_B]);
+  });
+
+  it('usuário desativado perde acesso', async () => {
+    await t.raw(`UPDATE aurora.users SET status = 'disabled' WHERE id = $1`, [USER_B]);
+    const r = await http.get('/v1/organizations/current').set('authorization', `Bearer ${tokenFor(EMAIL_B)}`);
+    expect(r.status).toBe(403);
+    await t.raw(`UPDATE aurora.users SET status = 'active' WHERE id = $1`, [USER_B]);
+  });
+
+  it('organização arquivada bloqueia o acesso', async () => {
+    await t.raw(`UPDATE aurora.organizations SET status = 'archived' WHERE id = $1`, [ORG_B]);
+    const r = await http.get('/v1/organizations/current').set('authorization', `Bearer ${tokenFor(EMAIL_B)}`);
+    expect(r.status).toBe(403);
+    await t.raw(`UPDATE aurora.organizations SET status = 'active' WHERE id = $1`, [ORG_B]);
+  });
+});
+
+describe('correlação e diagnóstico', () => {
+  it('propaga o request_id fornecido pelo cliente', async () => {
+    const r = await http
+      .get('/v1/organizations/current')
+      .set('authorization', 'Bearer invalido')
+      .set('x-request-id', 'trace-123');
+    expect(r.body.request_id).toBe('trace-123');
+  });
+
+  it('rota inexistente devolve problem details, não HTML', async () => {
+    const r = await http.get('/v1/nao-existe').set('authorization', `Bearer ${tokenFor(EMAIL_A)}`);
+    expect(r.status).toBe(404);
+    expect(r.body.code).toBeTruthy();
+    expect(r.body.request_id).toBeTruthy();
+  });
+});
