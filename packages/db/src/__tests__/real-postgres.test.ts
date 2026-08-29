@@ -30,6 +30,7 @@ import { provisionWorkOrderStates, createWorkOrder, transitionWorkOrder } from '
 import { createWarehouse, createItem, recordMovement, reserve, balances } from '../inventory';
 import { createServiceRequest } from '../service-requests';
 import { inviteMember } from '../memberships';
+import { withClientOperation } from '../client-operations';
 import type { Database } from '../client';
 
 const URL = process.env.AURORA_TEST_PG_URL;
@@ -783,4 +784,84 @@ describe.skipIf(!rodar)('duas instâncias migrando o mesmo banco', () => {
       await admin.query(`DROP DATABASE IF EXISTS ${nome}`);
     }
   }, 300_000);
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(!rodar)('retentativa simultânea da mesma operação de campo', () => {
+  /*
+   * O CENÁRIO QUE O PGLITE NÃO CONSEGUE ENCENAR.
+   *
+   * O aparelho manda o comando, o sinal cai, e a retentativa parte ANTES de a
+   * primeira ter terminado no servidor. Não é hipótese: é o que um cliente HTTP
+   * com tempo-limite curto faz numa rede de hospital.
+   *
+   * Com uma conexão só, as duas tentativas seriam serializadas pelo próprio
+   * driver e o teste passaria sem provar nada. São necessárias duas conexões
+   * FÍSICAS disputando o mesmo índice único.
+   */
+  it('as duas chegam juntas, o trabalho acontece uma vez, e ambas recebem o mesmo desfecho', async () => {
+    const op = { id: newId(), route: 'POST /work-orders', body: { titulo: 'Simultânea' } };
+    let execucoes = 0;
+
+    const tentativa = () =>
+      withClientOperation(db, ctxA, op, async () => {
+        execucoes++;
+        /*
+         * A pausa é o que garante a SOBREPOSIÇÃO. Sem ela, a primeira poderia
+         * terminar antes de a segunda começar, e o teste viraria o mesmo caso
+         * sequencial que já está coberto — passaria sempre, provando menos.
+         */
+        await new Promise((r) => setTimeout(r, 120));
+        return { numero: `OS-${execucoes}` };
+      });
+
+    const [um, dois] = await Promise.all([tentativa(), tentativa()]);
+
+    // UMA execução. A segunda esperou no índice único e leu o desfecho da
+    // primeira em vez de fazer o trabalho de novo.
+    expect(execucoes).toBe(1);
+
+    const feita = [um, dois].filter((r) => !r.replayed);
+    const repetida = [um, dois].filter((r) => r.replayed);
+    expect(feita).toHaveLength(1);
+    expect(repetida).toHaveLength(1);
+
+    // E as duas contam a MESMA coisa: qual delas chegou primeiro é irrelevante
+    // para quem está em campo.
+    expect((feita[0] as { value: { numero: string } }).value.numero).toBe('OS-1');
+    expect(repetida[0]).toMatchObject({ body: { numero: 'OS-1' } });
+
+    const { rows } = await admin.query(
+      `SELECT count(*)::int AS total FROM aurora.client_operations WHERE client_operation_id = $1`,
+      [op.id]
+    );
+    expect(rows[0].total).toBe(1);
+  });
+
+  it('vinte tentativas ao mesmo tempo executam uma vez só', async () => {
+    /*
+     * Duas provam a exclusão mútua; vinte provam que ela não depende de sorte no
+     * escalonamento. É barato, e é a diferença entre "passou" e "passa sempre".
+     */
+    const op = { id: newId(), route: 'POST /work-orders', body: { titulo: 'Vinte' } };
+    let execucoes = 0;
+
+    const resultados = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        withClientOperation(db, ctxA, op, async () => {
+          execucoes++;
+          await new Promise((r) => setTimeout(r, 30));
+          return { numero: 'OS-UNICA' };
+        })
+      )
+    );
+
+    expect(execucoes).toBe(1);
+    expect(resultados.filter((r) => !r.replayed)).toHaveLength(1);
+    for (const r of resultados) {
+      const corpo = r.replayed ? r.body : r.value;
+      expect(corpo).toEqual({ numero: 'OS-UNICA' });
+    }
+  });
 });

@@ -37,6 +37,7 @@ import {
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { runFieldOperation } from '../common/client-operation';
 import type { AuroraRequest } from '../common/context.middleware';
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string, fallback?: T): T {
@@ -68,7 +69,6 @@ export class ServiceRequestsController {
     @Req() req: AuroraRequest,
     @Body() body: Record<string, unknown>
   ): Promise<{ id: string; number: string; duplicate_hints: unknown[] }> {
-    const ctx = req.auroraContext!;
     if (typeof body.summary !== 'string' || body.summary.trim().length < 3) {
       throw new ValidationError('summary precisa de ao menos 3 caracteres', { field: 'summary' });
     }
@@ -92,7 +92,13 @@ export class ServiceRequestsController {
       submit: body.submit !== false,
     };
 
-    return withTenant(this.db, ctx, async (s) => {
+    /*
+     * ABRIR CHAMADO É A OPERAÇÃO DE CAMPO MAIS COMUM, e a mais fácil de
+     * duplicar: a pessoa encontra o problema no corredor, escreve, e o aparelho
+     * reenvia quando reencontra sinal. Dois chamados para o mesmo problema
+     * viram duas triagens, e alguém precisa descobrir qual fechar.
+     */
+    return runFieldOperation(this.db, req, 'POST /service-requests', body, async (s) => {
       const hints = await duplicateHints(s, {
         assetId: entrada.assetId,
         locationId: entrada.locationId,

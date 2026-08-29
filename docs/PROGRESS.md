@@ -959,6 +959,77 @@ buscas por texto sem `.first()` da suíte. Nenhuma outra colisão.
 
 ---
 
+## EPIC-014 — a espinha da sincronização offline
+
+O épico pede oito horas de trabalho sem rede, com zero perda de dado e conflito
+sempre visível. Antes do aplicativo, o servidor precisa saber responder duas
+perguntas — e até 29/08/2026 ele não sabia nenhuma das duas: `client_operation_id`
+não existia em lugar nenhum da base.
+
+### 1. "Reenviar a mesma operação nunca duplica registro"
+
+`aurora.client_operations` guarda o desfecho de cada operação vinda de campo. A
+regra é uma frase: **um identificador tem um desfecho, para sempre**. Reenviar
+devolve o mesmo desfecho sem reexecutar nada.
+
+A montagem importa mais que a tabela. A reserva acontece **dentro da mesma
+transação do trabalho**, e não num interceptor:
+
+- um interceptor rodaria fora dela, e o processo caindo entre reservar e
+  executar deixaria "já fiz isso" gravado para trabalho que nunca aconteceu — a
+  forma mais cruel de perder trabalho, porque o aparelho apaga da fila satisfeito;
+- `INSERT ... ON CONFLICT DO NOTHING` reserva **e** faz a retentativa simultânea
+  ESPERAR no índice único até a primeira decidir. Vinte tentativas ao mesmo tempo
+  executam uma vez — provado contra PostgreSQL real, porque o PGlite tem uma
+  conexão só e não consegue encenar a disputa.
+
+A implementação ingênua (conferir, depois inserir) foi instalada de propósito
+para ver o teste falhar: as duas provas de concorrência morrem com violação de
+chave primária.
+
+### 2. "Nunca descartar trabalho em silêncio"
+
+Três recusas, e nenhuma delas devolve sucesso:
+
+| Situação | O que acontece | Por quê |
+| --- | --- | --- |
+| Mesmo id, mesmo corpo | devolve o desfecho guardado | é retentativa |
+| Mesmo id, **outro** corpo | 409 `digest_mismatch` | devolver a resposta velha faria o aparelho apagar da fila um comando que nunca foi aplicado |
+| Mesmo id, **outra pessoa** | 409 `membership_mismatch` | entregaria o resultado do trabalho alheio |
+
+E o conflito de estado — a OS cancelada enquanto o técnico executava — é gravado
+**com o corpo da requisição**, em transação própria. Tem de ser própria: a
+transação do trabalho já foi revertida, e a preservação escrita dentro dela
+sumiria junto. Uma restrição do banco recusa gravar conflito sem o corpo, o que
+transforma "preservar o trabalho" de intenção em garantia.
+
+A tela **"Precisa da sua atenção"** (`GET /field/attention`) devolve o conteúdo
+original inteiro, e é de quem trabalhou — não da organização. Tratar um conflito
+registra `superseded_by`: a pergunta "o que aconteceu com aquele trabalho?" tem
+resposta seis meses depois.
+
+### O que já está sob a garantia
+
+Oito rotas, todas por adesão explícita no controller — não há mágica no
+pipeline: criar OS, transicionar OS, abrir solicitação, iniciar e parar
+cronômetro, apontar hora, anexar checklist, responder item, anexar arquivo,
+assinar.
+
+O cabeçalho `x-aurora-client-operation` é **opcional**: quem está online não tem
+fila nem retentativa cega. Há uma prova que documenta esse limite por extenso, em
+vez de deixar alguém supor que a proteção é automática.
+
+### A VALIDAR
+
+- **Retenção das operações de cliente.** A tabela não concede `DELETE` a
+  ninguém, de propósito: apagar reabre a duplicata que ela fecha. Quanto tempo
+  guardar é decisão de operação, não da aplicação — e inventar "trinta dias"
+  aqui seria escolher por quem vai operar isto.
+- **O aplicativo em si** (`apps/field`) não existe ainda. O que existe é o
+  servidor pronto para recebê-lo.
+
+---
+
 ## Bloqueio externo ativo
 
 **Supabase remoto.** O CLI está autenticado e lista 28 projetos em ~15 organizações; nenhum identificável como Aurora e nenhum vinculado. Conforme a regra vigente, nenhuma operação remota foi executada. Para desbloquear é preciso o **project ref** do projeto correto (OQ-16). Nada no código depende disso: as migrations rodam em qualquer PostgreSQL 16+, e a escolha do ADR-026/027 removeu até a dependência de extensão.

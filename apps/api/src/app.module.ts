@@ -24,6 +24,7 @@ import { QrController } from './assets/qr.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
 import { ExecutionController, ExecutionResourcesController } from './work-orders/execution.controller';
+import { FieldController } from './work-orders/field.controller';
 import { ContractsController, AssetContractController } from './contracts/contracts.controller';
 import { QuotesController } from './quotes/quotes.controller';
 import { ScheduleController } from './schedule/schedule.controller';
@@ -74,6 +75,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       WorkOrdersController,
       ExecutionController,
       ExecutionResourcesController,
+      FieldController,
       ContractsController,
       AssetContractController,
       QuotesController,

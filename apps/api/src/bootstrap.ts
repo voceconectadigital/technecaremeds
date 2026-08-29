@@ -40,7 +40,17 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
       credentials: true,
       // Só o que a aplicação realmente manda. `x-aurora-organization` é a
       // escolha de organização; `x-request-id` correlaciona com o log.
-      allowedHeaders: ['authorization', 'content-type', 'x-aurora-organization', 'x-request-id'],
+      // `x-aurora-client-operation` carrega o identificador que o aparelho de
+      // campo gera antes da primeira tentativa. Sem ele na lista, o navegador
+      // recusa a requisição inteira no `preflight` — e a garantia de "no
+      // máximo uma vez" simplesmente não chegaria ao servidor.
+      allowedHeaders: [
+        'authorization',
+        'content-type',
+        'x-aurora-organization',
+        'x-request-id',
+        'x-aurora-client-operation',
+      ],
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       maxAge: 600,
     });

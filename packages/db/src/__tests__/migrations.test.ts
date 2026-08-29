@@ -74,6 +74,7 @@ describe('migrations (EPIC-001)', () => {
       'checklist_responses',
       'checklist_sections',
       'checklist_templates',
+      'client_operations',
       'completion_requirements',
       'contract_coverages',
       'contract_periods',

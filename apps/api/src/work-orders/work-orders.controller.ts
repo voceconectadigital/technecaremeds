@@ -40,6 +40,7 @@ import {
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { oneOf, optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { runFieldOperation } from '../common/client-operation';
 import type { AuroraRequest } from '../common/context.middleware';
 
 @Controller('work-orders')
@@ -339,12 +340,13 @@ export class WorkOrdersController {
     @Req() req: AuroraRequest,
     @Body() body: Record<string, unknown>
   ): Promise<{ id: string; number: string | null }> {
-    const ctx = req.auroraContext!;
     const title = text(body.title);
     if (!title || title.length < 3) {
       throw new ValidationError('title precisa de ao menos 3 caracteres', { field: 'title' });
     }
-    return withTenant(this.db, ctx, (s) =>
+    // Criar OS em campo é a operação que mais dói duplicar: duas OS para o
+    // mesmo problema, com dois números, e um deles fica aberto para sempre.
+    return runFieldOperation(this.db, req, 'POST /work-orders', body, (s) =>
       createWorkOrder(s, {
         customerId: uuidParam(body.customer_id, 'customer_id'),
         workOrderTypeId: uuidParam(body.work_order_type_id, 'work_order_type_id'),
@@ -382,11 +384,22 @@ export class WorkOrdersController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>
   ): Promise<{ status: string; category: string; version: number }> {
-    const ctx = req.auroraContext!;
     const to = text(body.to);
     if (!to) throw new ValidationError('to é obrigatório', { field: 'to' });
 
-    return withTenant(this.db, ctx, (s) =>
+    /*
+     * A TRANSIÇÃO É ONDE O CONFLITO DE CAMPO ACONTECE.
+     *
+     * É o critério de aceite do EPIC-014 escrito por extenso: "OS cancelada no
+     * servidor durante execução offline gera conflito visível, com o trabalho
+     * do técnico preservado e recuperável". O técnico manda "concluir"; a OS
+     * foi cancelada às 14h enquanto ele estava sem sinal; o grafo recusa.
+     *
+     * Sem o registro da operação, essa recusa devolveria 409 para um aparelho
+     * que talvez nem esteja mais ligado, e o diagnóstico e a resolução que ele
+     * escreveu existiriam só na memória do telefone.
+     */
+    return runFieldOperation(this.db, req, 'POST /work-orders/:id/transitions', body, (s) =>
       transitionWorkOrder(s, uuidParam(id, 'id'), to, {
         waitReasonId: optionalUuid(body.wait_reason_id, 'wait_reason_id'),
         waitNote: text(body.wait_note),

@@ -28,3 +28,4 @@ export * from './memberships';
 export * from './work-order-detail';
 export * from './roles';
 export * from './portal';
+export * from './client-operations';

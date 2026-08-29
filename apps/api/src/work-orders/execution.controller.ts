@@ -30,6 +30,7 @@ import {
 import { NotFoundError, ValidationError, type AttachmentPurpose } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
+import { runFieldOperation } from '../common/client-operation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -91,8 +92,7 @@ export class ExecutionController {
     @Param('id') id: string,
     @Body() body: { template_id?: unknown }
   ): Promise<{ response_id: string }> {
-    const ctx = req.auroraContext!;
-    const responseId = await withTenant(this.db, ctx, (s) =>
+    const responseId = await runFieldOperation(this.db, req, 'POST /work-orders/:id/checklists', body, (s) =>
       attachChecklist(s, uuidParam(id, 'id'), uuidParam(body.template_id, 'template_id'))
     );
     return { response_id: responseId };
@@ -101,8 +101,21 @@ export class ExecutionController {
   @Post(':id/timer/start')
   @RequirePermissions('time_entry.create')
   async start(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ entry_id: string }> {
-    const ctx = req.auroraContext!;
-    const entryId = await withTenant(this.db, ctx, (s) => startTimer(s, uuidParam(id, 'id')));
+    /*
+     * O CRONÔMETRO É O CASO MAIS CARO DE DUPLICAR.
+     *
+     * Dois cronômetros abertos na mesma OS produzem duas contagens que correm
+     * juntas, e a folha do dia passa a somar dezesseis horas para oito. Como a
+     * rota não tem corpo, a operação é identificada só pelo cabeçalho — que é
+     * exatamente o que o aparelho gera antes da primeira tentativa.
+     */
+    const entryId = await runFieldOperation(
+      this.db,
+      req,
+      'POST /work-orders/:id/timer/start',
+      { work_order_id: id },
+      (s) => startTimer(s, uuidParam(id, 'id'))
+    );
     return { entry_id: entryId };
   }
 
@@ -144,7 +157,7 @@ export class ExecutionController {
       });
     }
 
-    const entryId = await withTenant(this.db, ctx, (s) =>
+    const entryId = await runFieldOperation(this.db, req, 'POST /work-orders/:id/time-entries', body, (s) =>
       logTime(s, {
         workOrderId: uuidParam(id, 'id'),
         membershipId: typeof body.membership_id === 'string' ? body.membership_id : undefined,
@@ -177,9 +190,7 @@ export class ExecutionController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>
   ): Promise<{ attachment_id: string; storage_key: string }> {
-    const ctx = req.auroraContext!;
-
-    const r = await withTenant(this.db, ctx, (s) =>
+    const r = await runFieldOperation(this.db, req, 'POST /work-orders/:id/attachments', body, (s) =>
       attachFile(s, {
         workOrderId: uuidParam(id, 'id'),
         // Tipo, tamanho, nome e finalidade são conferidos pelo domínio
@@ -203,7 +214,6 @@ export class ExecutionController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>
   ): Promise<{ id: string; digest: string }> {
-    const ctx = req.auroraContext!;
     const roles = ['technician', 'customer', 'supervisor'] as const;
     const methods = ['drawn', 'email_code'] as const;
     if (!roles.includes(body.signer_role as never)) {
@@ -216,7 +226,7 @@ export class ExecutionController {
       throw new ValidationError('signer_name é obrigatório', { field: 'signer_name' });
     }
 
-    return withTenant(this.db, ctx, (s) =>
+    return runFieldOperation(this.db, req, 'POST /work-orders/:id/signatures', body, (s) =>
       signWorkOrder(s, uuidParam(id, 'id'), {
         signerRole: body.signer_role as (typeof roles)[number],
         signerName: (body.signer_name as string).trim(),
@@ -278,21 +288,26 @@ export class ExecutionResourcesController {
     @Param('responseId') responseId: string,
     @Body() body: Record<string, unknown>
   ): Promise<{ verdict: string; status: unknown }> {
-    const ctx = req.auroraContext!;
     const rId = uuidParam(responseId, 'responseId');
     const itemId = uuidParam(body.item_id, 'item_id');
 
-    return withTenant(this.db, ctx, async (s) => {
-      const { verdict } = await answerChecklistItem(s, rId, itemId, {
-        text: typeof body.text === 'string' ? body.text : null,
-        number: typeof body.number === 'number' ? body.number : null,
-        boolean: typeof body.boolean === 'boolean' ? body.boolean : null,
-        options: Array.isArray(body.options) ? (body.options as string[]) : null,
-        date: typeof body.date === 'string' ? body.date : null,
-        photoCount: typeof body.photo_count === 'number' ? body.photo_count : 0,
-      });
-      return { verdict, status: await checklistStatus(s, rId) };
-    });
+    return runFieldOperation(
+      this.db,
+      req,
+      'POST /checklist-responses/:responseId/answers',
+      body,
+      async (s) => {
+        const { verdict } = await answerChecklistItem(s, rId, itemId, {
+          text: typeof body.text === 'string' ? body.text : null,
+          number: typeof body.number === 'number' ? body.number : null,
+          boolean: typeof body.boolean === 'boolean' ? body.boolean : null,
+          options: Array.isArray(body.options) ? (body.options as string[]) : null,
+          date: typeof body.date === 'string' ? body.date : null,
+          photoCount: typeof body.photo_count === 'number' ? body.photo_count : 0,
+        });
+        return { verdict, status: await checklistStatus(s, rId) };
+      }
+    );
   }
 
   @Post('time-entries/:entryId/stop')
@@ -302,9 +317,13 @@ export class ExecutionResourcesController {
     @Param('entryId') entryId: string,
     @Body() body: { note?: unknown }
   ): Promise<{ minutes: number }> {
-    const ctx = req.auroraContext!;
-    const minutes = await withTenant(this.db, ctx, (s) =>
-      stopTimer(s, uuidParam(entryId, 'entryId'), typeof body.note === 'string' ? body.note : undefined)
+    const minutes = await runFieldOperation(
+      this.db,
+      req,
+      'POST /time-entries/:entryId/stop',
+      { entry_id: entryId, ...body },
+      (s) =>
+        stopTimer(s, uuidParam(entryId, 'entryId'), typeof body.note === 'string' ? body.note : undefined)
     );
     return { minutes };
   }
