@@ -92,6 +92,12 @@ describe('migrations (EPIC-001)', () => {
       'team_members',
       'teams',
       'users',
+      'wait_reasons',
+      'work_order_comments',
+      'work_order_status_history',
+      'work_order_status_transitions',
+      'work_order_statuses',
+      'work_orders',
     ]);
     await pg.close();
   });

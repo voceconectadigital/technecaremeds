@@ -10,3 +10,4 @@ export * from './pg-errors';
 export * from './catalogs';
 export * from './assets';
 export * from './service-requests';
+export * from './work-orders';

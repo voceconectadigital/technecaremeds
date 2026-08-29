@@ -132,7 +132,9 @@ export class ServiceRequestsController {
    * era assim na referência, e é o que a lista de transições disponíveis
    * elimina. O que vem aqui já está filtrado pelas permissões efetivas.
    */
-  @Get(':id')
+  // Parâmetro restrito ao formato de uuid: sem isso `GET /service-requests/queue`
+  // casaria com `:id`, e qual ganha dependeria da ordem de declaração.
+  @Get(':id([0-9a-fA-F-]{36})')
   @RequirePermissions('service_request.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<Record<string, unknown>> {
     const ctx = req.auroraContext!;
@@ -175,7 +177,7 @@ export class ServiceRequestsController {
    * por transição criaria um segundo lugar onde as transições estão listadas,
    * e os dois divergiriam no dia em que o grafo mudasse.
    */
-  @Post(':id/transitions')
+  @Post(':id([0-9a-fA-F-]{36})/transitions')
   @RequirePermissions('service_request.read')
   async transition(
     @Req() req: AuroraRequest,

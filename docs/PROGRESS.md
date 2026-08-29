@@ -11,10 +11,10 @@ Fonte de verdade de código: este repositório e o Git.
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F3 — Trabalho**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações) |
-| Épico seguinte                   | EPIC-008 — Ordens de serviço e máquina de estados                                            |
-| Testes                           | **455**, todos verdes                                                           |
-| Migrations                       | 20 (`0000` a `0019`), idempotentes, reprodutíveis do zero                       |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço) |
+| Épico seguinte                   | EPIC-011 — Execução: checklists, horas, peças e assinatura                                            |
+| Testes                           | **545**, todos verdes                                                           |
+| Migrations                       | 24 (`0000` a `0023`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 

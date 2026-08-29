@@ -296,7 +296,7 @@ export async function statusHistory(
     `SELECT from_status::text, to_status::text, changed_at, seconds_in_from
        FROM aurora.service_request_status_history
       WHERE request_id = $1
-      ORDER BY changed_at, id`,
+      ORDER BY sequence`,
     [requestId]
   );
 }
