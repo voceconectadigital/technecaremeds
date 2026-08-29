@@ -319,3 +319,44 @@ export function triageOrder<T extends { priority: RequestPriority; created_at: s
     return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* O vocabulário do portal                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Como cada situação da solicitação aparece para o cliente (SPEC v0.2 §19).
+ *
+ * É CÓDIGO, e não dado — ao contrário do rótulo da ordem de serviço, que a
+ * migration 0042 tornou configurável. A assimetria é deliberada e vem do
+ * ADR-003: a máquina de estados da OS é configurável por organização; a da
+ * solicitação não é, porque o ciclo da solicitação é o contrato com o cliente,
+ * e contrato que cada organização redesenha deixa de ser contrato.
+ *
+ * As frases são as da SPEC. O que elas têm em comum é dizer o que aconteceu do
+ * ponto de vista de QUEM PEDIU, e não do ponto de vista de quem atende:
+ * "triagem" é uma etapa nossa, "Recebido" é o que interessa a ela.
+ */
+export const REQUEST_STATUS_FOR_CUSTOMER: Readonly<Record<string, string>> = Object.freeze({
+  draft: 'Rascunho',
+  submitted: 'Recebido',
+  triage: 'Recebido',
+  info_needed: 'Aguardando você',
+  accepted: 'Aceito',
+  in_service: 'Em atendimento',
+  fulfilled: 'Concluído',
+  rejected: 'Não procede',
+  duplicate: 'Já registrado em outro chamado',
+  cancelled: 'Cancelado',
+  closed: 'Encerrado',
+});
+
+/**
+ * A frase do cliente para uma situação de solicitação.
+ *
+ * Cai na chave crua quando não conhece — pior do que traduzir, melhor do que
+ * devolver vazio, e visível o bastante para alguém notar e corrigir.
+ */
+export function requestStatusForCustomer(status: string): string {
+  return REQUEST_STATUS_FOR_CUSTOMER[status] ?? status;
+}

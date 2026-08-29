@@ -114,24 +114,54 @@ export async function seedOrganization(
 export async function seedMember(
   t: TestDatabase,
   ids: { organizationId: string; userId: string; membershipId: string },
-  opts: { email: string; userName: string; locationIds?: readonly string[] }
+  opts: {
+    email: string;
+    userName: string;
+    locationIds?: readonly string[];
+    /**
+     * Restringe também por CLIENTE.
+     *
+     * Sem isto, o escopo de cliente fica em `all` e um usuário de portal
+     * enxergaria os chamados de todos os clientes da prestadora — que é
+     * exatamente o vazamento que o portal existe para impedir, e o teste que o
+     * persegue precisava do escopo restrito para valer alguma coisa.
+     */
+    customerIds?: readonly string[];
+    /**
+     * `portal` para usuário de cliente; `staff` para gente da equipe.
+     *
+     * A SPEC §05 separa os dois porque só `staff` consome assento pago — a
+     * referência validou o modelo com 36 assentos internos contra 1.971
+     * solicitantes.
+     */
+    seatType?: 'staff' | 'portal';
+  }
 ): Promise<void> {
   await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
     ids.userId,
     opts.email,
     opts.userName,
   ]);
-  const restrito = opts.locationIds && opts.locationIds.length > 0;
+  const localRestrito = opts.locationIds && opts.locationIds.length > 0;
+  const clienteRestrito = opts.customerIds && opts.customerIds.length > 0;
   await t.admin.transaction(async (tx) => {
     await tx.query(
       `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
-       VALUES ($1, $2, $3, 'active', 'staff', false)`,
-      [ids.membershipId, ids.organizationId, ids.userId]
+       VALUES ($1, $2, $3, 'active', $4::aurora.seat_type, false)`,
+      [ids.membershipId, ids.organizationId, ids.userId, opts.seatType ?? 'staff']
     );
     await tx.query(
-      `INSERT INTO aurora.membership_scopes (membership_id, organization_id, location_scope, location_ids)
-       VALUES ($1, $2, $3::aurora.scope_mode, $4)`,
-      [ids.membershipId, ids.organizationId, restrito ? 'listed' : 'all', opts.locationIds ?? []]
+      `INSERT INTO aurora.membership_scopes
+         (membership_id, organization_id, location_scope, location_ids, customer_scope, customer_ids)
+       VALUES ($1, $2, $3::aurora.scope_mode, $4, $5::aurora.scope_mode, $6)`,
+      [
+        ids.membershipId,
+        ids.organizationId,
+        localRestrito ? 'listed' : 'all',
+        opts.locationIds ?? [],
+        clienteRestrito ? 'listed' : 'all',
+        opts.customerIds ?? [],
+      ]
     );
   });
 }

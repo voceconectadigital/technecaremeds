@@ -113,14 +113,49 @@ export interface StatusDefinition {
    * envenena o relatório que o ADR-004 existe para produzir.
    */
   readonly requiresWaitReason?: boolean;
+  /**
+   * Como esta situação aparece no PORTAL do cliente (SPEC §19).
+   *
+   * Nasce aqui e não só na migration porque toda organização nova provisiona
+   * as situações de fábrica: semear o rótulo apenas na migration daria
+   * vocabulário de cliente às organizações que já existiam e deixaria as
+   * futuras sem nenhum — e o portal delas mostraria a palavra da equipe.
+   *
+   * Ausente é deliberado em `draft`: uma OS em rascunho ainda não é
+   * compromisso com ninguém, e a consulta do portal exclui quem não tem
+   * rótulo.
+   */
+  readonly customerLabel?: string;
 }
 
 /** Reproduz a tabela de situações padrão da SPEC §10, sem acrescentar nada. */
 export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
+  // `draft` sem `customerLabel`: rascunho não é compromisso, e o portal o exclui.
   { key: 'draft', label: 'Rascunho', category: 'draft', color: '#9aa0a6', position: 0 },
-  { key: 'open', label: 'Aberta', category: 'open', color: '#1a73e8', position: 1 },
-  { key: 'scheduled', label: 'Agendada', category: 'scheduled', color: '#7b1fa2', position: 2 },
-  { key: 'in_progress', label: 'Em execução', category: 'in_progress', color: '#f9ab00', position: 3 },
+  {
+    key: 'open',
+    label: 'Aberta',
+    category: 'open',
+    color: '#1a73e8',
+    position: 1,
+    customerLabel: 'Recebido',
+  },
+  {
+    key: 'scheduled',
+    label: 'Agendada',
+    category: 'scheduled',
+    color: '#7b1fa2',
+    position: 2,
+    customerLabel: 'Agendado',
+  },
+  {
+    key: 'in_progress',
+    label: 'Em execução',
+    category: 'in_progress',
+    color: '#f9ab00',
+    position: 3,
+    customerLabel: 'Em atendimento',
+  },
   {
     key: 'waiting',
     label: 'Aguardando',
@@ -128,12 +163,52 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     color: '#e8710a',
     position: 4,
     requiresWaitReason: true,
+    // Só "Aguardando": o QUE se aguarda vem do motivo, que tem o rótulo dele.
+    customerLabel: 'Aguardando',
   },
-  { key: 'paused', label: 'Pausada', category: 'waiting', color: '#c5221f', position: 5 },
-  { key: 'completed', label: 'Concluída', category: 'review', color: '#188038', position: 6 },
-  { key: 'validated', label: 'Validada', category: 'done', color: '#0d652d', position: 7 },
-  { key: 'closed', label: 'Fechada', category: 'closed', color: '#3c4043', position: 8 },
-  { key: 'cancelled', label: 'Cancelada', category: 'cancelled', color: '#5f6368', position: 9 },
+  {
+    key: 'paused',
+    label: 'Pausada',
+    category: 'waiting',
+    color: '#c5221f',
+    position: 5,
+    // "Pausada" é vocabulário de operação — para quem espera, o que está
+    // acontecendo é análise.
+    customerLabel: 'Em análise',
+  },
+  {
+    key: 'completed',
+    label: 'Concluída',
+    category: 'review',
+    color: '#188038',
+    position: 6,
+    customerLabel: 'Concluído',
+  },
+  {
+    key: 'validated',
+    label: 'Validada',
+    category: 'done',
+    color: '#0d652d',
+    position: 7,
+    // "Validada" é etapa nossa; para o cliente, concluído é concluído.
+    customerLabel: 'Concluído',
+  },
+  {
+    key: 'closed',
+    label: 'Fechada',
+    category: 'closed',
+    color: '#3c4043',
+    position: 8,
+    customerLabel: 'Encerrado',
+  },
+  {
+    key: 'cancelled',
+    label: 'Cancelada',
+    category: 'cancelled',
+    color: '#5f6368',
+    position: 9,
+    customerLabel: 'Cancelado',
+  },
 ]);
 
 /* -------------------------------------------------------------------------- */
@@ -145,6 +220,14 @@ export interface WaitReasonDefinition {
   readonly label: string;
   readonly pausesSla: boolean;
   readonly responsible: 'customer' | 'supplier' | 'internal' | 'manager';
+  /**
+   * Como este motivo aparece no portal.
+   *
+   * Nenhuma frase NOMEIA fornecedor: dizer que há um terceiro envolvido é
+   * verdade e é útil; quem é esse terceiro é informação comercial nossa, e a
+   * SPEC §19 a lista entre o que não vaza.
+   */
+  readonly customerLabel?: string;
 }
 
 /**
@@ -160,46 +243,121 @@ export interface WaitReasonDefinition {
  * "PEÇA DISPONÍVEL P/ COLETA" — quatro estados que sempre significaram a mesma
  * coisa e nunca puderam ser somados.
  */
+/**
+ * Os motivos de espera de fábrica, com o rótulo que o cliente lê.
+ *
+ * DUAS COLUNAS DE TEXTO, e a diferença entre elas é o produto:
+ *
+ *   · `label` fala com a equipe: "Aguardando orçamento do fornecedor" diz
+ *     exatamente onde o processo parou.
+ *   · `customerLabel` fala com quem espera: "Aguardando orçamento de
+ *     terceiro" diz a mesma verdade sem nomear com quem trabalhamos.
+ *
+ * A regra que governa o segundo texto é responder à única pergunta que o
+ * cliente faz olhando para um chamado parado: "a bola é minha ou de vocês?".
+ * "Aguardando sua aprovação" e "Aguardando você" respondem; "Aguardando"
+ * sozinho transfere para a equipe a ligação de "e aí, como está?" — inclusive
+ * quando a resposta é "esperando você".
+ */
 export const FACTORY_WAIT_REASONS: readonly WaitReasonDefinition[] = Object.freeze([
-  { key: 'parts', label: 'Aguardando peça', pausesSla: false, responsible: 'internal' },
+  {
+    key: 'parts',
+    label: 'Aguardando peça',
+    pausesSla: false,
+    responsible: 'internal',
+    customerLabel: 'Aguardando peça',
+  },
   {
     key: 'quote_approval',
     label: 'Aguardando aprovação de orçamento',
     pausesSla: true,
     responsible: 'customer',
+    customerLabel: 'Aguardando sua aprovação',
   },
   {
     key: 'quote_preparation',
     label: 'Aguardando elaboração de orçamento',
     pausesSla: false,
     responsible: 'internal',
+    customerLabel: 'Preparando orçamento',
   },
-  { key: 'customer_response', label: 'Aguardando o cliente', pausesSla: true, responsible: 'customer' },
+  {
+    key: 'customer_response',
+    label: 'Aguardando o cliente',
+    pausesSla: true,
+    responsible: 'customer',
+    customerLabel: 'Aguardando você',
+  },
   {
     key: 'asset_release',
     label: 'Aguardando liberação do equipamento',
     pausesSla: true,
     responsible: 'customer',
+    customerLabel: 'Aguardando liberação do equipamento',
   },
-  { key: 'external_service', label: 'Em serviço externo', pausesSla: false, responsible: 'supplier' },
+  {
+    key: 'external_service',
+    label: 'Em serviço externo',
+    pausesSla: false,
+    responsible: 'supplier',
+    customerLabel: 'Em serviço externo',
+  },
   {
     key: 'external_quote',
     label: 'Aguardando orçamento do fornecedor',
     pausesSla: false,
     responsible: 'supplier',
+    customerLabel: 'Aguardando orçamento de terceiro',
   },
-  { key: 'warranty', label: 'Em acionamento de garantia', pausesSla: false, responsible: 'supplier' },
+  {
+    key: 'warranty',
+    label: 'Em acionamento de garantia',
+    pausesSla: false,
+    responsible: 'supplier',
+    customerLabel: 'Em acionamento de garantia',
+  },
   {
     key: 'internal_approval',
     label: 'Aguardando aprovação interna',
     pausesSla: false,
     responsible: 'internal',
+    customerLabel: 'Em análise',
   },
-  { key: 'scheduling', label: 'Aguardando janela de agendamento', pausesSla: true, responsible: 'customer' },
-  { key: 'transport', label: 'Em deslocamento / transporte', pausesSla: false, responsible: 'internal' },
-  { key: 'documentation', label: 'Aguardando documento fiscal', pausesSla: false, responsible: 'internal' },
-  { key: 'calibration', label: 'Aguardando calibração', pausesSla: false, responsible: 'internal' },
-  { key: 'unrepairable', label: 'Sem reparo viável', pausesSla: true, responsible: 'manager' },
+  {
+    key: 'scheduling',
+    label: 'Aguardando janela de agendamento',
+    pausesSla: true,
+    responsible: 'customer',
+    customerLabel: 'Aguardando janela para agendar',
+  },
+  {
+    key: 'transport',
+    label: 'Em deslocamento / transporte',
+    pausesSla: false,
+    responsible: 'internal',
+    customerLabel: 'Em deslocamento',
+  },
+  {
+    key: 'documentation',
+    label: 'Aguardando documento fiscal',
+    pausesSla: false,
+    responsible: 'internal',
+    customerLabel: 'Aguardando documento fiscal',
+  },
+  {
+    key: 'calibration',
+    label: 'Aguardando calibração',
+    pausesSla: false,
+    responsible: 'internal',
+    customerLabel: 'Aguardando calibração',
+  },
+  {
+    key: 'unrepairable',
+    label: 'Sem reparo viável',
+    pausesSla: true,
+    responsible: 'manager',
+    customerLabel: 'Sem reparo viável',
+  },
 ]);
 
 /* -------------------------------------------------------------------------- */

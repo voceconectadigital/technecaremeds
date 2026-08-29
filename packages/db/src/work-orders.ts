@@ -60,14 +60,22 @@ export async function provisionWorkOrderStates(session: TenantSession): Promise<
     if (!id) {
       id = newId();
       await session.query(
+        // `customer_label` entra AQUI, e não só na migration 0042.
+        //
+        // A migration semeou o vocabulário das organizações que já existiam.
+        // Sem esta coluna no provisionamento, toda organização NOVA nasceria
+        // com situações sem rótulo de cliente — e o portal dela mostraria a
+        // palavra da equipe, ou nada.
         `INSERT INTO aurora.work_order_statuses
-           (id, organization_id, key, label, category, color, position, requires_wait_reason, is_system, created_by)
-         VALUES ($1, $2, $3, $4, $5::aurora.status_category, $6, $7, $8, true, $9)`,
+           (id, organization_id, key, label, customer_label, category, color, position,
+            requires_wait_reason, is_system, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6::aurora.status_category, $7, $8, $9, true, $10)`,
         [
           id,
           org,
           s.key,
           s.label,
+          s.customerLabel ?? null,
           s.category,
           s.color,
           s.position,
@@ -90,9 +98,20 @@ export async function provisionWorkOrderStates(session: TenantSession): Promise<
       id = newId();
       await session.query(
         `INSERT INTO aurora.wait_reasons
-           (id, organization_id, key, label, pauses_sla, responsible, position, is_system, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6::aurora.wait_responsible, $7, true, $8)`,
-        [id, org, w.key, w.label, w.pausesSla, w.responsible, i, session.context.actorId]
+           (id, organization_id, key, label, customer_label, pauses_sla, responsible,
+            position, is_system, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::aurora.wait_responsible, $8, true, $9)`,
+        [
+          id,
+          org,
+          w.key,
+          w.label,
+          w.customerLabel ?? null,
+          w.pausesSla,
+          w.responsible,
+          i,
+          session.context.actorId,
+        ]
       );
     }
     waitReasons.set(w.key, id);
