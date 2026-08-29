@@ -1,9 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const raiz = resolve(__dirname, '..', '..');
+// `import.meta` e não `__dirname`: o carregador nativo do Vite 8 é ESM, e vai
+// virar o padrão.
+const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
