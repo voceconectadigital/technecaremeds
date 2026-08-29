@@ -51,12 +51,18 @@ describe('migrations (EPIC-001)', () => {
     const { rows } = await pg.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables WHERE table_schema='aurora' ORDER BY table_name`
     );
+    // lista explícita: mudança de schema tem de ser deliberada, nunca silenciosa
     expect(rows.map((r) => r.table_name)).toEqual([
       'audit_logs',
       'domain_events',
+      'membership_permission_overrides',
+      'membership_roles',
       'membership_scopes',
       'memberships',
       'organizations',
+      'permissions',
+      'role_permissions',
+      'roles',
       'schema_migrations',
       'users',
     ]);

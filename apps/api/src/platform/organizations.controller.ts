@@ -10,6 +10,7 @@
  * antipadrão que §37 existe para impedir.
  */
 import { Controller, Get, Inject, Req } from '@nestjs/common';
+import { RequirePermissions } from '../common/permissions.guard';
 import { withTenant, type Database } from '@aurora/db';
 import { NotFoundError } from '@aurora/domain';
 import { DATABASE } from '../common/tokens';
@@ -34,6 +35,7 @@ export class OrganizationsController {
 
   /** Organização do contexto — nunca recebe id por parâmetro. */
   @Get('current')
+  @RequirePermissions('organization.read')
   async current(@Req() req: AuroraRequest): Promise<OrganizationView> {
     const ctx = req.auroraContext!;
     return withTenant(this.db, ctx, async (s) => {
@@ -55,6 +57,7 @@ export class OrganizationsController {
 
   /** Membros da organização corrente. */
   @Get('current/members')
+  @RequirePermissions('organization.read', 'organization.manage_members')
   async members(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const items = await withTenant(this.db, ctx, (s) =>

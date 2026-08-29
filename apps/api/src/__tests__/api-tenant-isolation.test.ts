@@ -17,6 +17,8 @@ import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import { newId } from '@aurora/domain';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '@aurora/db/testing/harness';
+import { withTenant, provisionFactoryRoles, assignRole } from '@aurora/db';
+import { buildContext } from '@aurora/domain';
 import { loadEnv } from '@aurora/config';
 import { createApp } from '../bootstrap';
 
@@ -57,6 +59,18 @@ beforeAll(async () => {
       userName: 'Bruno',
     }
   );
+
+  // papéis de fábrica e atribuição: sem papel, o guard nega tudo — corretamente
+  for (const [org, mem, role] of [
+    [ORG_A, MEM_A, 'admin'],
+    [ORG_B, MEM_B, 'admin'],
+  ] as const) {
+    const ctx = buildContext({ organizationId: org, actorKind: 'system', requestId: 'setup' });
+    await withTenant(t.db, ctx, async (s) => {
+      const ids = await provisionFactoryRoles(s);
+      await assignRole(s, mem, ids.get(role)!);
+    });
+  }
 
   const env = loadEnv({
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
@@ -216,5 +230,61 @@ describe('seletor de organização (/me/organizations)', () => {
       .set('authorization', `Bearer ${tokenFor('ninguem@lugar.test')}`);
     expect(r.status).toBe(200);
     expect(r.body.items).toEqual([]);
+  });
+});
+
+describe('permissões na borda HTTP (EPIC-002)', () => {
+  it('rota protegida responde 403 nomeando a permissão que falta', async () => {
+    // técnico não tem organization.manage_members
+    const ctx = buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: 'perm-setup' });
+    const techUser = newId();
+    const techMem = newId();
+    await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1,$2,$3)`, [
+      techUser,
+      'tecnico@org-a.test',
+      'Técnico',
+    ]);
+    await withTenant(t.db, ctx, async (s) => {
+      await s.query(
+        `INSERT INTO aurora.memberships (id, organization_id, user_id, status) VALUES ($1,$2,$3,'active')`,
+        [techMem, ORG_A, techUser]
+      );
+      const ids = await provisionFactoryRoles(s);
+      await assignRole(s, techMem, ids.get('technician')!);
+    });
+
+    const ok = await http
+      .get('/v1/organizations/current')
+      .set('authorization', `Bearer ${tokenFor('tecnico@org-a.test')}`);
+    expect(ok.status, 'técnico deveria ler a própria organização').toBe(200);
+
+    const denied = await http
+      .get('/v1/organizations/current/members')
+      .set('authorization', `Bearer ${tokenFor('tecnico@org-a.test')}`);
+    expect(denied.status).toBe(403);
+    expect(denied.body.code).toBe('forbidden');
+    expect(denied.body.message).toContain('organization.manage_members');
+    expect(denied.body.details.permission).toContain('organization.manage_members');
+  });
+
+  it('revogação individual derruba a permissão mesmo com o papel concedendo', async () => {
+    await withTenant(
+      t.db,
+      buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: 'deny-setup' }),
+      (s) =>
+        s.query(
+          `INSERT INTO aurora.membership_permission_overrides
+             (organization_id, membership_id, permission_key, effect, reason)
+           VALUES ($1, $2, 'organization.manage_members', 'deny', 'suspenso durante apuração interna')`,
+          [ORG_A, MEM_A]
+        )
+    );
+    const r = await http
+      .get('/v1/organizations/current/members')
+      .set('authorization', `Bearer ${tokenFor(EMAIL_A)}`);
+    expect(r.status).toBe(403);
+
+    // limpa para não afetar outros testes
+    await t.raw(`DELETE FROM aurora.membership_permission_overrides WHERE membership_id = $1`, [MEM_A]);
   });
 });

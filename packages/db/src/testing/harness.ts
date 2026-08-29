@@ -12,6 +12,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { pgliteAdapter } from '../adapters';
 import type { Database } from '../client';
 import { migrate } from '../migrator';
+import { syncPermissionCatalog } from '../rbac';
 
 export interface TestDatabase {
   db: Database;
@@ -37,6 +38,9 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   if (result.applied.length === 0) {
     throw new Error('nenhuma migration aplicada — verifique o diretório de migrations');
   }
+
+  // o catálogo de permissões é espelho do código (§21)
+  await syncPermissionCatalog(superuser);
 
   // a partir daqui, tudo passa pelo papel de aplicação
   const db = pgliteAdapter(pg, 'aurora_app');

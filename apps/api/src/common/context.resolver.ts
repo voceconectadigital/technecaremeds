@@ -11,7 +11,7 @@
  */
 import { newId, buildContext, type RequestContext, type RequestSource } from '@aurora/domain';
 import { UnauthenticatedError, ForbiddenError } from '@aurora/domain';
-import { withPlatformSession, type Database } from '@aurora/db';
+import { withPlatformSession, loadEffectivePermissions, type Database } from '@aurora/db';
 import type { AuthProvider, AuthenticatedIdentity } from '../auth/auth-provider.port';
 
 export interface IncomingRequest {
@@ -53,13 +53,15 @@ export class ContextResolver {
     const requested = req.header('x-aurora-organization') ?? null;
     const membership = await this.findMembership(identity, requested);
 
+    // permissões efetivas do vínculo, já com deny aplicado (§21)
+    const permissions = await loadEffectivePermissions(this.db, membership.membership_id);
+
     return buildContext({
       organizationId: membership.organization_id,
       membershipId: membership.membership_id,
       actorId: membership.user_id,
       actorKind: 'user',
-      // permissões entram no EPIC-002; até lá, o contexto carrega conjunto vazio
-      permissions: [],
+      permissions,
       scope: {
         customerScope: (membership.customer_scope as 'all' | 'listed') ?? 'all',
         customerIds: membership.customer_ids ?? [],

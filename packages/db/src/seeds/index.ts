@@ -12,7 +12,9 @@
  * (2026-01-01) + versão 7 + variante correta.
  */
 import type { Database } from '../client';
-import { unsafeCrossTenant } from '../client';
+import { unsafeCrossTenant, withTenant } from '../client';
+import { buildContext } from '@aurora/domain';
+import { provisionFactoryRoles, assignRole } from '../rbac';
 
 /** Identificadores estáveis — referenciáveis em testes e documentação. */
 export const SEED_IDS = {
@@ -154,4 +156,45 @@ export async function seed(adminDb: Database): Promise<SeedResult> {
     const [mems] = await c.query<{ c: number }>('SELECT count(*)::int c FROM aurora.memberships');
     return { organizations: orgs?.c ?? 0, users: users?.c ?? 0, memberships: mems?.c ?? 0 };
   });
+}
+
+/** Atribuição papel -> vínculo usada pelos seeds. */
+const SEED_ROLE_ASSIGNMENTS: ReadonlyArray<
+  [orgKey: 'orgAcme' | 'orgNorte', membershipKey: keyof typeof SEED_IDS, roleKey: string]
+> = [
+  ['orgAcme', 'memAdmin', 'owner'],
+  ['orgAcme', 'memGestor', 'maintenance_manager'],
+  ['orgAcme', 'memTecnico', 'technician'],
+  ['orgAcme', 'memSolicitante', 'requester'],
+  ['orgAcme', 'memConsultorAcme', 'coordinator'],
+  ['orgNorte', 'memNorte', 'owner'],
+  ['orgNorte', 'memConsultorNorte', 'technician'],
+];
+
+/**
+ * Provisiona papéis de fábrica nas duas organizações e atribui aos vínculos.
+ * Roda depois de `seed`, já com contexto de tenant — papéis são dado de
+ * negócio da organização, não de plataforma.
+ */
+export async function seedRoles(appDb: Database): Promise<{ rolesPerOrg: number }> {
+  let rolesPerOrg = 0;
+  for (const orgKey of ['orgAcme', 'orgNorte'] as const) {
+    const organizationId = SEED_IDS[orgKey];
+    const ctx = buildContext({
+      organizationId,
+      actorKind: 'system',
+      requestId: `seed-roles-${orgKey}`,
+      source: 'import',
+    });
+    await withTenant(appDb, ctx, async (s) => {
+      const roleIds = await provisionFactoryRoles(s);
+      rolesPerOrg = roleIds.size;
+      for (const [org, memKey, roleKey] of SEED_ROLE_ASSIGNMENTS) {
+        if (org !== orgKey) continue;
+        const roleId = roleIds.get(roleKey);
+        if (roleId) await assignRole(s, SEED_IDS[memKey], roleId);
+      }
+    });
+  }
+  return { rolesPerOrg };
 }
