@@ -44,6 +44,7 @@ import { useApiQuery } from '../../lib/api';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { useUrlState } from '../../lib/url-state';
+import { AlternadorDeParque } from './alternador';
 
 const LIMITE = 500;
 
@@ -117,6 +118,10 @@ export function AtivosPage() {
       title={`${rotulo}s`}
       subtitle="O parque, pela árvore de locais. Escolha onde para ver o que há lá."
     >
+      <div className="mb-4">
+        <AlternadorDeParque />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
         <ArvoreDeLocais locais={locais?.items ?? []} escolhido={local} onEscolher={setLocal} />
 

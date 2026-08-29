@@ -33,6 +33,7 @@ import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
 import { PlanosPage, PlanoPage } from '../features/planos/lista';
 import { IndicadoresPage } from '../features/indicadores/painel';
 import { NotificacoesPage } from '../features/notificacoes/caixa';
+import { DocumentosPage } from '../features/documentos/lista';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -117,6 +118,8 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/estoque', EstoquePage),
+
+  rotaProtegida('/documentos', DocumentosPage),
   rotaProtegida('/contratos', ContratosPage),
   createRoute({
     getParentRoute: () => raiz,

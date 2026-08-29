@@ -138,7 +138,16 @@ describe('ciclo de vida pela borda', () => {
       .set(auth(EMAIL_GESTOR))
       .send({ documentTypeId: tipoRelatorio, verdict: 'mais_ou_menos' })
       .expect(422);
-    expect(r.body.message).toMatch(/conforming/);
+    /*
+     * A lista de válidos vai em `details.allowed`, e não concatenada na frase.
+     *
+     * O controller tinha uma cópia local de `oneOf` que montava
+     * "verdict deve ser um de: conforming, ..." — texto. A versão
+     * compartilhada devolve o campo estruturado, que é o que uma integração
+     * consegue LER; a frase é para a pessoa, e a lista é para o programa.
+     */
+    expect(r.body.details.allowed).toContain('conforming');
+    expect(r.body.details.field).toBe('verdict');
   });
 
   it('a checagem de emissão responde antes de tentar', async () => {
@@ -291,5 +300,40 @@ describe('consultas', () => {
   it('a varredura de vencimento é POST e devolve os alertas', async () => {
     const r = await http.post('/v1/documents/expiry/sweep').set(auth(EMAIL_GESTOR)).expect(201);
     expect(Array.isArray(r.body.alerts)).toBe(true);
+  });
+});
+
+describe('a lista e o recorte de vencimento', () => {
+  it('responde, e satisfaz o contrato', async () => {
+    // Este teste existe porque a consulta nova referenciou `dt.name` numa
+    // tabela cuja coluna é `label` — 500 em produção, e nenhum teste de
+    // unidade poderia ver, porque a coluna só é resolvida pelo PostgreSQL.
+    const { documentsList } = await import('@aurora/contracts');
+    const r = await http.get('/v1/documents').set(auth(EMAIL_GESTOR));
+    expect(r.status).toBe(200);
+
+    const conferido = documentsList.response.safeParse(r.body);
+    if (!conferido.success) {
+      throw new Error(
+        conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+  });
+
+  it('o recorte de vencimento ignora quem não tem validade', async () => {
+    // Sem validade não há o que vencer. Incluí-los faria a lista de "o que
+    // vence este mês" trazer o acervo inteiro, e o recorte perderia a função.
+    const r = await http.get('/v1/documents?expiring_within_days=3650').set(auth(EMAIL_GESTOR));
+    expect(r.status).toBe(200);
+    for (const d of r.body.items) {
+      expect(d.valid_until, `${d.id} entrou no recorte sem validade`).not.toBeNull();
+    }
+  });
+
+  it('janela fora do intervalo é recusada', async () => {
+    for (const v of ['-1', '99999', 'ontem']) {
+      const r = await http.get(`/v1/documents?expiring_within_days=${v}`).set(auth(EMAIL_GESTOR));
+      expect(r.status, v).toBe(422);
+    }
   });
 });

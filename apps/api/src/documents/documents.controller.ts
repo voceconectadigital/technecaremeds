@@ -22,7 +22,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   ForbiddenError,
   canTransitionDocument,
@@ -35,22 +34,15 @@ import {
   type SignatureMethod,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+// As três funções vêm de `common/params`, e não de cópias locais.
+//
+// Este arquivo tinha as suas próprias `uuidParam` e `oneOf` — restos das onze
+// cópias que a consolidação da fase de segurança recolheu e que passaram
+// batido aqui. Duas implementações da mesma validação divergem primeiro no
+// caso raro, que é onde ninguém olha.
+import { oneOf, optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
-
-function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
-  if (typeof value !== 'string' || !allowed.includes(value as T)) {
-    throw new ValidationError(`${field} deve ser um de: ${allowed.join(', ')}`, { field });
-  }
-  return value as T;
-}
 
 @Controller('documents')
 export class DocumentsController {
@@ -112,6 +104,66 @@ export class DocumentsController {
       })
     );
     return { id };
+  }
+
+  /**
+   * Os documentos, com o recorte que a operação usa: o que está vencendo.
+   *
+   * Havia `by-asset` e `by-id`, e nenhuma lista. A pergunta que se faz de
+   * manhã não é "quais documentos deste equipamento?" — é "o que vence este
+   * mês?", e sem ela o vencimento só é descoberto pela varredura, que avisa
+   * quando já é tarde para providenciar.
+   *
+   * `expiring_within_days` é o recorte, e é sobre `valid_until`: documento sem
+   * validade não vence, e por isso não aparece nesse recorte — mas continua na
+   * lista sem recorte, porque "sem validade" é diferente de "não existe".
+   */
+  @Get()
+  @RequirePermissions('document.read')
+  async list(
+    @Req() req: AuroraRequest,
+    @Query('status') status?: string,
+    @Query('asset') asset?: string,
+    @Query('expiring_within_days') expiring?: string
+  ): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+
+    let dias: number | null = null;
+    if (expiring !== undefined) {
+      dias = Number.parseInt(expiring, 10);
+      if (!Number.isFinite(dias) || dias < 0 || dias > 3650) {
+        throw new ValidationError('expiring_within_days deve estar entre 0 e 3650', {
+          field: 'expiring_within_days',
+        });
+      }
+    }
+
+    const items = await withTenant(this.db, ctx, (s) =>
+      s.query(
+        `SELECT d.id, d.number, d.version, d.status::text AS status, d.title,
+                d.verdict::text AS verdict,
+                d.asset_id, a.name AS asset_name,
+                d.work_order_id, d.customer_id,
+                dt.key AS type_key, dt.label AS type_name,
+                d.issued_at, d.valid_until::text AS valid_until,
+                d.released_to_customer_at, d.cancelled_at,
+                d.supersedes_id
+           FROM aurora.documents d
+           JOIN aurora.document_types dt ON dt.id = d.document_type_id
+           LEFT JOIN aurora.assets a     ON a.id = d.asset_id
+          WHERE ($1::text IS NULL OR d.status::text = $1)
+            AND ($2::uuid IS NULL OR d.asset_id = $2)
+            -- Sem validade não vence: fica de fora do recorte de vencimento, e
+            -- dentro da lista sem recorte.
+            AND ($3::int IS NULL
+                 OR (d.valid_until IS NOT NULL
+                     AND d.valid_until <= (current_date + ($3::int || ' days')::interval)))
+          ORDER BY d.valid_until NULLS LAST, d.issued_at DESC NULLS LAST
+          LIMIT 500`,
+        [status ?? null, optionalUuid(asset, 'asset'), dias]
+      )
+    );
+    return { items };
   }
 
   @Get('by-asset')

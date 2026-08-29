@@ -27,6 +27,7 @@ const TELAS = [
   '/planos',
   '/indicadores',
   '/notificacoes',
+  '/documentos',
   '/agenda',
   '/configuracoes',
 ];
