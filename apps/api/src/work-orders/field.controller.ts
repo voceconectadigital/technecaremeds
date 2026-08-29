@@ -17,9 +17,15 @@
  * comando que uma pessoa deu; é ela quem sabe o que quis fazer. Uma caixa
  * coletiva viraria uma caixa de ninguém.
  */
-import { Body, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
-import { withTenant, pendingConflicts, resolveClientConflict, type Database } from '@aurora/db';
-import { ForbiddenError, NotFoundError } from '@aurora/domain';
+import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  withTenant,
+  pendingConflicts,
+  resolveClientConflict,
+  fieldSyncBundle,
+  type Database,
+} from '@aurora/db';
+import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
@@ -34,6 +40,52 @@ function meuVinculo(req: AuroraRequest): string {
 @Controller('field')
 export class FieldController {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  /**
+   * O pacote do dia: tudo que o aparelho precisa antes de a rede acabar.
+   *
+   * UMA ROTA, E NÃO OITO. O técnico entra no elevador do subsolo quando
+   * terminar de sincronizar, e oito idas de rede numa conexão de hospital têm
+   * oito chances de morrer no meio — deixando o aparelho com metade do dia.
+   * Um pacote só chega inteiro ou não chega, e "não chegou" é um estado que a
+   * tela sabe mostrar.
+   *
+   * `since` faz a sincronização ser incremental. O instante é sempre o que o
+   * SERVIDOR devolveu na chamada anterior: um celular com a data errada — caso
+   * de borda que a SPEC lista — pediria "o que mudou desde 2027" e não baixaria
+   * nada, indo a campo achando que está em dia.
+   */
+  @Get('sync')
+  @RequirePermissions('work_order.read')
+  async sync(
+    @Req() req: AuroraRequest,
+    @Query('since') since?: string,
+    @Query('horizon') horizon?: string
+  ): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const eu = meuVinculo(req);
+
+    let desde: Date | null = null;
+    if (since !== undefined) {
+      desde = new Date(since);
+      if (Number.isNaN(desde.getTime())) {
+        throw new ValidationError('since precisa ser o instante que o servidor devolveu em synced_at.', {
+          field: 'since',
+          received: since,
+        });
+      }
+    }
+
+    const dias = horizon === undefined ? 7 : Number.parseInt(horizon, 10);
+    if (!Number.isFinite(dias) || dias < 1 || dias > 90) {
+      throw new ValidationError('horizon precisa ser um número de dias entre 1 e 90.', {
+        field: 'horizon',
+        received: horizon,
+      });
+    }
+
+    return withTenant(this.db, ctx, (s) => fieldSyncBundle(s, eu, { since: desde, horizonDays: dias }));
+  }
 
   /**
    * O que ficou pendurado, com o conteúdo original.

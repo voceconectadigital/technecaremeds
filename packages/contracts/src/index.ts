@@ -39,6 +39,7 @@ export * from './operations/documents';
 export * from './operations/automations';
 export * from './operations/portal';
 export * from './operations/field';
+export * from './operations/field-sync';
 export * from './operations/directory';
 export * from './operations/search';
 export * from './operations/service-requests';

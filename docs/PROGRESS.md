@@ -1019,14 +1019,55 @@ O cabeçalho `x-aurora-client-operation` é **opcional**: quem está online não
 fila nem retentativa cega. Há uma prova que documenta esse limite por extenso, em
 vez de deixar alguém supor que a proteção é automática.
 
+### 3. "O que precisa estar no dispositivo"
+
+`GET /field/sync` devolve o escopo do dia **numa ida só**: OS atribuídas (7 dias
+mais as abertas sem data), os ativos que elas referenciam, os locais do escopo,
+os modelos de checklist publicados, os catálogos, as situações, o grafo de
+transições, os motivos de espera e o saldo do almoxarifado.
+
+Uma rota, e não oito. O técnico entra no elevador do subsolo quando terminar de
+sincronizar, e oito idas de rede numa conexão de hospital têm oito chances de
+morrer no meio — deixando o aparelho com metade do dia, que é um estado que
+nenhuma tela sabe mostrar.
+
+Três decisões que o pacote carrega:
+
+- **O grafo de transições desce junto.** Sem ele a tela offline não sabe quais
+  botões oferecer e só resta oferecer todos — e aí metade das ações do dia volta
+  como conflito horas depois. Com ele, a recusa acontece enquanto a pessoa ainda
+  está na frente do equipamento e pode fazer outra coisa.
+- **OS aberta sem data entra sempre.** Filtrar só pela janela de 7 dias deixaria
+  de fora a OS atrasada há três semanas — exatamente a que ele mais provavelmente
+  vai tocar hoje.
+- **O relógio é o do servidor.** `synced_at` volta na chamada seguinte como
+  `since`. A SPEC lista "relógio do dispositivo errado" entre os casos de borda:
+  um celular adiantado pediria "o que mudou desde 2027" e iria a campo com o
+  pacote vazio, achando que está em dia.
+
+O contrato é conferido com `strict()` em cada uma das nove coleções, e o teste
+**exige que nenhuma esteja vazia** — uma lista vazia satisfaz qualquer esquema, e
+uma suíte verde que diz ter conferido nove coleções quando conferiu sete é pior
+do que não ter o teste.
+
+Foi essa conferência que encontrou dois defeitos meus: sete nomes de tabela e
+coluna que eu havia suposto em vez de ler (`aurora.catalogs`, `is_initial`,
+`work_order_transitions`, `manufacturer_id` no ativo…), e um contrato declarando
+`z.number()` para o saldo, quando o projeto já tinha decidido que quantidade
+decimal viaja como **texto** — `numeric` no banco existe para que peça fracionada
+não some em ponto flutuante, e converter na fronteira desfaria isso em silêncio.
+
 ### A VALIDAR
 
 - **Retenção das operações de cliente.** A tabela não concede `DELETE` a
   ninguém, de propósito: apagar reabre a duplicata que ela fecha. Quanto tempo
   guardar é decisão de operação, não da aplicação — e inventar "trinta dias"
   aqui seria escolher por quem vai operar isto.
+- **Fotos.** A política delas é oposta à do pacote: sobem numa fila com envio
+  retomável, e não descem num pacote. O envio retomável ainda não existe.
 - **O aplicativo em si** (`apps/field`) não existe ainda. O que existe é o
-  servidor pronto para recebê-lo.
+  servidor pronto para recebê-lo: idempotência, conflito preservado e o pacote
+  do dia.
 
 ---
 

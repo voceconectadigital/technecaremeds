@@ -34,6 +34,12 @@ import {
   createAssetCategory,
   createAsset,
   createWorkOrder,
+  createChecklistTemplate,
+  addChecklistItem,
+  publishChecklist,
+  createWarehouse,
+  createItem,
+  recordMovement,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
 import { createApp } from '../bootstrap';
@@ -114,6 +120,51 @@ beforeAll(async () => {
       label: 'Corretiva',
       systemKey: 'corrective',
     });
+
+    /*
+     * UM CHECKLIST PUBLICADO, COM OS TRÊS TIPOS DE ITEM QUE MAIS APARECEM.
+     *
+     * Sem ele, `checklist_templates` desceria vazio e a conferência estrita do
+     * contrato passaria sem olhar nada: uma lista vazia satisfaz qualquer
+     * esquema. E é exatamente esta coleção que o técnico usa com as mãos
+     * ocupadas — um campo torto aqui é um item que ele não consegue responder.
+     */
+    const modelo = await createChecklistTemplate(s, {
+      // Sublinhado, e não hífen: `ct_key_format` exige `^[a-z][a-z0-9_]{1,60}$`.
+      key: 'preventiva_ventilador',
+      title: 'Preventiva de ventilador pulmonar',
+      description: 'Roteiro trimestral',
+    });
+    await addChecklistItem(s, {
+      templateId: modelo,
+      kind: 'boolean',
+      label: 'Alarme sonoro funciona',
+      required: true,
+      expectedBoolean: true,
+      position: 1,
+    });
+    await addChecklistItem(s, {
+      templateId: modelo,
+      kind: 'number',
+      label: 'Pressão de pico',
+      required: true,
+      minValue: 10,
+      maxValue: 40,
+      unit: 'cmH2O',
+      position: 2,
+    });
+    await addChecklistItem(s, {
+      templateId: modelo,
+      // `option`: o vocabulário real do enum é text·number·boolean·option·
+      // multi_option·photo·date. `single_choice` era invenção minha.
+      kind: 'option',
+      label: 'Estado do circuito paciente',
+      required: false,
+      options: ['íntegro', 'ressecado', 'trincado'],
+      failingOptions: ['trincado'],
+      position: 3,
+    });
+    await publishChecklist(s, modelo);
   });
 
   await seedMember(
@@ -124,6 +175,26 @@ beforeAll(async () => {
   await withTenant(t.db, sysCtx, async (s) => {
     const papeis = await provisionFactoryRoles(s);
     await assignRole(s, TEC_MEM, papeis.get('technician')!);
+
+    /*
+     * O ALMOXARIFADO DA VAN VEM DEPOIS DO VÍNCULO, e não por organização do
+     * arquivo: `warehouses_van_has_owner` exige um dono, e a chave estrangeira
+     * exige que ele exista. Um almoxarifado móvel sem responsável é um estoque
+     * que ninguém confere — e o banco recusa criá-lo.
+     */
+    const armazem = await createWarehouse(s, {
+      name: 'Almoxarifado da van',
+      kind: 'van',
+      ownerMembershipId: TEC_MEM,
+    });
+    const filtro = await createItem(s, { sku: 'FLT-001', name: 'Filtro HEPA', unit: 'un' });
+    await recordMovement(s, {
+      itemId: filtro,
+      warehouseId: armazem,
+      kind: 'receipt',
+      qty: 12,
+      unitCost: 45,
+    });
   });
 
   const env = loadEnv({
@@ -523,6 +594,176 @@ describe('CAMPO-006 · a tela de atenção satisfaz o contrato', () => {
             conferido.error.issues.map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`).join('\n')
         );
       }
+    }
+  });
+});
+
+describe('CAMPO-007 · o pacote do dia', () => {
+  it('vem numa ida só, com tudo que a tela precisa para renderizar sem rede', async () => {
+    /*
+     * UMA ROTA, E NÃO OITO.
+     *
+     * O técnico entra no elevador do subsolo quando terminar de sincronizar.
+     * Oito idas de rede numa conexão de hospital têm oito chances de morrer no
+     * meio, deixando o aparelho com metade do dia — e "metade do dia" é um
+     * estado que nenhuma tela sabe mostrar.
+     */
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+
+    expect(r.body.work_orders.length).toBeGreaterThan(0);
+    expect(r.body.incremental).toBe(false);
+
+    /*
+     * O VOCABULÁRIO VAI JUNTO. Sem situações, motivos e catálogos, a tela
+     * offline mostra identificador onde deveria mostrar palavra — e um técnico
+     * lendo `01a04fc7-3bec` no lugar de "Aguardando peça" não consegue
+     * trabalhar.
+     */
+    expect(r.body.statuses.length).toBeGreaterThan(0);
+    expect(r.body.transitions.length).toBeGreaterThan(0);
+    expect(r.body.catalogs.length).toBeGreaterThan(0);
+
+    // As contagens existem para o aparelho DIZER o que baixou: "sincronizado"
+    // sozinho não distingue um pacote cheio de um pacote vazio por engano.
+    expect(r.body.counts.work_orders).toBe(r.body.work_orders.length);
+    expect(r.body.synced_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('o grafo de transições desce junto, para o aparelho recusar na hora', async () => {
+    /*
+     * Sem o grafo, a tela offline não sabe quais botões oferecer e só resta
+     * oferecer todos — e aí metade das ações do dia volta como conflito horas
+     * depois. Com ele, a recusa acontece quando a pessoa ainda está na frente
+     * do equipamento e pode fazer outra coisa.
+     */
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    const t = r.body.transitions[0];
+    expect(t).toMatchObject({
+      from_key: expect.any(String),
+      to_key: expect.any(String),
+    });
+  });
+
+  it('a OS de outra pessoa não entra no pacote', async () => {
+    // O recorte vem do VÍNCULO, e não de um parâmetro: uma rota que aceitasse
+    // `assignee` seria uma rota em que trocar o número na barra de endereço
+    // mostra o dia do colega.
+    const os = await novaOS('Do colega');
+    await withTenant(t.db, sysCtx, (s) =>
+      s.query(`UPDATE aurora.work_orders SET assignee_membership_id = $2 WHERE id = $1`, [os, COORD_MEM])
+    );
+
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    expect(r.body.work_orders.map((w: { id: string }) => w.id)).not.toContain(os);
+  });
+
+  it('a sincronização incremental traz o que mudou, e não o que já estava lá', async () => {
+    const primeiro = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    const marca = primeiro.body.synced_at;
+
+    // Nada mudou entre as duas chamadas: o pacote incremental vem vazio de OS.
+    const vazio = await http
+      .get(`/v1/field/sync?since=${encodeURIComponent(marca)}`)
+      .set(auth(EMAIL_TEC))
+      .expect(200);
+    expect(vazio.body.incremental).toBe(true);
+    expect(vazio.body.work_orders).toEqual([]);
+
+    // Agora uma OS nova, atribuída a ele.
+    const nova = await novaOS('Chegou depois da sincronização');
+
+    const depois = await http
+      .get(`/v1/field/sync?since=${encodeURIComponent(marca)}`)
+      .set(auth(EMAIL_TEC))
+      .expect(200);
+    expect(depois.body.work_orders.map((w: { id: string }) => w.id)).toContain(nova);
+  });
+
+  it('um `since` que não é data é recusado, e não vira "baixe tudo"', async () => {
+    /*
+     * Aceitar em silêncio faria a chamada devolver o pacote inteiro toda vez
+     * que o cliente mandasse lixo — lento, mas parecendo funcionar. O defeito
+     * ficaria escondido até alguém medir por que a sincronização demora.
+     */
+    const r = await http.get('/v1/field/sync?since=ontem').set(auth(EMAIL_TEC));
+    expect(r.status).toBe(422);
+    expect(r.body.details.field).toBe('since');
+  });
+
+  it('o horizonte tem teto: pedir dez anos não vira uma consulta sem limite', async () => {
+    const r = await http.get('/v1/field/sync?horizon=3650').set(auth(EMAIL_TEC));
+    expect(r.status).toBe(422);
+    expect(r.body.details.field).toBe('horizon');
+  });
+
+  it('a OS fechada não ocupa espaço no aparelho', async () => {
+    // Sete dias de OS fechadas somariam centenas de registros que ninguém vai
+    // abrir — e o espaço do aparelho é o que decide se as fotos do dia cabem.
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    for (const w of r.body.work_orders) {
+      expect(['closed', 'cancelled']).not.toContain(w.category);
+    }
+  });
+});
+
+describe('CAMPO-008 · o pacote satisfaz o contrato', () => {
+  it('campo a campo, em cada coleção, sem sobrar nem faltar', async () => {
+    /*
+     * É AQUI QUE UM CAMPO TORTO TEM DE MORRER.
+     *
+     * Em qualquer outra tela, uma divergência aparece como espaço em branco que
+     * alguém reporta. Este pacote é GRAVADO na base local do aparelho e
+     * sobrevive à sessão: o técnico desce para o subsolo com o dado torto e só
+     * descobre no fim do dia, quando já não dá para consertar.
+     *
+     * `strict()` em cada coleção: uma coluna nova numa das sete consultas
+     * deixa de chegar ao aparelho por acidente. Alguém precisa declará-la aqui,
+     * e ao declarar decide se ela deve mesmo sair do servidor.
+     */
+    const c = await import('@aurora/contracts');
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+
+    const colecoes = [
+      ['work_orders', c.FieldWorkOrder],
+      ['assets', c.FieldAsset],
+      ['locations', c.FieldLocation],
+      ['catalogs', c.FieldCatalogItem],
+      ['statuses', c.FieldStatus],
+      ['transitions', c.FieldTransition],
+      ['wait_reasons', c.FieldWaitReason],
+      ['stock', c.FieldStockBalance],
+      ['checklist_templates', c.FieldChecklistTemplate],
+    ] as const;
+
+    for (const [nome, esquema] of colecoes) {
+      const linhas = r.body[nome] as unknown[];
+      /*
+       * COLEÇÃO VAZIA NÃO CONFERE NADA, e passar em silêncio seria pior do que
+       * não ter o teste: a suíte ficaria verde afirmando ter conferido nove
+       * coleções quando conferiu sete.
+       */
+      expect(linhas.length, `a coleção ${nome} veio vazia — o arranjo não a semeou`).toBeGreaterThan(0);
+
+      for (const linha of linhas) {
+        const conferido = esquema.strict().safeParse(linha);
+        if (!conferido.success) {
+          throw new Error(
+            `${nome} divergiu do contrato:\n` +
+              conferido.error.issues
+                .map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`)
+                .join('\n')
+          );
+        }
+      }
+    }
+
+    // E o envelope inteiro, com as coleções dentro.
+    const envelope = c.fieldSync.response.safeParse(r.body);
+    if (!envelope.success) {
+      throw new Error(
+        'o pacote divergiu do contrato:\n' +
+          envelope.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
     }
   });
 });
