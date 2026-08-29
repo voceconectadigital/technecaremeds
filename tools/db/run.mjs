@@ -12,7 +12,12 @@
  */
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-require('ts-node/register/transpile-only');
+
+// `tsx` e não `ts-node`: o segundo estava declarado aqui e nunca foi
+// instalado, então este comando nunca rodou uma vez sequer — descoberto ao
+// aplicar as migrations num PostgreSQL real pela primeira vez. Um script no
+// package.json que ninguém executa é um script que não existe.
+require('tsx/cjs');
 
 const url = process.env.DATABASE_URL;
 if (!url) {
