@@ -44,6 +44,9 @@ export default tseslint.config(
       // guards.ts só consulta catálogo do sistema (pg_roles), nunca tabela de negócio
       'packages/db/src/guards.ts',
       'packages/db/src/testing/**',
+      // Rotina de plataforma: semear cria mais de uma organização por definição.
+      // Exige o banco administrativo e recusa rodar sob o papel de aplicação.
+      'packages/db/src/seeds/**',
       '**/__tests__/**',
     ],
     rules: { 'no-restricted-syntax': 'off', '@typescript-eslint/no-explicit-any': 'off' },
