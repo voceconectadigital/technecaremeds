@@ -16,3 +16,4 @@ export * from './sla';
 export * from './maintenance-plans';
 export * from './inventory';
 export * from './contracts';
+export * from './quotes';

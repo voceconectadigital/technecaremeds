@@ -12,3 +12,4 @@ export * from './checklists';
 export * from './business-time';
 export * from './maintenance-plans';
 export * from './contracts';
+export * from './quotes';

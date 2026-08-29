@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F5 — SLA, planos, estoque e contratos**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos) |
-| Épico seguinte                   | EPIC-016 — Orçamentos, ou EPIC-013 — Agenda                                            |
-| Testes                           | **806**, todos verdes                                                           |
-| Migrations                       | 32 (`0000` a `0031`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F6 — comercial: contratos e orçamentos**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos) |
+| Épico seguinte                   | EPIC-013 — Agenda, ou EPIC-018 — Documentos                                            |
+| Testes                           | **875**, todos verdes                                                           |
+| Migrations                       | 33 (`0000` a `0032`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -308,7 +308,7 @@ Falta de peça é a maior causa de OS travada: **789 registros de "aguardando pe
 
 **2 — O saldo é projeção; a proibição de negativo é restrição, não leitura prévia.** `stock_balances` é mantido por gatilho a partir do razão, e saldo negativo é recusado por `CHECK`. Duas baixas simultâneas do último item passariam as duas por uma verificação prévia; nenhuma passa por um `CHECK`. O erro devolvido diz **quanto há**, porque "saldo insuficiente" sem o número obriga a uma segunda consulta.
 
-**3 — Reserva reduz o disponível, não o físico.** Reservar peça para uma OS não tira nada da prateleira. É a diferença entre "tem" e "posso usar", e é ela que impede duas OS de contarem com a mesma peça — o defeito que trava as duas em vez de uma. `available = on_hand − reserved` é coluna gerada; ninguém precisa lembrar da subtração.
+**3 — Reserva reduz o disponível, não o físico.** Reservar peça para uma OS não tira nada da prateleira. É a diferença entre "tem" e "posso usar", e é ela que impede duas OS de contarem com a mesma peça — o defeito que trava as duas em vez de uma. O disponível (`on_hand − reserved`) é calculado na consulta de saldo, num lugar só, para ninguém repetir a subtração e errar o sinal.
 
 **Outras decisões**
 
@@ -355,6 +355,36 @@ Na referência auditada, contrato é cadastro documental: nome, apelido, contrat
 
 ---
 
+## EPIC-016 — Orçamentos · **concluído**
+
+Este épico fecha um elo aberto desde o EPIC-008: o motivo de espera "aguardando aprovação de orçamento" existia na máquina de estados da OS, e não havia o que aprovar. Agora a proposta sai, a OS entra em espera com o SLA pausado, e a aprovação devolve a OS ao trabalho reservando as peças.
+
+**Revisar cria versão; não sobrescreve.** A referência tem "Modificar", que reescreve a proposta no lugar. O histórico de propostas é argumento comercial — saber que a primeira versão custava 40 % mais é o que sustenta a conversa de desconto — e sobrescrever apaga exatamente isso. Aqui a versão anterior fica `superseded` e visível, as linhas vêm junto para a nova (obrigar a redigitar trinta linhas por causa de um preço é o que faz as pessoas preferirem o sobrescrever), e um índice único parcial garante **uma versão viva por número**: duas versões vivas seriam duas propostas diferentes com o mesmo nome na mão do cliente.
+
+**Dinheiro é inteiro, em centavos, do banco ao domínio.** `0.1 + 0.2` não é `0.3` em ponto flutuante, e trinta linhas acumulam a diferença até o total não bater com a calculadora do cliente. As colunas são `bigint`; a conversão de reais acontece uma vez, na borda HTTP. O arredondamento também acontece uma vez: na linha, nunca depois — assim a soma das linhas impressas bate com o total impresso, no mesmo papel.
+
+**Os totais são mantidos pelo banco.** Gatilho recalcula o cabeçalho a cada escrita de item, e o guarda do cabeçalho recalcula quando o desconto geral, o acréscimo ou o imposto mudam. Deixar isso para a aplicação significaria que qualquer caminho novo — importação, ajuste em lote, correção manual — poderia deixar o cabeçalho dizendo um número e as linhas outro, e o cliente recebe os dois no mesmo PDF.
+
+**Uma rota de transição, e a permissão sai do grafo.** `POST /quotes/:id/transitions` é o único caminho; rotas `/approve`, `/reject` e `/send` separadas seriam três caminhos para o mesmo ato, e o terceiro é sempre o que esquece uma verificação. A permissão exigida vem da tabela de transições do domínio — aprovar pede `quote.approve`, faturar pede `quote.invoice` — em vez de um decorador fixo que obrigaria a repetir a tabela na borda. Há teste com o coordenador, que lê a proposta e não a envia, provando que a checagem é por destino.
+
+**Outras decisões**
+
+- **Proposta enviada não se edita.** Trocar um preço depois do envio faria o sistema e o PDF que está na caixa de entrada dizerem números diferentes — e o cliente aprovaria o que leu, não o que está gravado.
+- **Reservar na aprovação, não no envio.** Uma proposta enviada pode nunca ser aprovada, e prender a peça enquanto o cliente decide travaria a OS do vizinho por um trabalho que talvez não aconteça. Sem saldo, a reserva é pulada em silêncio: recusar a aprovação por falta de peça transformaria uma boa notícia comercial em erro de sistema, e a falta aparece na OS, que é onde alguém age.
+- **Recusar exige motivo do catálogo.** "Recusado" sem porquê não alimenta análise de perda nenhuma, e é a análise de perda que faz a proposta seguinte ser melhor.
+- **Vencer não depende da varredura.** `currentStatus` corrige a situação gravada pela validade, então uma proposta vencida não é aprovável mesmo antes de a varredura rodar. Se a varredura nunca rodar, só o relatório fica velho — que é a falha certa para uma tarefa de fundo ter.
+- **A evidência do aceite é registro, não afirmação jurídica.** Ficam gravados quem, quando e de qual endereço — e o endereço vem do soquete, nunca de cabeçalho que o próprio interessado escreve. O sistema **não** afirma nada sobre valor jurídico ou validade legal de assinatura: isso depende de norma e de instrumento fora do escopo, que a auditoria não confirmou.
+- **Desconto geral em valor OU em percentual, nunca os dois.** Aceitar ambos obrigaria a escolher uma ordem de aplicação, e qualquer ordem surpreenderia metade dos usuários — sem contar que quem preenche os dois quase sempre queria só um.
+- **A cascata de preço devolve a ORIGEM junto com o valor.** Um preço vindo da tabela do contrato não se negocia como um vindo do catálogo, e sem a origem à vista o vendedor dá desconto sobre o preço que já era o descontado. Preço zero é resposta legítima (cortesia acordada), então a cascata testa por nulo, não por falsidade.
+
+### Adiado deliberadamente
+
+- **PDF versionado da proposta**: o motor de documentos é o EPIC-018, e gerar PDF aqui seria a sétima implementação que aquele épico existe para eliminar.
+- **Aprovação pelo portal do cliente**: o fluxo e a evidência já estão prontos; falta a superfície, que é o EPIC-020. Hoje a aprovação entra pela API com a mesma gravação de evidência.
+- **Escolha de lote na baixa**: a coluna `lot_id` existe na linha; escolher lote ao faturar entra com a rastreabilidade, junto com o rastreio por série do EPIC-015.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -387,6 +417,8 @@ Na referência auditada, contrato é cadastro documental: nome, apelido, contrat
 | 26  | **Consumo baixava o físico antes da reserva**                             | Autoauditoria da ordem das escritas em `consume`                                                              | Por um instante `reserved` ficaria maior que `on_hand` e a restrição recusaria a operação inteira. A ordem inversa nunca produz estado inválido: reserva menor que o físico é sempre legítima |
 | 27  | **O aviso de renovação anunciava sempre o marco mais distante**            | Teste de `renewalAlert` com 56 dias restantes                                                                  | `find` numa lista descendente devolvia 90 em vez de 60. Como a varredura só emite marco mais próximo que o último emitido, o contrato avisaria uma vez aos 90 dias e nunca mais — o aviso dos 30, que é o que faz alguém agir, jamais sairia |
 | 28  | **Renovar calava o contrato para sempre**                                 | Autoauditoria da idempotência da varredura                                                                    | O último marco avisado era lido sem recorte de vigência: um contrato que avisou aos 30 dias e depois foi renovado por mais um ano carregaria esse 30 adiante, e nenhum aviso da vigência nova passaria pela comparação — ficaria silencioso justamente por ter sido bem administrado da primeira vez. O recorte passou a ser pela data de término, e há teste que renova e exige o aviso novo |
+| 29  | **Buraco na convenção de chave composta, em `customer_contacts`**          | Falha ao criar a chave estrangeira do aprovador do orçamento                                                  | A tabela nasceu no EPIC-003 sem `UNIQUE (id, organization_id)` e ninguém percebeu porque nada apontava para ela. A convenção existe por um motivo concreto (ADR-011): a verificação de chave estrangeira roda como dona da tabela e IGNORA a RLS, então uma FK só por `id` aceitaria apontar para a linha de outro tenant — o aprovador poderia ser um contato de outra organização. Corrigido na 0032 |
+| 30  | **O PROGRESS afirmava uma coluna gerada que não existe**                   | Consulta de reserva do orçamento quebrou em `column "available" does not exist`                               | O registro do EPIC-015 dizia que `available` era coluna gerada em `stock_balances`; na verdade o disponível é calculado na consulta de saldo. O texto foi corrigido: documento que descreve o que não existe é pior que documento ausente, porque o próximo leitor confia nele |
 
 ---
 
