@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F7 — indicadores e notificações**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações) |
-| Épico seguinte                   | EPIC-020 — Portal do cliente, ou EPIC-024 — Automações                                 |
-| Testes                           | **1114**, todos verdes                                                           |
-| Migrations                       | 37 (`0000` a `0036`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F7 — indicadores, notificações e automações**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações) |
+| Épico seguinte                   | EPIC-020 — Portal do cliente (exige `apps/portal`)                                     |
+| Testes                           | **1174**, todos verdes                                                           |
+| Migrations                       | 38 (`0000` a `0037`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -507,6 +507,37 @@ Este épico tem um inimigo declarado, e não é a falta de aviso: é o **excesso
 
 ---
 
+## EPIC-024 — Automações · **concluído**
+
+Os "Robôs" da referência têm 2 modelos, 2 gatilhos e **1 ação real**. O problema não é o tamanho: uma automação que só sabe fazer uma coisa obriga a organização a pedir desenvolvimento para cada regra nova — e o resultado é que ninguém pede, e o trabalho continua sendo feito à mão. Aqui a regra é **dado**: gatilho, árvore booleana de condições e lista ordenada de ações.
+
+**As salvaguardas são o produto.** Um motor de regras sem freio é a maneira mais rápida de um sistema perder a confiança de quem o usa: basta uma regra mal escrita para a equipe inteira receber trezentos e-mails numa tarde, e depois disso ninguém liga automação nenhuma. As quatro do §24 estão implementadas e testadas:
+
+- **Sem recursão.** A regra não reage ao evento que ela mesma causou, e cadeias acima de três degraus são cortadas. Sem isso, uma regra que comenta ao mudar de situação e outra que muda de situação ao comentar giram para sempre — e o primeiro sinal seria a fatura do banco.
+- **Limite por janela, com quarentena.** Quem estoura entra em quarentena **com o motivo escrito**, em vez de ser barrado em silêncio. Uma regra barrada calada parece funcionar e não funciona; uma em quarentena aparece na tela e alguém decide se corrige ou desliga.
+- **Simulação obrigatória antes de ativar.** A API **recusa** ativar sem simular, e a frase é o produto: "esta regra teria disparado 412 vezes nos últimos 30 dias". Uma validação que se pode pular não é validação, é sugestão — e a regra que inunda a equipe é sempre a que alguém ligou com pressa. A simulação não executa ação nenhuma, e há teste que confirma.
+- **Log de execução.** Toda corrida fica registrada, inclusive as que NÃO casaram: entrada, resultado, ações e erro. Sem o log, automação é caixa-preta — e caixa-preta que age sozinha no dado de outra pessoa é o que faz o operador desconfiar do próprio sistema.
+
+**Automação nunca contorna permissão.** Cada ação declara a permissão que exige, e o motor confere contra o contexto **antes** de agir. Uma automação capaz de fazer o que o ator não pode fazer seria uma escada de privilégio com interface amigável.
+
+**Outras decisões**
+
+- **A regra nasce em rascunho, sempre.** Nascer ligada tornaria a exigência de simulação decorativa: bastaria criar e esquecer.
+- **Ordem por prioridade declarada.** Quando duas regras agem sobre a mesma OS, o resultado tem de ser previsível; sem ordenação, a mesma sequência de eventos produziria estados diferentes conforme o plano de consulta do banco.
+- **A ação que falha PARA a lista.** As seguintes costumam depender do efeito da anterior, e seguir em frente produziria meia automação — o pior dos estados possíveis, porque parece que funcionou.
+- **`all` vazio dispara sempre; `any` vazio nunca dispara.** São as identidades de cada operação, e a consequência prática é boa: a regra sem filtro funciona, e a regra incompleta fica inerte em vez de sair atirando.
+- **Comparação de igualdade é por valor, não por tipo.** O payload chega do banco com números virando texto, e uma regra que dissesse `prioridade = 3` deixaria de funcionar em silêncio — a pior falha possível numa automação.
+- **Campo ausente nunca satisfaz** (exceto `missing`): "cliente ∈ [X, Y]" não deve disparar para um evento sem cliente.
+
+### Adiado deliberadamente
+
+- **`call_webhook`**: faz chamada externa e exige lista de destinos autorizados e revisão de segurança própria. Declarar a ação sem isso faria a organização montar a regra e ela falhar calada — ou, pior, chamar um endereço que alguém digitou errado.
+- **`escalate` (após N minutos)**: depende de agendador durável, que depende de PostgreSQL real (ADR-022).
+- **Gatilhos `schedule` e `condition_watch`**: as colunas e as restrições existem, e a validação já exige o cron quando o gatilho é agendado; o disparo depende do mesmo agendador.
+- **`issue_document` e `create_service_request`**: entram junto com o consumidor que as justifique.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -547,6 +578,7 @@ Este épico tem um inimigo declarado, e não é a falta de aviso: é o **excesso
 | 34  | **Dois jeitos de calcular o mesmo tempo**                                  | Teste do tempo por motivo de espera não encontrou o motivo "peça"                                              | As consultas de tempo por situação e por motivo recalculavam a duração por janela (`lead` sobre o histórico), enquanto o gatilho do EPIC-008 já grava `seconds_in_from` na linha que fecha cada permanência — e grava o motivo do estado que TERMINA, não do que começa. Duas maneiras de obter o mesmo número divergem no primeiro caso de borda, e o painel passaria a discordar do detalhe da OS sem ninguém perceber. Passou a ler a duração já gravada |
 | 35  | **Endereço de e-mail no texto virava menção**                              | Teste de `extractMentions` com "avise ana@hospital.test"                                                       | A expressão casava o arroba em qualquer posição, então o domínio virava nome de usuário. O resultado seria uma busca que não acha ninguém no melhor caso e que acha a pessoa errada no pior. Passou a exigir que o arroba não venha colado em outra palavra |
 | 36  | **O roteador aceitava "agora" e carimbava outro instante**                 | Teste "passada a janela, o aviso volta a sair" falhou: a de-duplicação nunca abria                             | A notificação era gravada com `now()` do banco enquanto a janela era medida contra o instante recebido por parâmetro. Um roteador que se contradiz assim tem de-duplicação que nunca fecha — e nenhum teste de tempo consegue ser determinístico. Passou a gravar o instante que recebeu |
+| 37  | **Ação apontava para uma permissão que não existe**                        | Teste de fim a fim: a regra casava, a ação falhava, e o motor dizia faltar `work_order.comment`                 | Não existe permissão de comentário no RBAC — comentar é editar a OS. A ação `add_comment` estava permanentemente morta: recusada por falta de uma chave que ninguém podia conceder, porque não estava no catálogo para ser concedida. Passou a exigir `work_order.update`, e há agora um teste que percorre TODAS as ações conferindo que a permissão declarada existe no registro |
 
 ---
 
