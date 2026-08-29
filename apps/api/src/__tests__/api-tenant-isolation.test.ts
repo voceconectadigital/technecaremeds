@@ -250,10 +250,10 @@ describe('permissões na borda HTTP (EPIC-002)', () => {
         [techMem, ORG_A, techUser]
       );
       // Escopo junto: desde a 0039 o vínculo cego não sobrevive ao COMMIT.
-      await s.query(
-        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1,$2)`,
-        [techMem, ORG_A]
-      );
+      await s.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1,$2)`, [
+        techMem,
+        ORG_A,
+      ]);
       const ids = await provisionFactoryRoles(s);
       await assignRole(s, techMem, ids.get('technician')!);
     });

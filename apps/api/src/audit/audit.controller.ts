@@ -18,7 +18,7 @@ import {
   type Database,
 } from '@aurora/db';
 import { isUuid, ValidationError, ForbiddenError } from '@aurora/domain';
-import { RequirePermissions } from '../common/permissions.guard';
+import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -125,6 +125,9 @@ export class AuditController {
    * equipamento que ela opera.
    */
   @Get(`timeline/:entityType/:entityId(${UUID_ROUTE})`)
+  @PermissionsCheckedInHandler(
+    'a permissão é a de ler AQUELA entidade, resolvida pela lista fechada de tipos com linha do tempo'
+  )
   async timeline(
     @Req() req: AuroraRequest,
     @Param('entityType') entityType: string,

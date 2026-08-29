@@ -101,10 +101,10 @@ describe('o banco recusa vínculo sem escopo', () => {
          VALUES ($1, $2, $3, 'active', 'staff', false)`,
         [novoMem, ORG, u]
       );
-      await s.query(
-        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
-        [novoMem, ORG]
-      );
+      await s.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
+        novoMem,
+        ORG,
+      ]);
     });
 
     expect(await withTenant(t.db, ctx, (s) => membershipsWithoutScope(s))).toEqual([]);
@@ -206,9 +206,7 @@ describe('convite', () => {
 
   it('convidar duas vezes na mesma organização é recusado, com a razão certa', async () => {
     await expect(
-      withTenant(t.db, ctx, (s) =>
-        inviteMember(s, { email: 'joao.silva@conv.test', name: 'João Silva' })
-      )
+      withTenant(t.db, ctx, (s) => inviteMember(s, { email: 'joao.silva@conv.test', name: 'João Silva' }))
     ).rejects.toThrow(/já faz parte desta organização/);
   });
 
@@ -288,9 +286,7 @@ describe('encerramento', () => {
     const membros = await withTenant(t.db, ctx, (s) => listMembers(s));
     const alvo = membros.find((m) => m.email === 'lote1@conv.test')!;
 
-    await withTenant(t.db, ctx, (s) =>
-      suspendMembership(s, alvo.membership_id, 'saiu da empresa em agosto')
-    );
+    await withTenant(t.db, ctx, (s) => suspendMembership(s, alvo.membership_id, 'saiu da empresa em agosto'));
 
     const depois = await withTenant(t.db, ctx, (s) => listMembers(s));
     const encerrado = depois.find((m) => m.membership_id === alvo.membership_id)!;
@@ -302,16 +298,14 @@ describe('encerramento', () => {
     const membros = await withTenant(t.db, ctx, (s) => listMembers(s));
     const alvo = membros.find((m) => m.email === 'lote2@conv.test')!;
 
-    await expect(
-      withTenant(t.db, ctx, (s) => suspendMembership(s, alvo.membership_id, 'x'))
-    ).rejects.toThrow(/motivo/);
+    await expect(withTenant(t.db, ctx, (s) => suspendMembership(s, alvo.membership_id, 'x'))).rejects.toThrow(
+      /motivo/
+    );
   });
 
   it('o último proprietário ativo não pode ser encerrado', async () => {
     await expect(
-      withTenant(t.db, ctx, (s) =>
-        suspendMembership(s, MEM, 'tentativa de encerrar o único dono')
-      )
+      withTenant(t.db, ctx, (s) => suspendMembership(s, MEM, 'tentativa de encerrar o único dono'))
     ).rejects.toThrow(/último proprietário ativo/);
   });
 });

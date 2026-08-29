@@ -60,10 +60,10 @@ describe('trilha de auditoria (§22)', () => {
         [MEM2, ORG, USER2]
       );
       // Escopo junto: desde a 0039 o vínculo cego não sobrevive ao COMMIT.
-      await s.query(
-        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1,$2)`,
-        [MEM2, ORG]
-      );
+      await s.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1,$2)`, [
+        MEM2,
+        ORG,
+      ]);
     });
 
     const rows = await t.raw(

@@ -14,13 +14,7 @@
  *   diferido que verifica no COMMIT. Este módulo é o caminho conveniente; o
  *   gatilho é o que impede o caminho inconveniente de existir.
  */
-import {
-  newId,
-  ValidationError,
-  ConflictError,
-  NotFoundError,
-  isKnownPermission,
-} from '@aurora/domain';
+import { newId, ValidationError, ConflictError, NotFoundError, isKnownPermission } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 
@@ -70,10 +64,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
  * identidades — o que quebra a resolução de identidade do EPIC-002 e faz o
  * seletor de organização mostrar metade dos vínculos dela.
  */
-export async function inviteMember(
-  session: TenantSession,
-  input: InviteInput
-): Promise<InviteResult> {
+export async function inviteMember(session: TenantSession, input: InviteInput): Promise<InviteResult> {
   const email = input.email.trim().toLowerCase();
   if (!EMAIL.test(email)) {
     throw new ValidationError('informe um endereço de e-mail válido', { field: 'email' });
@@ -257,10 +248,7 @@ export async function suspendMembership(
     }
   }
 
-  await session.query(
-    `UPDATE aurora.memberships SET status = 'suspended' WHERE id = $1`,
-    [membershipId]
-  );
+  await session.query(`UPDATE aurora.memberships SET status = 'suspended' WHERE id = $1`, [membershipId]);
 
   await emitEvent(session, {
     type: 'member.suspended',

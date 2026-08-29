@@ -13,6 +13,14 @@ import { newId, buildContext } from '@aurora/domain';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '@aurora/db/testing/harness';
 import { withTenant, provisionFactoryRoles, assignRole } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
+import {
+  membersList,
+  membersInvite,
+  organizationsCurrent,
+  meOrganizations,
+  healthReady,
+  ProblemDetails,
+} from '@aurora/contracts';
 import { createApp } from '../bootstrap';
 
 const ORG_A = newId(),
@@ -87,9 +95,7 @@ describe('convite (POST /organizations/current/members)', () => {
     expect(r.body.reused_user).toBe(false);
 
     const lista = await comoDona(http.get('/v1/organizations/current/members'));
-    const novato = lista.body.items.find(
-      (m: { email: string }) => m.email === 'novato@membros-a.test'
-    );
+    const novato = lista.body.items.find((m: { email: string }) => m.email === 'novato@membros-a.test');
     expect(novato.roles).toEqual(['technician']);
     // O escopo existe desde o primeiro segundo: sem ele a pessoa entra numa
     // tela vazia e não tem como saber por quê.
@@ -180,9 +186,7 @@ describe('convite (POST /organizations/current/members)', () => {
 describe('escopo (PATCH .../:id/scope)', () => {
   it('ajusta o escopo de um vínculo existente', async () => {
     const lista = await comoDona(http.get('/v1/organizations/current/members'));
-    const alvo = lista.body.items.find(
-      (m: { email: string }) => m.email === 'novato@membros-a.test'
-    );
+    const alvo = lista.body.items.find((m: { email: string }) => m.email === 'novato@membros-a.test');
 
     const r = await comoDona(
       http.patch(`/v1/organizations/current/members/${alvo.membership_id}/scope`)
@@ -208,9 +212,7 @@ describe('escopo (PATCH .../:id/scope)', () => {
 describe('suspensão (POST .../:id/suspension)', () => {
   it('exige motivo', async () => {
     const lista = await comoDona(http.get('/v1/organizations/current/members'));
-    const alvo = lista.body.items.find(
-      (m: { email: string }) => m.email === 'infiltrado@membros-a.test'
-    );
+    const alvo = lista.body.items.find((m: { email: string }) => m.email === 'infiltrado@membros-a.test');
 
     const semMotivo = await comoDona(
       http.post(`/v1/organizations/current/members/${alvo.membership_id}/suspension`)
@@ -223,18 +225,78 @@ describe('suspensão (POST .../:id/suspension)', () => {
     expect(r.status).toBe(201);
 
     const depois = await comoDona(http.get('/v1/organizations/current/members'));
-    const agora = depois.body.items.find(
-      (m: { email: string }) => m.email === 'infiltrado@membros-a.test'
-    );
+    const agora = depois.body.items.find((m: { email: string }) => m.email === 'infiltrado@membros-a.test');
     // Continua na lista, suspenso: apagar levaria junto a trilha de auditoria.
     expect(agora.status).toBe('suspended');
   });
 
   it('o último proprietário ativo não pode ser suspenso', async () => {
-    const r = await comoDona(
-      http.post(`/v1/organizations/current/members/${MEM_A}/suspension`)
-    ).send({ reason: 'tentativa de deixar a organização sem dono' });
+    const r = await comoDona(http.post(`/v1/organizations/current/members/${MEM_A}/suspension`)).send({
+      reason: 'tentativa de deixar a organização sem dono',
+    });
     expect(r.status).toBe(409);
     expect(r.body.message).toContain('último proprietário ativo');
+  });
+});
+
+/*
+ * O contrato só vale se a API o cumprir.
+ *
+ * Sem estes testes, `@aurora/contracts` seria documentação: descreveria uma
+ * resposta que ninguém confere, o cliente do frontend confiaria nela, e a
+ * divergência apareceria como campo `undefined` numa tela.
+ */
+describe('a resposta cumpre o contrato', () => {
+  it('members.list', async () => {
+    const r = await comoDona(http.get('/v1/organizations/current/members')).expect(200);
+    const conferido = membersList.response.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
+  });
+
+  it('members.invite', async () => {
+    const r = await comoDona(http.post('/v1/organizations/current/members'))
+      .send({ email: 'contrato@membros-a.test', name: 'Contrato' })
+      .expect(201);
+    const conferido = membersInvite.response.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
+  });
+
+  it('organizations.current', async () => {
+    const r = await comoDona(http.get('/v1/organizations/current')).expect(200);
+    const conferido = organizationsCurrent.response.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
+  });
+
+  it('me.organizations', async () => {
+    const r = await comoDona(http.get('/v1/me/organizations')).expect(200);
+    const conferido = meOrganizations.response.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
+  });
+
+  it('health.ready', async () => {
+    const r = await http.get('/v1/health/ready').expect(200);
+    expect(healthReady.response.safeParse(r.body).success).toBe(true);
+  });
+
+  /*
+   * O erro também é contrato. Uma tela que trata falha lendo `code` e
+   * `request_id` quebra em silêncio se um deles faltar num caminho de erro.
+   */
+  it('o problem details do 403 tem a forma declarada', async () => {
+    const r = await http
+      .post('/v1/organizations/current/members')
+      .set('authorization', `Bearer ${tokenFor('novato@membros-a.test')}`)
+      .send({ email: 'z@membros-a.test', name: 'Zeta' })
+      .expect(403);
+    const conferido = ProblemDetails.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
+  });
+
+  it('o problem details do 422 aponta o campo', async () => {
+    const r = await comoDona(http.post('/v1/organizations/current/members'))
+      .send({ email: 'nao-e-email', name: 'Alguém' })
+      .expect(422);
+    expect(ProblemDetails.safeParse(r.body).success).toBe(true);
+    expect(r.body.details.field).toBe('email');
   });
 });

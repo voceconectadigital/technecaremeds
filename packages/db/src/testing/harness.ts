@@ -91,10 +91,10 @@ export async function seedOrganization(
        VALUES ($1, $2, $3, 'active', 'staff', true)`,
       [ids.membershipId, ids.organizationId, ids.userId]
     );
-    await tx.query(
-      `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
-      [ids.membershipId, ids.organizationId]
-    );
+    await tx.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
+      ids.membershipId,
+      ids.organizationId,
+    ]);
   });
   return ids;
 }

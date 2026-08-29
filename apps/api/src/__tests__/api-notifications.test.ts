@@ -37,8 +37,11 @@ const COORD_USER = newId(),
   COORD_MEM = newId();
 const TEC_USER = newId(),
   TEC_MEM = newId();
+const ADM_USER = newId(),
+  ADM_MEM = newId();
 const EMAIL_GESTOR = 'gestor@ntf.test';
 const EMAIL_TEC = 'tec@ntf.test';
+const EMAIL_ADM = 'adm@ntf.test';
 const auth = (email: string) => ({ authorization: `Bearer local:${email}:${email}` });
 
 let t: TestDatabase;
@@ -58,6 +61,11 @@ beforeAll(async () => {
     { organizationId: ORG, userId: TEC_USER, membershipId: TEC_MEM },
     { email: EMAIL_TEC, userName: 'Técnico' }
   );
+  await seedMember(
+    t,
+    { organizationId: ORG, userId: ADM_USER, membershipId: ADM_MEM },
+    { email: EMAIL_ADM, userName: 'Administradora' }
+  );
 
   const ctx = buildContext({
     organizationId: ORG,
@@ -70,9 +78,10 @@ beforeAll(async () => {
   await withTenant(t.db, ctx, async (s) => {
     const papeis = await provisionFactoryRoles(s);
     // O gestor de manutenção é quem tem `audit.read`, e a fila de saída é
-    // trilha operacional: quem a lê é quem responde por ela.
+    // trilha operacional: quem a lê é quem responde por ela. LER, só.
     await assignRole(s, COORD_MEM, papeis.get('maintenance_manager')!);
     await assignRole(s, TEC_MEM, papeis.get('technician')!);
+    await assignRole(s, ADM_MEM, papeis.get('admin')!);
 
     await provisionWorkOrderStates(s);
     const lt = await provisionStarterLocationTypes(s);
@@ -257,13 +266,32 @@ describe('fila de saída', () => {
     expect(r.body.message).toMatch(/in_app, email/);
   });
 
+  /*
+   * LER a fila e ESCREVER nela são permissões diferentes.
+   *
+   * Marcar como enviada uma notificação que nunca saiu é a pior mentira que um
+   * sistema de notificação pode contar: o alerta some da fila e ninguém fica
+   * sabendo. Isso era guardado por `audit.read` — que o Auditor tem, e sobre
+   * quem a §21 diz "somente leitura em tudo. Nenhuma escrita".
+   */
+  it('quem só audita não marca entrega: lê a fila e recebe 403 ao escrever', async () => {
+    const fila = await http.get('/v1/notifications/outbox?channel=email').set(auth(EMAIL_GESTOR)).expect(200);
+    expect(fila.body.items.length).toBeGreaterThan(0);
+
+    const r = await http
+      .post(`/v1/notifications/outbox/${fila.body.items[0].id}/sent`)
+      .set(auth(EMAIL_GESTOR))
+      .expect(403);
+    expect(r.body.details.permission).toContain('notification.deliver');
+  });
+
   it('lista o que espera e permite marcar o resultado real do envio', async () => {
     const fila = await http.get('/v1/notifications/outbox?channel=email').set(auth(EMAIL_GESTOR)).expect(200);
     expect(fila.body.items.length).toBeGreaterThan(0);
     expect(fila.body.items[0].email).toContain('@');
 
     const alvo = fila.body.items[0].id;
-    await http.post(`/v1/notifications/outbox/${alvo}/sent`).set(auth(EMAIL_GESTOR)).expect(201);
+    await http.post(`/v1/notifications/outbox/${alvo}/sent`).set(auth(EMAIL_ADM)).expect(201);
 
     const depois = await http
       .get('/v1/notifications/outbox?channel=email')
@@ -281,7 +309,7 @@ describe('fila de saída', () => {
 
     await http
       .post(`/v1/notifications/outbox/${fila.body.items[0].id}/failed`)
-      .set(auth(EMAIL_GESTOR))
+      .set(auth(EMAIL_ADM))
       .send({ error: 'servidor recusou a conexão' })
       .expect(201);
   });

@@ -88,10 +88,10 @@ async function seedOrg(org: string, userId: string, membershipId: string, slug: 
        VALUES ($1, $2, $3, 'active', 'staff', true)`,
       [membershipId, org, userId]
     );
-    await c.query(
-      `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
-      [membershipId, org]
-    );
+    await c.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
+      membershipId,
+      org,
+    ]);
     await c.query('COMMIT');
   } catch (e) {
     await c.query('ROLLBACK');
@@ -589,20 +589,20 @@ describe.skipIf(!rodar)('convite sob o papel de aplicação real', () => {
 
   it('convida alguém que ainda não existe na plataforma', async () => {
     const email = `novato-${Date.now()}@pg.test`;
-    const r = await withTenant(db, ctxA, (s) =>
-      inviteMember(s, { email, name: 'Novato da Silva' })
-    );
+    const r = await withTenant(db, ctxA, (s) => inviteMember(s, { email, name: 'Novato da Silva' }));
 
     expect(r.reusedUser).toBe(false);
 
-    const [linha] = await admin.query(
-      `SELECT u.email, m.status::text AS status, s.customer_scope::text AS escopo
+    const [linha] = await admin
+      .query(
+        `SELECT u.email, m.status::text AS status, s.customer_scope::text AS escopo
          FROM aurora.memberships m
          JOIN aurora.users u ON u.id = m.user_id
          JOIN aurora.membership_scopes s ON s.membership_id = m.id
         WHERE m.id = $1`,
-      [r.membershipId]
-    ).then((x) => x.rows);
+        [r.membershipId]
+      )
+      .then((x) => x.rows);
 
     expect(linha).toMatchObject({ email, status: 'active', escopo: 'all' });
   });
@@ -610,12 +610,8 @@ describe.skipIf(!rodar)('convite sob o papel de aplicação real', () => {
   it('a mesma pessoa entra na segunda organização sem virar dois cadastros', async () => {
     const email = `consultor-${Date.now()}@pg.test`;
 
-    const naA = await withTenant(db, ctxA, (s) =>
-      inviteMember(s, { email, name: 'Carla Consultora' })
-    );
-    const naB = await withTenant(db, ctxB, (s) =>
-      inviteMember(s, { email, name: 'Carla Consultora' })
-    );
+    const naA = await withTenant(db, ctxA, (s) => inviteMember(s, { email, name: 'Carla Consultora' }));
+    const naB = await withTenant(db, ctxB, (s) => inviteMember(s, { email, name: 'Carla Consultora' }));
 
     expect(naA.reusedUser).toBe(false);
     expect(naB.reusedUser).toBe(true);

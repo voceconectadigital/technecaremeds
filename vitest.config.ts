@@ -10,6 +10,7 @@ export default defineConfig({
       '@aurora/events': resolve(__dirname, 'packages/events/src'),
       '@aurora/workers': resolve(__dirname, 'apps/workers/src'),
       '@aurora/config': resolve(__dirname, 'packages/config/src'),
+      '@aurora/contracts': resolve(__dirname, 'packages/contracts/src'),
     },
   },
   test: {

@@ -13,12 +13,12 @@ Fonte de verdade de código: este repositório e o Git.
 | Fase                             | **F7 — plataforma transversal**                                                               |
 | Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria) |
 | Épico seguinte                   | EPIC-009 (interface de OS), EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal)   |
-| Testes                           | **1273** (64 arquivos) em PGlite + **24** só contra PostgreSQL real, todos verdes |
+| Testes                           | **1298** (65 arquivos) em PGlite + **24** só contra PostgreSQL real, todos verdes |
 | Migrations                       | 41 (`0000` a `0040`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
 
-Portão de qualidade (`npm run verify`): auditoria da SPEC → typecheck → lint → testes.
+Portão de qualidade (`npm run verify`): auditoria da SPEC → typecheck → lint → conferência de contratos → testes.
 No CI acrescentam-se `format:check` e varredura de segredos.
 
 ### Reconciliação de 29/08/2026 — a numeração estava errada
@@ -661,6 +661,9 @@ O que faltava era o que este épico entrega: **como ler**. Uma trilha que ningu�
 | 43  | **O convite não podia funcionar sob o papel de produção**                  | Primeiro teste do módulo de convite: `new row violates row-level security policy for table "users"`            | A política `users_visible_through_membership` exige vínculo prévio para a linha de usuário existir; o vínculo exige o usuário pela chave estrangeira. Ovo e galinha: `aurora_app` tinha `GRANT INSERT` em `users` desde a 0003 e nunca conseguiu usá-lo. Passou despercebido porque todo teste e todo seed criava usuário pelo caminho administrativo. A chave passou a ser diferida (0040) e o convite insere o VÍNCULO primeiro |
 | 44  | **Os dois vínculos da consultora nasciam cegos**                           | O gatilho da 0039 recusou o seed inteiro                                                                      | O seed criava sete vínculos e escopo para cinco. Justamente a consultora — a persona que existe para exercitar o seletor de organização — entrava nas duas organizações sem enxergar nada. Oito meses de desenvolvimento com esse seed e ninguém tinha notado, porque um vínculo cego não dá erro: dá tela vazia |
 | 45  | **`deactivateMembership` gravava um estado que o enumerado não tem**       | Teste de encerramento: `invalid input value for enum aurora.membership_status: "inactive"`                    | O enumerado é `invited\|active\|suspended\|removed` e o evento emitido já se chamava `member.suspended`. A função escrevia `inactive` — nome que não existe em lugar nenhum. Renomeada para `suspendMembership`, com a mesma palavra nos três lugares: enumerado, evento e função |
+| 46  | **Escrita de notificação guardada por permissão de LEITURA**               | Conferência automática de contratos: "escrita guardada por permissão de leitura"                              | `POST /notifications/outbox/:id/sent` e `/failed` exigiam `audit.read` — chave que o papel Auditor tem e sobre o qual a §21 diz "somente leitura em tudo. Nenhuma escrita". Um auditor podia marcar como enviada uma notificação que nunca saiu, e um "enviado" falso some da fila sem deixar rastro. Passou a exigir `notification.deliver`, que fica fora de todo papel de fábrica exceto Proprietário e Administrador |
+| 47  | **Gravar a medição do contrato exigia só ver valores**                     | Mesma conferência                                                                                             | `POST /contracts/:id/periods/:period` GRAVA a medição e exigia apenas `contract.read_financials`. O papel Financeiro, descrito como leitura de valores, escrevia a medição do mês. Passou a exigir também `contract.update` |
+| 48  | **O contrato do convite perdia as regras de escopo pelo caminho**          | Teste do próprio contrato                                                                                     | `InviteInput` espalhava `...MembershipScopeInput.shape` para reaproveitar os campos de escopo. Espalhar a FORMA de um esquema refinado copia os campos e deixa as REGRAS para trás, em silêncio: o convite passou a aceitar escopo "listed" com lista vazia enquanto o ajuste de escopo recusava. As duas regras viraram função aplicável aos dois esquemas |
 
 ---
 
@@ -674,6 +677,32 @@ O que faltava era o que este épico entrega: **como ler**. Uma trilha que ningu�
 - **P18 · dois eventos de contrato**: o §17 pede alerta de vencimento e trata encerramento como fato de negócio, mas o catálogo declarava só `contract.activated`, `contract.expiring` e `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu" seriam o mesmo evento; sem `contract.terminated`, o encerramento por decisão humana só existiria na trilha de auditoria, invisível a qualquer automação. A SPEC foi corrigida pelo mesmo pipeline reproduzível dos demais patches.
 - **P19 · ausências pelo nome certo**: o dicionário de dados descrevia `kind(absence|training|meeting|other)` e vínculo com usuário ou equipe; o que existe desde a 0008 é `vacation|leave|training|other` preso ao vínculo. A SPEC foi corrigida para descrever o esquema real, com a regra de bloqueio dita pelos tipos que existem.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
+
+---
+
+## Contratos e OpenAPI
+
+`packages/contracts` é a fonte compartilhada entre backend e frontend: um campo é
+decidido uma vez, em Zod, e três coisas passam a concordar por construção — a
+validação do controller, o documento OpenAPI e o cliente tipado.
+
+`npm run openapi` lê os **controllers de verdade** (os metadados que o NestJS
+grava nos decoradores, os mesmos que o roteador usa) e cruza com o registro de
+contratos. Não existe uma segunda lista de rotas escrita à mão para o documento
+sair bonito. O que a conferência acusa, e que entra no `npm run verify`:
+
+- **rota sem contrato** — contada e mostrada em porcentagem, nunca escondida;
+- **contrato sem rota** — esquema que descreve um endereço que não existe mais;
+- **permissão divergente** — o contrato diz uma coisa e o guard exige outra;
+- **escrita guardada por permissão de leitura** — a classe de defeito que
+  encontrou os itens 46 e 47 da tabela acima. As quatro rotas em que isso é
+  legítimo (transições, cuja permissão é a da aresta do grafo) declaram a
+  exceção no próprio controller, com `@PermissionsCheckedInHandler`.
+
+**Cobertura atual: 8 de 135 rotas (6%).** Está dito de propósito. Contrato nasce
+quando a tela que o usa nasce — escrever os 135 de uma vez produziria esquemas
+que ninguém exercita, e esquema não exercitado erra no campo opcional. O número
+sobe junto com `apps/web`.
 
 ---
 

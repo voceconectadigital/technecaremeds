@@ -9,6 +9,13 @@
  * Não existe `DELETE /members/:id`. Vínculo se suspende, não se apaga: a trilha
  * de auditoria precisa continuar tendo dono, e uma OS executada por alguém que
  * deixou a empresa não pode passar a ter sido executada por ninguém.
+ *
+ * A VALIDAÇÃO VEM DO CONTRATO
+ *
+ * O corpo é conferido pelo mesmo esquema que gera o OpenAPI e tipa o cliente do
+ * frontend (`@aurora/contracts`). Escrever aqui uma segunda leitura do corpo —
+ * `typeof body.email !== 'string'` e companhia — criaria duas descrições do
+ * mesmo formulário, e a segunda erra primeiro no campo opcional.
  */
 import { Body, Controller, Get, Inject, Param, Patch, Post, Req } from '@nestjs/common';
 import {
@@ -17,52 +24,26 @@ import {
   setMembershipScope,
   suspendMembership,
   listMembers,
-  SEAT_TYPES,
-  SCOPE_MODES,
   type Database,
-  type SeatType,
-  type ScopeMode,
 } from '@aurora/db';
-import { isUuid, ValidationError } from '@aurora/domain';
+import { membersInvite, membersSetScope, membersSuspend } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
+import { parseWith } from '../common/contract-validation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
-function texto(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new ValidationError(`${field} é obrigatório`, { field });
-  }
-  return value.trim();
-}
-
-function listaDeUuids(value: unknown, field: string): string[] | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (!Array.isArray(value)) {
-    throw new ValidationError(`${field} deve ser uma lista de identificadores`, { field });
-  }
-  for (const v of value) {
-    if (typeof v !== 'string' || !isUuid(v)) {
-      throw new ValidationError(`${field} contém um identificador inválido`, { field });
-    }
-  }
-  return value as string[];
-}
-
-function modo(value: unknown, field: string): ScopeMode | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== 'string' || !(SCOPE_MODES as readonly string[]).includes(value)) {
-    throw new ValidationError(`${field} inválido`, { field, allowed: SCOPE_MODES });
-  }
-  return value as ScopeMode;
-}
-
-/** O escopo vem do mesmo formato no convite e no ajuste — uma leitura só. */
-function escopoDoCorpo(body: Record<string, unknown>) {
+/** O escopo tem o mesmo formato no convite e no ajuste — uma leitura só. */
+function escopoDoCorpo(body: {
+  customer_scope?: 'all' | 'listed';
+  customer_ids?: string[];
+  location_scope?: 'all' | 'listed';
+  location_ids?: string[];
+}) {
   return {
-    customerScope: modo(body.customer_scope, 'customer_scope'),
-    customerIds: listaDeUuids(body.customer_ids, 'customer_ids'),
-    locationScope: modo(body.location_scope, 'location_scope'),
-    locationIds: listaDeUuids(body.location_ids, 'location_ids'),
+    customerScope: body.customer_scope,
+    customerIds: body.customer_ids,
+    locationScope: body.location_scope,
+    locationIds: body.location_ids,
   };
 }
 
@@ -83,37 +64,26 @@ export class MembersController {
    *
    * O escopo é parte do convite, não um segundo passo: a pessoa que entra sem
    * escopo vê uma tela vazia e não tem como distinguir isso de falta de
-   * permissão. O padrão — enxergar tudo — é explícito no corpo do módulo, e o
-   * banco recusa o vínculo sem escopo de qualquer forma (migration 0039).
+   * permissão. O padrão — enxergar tudo — é explícito, e o banco recusa o
+   * vínculo sem escopo de qualquer forma (migration 0039).
    */
   @Post()
   @RequirePermissions('organization.manage_members')
   async invite(
     @Req() req: AuroraRequest,
-    @Body() body: Record<string, unknown>
+    @Body() body: unknown
   ): Promise<{ membership_id: string; user_id: string; reused_user: boolean }> {
     const ctx = req.auroraContext!;
-
-    const seat = body.seat_type;
-    if (seat !== undefined && (typeof seat !== 'string' || !(SEAT_TYPES as readonly string[]).includes(seat))) {
-      throw new ValidationError('seat_type inválido', { field: 'seat_type', allowed: SEAT_TYPES });
-    }
-
-    const papeis = body.role_keys;
-    if (papeis !== undefined && (!Array.isArray(papeis) || papeis.some((r) => typeof r !== 'string'))) {
-      throw new ValidationError('role_keys deve ser uma lista de chaves de papel', {
-        field: 'role_keys',
-      });
-    }
+    const entrada = parseWith(membersInvite.body, body);
 
     const r = await withTenant(this.db, ctx, (s) =>
       inviteMember(s, {
-        email: texto(body.email, 'email'),
-        name: texto(body.name, 'name'),
-        seatType: seat as SeatType | undefined,
-        roleKeys: papeis as string[] | undefined,
-        scope: escopoDoCorpo(body),
-        dailyHours: typeof body.daily_hours === 'number' ? body.daily_hours : null,
+        email: entrada.email,
+        name: entrada.name,
+        seatType: entrada.seat_type,
+        roleKeys: entrada.role_keys,
+        scope: escopoDoCorpo(entrada),
+        dailyHours: entrada.daily_hours ?? null,
       })
     );
 
@@ -125,10 +95,11 @@ export class MembersController {
   async scope(
     @Req() req: AuroraRequest,
     @Param('id') id: string,
-    @Body() body: Record<string, unknown>
+    @Body() body: unknown
   ): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
-    await withTenant(this.db, ctx, (s) => setMembershipScope(s, id, escopoDoCorpo(body)));
+    const entrada = parseWith(membersSetScope.body, body);
+    await withTenant(this.db, ctx, (s) => setMembershipScope(s, id, escopoDoCorpo(entrada)));
     return { ok: true };
   }
 
@@ -141,10 +112,11 @@ export class MembersController {
   async suspend(
     @Req() req: AuroraRequest,
     @Param('id') id: string,
-    @Body() body: Record<string, unknown>
+    @Body() body: unknown
   ): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
-    await withTenant(this.db, ctx, (s) => suspendMembership(s, id, texto(body.reason, 'reason')));
+    const { reason } = parseWith(membersSuspend.body, body);
+    await withTenant(this.db, ctx, (s) => suspendMembership(s, id, reason));
     return { ok: true };
   }
 }

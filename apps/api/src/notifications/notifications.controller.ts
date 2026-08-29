@@ -188,8 +188,13 @@ export class NotificationsController {
     return { items };
   }
 
+  /*
+   * Escrita, e por isso NÃO é `audit.read`: o papel Auditor tem essa chave e a
+   * §21 diz que ele não escreve nada. Quem chama isto é o adaptador de
+   * transporte, informando o que aconteceu de fato com a mensagem.
+   */
   @Post(`outbox/:id(${UUID_ROUTE})/sent`)
-  @RequirePermissions('audit.read')
+  @RequirePermissions('notification.deliver')
   async sent(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
     await withTenant(this.db, ctx, (s) => markDeliverySent(s, id));
@@ -197,7 +202,7 @@ export class NotificationsController {
   }
 
   @Post(`outbox/:id(${UUID_ROUTE})/failed`)
-  @RequirePermissions('audit.read')
+  @RequirePermissions('notification.deliver')
   async failed(
     @Req() req: AuroraRequest,
     @Param('id') id: string,

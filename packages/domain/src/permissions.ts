@@ -170,6 +170,17 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('automation', 'delete', 'Excluir automações'),
   p('automation', 'run_now', 'Executar automação manualmente'),
   p('audit', 'read', 'Ver trilha de auditoria'),
+
+  // --- entrega de notificação -----------------------------------------------
+  //
+  // Marcar uma entrega como enviada ou falha é ESCRITA, e era guardada por
+  // `audit.read` — que o papel Auditor tem, e sobre o qual a §21 diz "somente
+  // leitura em tudo. Nenhuma escrita". Um auditor podia marcar como enviada uma
+  // notificação que nunca saiu, e um "enviado" falso some sem deixar rastro.
+  //
+  // Fica fora de todo papel de fábrica exceto Proprietário e Administrador (que
+  // recebem tudo): quem usa isto é o adaptador de transporte, não uma pessoa.
+  p('notification', 'deliver', 'Registrar o resultado do envio de uma notificação'),
 ]);
 
 export const PERMISSION_KEYS: readonly string[] = Object.freeze(PERMISSIONS.map((x) => x.key));

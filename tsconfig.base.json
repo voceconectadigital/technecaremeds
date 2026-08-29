@@ -25,7 +25,8 @@
       "@aurora/domain": ["packages/domain/src"],
       "@aurora/events": ["packages/events/src"],
       "@aurora/db": ["packages/db/src"],
-      "@aurora/config": ["packages/config/src"]
+      "@aurora/config": ["packages/config/src"],
+      "@aurora/contracts": ["packages/contracts/src"]
     }
   },
   "exclude": ["node_modules", "dist"]

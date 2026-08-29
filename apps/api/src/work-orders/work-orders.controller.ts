@@ -30,7 +30,7 @@ import {
   REQUEST_PRIORITIES,
   type RequestPriority,
 } from '@aurora/domain';
-import { RequirePermissions } from '../common/permissions.guard';
+import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -266,6 +266,9 @@ export class WorkOrdersController {
   /** Uma rota para todas as transições — o grafo é a fonte de verdade. */
   @Post(':id([0-9a-fA-F-]{36})/transitions')
   @RequirePermissions('work_order.read')
+  @PermissionsCheckedInHandler(
+    'cada aresta do grafo tem a sua permissão (work_order.assign, .execute, .complete, .validate, .close, .reopen); o guard aqui é o piso'
+  )
   async transition(
     @Req() req: AuroraRequest,
     @Param('id') id: string,

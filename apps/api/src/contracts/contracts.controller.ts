@@ -292,8 +292,13 @@ export class ContractsController {
     return withTenant(this.db, ctx, (s) => measurePeriod(s, uuidParam(id, 'id'), period));
   }
 
+  /*
+   * GRAVA a medição — e por isso exige as duas: ver os valores e poder alterar
+   * o contrato. Só `contract.read_financials` deixaria o papel Financeiro,
+   * cuja descrição é de leitura de valores, escrever a medição do mês.
+   */
   @Post(`:id(${UUID_ROUTE})/periods/:period(${PERIOD_ROUTE})`)
-  @RequirePermissions('contract.read_financials')
+  @RequirePermissions('contract.read_financials', 'contract.update')
   async saveperiod(
     @Req() req: AuroraRequest,
     @Param('id') id: string,

@@ -19,10 +19,12 @@
     "format:check": "prettier --check .",
     "spec:build": "node tools/spec/build-v0.2.mjs",
     "spec:audit": "node tools/spec/audit.mjs docs/AURORA-CMMS-SPEC-v0.2.md",
-    "verify": "npm run spec:audit && npm run typecheck && npm run lint && npm run test",
+    "verify": "npm run spec:audit && npm run typecheck && npm run lint && npm run openapi:check && npm run test",
     "db:migrate": "node tools/db/run.mjs migrate",
     "db:seed": "node tools/db/run.mjs seed",
-    "db:status": "node tools/db/run.mjs status"
+    "db:status": "node tools/db/run.mjs status",
+    "openapi": "node tools/openapi/generate.mjs",
+    "openapi:check": "node tools/openapi/generate.mjs --check"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

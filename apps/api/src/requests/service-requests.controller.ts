@@ -35,7 +35,7 @@ import {
   type RequestPriority,
   type ServiceRequestSource,
 } from '@aurora/domain';
-import { RequirePermissions } from '../common/permissions.guard';
+import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -179,6 +179,9 @@ export class ServiceRequestsController {
    */
   @Post(':id([0-9a-fA-F-]{36})/transitions')
   @RequirePermissions('service_request.read')
+  @PermissionsCheckedInHandler(
+    'cada aresta tem a sua permissão (service_request.triage, .accept, .reject, .merge); o guard aqui é o piso'
+  )
   async transition(
     @Req() req: AuroraRequest,
     @Param('id') id: string,

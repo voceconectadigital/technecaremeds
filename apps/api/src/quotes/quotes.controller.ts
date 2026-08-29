@@ -42,7 +42,7 @@ import {
   type QuoteNature,
   type QuoteItemKind,
 } from '@aurora/domain';
-import { RequirePermissions } from '../common/permissions.guard';
+import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -257,6 +257,9 @@ export class QuotesController {
    */
   @Post(`:id(${UUID_ROUTE})/transitions`)
   @RequirePermissions('quote.read')
+  @PermissionsCheckedInHandler(
+    'cada aresta tem a sua permissão (quote.send, .approve, .update); o guard aqui é o piso'
+  )
   async transition(
     @Req() req: AuroraRequest,
     @Param('id') id: string,

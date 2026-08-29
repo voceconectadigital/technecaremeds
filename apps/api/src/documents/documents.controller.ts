@@ -34,7 +34,7 @@ import {
   type DocumentVerdict,
   type SignatureMethod,
 } from '@aurora/domain';
-import { RequirePermissions } from '../common/permissions.guard';
+import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -167,6 +167,9 @@ export class DocumentsController {
 
   @Post(`:id(${UUID_ROUTE})/transitions`)
   @RequirePermissions('document.read')
+  @PermissionsCheckedInHandler(
+    'cada aresta tem a sua permissão (document.create, .issue, .release); o guard aqui é o piso'
+  )
   async transition(
     @Req() req: AuroraRequest,
     @Param('id') id: string,
