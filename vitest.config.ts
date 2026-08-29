@@ -8,6 +8,7 @@ export default defineConfig({
       '@aurora/db/testing/harness': resolve(__dirname, 'packages/db/src/testing/harness'),
       '@aurora/db': resolve(__dirname, 'packages/db/src'),
       '@aurora/events': resolve(__dirname, 'packages/events/src'),
+      '@aurora/workers': resolve(__dirname, 'apps/workers/src'),
       '@aurora/config': resolve(__dirname, 'packages/config/src'),
     },
   },
