@@ -15,6 +15,8 @@ import { migrate } from '../migrator';
 
 export interface TestDatabase {
   db: Database;
+  /** Sem SET ROLE: usado por migrations e seeds, como em produção. */
+  admin: Database;
   /**
    * Executa SQL como o usuário da conexão — só para arranjo de teste.
    *
@@ -41,6 +43,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 
   return {
     db,
+    admin: superuser,
     raw: async (sql, params) => {
       const r = await pg.query<Record<string, unknown>>(sql, params);
       return r.rows;

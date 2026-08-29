@@ -27,7 +27,8 @@ export default tseslint.config(
             'unsafeCrossTenant ignora o escopo de tenant. Use withTenant. Se for realmente uma rotina de plataforma, mova para packages/db/src/platform ou apps/workers e adicione a exceção explicitamente neste arquivo.',
         },
         {
-          selector: "MemberExpression[property.name='query'][object.name='db']",
+          selector:
+            "MemberExpression[property.name='query'][object.name='db'], MemberExpression[property.name='query'][object.property.name='db']",
           message:
             'Acesso direto a db.query em tabela de negócio ignora o contexto de tenant. Use withTenant(db, ctx, ...).',
         },

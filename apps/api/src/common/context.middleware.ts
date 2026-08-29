@@ -22,8 +22,14 @@ export interface AuroraRequest extends IncomingRequest {
 
 type Next = (err?: unknown) => void;
 
-/** Rotas de saúde não exigem identidade: precisam responder quando tudo mais falhou. */
-const PUBLIC_PATH = /(^|\/)health(\/|$)/;
+/**
+ * Rotas que não passam pela resolução de contexto:
+ *  · health — precisa responder quando tudo mais falhou
+ *  · me/*   — responde ANTES de existir organização no contexto; é a rota que
+ *             o seletor de organização usa. Faz a própria verificação de
+ *             credencial.
+ */
+const PUBLIC_PATH = /(^|\/)(health|me)(\/|$)/;
 
 export function createContextMiddleware(resolver: ContextResolver, logger: StructuredLogger) {
   return async function contextMiddleware(req: AuroraRequest, _res: unknown, next: Next): Promise<void> {

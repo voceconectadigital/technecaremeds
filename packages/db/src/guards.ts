@@ -45,3 +45,17 @@ export async function assertAppRoleIsSafe(db: Database, allowUnsafe = false): Pr
   }
   return priv;
 }
+
+/**
+ * Verificação de conectividade para o endpoint de readiness.
+ * Fica aqui, e não no controller, para que a regra de lint que proíbe acesso
+ * direto ao banco fora da camada de dados continue valendo sem exceções.
+ */
+export async function checkConnectivity(db: Database): Promise<boolean> {
+  try {
+    await db.query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  }
+}

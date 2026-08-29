@@ -195,3 +195,26 @@ describe('correlação e diagnóstico', () => {
     expect(r.body.request_id).toBeTruthy();
   });
 });
+
+describe('seletor de organização (/me/organizations)', () => {
+  it('lista apenas as organizações do portador da credencial', async () => {
+    const r = await http.get('/v1/me/organizations').set('authorization', `Bearer ${tokenFor(EMAIL_A)}`);
+    expect(r.status).toBe(200);
+    expect(r.body.items).toHaveLength(1);
+    expect(r.body.items[0].slug).toBe('org-a');
+    expect(JSON.stringify(r.body)).not.toContain('org-b');
+  });
+
+  it('sem credencial: 401', async () => {
+    const r = await http.get('/v1/me/organizations');
+    expect(r.status).toBe(401);
+  });
+
+  it('identidade sem vínculo: lista vazia, não erro', async () => {
+    const r = await http
+      .get('/v1/me/organizations')
+      .set('authorization', `Bearer ${tokenFor('ninguem@lugar.test')}`);
+    expect(r.status).toBe(200);
+    expect(r.body.items).toEqual([]);
+  });
+});

@@ -4,7 +4,7 @@
  * `ready` verifica a dependência crítica; é o que o balanceador deve olhar.
  */
 import { Controller, Get, Inject } from '@nestjs/common';
-import type { Database } from '@aurora/db';
+import { checkConnectivity, type Database } from '@aurora/db';
 import { DATABASE } from '../common/tokens';
 
 @Controller('health')
@@ -18,15 +18,10 @@ export class HealthController {
 
   @Get('ready')
   async ready(): Promise<{ status: string; checks: Record<string, string> }> {
-    const checks: Record<string, string> = {};
-    let status = 'ok';
-    try {
-      await this.db.query('SELECT 1');
-      checks.database = 'ok';
-    } catch {
-      checks.database = 'unavailable';
-      status = 'degraded';
-    }
-    return { status, checks };
+    const ok = await checkConnectivity(this.db);
+    return {
+      status: ok ? 'ok' : 'degraded',
+      checks: { database: ok ? 'ok' : 'unavailable' },
+    };
   }
 }
