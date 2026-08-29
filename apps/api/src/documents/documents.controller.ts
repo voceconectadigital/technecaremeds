@@ -38,8 +38,6 @@ import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permi
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-
 function uuidParam(value: unknown, field: string): string {
   if (typeof value !== 'string' || !isUuid(value)) {
     throw new ValidationError(`${field} deve ser um identificador válido`, { field });
@@ -116,7 +114,32 @@ export class DocumentsController {
     return { id };
   }
 
-  @Get(`:id(${UUID_ROUTE})`)
+  @Get('by-asset')
+  @RequirePermissions('document.read')
+  async byAsset(
+    @Req() req: AuroraRequest,
+    @Query('assetId') assetId?: string
+  ): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const items = await withTenant(this.db, ctx, (s) => documentsForAsset(s, uuidParam(assetId, 'assetId')));
+    return { items };
+  }
+
+  /**
+   * Varredura de vencimento.
+   *
+   * POST porque muda estado: carimba os vencidos e grava o marco avisado. Um
+   * GET que faz isso é armadilha para qualquer pré-carregamento de link.
+   */
+  @Post('expiry/sweep')
+  @RequirePermissions('document.issue')
+  async sweep(@Req() req: AuroraRequest): Promise<{ alerts: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const alerts = await withTenant(this.db, ctx, (s) => sweepDocumentExpiry(s));
+    return { alerts };
+  }
+
+  @Get(':id')
   @RequirePermissions('document.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
@@ -136,14 +159,14 @@ export class DocumentsController {
   }
 
   /** O que falta para emitir — a pergunta que a tela faz antes de tentar. */
-  @Get(`:id(${UUID_ROUTE})/issue-check`)
+  @Get(':id/issue-check')
   @RequirePermissions('document.read')
   async issueCheck(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
     return withTenant(this.db, ctx, (s) => documentIssueCheck(s, uuidParam(id, 'id')));
   }
 
-  @Post(`:id(${UUID_ROUTE})/content`)
+  @Post(':id/content')
   @RequirePermissions('document.create')
   async content(
     @Req() req: AuroraRequest,
@@ -165,7 +188,7 @@ export class DocumentsController {
     });
   }
 
-  @Post(`:id(${UUID_ROUTE})/transitions`)
+  @Post(':id/transitions')
   @RequirePermissions('document.read')
   @PermissionsCheckedInHandler(
     'cada aresta tem a sua permissão (document.create, .issue, .release); o guard aqui é o piso'
@@ -194,7 +217,7 @@ export class DocumentsController {
     });
   }
 
-  @Post(`:id(${UUID_ROUTE})/versions`)
+  @Post(':id/versions')
   @RequirePermissions('document.issue')
   async supersede(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
@@ -202,7 +225,7 @@ export class DocumentsController {
     return { id: novo };
   }
 
-  @Post(`:id(${UUID_ROUTE})/signatures`)
+  @Post(':id/signatures')
   @RequirePermissions('document.sign')
   async sign(
     @Req() req: AuroraRequest,
@@ -244,30 +267,5 @@ export class DocumentsController {
       })
     );
     return { id: sigId };
-  }
-
-  @Get('by-asset')
-  @RequirePermissions('document.read')
-  async byAsset(
-    @Req() req: AuroraRequest,
-    @Query('assetId') assetId?: string
-  ): Promise<{ items: unknown[] }> {
-    const ctx = req.auroraContext!;
-    const items = await withTenant(this.db, ctx, (s) => documentsForAsset(s, uuidParam(assetId, 'assetId')));
-    return { items };
-  }
-
-  /**
-   * Varredura de vencimento.
-   *
-   * POST porque muda estado: carimba os vencidos e grava o marco avisado. Um
-   * GET que faz isso é armadilha para qualquer pré-carregamento de link.
-   */
-  @Post('expiry/sweep')
-  @RequirePermissions('document.issue')
-  async sweep(@Req() req: AuroraRequest): Promise<{ alerts: unknown[] }> {
-    const ctx = req.auroraContext!;
-    const alerts = await withTenant(this.db, ctx, (s) => sweepDocumentExpiry(s));
-    return { alerts };
   }
 }

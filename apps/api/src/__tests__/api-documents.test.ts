@@ -272,10 +272,20 @@ describe('consultas', () => {
   });
 
   it('a rota de consulta não colide com a de detalhe', async () => {
-    // `by-asset` e `types` são caminhos literais; o `:id` é restrito ao formato
-    // de uuid, então a resolução não depende da ordem de declaração.
+    /*
+     * `types` e `by-asset` são caminhos literais e precisam ser declarados
+     * ANTES de `:id` — desde o Express 5 não há mais regex no parâmetro para
+     * desambiguar. A conferência de `npm run openapi` recusa a build se
+     * alguém inverter a ordem; este teste prova o resultado.
+     */
     await http.get('/v1/documents/types').set(auth(EMAIL_GESTOR)).expect(200);
-    await http.get('/v1/documents/nao-e-uuid').set(auth(EMAIL_GESTOR)).expect(404);
+    await http.get('/v1/documents/by-asset').set(auth(EMAIL_GESTOR)).expect(422);
+
+    // Identificador malformado agora chega ao handler e recebe 422 dizendo
+    // qual campo está errado — melhor que o 404 antigo, que mandava quem
+    // integra procurar uma URL que estava certa.
+    const r = await http.get('/v1/documents/nao-e-uuid').set(auth(EMAIL_GESTOR)).expect(422);
+    expect(r.body.details.field).toBe('id');
   });
 
   it('a varredura de vencimento é POST e devolve os alertas', async () => {

@@ -30,7 +30,7 @@ import {
   type MetricFilters,
   type Database,
 } from '@aurora/db';
-import { isUuid, ValidationError, METRIC_DEFINITIONS } from '@aurora/domain';
+import { METRIC_DEFINITIONS, ValidationError, isUuid } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';

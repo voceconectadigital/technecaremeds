@@ -31,10 +31,9 @@ import {
   type DigestMode,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T {
   if (typeof value !== 'string' || !allowed.includes(value as T)) {
@@ -193,15 +192,15 @@ export class NotificationsController {
    * §21 diz que ele não escreve nada. Quem chama isto é o adaptador de
    * transporte, informando o que aconteceu de fato com a mensagem.
    */
-  @Post(`outbox/:id(${UUID_ROUTE})/sent`)
+  @Post('outbox/:id/sent')
   @RequirePermissions('notification.deliver')
   async sent(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
-    await withTenant(this.db, ctx, (s) => markDeliverySent(s, id));
+    await withTenant(this.db, ctx, (s) => markDeliverySent(s, uuidParam(id, 'id')));
     return { ok: true };
   }
 
-  @Post(`outbox/:id(${UUID_ROUTE})/failed`)
+  @Post('outbox/:id/failed')
   @RequirePermissions('notification.deliver')
   async failed(
     @Req() req: AuroraRequest,
@@ -210,7 +209,7 @@ export class NotificationsController {
   ): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
     const erro = typeof body.error === 'string' ? body.error : 'erro não informado';
-    await withTenant(this.db, ctx, (s) => markDeliveryFailed(s, id, erro));
+    await withTenant(this.db, ctx, (s) => markDeliveryFailed(s, uuidParam(id, 'id'), erro));
     return { ok: true };
   }
 }

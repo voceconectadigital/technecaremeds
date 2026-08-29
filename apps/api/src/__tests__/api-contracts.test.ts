@@ -255,8 +255,19 @@ describe('medição', () => {
     await http.post(`/v1/contracts/${contrato}/periods/2024-03`).set(auth(EMAIL_FIN)).expect(422);
   });
 
-  it('competência fora do formato não casa com a rota', async () => {
-    await http.get(`/v1/contracts/${contrato}/periods/marco`).set(auth(EMAIL_FIN)).expect(404);
+  it('competência fora do formato é recusada, e não medida', async () => {
+    /*
+     * A conferência do formato era uma regex na rota e sumiu com o Express 5.
+     * Voltou como validação explícita no controller — e precisa mesmo estar
+     * lá: a medição de um contrato é exatamente onde um valor sem sentido
+     * viraria número de fatura.
+     */
+    const r = await http.get(`/v1/contracts/${contrato}/periods/marco`).set(auth(EMAIL_FIN));
+    expect(r.status).toBe(422);
+    expect(r.body.details.field).toBe('period');
+
+    // Mês fora da faixa também: "2026-13" tem o formato e não é competência.
+    await http.get(`/v1/contracts/${contrato}/periods/2026-13`).set(auth(EMAIL_FIN)).expect(422);
   });
 });
 

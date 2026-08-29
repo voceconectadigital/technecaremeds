@@ -24,7 +24,6 @@ import {
 import {
   STATUS_CATEGORIES,
   type StatusCategory,
-  isUuid,
   ValidationError,
   NotFoundError,
   ForbiddenError,
@@ -33,24 +32,9 @@ import {
   type RequestPriority,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
-
-function optionalUuid(value: unknown, field: string): string | null {
-  if (value === undefined || value === null) return null;
-  return uuidParam(value, field);
-}
-
-function text(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
 
 @Controller('work-orders')
 export class WorkOrdersController {
@@ -202,7 +186,7 @@ export class WorkOrdersController {
    * resolução depende de ordem de declaração quebra na próxima refatoração —
    * a restrição põe a decisão no caminho, onde ela é visível.
    */
-  @Get(':id([0-9a-fA-F-]{36})')
+  @Get(':id')
   @RequirePermissions('work_order.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<Record<string, unknown>> {
     const ctx = req.auroraContext!;
@@ -307,7 +291,7 @@ export class WorkOrdersController {
   }
 
   /** Uma rota para todas as transições — o grafo é a fonte de verdade. */
-  @Post(':id([0-9a-fA-F-]{36})/transitions')
+  @Post(':id/transitions')
   @RequirePermissions('work_order.read')
   @PermissionsCheckedInHandler(
     'cada aresta do grafo tem a sua permissão (work_order.assign, .execute, .complete, .validate, .close, .reopen); o guard aqui é o piso'

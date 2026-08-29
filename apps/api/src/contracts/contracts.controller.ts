@@ -29,7 +29,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   CONTRACT_KINDS,
   COVERAGE_KINDS,
@@ -39,15 +38,22 @@ import {
   type BillingModel,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-const PERIOD_ROUTE = '\\d{4}-\\d{2}';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
+/**
+ * O período de medição, no formato `AAAA-MM`.
+ *
+ * Esta conferência existia como regex na própria rota
+ * (`:period(\\d{4}-\\d{2})`) e sumiu quando o Express 5 passou a recusar
+ * regex embutida em parâmetro. Sem ela, "2026-13" ou "banana" chegariam à
+ * camada de dados como se fossem período — e a medição de um contrato é
+ * exatamente onde um valor sem sentido vira número de fatura.
+ */
+function periodoParam(value: unknown, field = 'period'): string {
+  if (typeof value !== 'string' || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+    throw new ValidationError(`${field} deve estar no formato AAAA-MM`, { field });
   }
   return value;
 }
@@ -161,7 +167,7 @@ export class ContractsController {
     return { items };
   }
 
-  @Get(`:id(${UUID_ROUTE})`)
+  @Get(':id')
   @RequirePermissions('contract.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
@@ -184,7 +190,7 @@ export class ContractsController {
   }
 
   /** Os ativos que a expressão alcança HOJE — a pergunta que o operador faz antes de ativar. */
-  @Get(`:id(${UUID_ROUTE})/assets`)
+  @Get(':id/assets')
   @RequirePermissions('contract.read')
   async assets(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
@@ -200,7 +206,7 @@ export class ContractsController {
     return { items };
   }
 
-  @Post(`:id(${UUID_ROUTE})/coverages`)
+  @Post(':id/coverages')
   @RequirePermissions('contract.update')
   async coverage(
     @Req() req: AuroraRequest,
@@ -221,7 +227,7 @@ export class ContractsController {
     return { id: coverageId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/services`)
+  @Post(':id/services')
   @RequirePermissions('contract.update')
   async service(
     @Req() req: AuroraRequest,
@@ -239,7 +245,7 @@ export class ContractsController {
     return { id: serviceId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/sla-overrides`)
+  @Post(':id/sla-overrides')
   @RequirePermissions('contract.update')
   async slaOverride(
     @Req() req: AuroraRequest,
@@ -257,7 +263,7 @@ export class ContractsController {
     return { id: overrideId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/activate`)
+  @Post(':id/activate')
   @RequirePermissions('contract.update')
   async activate(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ status: string }> {
     const ctx = req.auroraContext!;
@@ -265,7 +271,7 @@ export class ContractsController {
     return { status: 'active' };
   }
 
-  @Post(`:id(${UUID_ROUTE})/terminate`)
+  @Post(':id/terminate')
   @RequirePermissions('contract.update')
   async terminate(
     @Req() req: AuroraRequest,
@@ -281,7 +287,7 @@ export class ContractsController {
   }
 
   /** Mede sem gravar — é a tela do mês em curso. */
-  @Get(`:id(${UUID_ROUTE})/periods/:period(${PERIOD_ROUTE})`)
+  @Get(':id/periods/:period')
   @RequirePermissions('contract.read_financials')
   async period(
     @Req() req: AuroraRequest,
@@ -289,7 +295,7 @@ export class ContractsController {
     @Param('period') period: string
   ): Promise<unknown> {
     const ctx = req.auroraContext!;
-    return withTenant(this.db, ctx, (s) => measurePeriod(s, uuidParam(id, 'id'), period));
+    return withTenant(this.db, ctx, (s) => measurePeriod(s, uuidParam(id, 'id'), periodoParam(period)));
   }
 
   /*
@@ -297,7 +303,7 @@ export class ContractsController {
    * o contrato. Só `contract.read_financials` deixaria o papel Financeiro,
    * cuja descrição é de leitura de valores, escrever a medição do mês.
    */
-  @Post(`:id(${UUID_ROUTE})/periods/:period(${PERIOD_ROUTE})`)
+  @Post(':id/periods/:period')
   @RequirePermissions('contract.read_financials', 'contract.update')
   async saveperiod(
     @Req() req: AuroraRequest,
@@ -305,10 +311,10 @@ export class ContractsController {
     @Param('period') period: string
   ): Promise<unknown> {
     const ctx = req.auroraContext!;
-    return withTenant(this.db, ctx, (s) => saveMeasurement(s, uuidParam(id, 'id'), period));
+    return withTenant(this.db, ctx, (s) => saveMeasurement(s, uuidParam(id, 'id'), periodoParam(period)));
   }
 
-  @Post(`:id(${UUID_ROUTE})/periods/:period(${PERIOD_ROUTE})/close`)
+  @Post(':id/periods/:period/close')
   @RequirePermissions('contract.close_period')
   async close(
     @Req() req: AuroraRequest,
@@ -316,7 +322,9 @@ export class ContractsController {
     @Param('period') period: string
   ): Promise<unknown> {
     const ctx = req.auroraContext!;
-    return withTenant(this.db, ctx, (s) => closePeriod(s, uuidParam(id, 'id'), period, today()));
+    return withTenant(this.db, ctx, (s) =>
+      closePeriod(s, uuidParam(id, 'id'), periodoParam(period), today())
+    );
   }
 
   /**
@@ -348,7 +356,7 @@ export class ContractsController {
 export class AssetContractController {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  @Get(`:id(${UUID_ROUTE})/contract`)
+  @Get(':id/contract')
   @RequirePermissions('asset.read')
   async current(
     @Req() req: AuroraRequest,

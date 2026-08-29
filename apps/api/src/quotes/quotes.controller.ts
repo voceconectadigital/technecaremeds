@@ -46,8 +46,6 @@ import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permi
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-
 function uuidParam(value: unknown, field: string): string {
   if (typeof value !== 'string' || !isUuid(value)) {
     throw new ValidationError(`${field} deve ser um identificador válido`, { field });
@@ -143,7 +141,35 @@ export class QuotesController {
     return { items };
   }
 
-  @Get(`:id(${UUID_ROUTE})`)
+  @Get('price')
+  @RequirePermissions('quote.read')
+  async price(
+    @Req() req: AuroraRequest,
+    @Query('itemId') itemId?: string,
+    @Query('customerId') customerId?: string,
+    @Query('contractId') contractId?: string
+  ): Promise<{ price: unknown }> {
+    const ctx = req.auroraContext!;
+    const preco = await withTenant(this.db, ctx, (s) =>
+      priceFor(
+        s,
+        uuidParam(itemId, 'itemId'),
+        uuidParam(customerId, 'customerId'),
+        contractId ? uuidParam(contractId, 'contractId') : null
+      )
+    );
+    return { price: preco };
+  }
+
+  @Post('expire/sweep')
+  @RequirePermissions('quote.update')
+  async sweep(@Req() req: AuroraRequest): Promise<{ expired: number }> {
+    const ctx = req.auroraContext!;
+    const expired = await withTenant(this.db, ctx, (s) => sweepExpiredQuotes(s));
+    return { expired };
+  }
+
+  @Get(':id')
   @RequirePermissions('quote.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
@@ -167,7 +193,7 @@ export class QuotesController {
     });
   }
 
-  @Get(`:id(${UUID_ROUTE})/versions`)
+  @Get(':id/versions')
   @RequirePermissions('quote.read')
   async versions(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
@@ -179,7 +205,7 @@ export class QuotesController {
     return { items };
   }
 
-  @Post(`:id(${UUID_ROUTE})/items`)
+  @Post(':id/items')
   @RequirePermissions('quote.update')
   async addItem(
     @Req() req: AuroraRequest,
@@ -221,7 +247,7 @@ export class QuotesController {
     return { id: itemId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/items/:itemId(${UUID_ROUTE})/remove`)
+  @Post(':id/items/:itemId/remove')
   @RequirePermissions('quote.update')
   async removeItem(@Req() req: AuroraRequest, @Param('itemId') itemId: string): Promise<{ removed: true }> {
     const ctx = req.auroraContext!;
@@ -229,7 +255,7 @@ export class QuotesController {
     return { removed: true };
   }
 
-  @Post(`:id(${UUID_ROUTE})/discount`)
+  @Post(':id/discount')
   @RequirePermissions('quote.update')
   async discount(
     @Req() req: AuroraRequest,
@@ -255,7 +281,7 @@ export class QuotesController {
    * A permissão é conferida aqui, contra o grafo, e não por decorador: cada
    * destino tem a sua, e a tabela que diz qual é mora no domínio.
    */
-  @Post(`:id(${UUID_ROUTE})/transitions`)
+  @Post(':id/transitions')
   @RequirePermissions('quote.read')
   @PermissionsCheckedInHandler(
     'cada aresta tem a sua permissão (quote.send, .approve, .update); o guard aqui é o piso'
@@ -304,7 +330,7 @@ export class QuotesController {
     });
   }
 
-  @Post(`:id(${UUID_ROUTE})/revisions`)
+  @Post(':id/revisions')
   @RequirePermissions('quote.update')
   async revise(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
@@ -313,31 +339,4 @@ export class QuotesController {
   }
 
   /** O preço que a cascata daria, para a tela mostrar antes de a linha existir. */
-  @Get('price')
-  @RequirePermissions('quote.read')
-  async price(
-    @Req() req: AuroraRequest,
-    @Query('itemId') itemId?: string,
-    @Query('customerId') customerId?: string,
-    @Query('contractId') contractId?: string
-  ): Promise<{ price: unknown }> {
-    const ctx = req.auroraContext!;
-    const preco = await withTenant(this.db, ctx, (s) =>
-      priceFor(
-        s,
-        uuidParam(itemId, 'itemId'),
-        uuidParam(customerId, 'customerId'),
-        contractId ? uuidParam(contractId, 'contractId') : null
-      )
-    );
-    return { price: preco };
-  }
-
-  @Post('expire/sweep')
-  @RequirePermissions('quote.update')
-  async sweep(@Req() req: AuroraRequest): Promise<{ expired: number }> {
-    const ctx = req.auroraContext!;
-    const expired = await withTenant(this.db, ctx, (s) => sweepExpiredQuotes(s));
-    return { expired };
-  }
 }

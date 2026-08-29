@@ -23,7 +23,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   NotFoundError,
   ForbiddenError,
@@ -36,20 +35,9 @@ import {
   type ServiceRequestSource,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
-
-function optionalUuid(value: unknown, field: string): string | null {
-  if (value === undefined || value === null) return null;
-  return uuidParam(value, field);
-}
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string, fallback?: T): T {
   if (value === undefined || value === null) {
@@ -134,7 +122,7 @@ export class ServiceRequestsController {
    */
   // Parâmetro restrito ao formato de uuid: sem isso `GET /service-requests/queue`
   // casaria com `:id`, e qual ganha dependeria da ordem de declaração.
-  @Get(':id([0-9a-fA-F-]{36})')
+  @Get(':id')
   @RequirePermissions('service_request.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<Record<string, unknown>> {
     const ctx = req.auroraContext!;
@@ -177,7 +165,7 @@ export class ServiceRequestsController {
    * por transição criaria um segundo lugar onde as transições estão listadas,
    * e os dois divergiriam no dia em que o grafo mudasse.
    */
-  @Post(':id([0-9a-fA-F-]{36})/transitions')
+  @Post(':id/transitions')
   @RequirePermissions('service_request.read')
   @PermissionsCheckedInHandler(
     'cada aresta tem a sua permissão (service_request.triage, .accept, .reject, .merge); o guard aqui é o piso'

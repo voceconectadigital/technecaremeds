@@ -21,22 +21,15 @@ import {
   CATALOGS,
   catalogByKey,
   suggestMergeGroups,
-  isUuid,
   ValidationError,
   CUSTOM_FIELD_ENTITIES,
   type CustomFieldEntity,
   type CustomFieldKind,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
 
 function knownCatalog(key: string): string {
   if (!catalogByKey(key)) {

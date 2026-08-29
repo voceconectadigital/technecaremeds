@@ -390,8 +390,17 @@ describe('permissões e isolamento na borda', () => {
     expect((await http.get(`/v1/work-orders/${newId()}`).set(auth(EMAIL_COORD))).status).toBe(404);
   });
 
-  it('id malformado não chega ao controlador', async () => {
+  it('id malformado é recusado nomeando o campo', async () => {
+    // 422 e não 404: a rota existe, o identificador é que não presta. Dizer
+    // "não encontrado" mandaria quem integra procurar a URL errada.
     const r = await http.get('/v1/work-orders/nao-e-uuid').set(auth(EMAIL_COORD));
-    expect(r.status).toBe(404);
+    expect(r.status).toBe(422);
+    expect(r.body.details.field).toBe('id');
+  });
+
+  it('as rotas literais não são engolidas pela rota de detalhe', async () => {
+    // `board` e `statuses` casariam com `:id` se fossem declaradas depois.
+    await http.get('/v1/work-orders/board').set(auth(EMAIL_COORD)).expect(200);
+    await http.get('/v1/work-orders/statuses').set(auth(EMAIL_COORD)).expect(200);
   });
 });

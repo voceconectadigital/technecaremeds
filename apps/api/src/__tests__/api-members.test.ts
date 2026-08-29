@@ -194,11 +194,12 @@ describe('escopo (PATCH .../:id/scope)', () => {
     expect(r.status).toBe(200);
   });
 
-  it('identificador que não é uuid não encontra rota', async () => {
+  it('identificador que não é uuid é recusado', async () => {
     const r = await comoDona(http.patch('/v1/organizations/current/members/abc/scope')).send({
       customer_scope: 'all',
     });
-    expect(r.status).toBe(404);
+    // 422: a rota existe e o identificador é que não presta.
+    expect(r.status).toBe(422);
   });
 
   it('vínculo de outra organização: 404, não 403 — nem confirma que existe', async () => {

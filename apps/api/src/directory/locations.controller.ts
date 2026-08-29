@@ -17,8 +17,9 @@ import {
   archiveLocation,
   type Database,
 } from '@aurora/db';
-import { ValidationError, ForbiddenError, isUuid } from '@aurora/domain';
+import { ForbiddenError, ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -36,17 +37,6 @@ interface MoveLocationBody {
 }
 
 /** Um uuid obrigatório, ou erro que nomeia o campo. */
-function requiredUuid(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
-
-function optionalUuid(value: unknown, field: string): string | null {
-  if (value === undefined || value === null) return null;
-  return requiredUuid(value, field);
-}
 
 /**
  * O escopo por local é resolvido a partir do vínculo. Um chamador sem vínculo
@@ -87,7 +77,7 @@ export class LocationsController {
   async list(@Req() req: AuroraRequest, @Query('root') root?: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const membershipId = requireMembership(ctx.membershipId);
-    const rootId = root === undefined ? null : requiredUuid(root, 'root');
+    const rootId = root === undefined ? null : uuidParam(root, 'root');
 
     // O recorte por escopo fica no banco. Trazer a árvore inteira para filtrar
     // em memória funcionaria com trinta locais e não com trinta mil — e, pior,
@@ -114,7 +104,7 @@ export class LocationsController {
   @RequirePermissions('location.read')
   async breadcrumb(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
-    const items = await withTenant(this.db, ctx, (s) => ancestors(s, requiredUuid(id, 'id')));
+    const items = await withTenant(this.db, ctx, (s) => ancestors(s, uuidParam(id, 'id')));
     return { items };
   }
 
@@ -124,9 +114,9 @@ export class LocationsController {
     const ctx = req.auroraContext!;
     const id = await withTenant(this.db, ctx, (s) =>
       createLocation(s, {
-        customerId: requiredUuid(body.customer_id, 'customer_id'),
+        customerId: uuidParam(body.customer_id, 'customer_id'),
         parentId: optionalUuid(body.parent_id, 'parent_id'),
-        locationTypeId: requiredUuid(body.location_type_id, 'location_type_id'),
+        locationTypeId: uuidParam(body.location_type_id, 'location_type_id'),
         name: requiredText(body.name, 'name'),
         code: typeof body.code === 'string' ? body.code : null,
         isMobile: body.is_mobile === true,
@@ -148,7 +138,7 @@ export class LocationsController {
   ): Promise<{ moved: number }> {
     const ctx = req.auroraContext!;
     const moved = await withTenant(this.db, ctx, (s) =>
-      moveLocation(s, requiredUuid(id, 'id'), optionalUuid(body.parent_id, 'parent_id'))
+      moveLocation(s, uuidParam(id, 'id'), optionalUuid(body.parent_id, 'parent_id'))
     );
     return { moved };
   }
@@ -157,7 +147,7 @@ export class LocationsController {
   @RequirePermissions('location.update')
   async archive(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ archived: string }> {
     const ctx = req.auroraContext!;
-    const locationId = requiredUuid(id, 'id');
+    const locationId = uuidParam(id, 'id');
     await withTenant(this.db, ctx, (s) => archiveLocation(s, locationId));
     return { archived: locationId };
   }

@@ -94,6 +94,9 @@ function lerRotas() {
         const dinamica = Reflect.getMetadata(DYNAMIC_PERMISSIONS_KEY, handler);
 
         rotas.push({
+          // A ordem em que o NestJS registra: é ela que decide quem responde
+          // quando dois caminhos casam.
+          ordem: rotas.length,
           controller: exportado.name,
           handler: nome,
           method: metodo,
@@ -248,6 +251,64 @@ function gerar() {
   }
 
   /*
+   * ROTA LITERAL ENGOLIDA POR ROTA COM PARÂMETRO.
+   *
+   * Até o Express 4, os parâmetros de identificador traziam a forma embutida
+   * — `:id([0-9a-fA-F-]{36})` — e "price" simplesmente não casava com um
+   * uuid. O Express 5 usa path-to-regexp 8, que REMOVEU regex embutida (era
+   * vetor de ReDoS), e a desambiguação passou a depender da ORDEM DE
+   * DECLARAÇÃO.
+   *
+   * Ordem de declaração é uma garantia que ninguém enxerga lendo um arquivo:
+   * mover um método trinta linhas para baixo, num refactor inocente, torna uma
+   * rota inalcançável — e o sintoma é um 404 ou, pior, o handler ERRADO
+   * respondendo. Foi o que aconteceu com `/quotes/price` e
+   * `/documents/by-asset` na migração.
+   *
+   * Por isso a garantia virou esta conferência: toda rota literal precisa ser
+   * declarada ANTES de qualquer rota com parâmetro que a cobriria.
+   */
+  const sombreadas = [];
+  const porMetodo = new Map();
+  for (const rota of rotas) {
+    const lista = porMetodo.get(rota.method) ?? [];
+    lista.push(rota);
+    porMetodo.set(rota.method, lista);
+  }
+
+  for (const [metodo, lista] of porMetodo) {
+    // `rotas` está ordenada por caminho; a ordem que importa é a de
+    // DECLARAÇÃO, que é a de registro no roteador.
+    const naOrdem = lista.slice().sort((x, y) => x.ordem - y.ordem);
+
+    for (let i = 0; i < naOrdem.length; i++) {
+      const anterior = naOrdem[i];
+      const segsA = anterior.path.split('/').filter(Boolean);
+      if (!segsA.some((s) => s.startsWith(':'))) continue;
+
+      for (let j = i + 1; j < naOrdem.length; j++) {
+        const depois = naOrdem[j];
+        const segsD = depois.path.split('/').filter(Boolean);
+        if (segsA.length !== segsD.length) continue;
+
+        // A anterior cobre a posterior quando cada segmento ou é idêntico ou
+        // é um parâmetro que aceita qualquer coisa.
+        const cobre = segsA.every((sa, k) => sa.startsWith(':') || sa === segsD[k]);
+        // Só é problema se a posterior for MAIS específica (tem literal onde a
+        // anterior tem parâmetro) — senão são a mesma rota, e isso é outro erro.
+        const maisEspecifica = segsA.some((sa, k) => sa.startsWith(':') && !segsD[k].startsWith(':'));
+
+        if (cobre && maisEspecifica) {
+          sombreadas.push(
+            `${metodo} ${depois.path} (${depois.controller}.${depois.handler}) nunca é alcançada: ` +
+              `${metodo} ${anterior.path} (${anterior.controller}.${anterior.handler}) é declarada antes e a cobre`
+          );
+        }
+      }
+    }
+  }
+
+  /*
    * ESCRITA GUARDADA POR PERMISSÃO DE LEITURA.
    *
    * Uma rota que altera dado e exige apenas `algo.read` entrega a escrita a
@@ -305,12 +366,12 @@ function gerar() {
     paths,
   };
 
-  return { doc, rotas, semContrato, contratosOrfaos, divergencias, escritaComLeitura };
+  return { doc, rotas, semContrato, contratosOrfaos, divergencias, escritaComLeitura, sombreadas };
 }
 
 /* -------------------------------------------------------------------------- */
 
-const { doc, rotas, semContrato, contratosOrfaos, divergencias, escritaComLeitura } = gerar();
+const { doc, rotas, semContrato, contratosOrfaos, divergencias, escritaComLeitura, sombreadas } = gerar();
 const texto = JSON.stringify(doc, null, 2) + '\n';
 
 const comContrato = rotas.length - semContrato.length;
@@ -323,6 +384,10 @@ if (divergencias.length) {
   console.log('\n✗ contrato e guard discordam:');
   divergencias.forEach((d) => console.log('  · ' + d));
 }
+if (sombreadas.length) {
+  console.log('\n✗ rota literal inalcançável (ordem de declaração):');
+  sombreadas.forEach((x) => console.log('  · ' + x));
+}
 if (escritaComLeitura.length) {
   console.log('\n✗ escrita guardada por permissão de leitura:');
   escritaComLeitura.forEach((e) => console.log('  · ' + e));
@@ -332,7 +397,11 @@ if (contratosOrfaos.length) {
   contratosOrfaos.forEach((c) => console.log('  · ' + c));
 }
 
-const quebrado = divergencias.length > 0 || contratosOrfaos.length > 0 || escritaComLeitura.length > 0;
+const quebrado =
+  divergencias.length > 0 ||
+  contratosOrfaos.length > 0 ||
+  escritaComLeitura.length > 0 ||
+  sombreadas.length > 0;
 
 if (conferir) {
   const atual = existsSync(SAIDA) ? readFileSync(SAIDA, 'utf8') : '';

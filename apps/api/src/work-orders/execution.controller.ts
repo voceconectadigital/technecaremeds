@@ -27,19 +27,11 @@ import {
   completionRequirementsFor,
   type Database,
 } from '@aurora/db';
-import { isUuid, ValidationError, NotFoundError } from '@aurora/domain';
+import { NotFoundError, ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
 
 @Controller('work-orders')
 export class ExecutionController {
@@ -52,7 +44,7 @@ export class ExecutionController {
    * trabalha. Descobrir só na hora de fechar significa descobrir quando já
    * saiu do hospital.
    */
-  @Get(`:id(${UUID_ROUTE})/completion`)
+  @Get(':id/completion')
   @RequirePermissions('work_order.read')
   async completion(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
@@ -65,7 +57,7 @@ export class ExecutionController {
     });
   }
 
-  @Get(`:id(${UUID_ROUTE})/checklists`)
+  @Get(':id/checklists')
   @RequirePermissions('work_order.read')
   async checklists(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
@@ -92,7 +84,7 @@ export class ExecutionController {
     return { items };
   }
 
-  @Post(`:id(${UUID_ROUTE})/checklists`)
+  @Post(':id/checklists')
   @RequirePermissions('work_order.execute')
   async attach(
     @Req() req: AuroraRequest,
@@ -106,7 +98,7 @@ export class ExecutionController {
     return { response_id: responseId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/timer/start`)
+  @Post(':id/timer/start')
   @RequirePermissions('time_entry.create')
   async start(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ entry_id: string }> {
     const ctx = req.auroraContext!;
@@ -121,7 +113,7 @@ export class ExecutionController {
    * poderia lançar horas em nome de qualquer um, e a folha de campo deixaria de
    * significar alguma coisa.
    */
-  @Post(`:id(${UUID_ROUTE})/time-entries`)
+  @Post(':id/time-entries')
   @RequirePermissions('time_entry.create')
   async log(
     @Req() req: AuroraRequest,
@@ -173,7 +165,7 @@ export class ExecutionController {
    * transformaria cada foto de campo — em rede de hospital, pelo celular — numa
    * requisição que pode morrer no meio e não deixar rastro nem do envio.
    */
-  @Post(`:id(${UUID_ROUTE})/attachments`)
+  @Post(':id/attachments')
   @RequirePermissions('work_order.execute')
   async attachment(
     @Req() req: AuroraRequest,
@@ -211,7 +203,7 @@ export class ExecutionController {
     return { attachment_id: attachmentId };
   }
 
-  @Post(`:id(${UUID_ROUTE})/signatures`)
+  @Post(':id/signatures')
   @RequirePermissions('work_order.execute')
   async sign(
     @Req() req: AuroraRequest,
@@ -249,7 +241,7 @@ export class ExecutionController {
    * O produto não impede alterar uma OS assinada — há motivos legítimos. O que
    * ele faz é saber, e mostrar, que a assinatura já não cobre o texto novo.
    */
-  @Get(`:id(${UUID_ROUTE})/signatures`)
+  @Get(':id/signatures')
   @RequirePermissions('work_order.read')
   async signatures(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
@@ -286,7 +278,7 @@ export class ExecutionResourcesController {
    * faixa — exatamente o que o motor existe para impedir. O cliente manda o
    * valor medido; quem julga é o servidor.
    */
-  @Post(`checklist-responses/:responseId(${UUID_ROUTE})/answers`)
+  @Post('checklist-responses/:responseId/answers')
   @RequirePermissions('work_order.execute')
   async answer(
     @Req() req: AuroraRequest,
@@ -310,7 +302,7 @@ export class ExecutionResourcesController {
     });
   }
 
-  @Post(`time-entries/:entryId(${UUID_ROUTE})/stop`)
+  @Post('time-entries/:entryId/stop')
   @RequirePermissions('time_entry.create')
   async stop(
     @Req() req: AuroraRequest,

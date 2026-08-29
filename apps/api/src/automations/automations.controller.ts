@@ -18,7 +18,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   ACTIONS,
   OPERATORS,
@@ -28,17 +27,9 @@ import {
   type ConditionNode,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
 
 @Controller('automations')
 export class AutomationsController {
@@ -117,7 +108,7 @@ export class AutomationsController {
   }
 
   /** Simula contra o histórico, sem executar ação nenhuma. */
-  @Post(`:id(${UUID_ROUTE})/simulate`)
+  @Post(':id/simulate')
   @RequirePermissions('automation.update')
   async simulate(
     @Req() req: AuroraRequest,
@@ -132,7 +123,7 @@ export class AutomationsController {
     return withTenant(this.db, ctx, (s) => simulateRule(s, uuidParam(id, 'id'), dias));
   }
 
-  @Post(`:id(${UUID_ROUTE})/activate`)
+  @Post(':id/activate')
   @RequirePermissions('automation.update')
   async activate(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ state: string }> {
     const ctx = req.auroraContext!;
@@ -140,7 +131,7 @@ export class AutomationsController {
     return { state: 'active' };
   }
 
-  @Post(`:id(${UUID_ROUTE})/pause`)
+  @Post(':id/pause')
   @RequirePermissions('automation.update')
   async pause(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ state: string }> {
     const ctx = req.auroraContext!;
@@ -155,7 +146,7 @@ export class AutomationsController {
    * e caixa-preta que age sozinha no dado de outra pessoa é o que faz o
    * operador desconfiar do próprio sistema.
    */
-  @Get(`:id(${UUID_ROUTE})/runs`)
+  @Get(':id/runs')
   @RequirePermissions('automation.read')
   async runs(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;

@@ -23,7 +23,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   ForbiddenError,
   NotFoundError,
@@ -34,15 +33,9 @@ import {
   type AssetImportRow,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
 
 function requiredText(value: unknown, field: string, min = 1): string {
   if (typeof value !== 'string' || value.trim().length < min) {

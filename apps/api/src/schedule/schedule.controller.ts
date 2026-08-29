@@ -24,7 +24,6 @@ import {
   type Database,
 } from '@aurora/db';
 import {
-  isUuid,
   ValidationError,
   BLOCK_KINDS,
   BUCKET_LABELS,
@@ -32,17 +31,9 @@ import {
   type BlockKind,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
-
-function uuidParam(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) {
-    throw new ValidationError(`${field} deve ser um identificador válido`, { field });
-  }
-  return value;
-}
 
 /**
  * Converte um instante recebido do cliente.
@@ -107,7 +98,7 @@ export class ScheduleController {
     return withTenant(this.db, ctx, (s) => scheduleWorkOrder(s, proposal(body)));
   }
 
-  @Post(`work-orders/:id(${UUID_ROUTE})/unschedule`)
+  @Post('work-orders/:id/unschedule')
   @RequirePermissions('work_order.schedule')
   async unschedule(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ unscheduled: true }> {
     const ctx = req.auroraContext!;

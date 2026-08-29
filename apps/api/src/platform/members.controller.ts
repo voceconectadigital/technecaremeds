@@ -28,6 +28,7 @@ import {
 } from '@aurora/db';
 import { membersInvite, membersSetScope, membersSuspend } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { parseWith } from '../common/contract-validation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -90,7 +91,7 @@ export class MembersController {
     return { membership_id: r.membershipId, user_id: r.userId, reused_user: r.reusedUser };
   }
 
-  @Patch(':id([0-9a-fA-F-]{36})/scope')
+  @Patch(':id/scope')
   @RequirePermissions('organization.manage_members')
   async scope(
     @Req() req: AuroraRequest,
@@ -99,7 +100,7 @@ export class MembersController {
   ): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
     const entrada = parseWith(membersSetScope.body, body);
-    await withTenant(this.db, ctx, (s) => setMembershipScope(s, id, escopoDoCorpo(entrada)));
+    await withTenant(this.db, ctx, (s) => setMembershipScope(s, uuidParam(id, 'id'), escopoDoCorpo(entrada)));
     return { ok: true };
   }
 
@@ -107,7 +108,7 @@ export class MembersController {
    * Suspende o vínculo. O motivo é obrigatório e vai para o evento: seis meses
    * depois, "por que essa pessoa perdeu o acesso?" precisa ter resposta.
    */
-  @Post(':id([0-9a-fA-F-]{36})/suspension')
+  @Post(':id/suspension')
   @RequirePermissions('organization.manage_members')
   async suspend(
     @Req() req: AuroraRequest,
@@ -116,7 +117,7 @@ export class MembersController {
   ): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
     const { reason } = parseWith(membersSuspend.body, body);
-    await withTenant(this.db, ctx, (s) => suspendMembership(s, id, reason));
+    await withTenant(this.db, ctx, (s) => suspendMembership(s, uuidParam(id, 'id'), reason));
     return { ok: true };
   }
 }

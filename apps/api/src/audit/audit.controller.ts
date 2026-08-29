@@ -17,12 +17,11 @@ import {
   type AuditAction,
   type Database,
 } from '@aurora/db';
-import { isUuid, ValidationError, ForbiddenError } from '@aurora/domain';
+import { ForbiddenError, ValidationError, isUuid } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-const UUID_ROUTE = '[0-9a-fA-F-]{36}';
 
 /**
  * As entidades cuja história pode ser aberta pela linha do tempo.
@@ -124,7 +123,7 @@ export class AuditController {
    * pessoa precise da permissão de perícia para ver o que aconteceu com o
    * equipamento que ela opera.
    */
-  @Get(`timeline/:entityType/:entityId(${UUID_ROUTE})`)
+  @Get('timeline/:entityType/:entityId')
   @PermissionsCheckedInHandler(
     'a permissão é a de ler AQUELA entidade, resolvida pela lista fechada de tipos com linha do tempo'
   )
@@ -151,7 +150,7 @@ export class AuditController {
     }
 
     const items = await withTenant(this.db, ctx, (s) =>
-      recordTimeline(s, entityType, entityId, limit ? Number(limit) : undefined)
+      recordTimeline(s, entityType, uuidParam(entityId, 'entityId'), limit ? Number(limit) : undefined)
     );
     return { items };
   }
