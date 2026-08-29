@@ -26,6 +26,7 @@ import { DocumentsController } from './documents/documents.controller';
 import { InsightsController } from './insights/insights.controller';
 import { NotificationsController } from './notifications/notifications.controller';
 import { AutomationsController } from './automations/automations.controller';
+import { SearchController } from './search/search.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -70,6 +71,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       InsightsController,
       NotificationsController,
       AutomationsController,
+      SearchController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },

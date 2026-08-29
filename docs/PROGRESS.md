@@ -10,10 +10,10 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F7 — indicadores, notificações e automações**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações) |
-| Épico seguinte                   | EPIC-020 — Portal do cliente (exige `apps/portal`)                                     |
-| Testes                           | **1174**, todos verdes                                                           |
+| Fase                             | **F7 — plataforma transversal**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações), EPIC-023 (busca global) |
+| Épico seguinte                   | EPIC-020 — Portal, EPIC-014 — PWA de campo (exigem novas aplicações)                   |
+| Testes                           | **1216**, todos verdes                                                           |
 | Migrations                       | 38 (`0000` a `0037`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
@@ -538,6 +538,32 @@ Os "Robôs" da referência têm 2 modelos, 2 gatilhos e **1 ação real**. O pro
 
 ---
 
+## EPIC-023 — Busca global · **concluído**
+
+A ausência de busca global é uma das lacunas mais custosas da referência: para achar "patrimônio 7737" é preciso saber em qual lista procurar. O técnico com o equipamento na frente sabe o número que está na etiqueta e **não sabe se aquilo é TAG, patrimônio ou série** — e não deveria precisar saber.
+
+**Identificador exato vem sempre primeiro.** Quem digita "7737" está com a etiqueta na mão. Devolver primeiro a OS cujo texto menciona 7737 e só depois o ativo de patrimônio 7737 é tecnicamente defensável e praticamente inútil. A recência entra como fração de um ponto: desempata dentro da mesma classe e **nunca atravessa** — um ativo tocado hoje não passa na frente do patrimônio que a pessoa acabou de digitar.
+
+**Permissão e escopo cortam na consulta, não na exibição.** Um resultado fora do escopo não existe para quem procura: o escopo sem permissão de leitura **não é consultado**. Filtrar depois de buscar vazaria a existência do registro — o contador diria "12" e a tela mostraria 3, e a diferença é informação sobre dados que a pessoa não deveria saber que existem.
+
+**Não há índice próprio, e isso é decisão.** A busca consulta as tabelas de origem, uma por escopo, com os índices que cada uma já tem. Uma tabela de índice mantida por gatilho — como o fato do EPIC-021 — seria mais rápida, e não foi escolhida porque o risco é diferente: o fato de OS erra e o painel fica velho; o índice de busca erra e **o registro desaparece para quem procura**, que é exatamente o problema da referência de volta por outro caminho. O §27 já diz "motor dedicado apenas quando o volume ou a latência exigirem", e é a mesma disciplina.
+
+**Outras decisões**
+
+- **Os prefixos são convenção de teclado, não sintaxe.** `#` restringe a OS, `@` a pessoas, `>` vira paleta de comandos — e quem não os conhece nunca os digita, com a busca funcionando igual.
+- **A paleta filtra por existência, não por aparência.** O comando que a pessoa não pode executar não aparece desabilitado: não aparece. Mostrar cinzento ensina o que existe do outro lado da parede sem oferecer nada em troca.
+- **A busca comum também sugere comandos.** Quem digita "agenda" quase sempre quer ir para a agenda, não achar um registro chamado agenda.
+- **Empate técnico resolve pelo título**, para a lista não dançar entre consultas iguais: resultado que muda de ordem sozinho parece defeito.
+- **Uma rota, sem permissão no decorador.** Um decorador exigiria uma permissão única para buscar, e quem não a tivesse perderia a busca inteira — inclusive nos escopos que pode ler.
+
+### Adiado deliberadamente
+
+- **Busca por similaridade** (erro de digitação em série e patrimônio): o §27 previa `pg_trgm`, que o ADR-027 já removeu por não existir no ambiente. A degradação é de qualidade de resultado, não de funcionalidade — "7737" continua achando "7737".
+- **Recência por interação do usuário**: o desempate usa `updated_at` do registro, e não o histórico de quem abriu o quê. A tabela de interações entra quando houver superfície que a alimente.
+- **Busca no cache local do PWA** (§27, offline): é do EPIC-014, junto com o aplicativo de campo.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -579,6 +605,9 @@ Os "Robôs" da referência têm 2 modelos, 2 gatilhos e **1 ação real**. O pro
 | 35  | **Endereço de e-mail no texto virava menção**                              | Teste de `extractMentions` com "avise ana@hospital.test"                                                       | A expressão casava o arroba em qualquer posição, então o domínio virava nome de usuário. O resultado seria uma busca que não acha ninguém no melhor caso e que acha a pessoa errada no pior. Passou a exigir que o arroba não venha colado em outra palavra |
 | 36  | **O roteador aceitava "agora" e carimbava outro instante**                 | Teste "passada a janela, o aviso volta a sair" falhou: a de-duplicação nunca abria                             | A notificação era gravada com `now()` do banco enquanto a janela era medida contra o instante recebido por parâmetro. Um roteador que se contradiz assim tem de-duplicação que nunca fecha — e nenhum teste de tempo consegue ser determinístico. Passou a gravar o instante que recebeu |
 | 37  | **Ação apontava para uma permissão que não existe**                        | Teste de fim a fim: a regra casava, a ação falhava, e o motor dizia faltar `work_order.comment`                 | Não existe permissão de comentário no RBAC — comentar é editar a OS. A ação `add_comment` estava permanentemente morta: recusada por falta de uma chave que ninguém podia conceder, porque não estava no catálogo para ser concedida. Passou a exigir `work_order.update`, e há agora um teste que percorre TODAS as ações conferindo que a permissão declarada existe no registro |
+| 38  | **A busca por patrimônio dependia da configuração de unicidade**           | Teste da TAG e da série não achou o ativo                                                                      | A consulta lia `asset_identifiers`, que é a projeção de UNICIDADE do EPIC-005 e só contém os campos que a organização declarou como únicos. Numa organização que não exige patrimônio único, o patrimônio não estaria lá e "7737" não acharia nada — a lacuna da referência de volta, por um caminho mais sofisticado: fazer a busca depender de uma configuração que não tem nada a ver com busca. Passou a ler as colunas do próprio ativo |
+| 39  | **O escopo de LOCAL não era aplicado à busca**                             | Autoauditoria do teste de escopo restrito                                                                     | Ativo, OS e solicitação eram filtrados só por cliente. O escopo de um vínculo tem duas dimensões independentes (§05), e um vínculo que enxerga o hospital inteiro mas só a UTI dele receberia o equipamento de qualquer setor. "O resultado fora do escopo não existe" deixaria de valer justamente para quem tem escopo restrito |
+| 40  | **Parâmetro declarado e não usado derrubava a consulta**                   | `could not determine data type of parameter $1` na busca de orçamentos                                        | A consulta recebia dois parâmetros e usava um. O PostgreSQL não infere o tipo do que não aparece, e recusa a consulta inteira — com um erro que não diz qual das nove consultas é. Corrigido, e todos os parâmetros de texto passaram a ter `::text` explícito, porque dentro de `LIKE $1 \|\| '%'` os dois lados são desconhecidos |
 
 ---
 
