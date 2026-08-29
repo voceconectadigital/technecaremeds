@@ -19,6 +19,11 @@ import {
   loadTransitionGraph,
   workOrderHistory,
   waitTimeByReason,
+  listComments,
+  addComment,
+  listTimeEntries,
+  listAttachments,
+  listParts,
   slaStatus,
   type Database,
 } from '@aurora/db';
@@ -33,7 +38,7 @@ import {
   type RequestPriority,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
-import { optionalUuid, text, uuidParam } from '../common/params';
+import { oneOf, optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -210,16 +215,66 @@ export class WorkOrdersController {
     const woId = uuidParam(id, 'id');
     return withTenant(this.db, ctx, async (s) => {
       const [row] = await s.query<Record<string, unknown>>(
-        `SELECT w.*, st.key AS status_key, st.label AS status_label,
+        // As colunas são NOMEADAS, e não `w.*`.
+        //
+        // Com `w.*` a resposta carregava `organization_id`, `created_by`,
+        // `updated_by` e `custom` — campos que a tela não usa e que o
+        // contrato não declara. Uma resposta maior que o contrato é uma
+        // resposta que ninguém revisou: o dia em que uma coluna sensível for
+        // acrescentada à tabela, ela viaja para o navegador sem que nenhuma
+        // linha de código tenha mudado.
+        //
+        // Os nomes vêm juntos por junção, e não por consulta extra: a ficha
+        // mostra "Ana Paula", não o uuid do vínculo, e buscar cada nome
+        // depois seria uma ida ao banco por rótulo.
+        `SELECT w.id, w.number, w.source::text AS source, w.title, w.description,
+                w.resolution, w.priority::text AS priority, w.version,
+                w.status_category::text AS status_category,
+                w.customer_id, w.location_id, w.asset_id,
+                -- Os identificadores dos campos que a tela ESCREVE de volta
+                -- vêm junto com os rótulos. A transição manda
+                -- wait_reason_id e cause_failure_code_id; sem eles aqui, o
+                -- diálogo não consegue pré-selecionar o que já está gravado, e
+                -- quem só queria mudar a resolução reescolheria a causa.
+                w.wait_reason_id, w.reported_failure_code_id,
+                w.cause_failure_code_id, w.action_code_id,
+                w.criticality_id, w.work_order_type_id, w.status_id,
+                w.service_request_id, w.parent_work_order_id, w.contract_id,
+                w.asset_name_snapshot, w.asset_serial_snapshot,
+                w.location_name_snapshot, w.location_path_snapshot,
+                w.assignee_membership_id, w.team_id,
+                w.scheduled_start, w.scheduled_end, w.reschedule_count,
+                w.window_invalidated_at, w.window_invalidated_reason,
+                w.started_at, w.completed_at, w.validated_at, w.closed_at,
+                w.cancellation_reason, w.rework_reason, w.reopen_reason,
+                w.wait_note, w.created_at, w.updated_at,
+                st.key AS status_key, st.label AS status_label,
                 st.requires_wait_reason,
                 wr.key AS wait_reason_key, wr.label AS wait_reason_label, wr.pauses_sla,
                 nat.label AS work_order_type_label,
-                c.name AS customer_name
+                c.name AS customer_name,
+                resp.name AS assignee_name,
+                eq.name AS team_name,
+                sintoma.label AS reported_failure_label,
+                causa.label AS cause_failure_label,
+                acao.label AS action_label,
+                crit.name AS criticality_label,
+                sol.number AS service_request_number,
+                autor.name AS created_by_name
            FROM aurora.work_orders w
            JOIN aurora.work_order_statuses st ON st.id = w.status_id
            JOIN aurora.catalog_items nat      ON nat.id = w.work_order_type_id
            JOIN aurora.customers c            ON c.id = w.customer_id
            LEFT JOIN aurora.wait_reasons wr   ON wr.id = w.wait_reason_id
+           LEFT JOIN aurora.memberships rm    ON rm.id = w.assignee_membership_id
+           LEFT JOIN aurora.users resp        ON resp.id = rm.user_id
+           LEFT JOIN aurora.teams eq          ON eq.id = w.team_id
+           LEFT JOIN aurora.catalog_items sintoma ON sintoma.id = w.reported_failure_code_id
+           LEFT JOIN aurora.catalog_items causa   ON causa.id = w.cause_failure_code_id
+           LEFT JOIN aurora.catalog_items acao    ON acao.id = w.action_code_id
+           LEFT JOIN aurora.criticality_levels crit ON crit.id = w.criticality_id
+           LEFT JOIN aurora.service_requests sol  ON sol.id = w.service_request_id
+           LEFT JOIN aurora.users autor           ON autor.id = w.created_by
           WHERE w.id = $1`,
         [woId]
       );
@@ -404,6 +459,123 @@ export class WorkOrdersController {
       throw new ValidationError('from e to devem ser datas válidas', { field: 'from' });
     }
     const items = await withTenant(this.db, ctx, (s) => waitTimeByReason(s, inicio, fim));
+    return { items };
+  }
+
+  /* ------------------------------------------------------------------------
+   * A FICHA: o que a tela de detalhe precisa ler.
+   *
+   * São rotas separadas, e não campos dentro de `GET /work-orders/:id`, por
+   * uma razão medível: a ficha abre numa aba só. Carregar horas, peças, anexos
+   * e comentários de toda OS que alguém abre para ver a situação paga o custo
+   * de cinco consultas para mostrar uma. Cada aba busca o seu quando é aberta.
+   *
+   * Todas ficam ANTES de `@Get(':id')` neste arquivo? Não — vêm depois, e
+   * podem: o Express 5 casa `/:id/comments` só contra caminhos de dois
+   * segmentos, e `/:id` só contra os de um. A ambiguidade que a checagem de
+   * sombreamento persegue é entre rotas do MESMO número de segmentos.
+   * ---------------------------------------------------------------------- */
+
+  /**
+   * Comentários e notas internas.
+   *
+   * A permissão da rota é `work_order.read`, e não `read_internal_notes`:
+   * quem só pode ver o que o cliente vê CONTINUA podendo abrir a aba. O que
+   * muda é o conteúdo, filtrado na consulta — negar a rota inteira ensinaria a
+   * pessoa que "a aba está quebrada", quando na verdade ela está vazia.
+   */
+  @Get(':id/comments')
+  @RequirePermissions('work_order.read')
+  async comments(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string
+  ): Promise<{ items: unknown[]; can_write_internal: boolean }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, (s) => listComments(s, woId));
+    return {
+      // A tela precisa saber ANTES de desenhar: oferecer o seletor
+      // "interna/cliente" a quem não pode escrever nota interna é oferecer um
+      // botão que só falha depois de a pessoa ter digitado o texto.
+      can_write_internal: ctx.permissions.has('work_order.read_internal_notes'),
+      items,
+    };
+  }
+
+  @Post(':id/comments')
+  @RequirePermissions('work_order.comment')
+  async comment(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>
+  ): Promise<{ id: string }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const corpo = text(body.body);
+    if (corpo === null) {
+      throw new ValidationError('o comentário não pode ser vazio', { field: 'body' });
+    }
+    if (corpo.length > 20_000) {
+      throw new ValidationError('o comentário passa de 20 mil caracteres', { field: 'body' });
+    }
+    const visibilidade = oneOf(body.visibility, ['internal', 'customer'] as const, 'visibility');
+
+    if (visibilidade === 'internal' && !ctx.permissions.has('work_order.read_internal_notes')) {
+      // Escrever no canal interno exige poder LÊ-LO: quem não lê não tem como
+      // conferir o que escreveu, nem responder ao que vier depois.
+      throw new ForbiddenError('work_order.read_internal_notes');
+    }
+
+    const novo = await withTenant(this.db, ctx, (s) =>
+      addComment(s, { workOrderId: woId, body: corpo, visibility: visibilidade })
+    );
+    return { id: novo };
+  }
+
+  /** As horas apontadas, com o custo omitido para quem não pode vê-lo. */
+  @Get(':id/time-entries')
+  @RequirePermissions('work_order.read')
+  async timeEntries(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string
+  ): Promise<{ items: unknown[]; total_minutes: number; open_entries: number }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, (s) => listTimeEntries(s, woId));
+
+    // O total é somado aqui e não na tela: somar no cliente significa que a
+    // resposta paginada de amanhã passa a mostrar um total menor sem avisar.
+    const total = items.reduce((acc, e) => acc + (e.minutes ?? 0), 0);
+    return {
+      total_minutes: total,
+      // Entrada aberta é o defeito operacional mais comum do apontamento: o
+      // técnico inicia o cronômetro e esquece. A ficha diz quantas há em vez
+      // de fingir que o total está completo.
+      open_entries: items.filter((e) => e.ended_at === null).length,
+      items,
+    };
+  }
+
+  /** Anexos e fotos. Nunca a chave de armazenamento. */
+  @Get(':id/attachments')
+  @RequirePermissions('work_order.read')
+  async attachments(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string
+  ): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, (s) => listAttachments(s, woId));
+    return { items };
+  }
+
+  /** Peças movimentadas: consumo e devolução, cada uma na sua linha. */
+  @Get(':id/parts')
+  @RequirePermissions('work_order.read')
+  async parts(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, (s) => listParts(s, woId));
     return { items };
   }
 }

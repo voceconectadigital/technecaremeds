@@ -12,10 +12,49 @@
 import { defineOperation } from '../registry';
 import { z, Uuid, NonEmpty, Timestamp } from '../primitives';
 
-export const STATUS_CATEGORIES = ['open', 'in_progress', 'waiting', 'done', 'cancelled'] as const;
+/**
+ * As categorias de situação, como o domínio as define.
+ *
+ * ESTAS DUAS LISTAS ESTAVAM ERRADAS, e erradas de um jeito que não doía.
+ *
+ * A daqui tinha cinco valores — `open`, `in_progress`, `waiting`, `done`,
+ * `cancelled` — e o domínio tem nove: faltavam `draft`, `scheduled`, `review`
+ * e `closed`. Como o cliente CONFERE a resposta contra o contrato em
+ * desenvolvimento, uma OS agendada ou em revisão fazia a tela inteira falhar
+ * — e não falhava só porque nenhuma massa de teste tinha chegado nesses
+ * estados. Era uma bomba com pino, esperando a primeira OS agendada.
+ *
+ * A de prioridade era pior: `normal`, `high` e `critical` não existem em lugar
+ * nenhum do sistema. O tipo do PostgreSQL é `request_priority`, com `urgent`,
+ * `very_urgent` e `emergency`. O contrato descrevia um vocabulário que o banco
+ * não sabe produzir — três dos cinco valores eram ficção.
+ *
+ * A duplicação em relação a `@aurora/domain` é deliberada (este pacote não
+ * depende de nenhum outro, porque é ele que o navegador carrega), e o preço
+ * dela é cobrado por um teste que falha se as listas divergirem.
+ */
+export const STATUS_CATEGORIES = [
+  'draft',
+  'open',
+  'scheduled',
+  'in_progress',
+  'waiting',
+  'review',
+  'done',
+  'closed',
+  'cancelled',
+] as const;
 export type StatusCategory = (typeof STATUS_CATEGORIES)[number];
 
-export const WORK_ORDER_PRIORITIES = ['none', 'low', 'normal', 'high', 'critical'] as const;
+/**
+ * A urgência, no vocabulário que o banco realmente grava.
+ *
+ * É a mesma escala da solicitação, e de propósito: a OS nasce do que o cliente
+ * pediu, e traduzir "muito urgente" para "alta" na fronteira faria a triagem
+ * discutir com o solicitante sobre uma palavra que o sistema trocou sozinho.
+ */
+export const WORK_ORDER_PRIORITIES = ['none', 'low', 'urgent', 'very_urgent', 'emergency'] as const;
+export type WorkOrderPriority = (typeof WORK_ORDER_PRIORITIES)[number];
 
 export const WorkOrderRow = z.object({
   id: Uuid,
@@ -90,37 +129,155 @@ export const WorkOrderTransition = z.object({
 });
 export type WorkOrderTransition = z.infer<typeof WorkOrderTransition>;
 
-export const WorkOrderDetail = z
-  .object({
-    id: Uuid,
-    number: z.string().nullable(),
-    title: z.string(),
-    description: z.string().nullable(),
-    status_category: z.enum(STATUS_CATEGORIES),
-    status_key: z.string(),
-    status_label: z.string(),
-    requires_wait_reason: z.boolean().nullable().optional(),
-    wait_reason_key: z.string().nullable(),
-    wait_reason_label: z.string().nullable(),
-    pauses_sla: z.boolean().nullable(),
-    priority: z.enum(WORK_ORDER_PRIORITIES),
-    customer_id: Uuid,
-    customer_name: z.string(),
-    work_order_type_label: z.string(),
-    asset_id: Uuid.nullable(),
-    asset_name_snapshot: z.string().nullable(),
-    location_name_snapshot: z.string().nullable(),
-    assignee_membership_id: Uuid.nullable(),
-    scheduled_start: Timestamp.nullable(),
-    scheduled_end: Timestamp.nullable(),
-    created_at: Timestamp,
-    version: z.number().int(),
-    history: z.array(z.record(z.string(), z.unknown())),
-    /** O SLA vem na ficha porque é o que decide a ordem do dia de quem atende. */
-    sla: z.array(z.record(z.string(), z.unknown())).nullable(),
-    available_transitions: z.array(WorkOrderTransition),
-  })
-  .loose();
+/**
+ * Uma mudança de estado no histórico.
+ *
+ * `seconds_in_from` é quanto tempo a OS passou no estado ANTERIOR, e é a
+ * informação que transforma um histórico em diagnóstico: "parada 6 dias
+ * aguardando peça" responde a pergunta que "mudou para Aguardando" não
+ * responde.
+ */
+export const WorkOrderHistoryEntry = z.object({
+  changed_at: Timestamp,
+  seconds_in_from: z.number().int().nullable(),
+  from_category: z.string().nullable(),
+  to_category: z.string(),
+  from_label: z.string().nullable(),
+  to_label: z.string(),
+  wait_reason_label: z.string().nullable(),
+});
+export type WorkOrderHistoryEntry = z.infer<typeof WorkOrderHistoryEntry>;
+
+/** Um relógio de SLA, com o percentual já consumido em tempo ÚTIL. */
+export const SlaClock = z.object({
+  id: Uuid,
+  kind: z.string(),
+  state: z.string(),
+  due_at: Timestamp,
+  target_minutes: z.number().int(),
+  paused_minutes: z.number().int(),
+  /**
+   * Minutos ÚTEIS decorridos — não relógio de parede.
+   *
+   * A diferença é o produto inteiro: um chamado aberto sexta às 17h com prazo
+   * de 4 horas vence terça de manhã, e não sábado de madrugada.
+   */
+  elapsed_business_minutes: z.number().int().nullable(),
+  breached_at: Timestamp.nullable(),
+  consumed_pct: z.number(),
+});
+export type SlaClock = z.infer<typeof SlaClock>;
+
+/**
+ * A ficha completa da ordem de serviço.
+ *
+ * ERA `.loose()`, e a rota devolvia `w.*`. As duas coisas juntas significavam
+ * que a resposta real tinha 20 campos a mais do que o contrato descrevia — e a
+ * tela não podia usar nenhum deles sem adivinhar o nome. A resolução, a causa,
+ * o responsável e o solicitante estavam TODOS ali, trafegando, invisíveis para
+ * o compilador e por isso ausentes da interface.
+ *
+ * O objeto agora é estrito. Campo novo na tabela não chega mais ao navegador
+ * por acidente: alguém precisa escrevê-lo aqui, e ao escrever decide se ele
+ * deve mesmo sair do servidor.
+ */
+export const WorkOrderDetail = z.object({
+  /* --- identificação ---------------------------------------------------- */
+  id: Uuid,
+  number: z.string().nullable(),
+  title: z.string(),
+  description: z.string().nullable(),
+  source: z.string().nullable(),
+  version: z.number().int(),
+
+  /* --- situação --------------------------------------------------------- */
+  status_id: Uuid,
+  status_key: z.string(),
+  status_label: z.string(),
+  status_category: z.enum(STATUS_CATEGORIES),
+  requires_wait_reason: z.boolean().nullable().optional(),
+  wait_reason_id: Uuid.nullable(),
+  wait_reason_key: z.string().nullable(),
+  wait_reason_label: z.string().nullable(),
+  /** Se este motivo de parada pausa o relógio do prazo. */
+  pauses_sla: z.boolean().nullable(),
+  /** O detalhe da parada: "aguardando cliente" sem o quê? */
+  wait_note: z.string().nullable(),
+  priority: z.enum(WORK_ORDER_PRIORITIES),
+  criticality_id: Uuid.nullable(),
+  criticality_label: z.string().nullable(),
+
+  /* --- a quem e onde ---------------------------------------------------- */
+  customer_id: Uuid,
+  customer_name: z.string(),
+  location_id: Uuid.nullable(),
+  location_name_snapshot: z.string().nullable(),
+  /**
+   * O caminho completo do local, como era na abertura.
+   *
+   * É instantâneo, e não junção: o setor pode ser renomeado ou movido depois,
+   * e a ficha de um atendimento de março não deve mudar porque a árvore de
+   * locais foi reorganizada em agosto.
+   */
+  location_path_snapshot: z.string().nullable(),
+  asset_id: Uuid.nullable(),
+  asset_name_snapshot: z.string().nullable(),
+  asset_serial_snapshot: z.string().nullable(),
+
+  /* --- quem faz --------------------------------------------------------- */
+  assignee_membership_id: Uuid.nullable(),
+  assignee_name: z.string().nullable(),
+  team_id: Uuid.nullable(),
+  team_name: z.string().nullable(),
+  created_by_name: z.string().nullable(),
+
+  /* --- de onde veio ----------------------------------------------------- */
+  service_request_id: Uuid.nullable(),
+  service_request_number: z.string().nullable(),
+  parent_work_order_id: Uuid.nullable(),
+  contract_id: Uuid.nullable(),
+  work_order_type_id: Uuid,
+  work_order_type_label: z.string(),
+
+  /* --- diagnóstico e solução -------------------------------------------- */
+  reported_failure_code_id: Uuid.nullable(),
+  reported_failure_label: z.string().nullable(),
+  cause_failure_code_id: Uuid.nullable(),
+  cause_failure_label: z.string().nullable(),
+  action_code_id: Uuid.nullable(),
+  action_label: z.string().nullable(),
+  resolution: z.string().nullable(),
+
+  /* --- agenda e marcos -------------------------------------------------- */
+  scheduled_start: Timestamp.nullable(),
+  scheduled_end: Timestamp.nullable(),
+  /**
+   * Quantas vezes a janela foi remarcada.
+   *
+   * Aparece na ficha porque remarcar quatro vezes não é detalhe de agenda: é o
+   * sintoma de um atendimento que ninguém está conseguindo fazer.
+   */
+  reschedule_count: z.number().int(),
+  window_invalidated_at: Timestamp.nullable(),
+  window_invalidated_reason: z.string().nullable(),
+  started_at: Timestamp.nullable(),
+  completed_at: Timestamp.nullable(),
+  validated_at: Timestamp.nullable(),
+  closed_at: Timestamp.nullable(),
+  created_at: Timestamp,
+  updated_at: Timestamp,
+
+  /* --- desfechos que precisam de explicação ------------------------------ */
+  cancellation_reason: z.string().nullable(),
+  rework_reason: z.string().nullable(),
+  reopen_reason: z.string().nullable(),
+
+  /* --- agregados -------------------------------------------------------- */
+  history: z.array(WorkOrderHistoryEntry),
+  /** O SLA vem na ficha porque é o que decide a ordem do dia de quem atende. */
+  sla: z.array(SlaClock).nullable(),
+  available_transitions: z.array(WorkOrderTransition),
+});
 export type WorkOrderDetail = z.infer<typeof WorkOrderDetail>;
 
 export const workOrdersList = defineOperation({

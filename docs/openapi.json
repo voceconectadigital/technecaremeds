@@ -9974,11 +9974,11 @@
                   "priority": {
                     "type": "string",
                     "enum": [
-                      "none",
+                      "emergency",
+                      "very_urgent",
+                      "urgent",
                       "low",
-                      "normal",
-                      "high",
-                      "critical"
+                      "none"
                     ]
                   },
                   "version": {
@@ -10156,11 +10156,11 @@
                     "priority": {
                       "type": "string",
                       "enum": [
-                        "none",
+                        "emergency",
+                        "very_urgent",
+                        "urgent",
                         "low",
-                        "normal",
-                        "high",
-                        "critical"
+                        "none"
                       ]
                     },
                     "requested_priority": {
@@ -10168,11 +10168,11 @@
                         {
                           "type": "string",
                           "enum": [
-                            "none",
+                            "emergency",
+                            "very_urgent",
+                            "urgent",
                             "low",
-                            "normal",
-                            "high",
-                            "critical"
+                            "none"
                           ]
                         },
                         {
@@ -10521,11 +10521,11 @@
                           "priority": {
                             "type": "string",
                             "enum": [
-                              "none",
+                              "emergency",
+                              "very_urgent",
+                              "urgent",
                               "low",
-                              "normal",
-                              "high",
-                              "critical"
+                              "none"
                             ]
                           },
                           "summary": {
@@ -10730,11 +10730,11 @@
                   "requested_priority": {
                     "type": "string",
                     "enum": [
-                      "none",
+                      "emergency",
+                      "very_urgent",
+                      "urgent",
                       "low",
-                      "normal",
-                      "high",
-                      "critical"
+                      "none"
                     ]
                   },
                   "requester_name": {
@@ -11079,6 +11079,173 @@
       }
     },
     "/v1/work-orders/{id}/attachments": {
+      "get": {
+        "operationId": "workOrders.attachments",
+        "summary": "Anexos e fotos da ordem de serviço",
+        "description": "Não devolve a chave de armazenamento: entregá-la ao navegador transformaria um identificador interno em coisa que alguém tenta adivinhar. A tela pede pelo id do anexo.",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "purpose": {
+                            "type": "string"
+                          },
+                          "file_name": {
+                            "type": "string"
+                          },
+                          "content_type": {
+                            "type": "string"
+                          },
+                          "byte_size": {
+                            "type": "string"
+                          },
+                          "sha256": {
+                            "type": "string"
+                          },
+                          "taken_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "uploaded_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "uploaded_by_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "checklist_answer_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "purpose",
+                          "file_name",
+                          "content_type",
+                          "byte_size",
+                          "sha256",
+                          "taken_at",
+                          "uploaded_at",
+                          "uploaded_by_name",
+                          "checklist_answer_id"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
       "post": {
         "operationId": "ExecutionController.attachment",
         "summary": "(sem contrato) ExecutionController.attachment",
@@ -11313,6 +11480,294 @@
         ]
       }
     },
+    "/v1/work-orders/{id}/comments": {
+      "get": {
+        "operationId": "workOrders.comments",
+        "summary": "Comentários e notas internas de uma ordem de serviço",
+        "description": "A permissão da rota é `work_order.read`: quem só vê o que o cliente vê continua abrindo a aba, com menos conteúdo. Negar a rota inteira ensinaria que \"a aba está quebrada\" quando ela apenas está vazia.",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "can_write_internal": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "visibility": {
+                            "type": "string",
+                            "enum": [
+                              "internal",
+                              "customer"
+                            ]
+                          },
+                          "author_membership_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "author_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "edited_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "body",
+                          "visibility",
+                          "author_membership_id",
+                          "author_name",
+                          "created_at",
+                          "edited_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "can_write_internal",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "workOrders.comment",
+        "summary": "Escreve um comentário ou nota interna",
+        "description": "A visibilidade é obrigatória, sem padrão: quem quisesse falar com o cliente e esquecesse o campo escreveria uma nota que o cliente nunca lê, e esperaria resposta de uma mensagem que não foi entregue.",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.comment"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "internal",
+                      "customer"
+                    ]
+                  }
+                },
+                "required": [
+                  "body",
+                  "visibility"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/work-orders/{id}/completion": {
       "get": {
         "operationId": "ExecutionController.completion",
@@ -11341,6 +11796,192 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/work-orders/{id}/parts": {
+      "get": {
+        "operationId": "workOrders.parts",
+        "summary": "Peças movimentadas na ordem de serviço",
+        "description": "Vêm dos movimentos de estoque, e devolução é linha própria — consolidar em \"líquido zero\" apagaria o fato de a peça ter sido levada, que é o que explica a segunda visita.",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "item_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "item_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "item_sku": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unit": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "consumption",
+                              "return"
+                            ]
+                          },
+                          "qty": {
+                            "type": "string"
+                          },
+                          "warehouse_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "occurred_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "unit_cost": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "item_id",
+                          "item_name",
+                          "item_sku",
+                          "unit",
+                          "kind",
+                          "qty",
+                          "warehouse_name",
+                          "occurred_at",
+                          "unit_cost"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
               }
             }
           },
@@ -11549,6 +12190,227 @@
       }
     },
     "/v1/work-orders/{id}/time-entries": {
+      "get": {
+        "operationId": "workOrders.timeEntries",
+        "summary": "Horas apontadas na ordem de serviço",
+        "description": "O custo sai da consulta para quem não tem `work_order.read_costs` — o técnico aponta a hora e não precisa saber por quanto ela é cobrada.",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "total_minutes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "open_entries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "membership_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "person_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "started_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "ended_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "minutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "note": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "approved_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "cost": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "currency": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "membership_id",
+                          "person_name",
+                          "started_at",
+                          "ended_at",
+                          "minutes",
+                          "source",
+                          "note",
+                          "approved_at",
+                          "cost",
+                          "currency"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "total_minutes",
+                    "open_entries",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
       "post": {
         "operationId": "ExecutionController.log",
         "summary": "(sem contrato) ExecutionController.log",
@@ -11894,10 +12756,14 @@
                     "category": {
                       "type": "string",
                       "enum": [
+                        "draft",
                         "open",
+                        "scheduled",
                         "in_progress",
                         "waiting",
+                        "review",
                         "done",
+                        "closed",
                         "cancelled"
                       ]
                     },
@@ -12046,15 +12912,26 @@
                         }
                       ]
                     },
-                    "status_category": {
-                      "type": "string",
-                      "enum": [
-                        "open",
-                        "in_progress",
-                        "waiting",
-                        "done",
-                        "cancelled"
+                    "source": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "status_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
                     },
                     "status_key": {
                       "type": "string"
@@ -12062,10 +12939,37 @@
                     "status_label": {
                       "type": "string"
                     },
+                    "status_category": {
+                      "type": "string",
+                      "enum": [
+                        "draft",
+                        "open",
+                        "scheduled",
+                        "in_progress",
+                        "waiting",
+                        "review",
+                        "done",
+                        "closed",
+                        "cancelled"
+                      ]
+                    },
                     "requires_wait_reason": {
                       "anyOf": [
                         {
                           "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "wait_reason_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
                         },
                         {
                           "type": "null"
@@ -12102,14 +13006,47 @@
                         }
                       ]
                     },
+                    "wait_note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "priority": {
                       "type": "string",
                       "enum": [
                         "none",
                         "low",
-                        "normal",
-                        "high",
-                        "critical"
+                        "urgent",
+                        "very_urgent",
+                        "emergency"
+                      ]
+                    },
+                    "criticality_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "criticality_label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "customer_id": {
@@ -12121,8 +13058,38 @@
                     "customer_name": {
                       "type": "string"
                     },
-                    "work_order_type_label": {
-                      "type": "string"
+                    "location_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "location_name_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "location_path_snapshot": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "asset_id": {
                       "anyOf": [
@@ -12147,7 +13114,7 @@
                         }
                       ]
                     },
-                    "location_name_snapshot": {
+                    "asset_serial_snapshot": {
                       "anyOf": [
                         {
                           "type": "string"
@@ -12164,6 +13131,186 @@
                           "type": "string",
                           "format": "uuid",
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "assignee_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "team_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "team_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_by_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "service_request_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "service_request_number": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "parent_work_order_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "work_order_type_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "work_order_type_label": {
+                      "type": "string"
+                    },
+                    "reported_failure_code_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reported_failure_label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cause_failure_code_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cause_failure_label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "action_code_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "action_label": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "resolution": {
+                      "anyOf": [
+                        {
+                          "type": "string"
                         },
                         {
                           "type": "null"
@@ -12192,23 +13339,181 @@
                         }
                       ]
                     },
+                    "reschedule_count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "window_invalidated_at": {
+                      "anyOf": [
+                        {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "window_invalidated_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "started_at": {
+                      "anyOf": [
+                        {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "completed_at": {
+                      "anyOf": [
+                        {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "validated_at": {
+                      "anyOf": [
+                        {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "closed_at": {
+                      "anyOf": [
+                        {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "created_at": {
                       "description": "Instante em ISO 8601 com fuso horário",
                       "type": "string"
                     },
-                    "version": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
+                    "updated_at": {
+                      "description": "Instante em ISO 8601 com fuso horário",
+                      "type": "string"
+                    },
+                    "cancellation_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "rework_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "reopen_reason": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "history": {
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "propertyNames": {
-                          "type": "string"
+                        "properties": {
+                          "changed_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "seconds_in_from": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "from_category": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "to_category": {
+                            "type": "string"
+                          },
+                          "from_label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "to_label": {
+                            "type": "string"
+                          },
+                          "wait_reason_label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
                         },
-                        "additionalProperties": {}
+                        "required": [
+                          "changed_at",
+                          "seconds_in_from",
+                          "from_category",
+                          "to_category",
+                          "from_label",
+                          "to_label",
+                          "wait_reason_label"
+                        ]
                       }
                     },
                     "sla": {
@@ -12217,10 +13522,71 @@
                           "type": "array",
                           "items": {
                             "type": "object",
-                            "propertyNames": {
-                              "type": "string"
+                            "properties": {
+                              "id": {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "state": {
+                                "type": "string"
+                              },
+                              "due_at": {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              "target_minutes": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "paused_minutes": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "elapsed_business_minutes": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "breached_at": {
+                                "anyOf": [
+                                  {
+                                    "description": "Instante em ISO 8601 com fuso horário",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "consumed_pct": {
+                                "type": "number"
+                              }
                             },
-                            "additionalProperties": {}
+                            "required": [
+                              "id",
+                              "kind",
+                              "state",
+                              "due_at",
+                              "target_minutes",
+                              "paused_minutes",
+                              "elapsed_business_minutes",
+                              "breached_at",
+                              "consumed_pct"
+                            ]
                           }
                         },
                         {
@@ -12242,10 +13608,14 @@
                           "category": {
                             "type": "string",
                             "enum": [
+                              "draft",
                               "open",
+                              "scheduled",
                               "in_progress",
                               "waiting",
+                              "review",
                               "done",
+                              "closed",
                               "cancelled"
                             ]
                           },
@@ -12288,29 +13658,64 @@
                     "number",
                     "title",
                     "description",
-                    "status_category",
+                    "source",
+                    "version",
+                    "status_id",
                     "status_key",
                     "status_label",
+                    "status_category",
+                    "wait_reason_id",
                     "wait_reason_key",
                     "wait_reason_label",
                     "pauses_sla",
+                    "wait_note",
                     "priority",
+                    "criticality_id",
+                    "criticality_label",
                     "customer_id",
                     "customer_name",
-                    "work_order_type_label",
+                    "location_id",
+                    "location_name_snapshot",
+                    "location_path_snapshot",
                     "asset_id",
                     "asset_name_snapshot",
-                    "location_name_snapshot",
+                    "asset_serial_snapshot",
                     "assignee_membership_id",
+                    "assignee_name",
+                    "team_id",
+                    "team_name",
+                    "created_by_name",
+                    "service_request_id",
+                    "service_request_number",
+                    "parent_work_order_id",
+                    "contract_id",
+                    "work_order_type_id",
+                    "work_order_type_label",
+                    "reported_failure_code_id",
+                    "reported_failure_label",
+                    "cause_failure_code_id",
+                    "cause_failure_label",
+                    "action_code_id",
+                    "action_label",
+                    "resolution",
                     "scheduled_start",
                     "scheduled_end",
+                    "reschedule_count",
+                    "window_invalidated_at",
+                    "window_invalidated_reason",
+                    "started_at",
+                    "completed_at",
+                    "validated_at",
+                    "closed_at",
                     "created_at",
-                    "version",
+                    "updated_at",
+                    "cancellation_reason",
+                    "rework_reason",
+                    "reopen_reason",
                     "history",
                     "sla",
                     "available_transitions"
-                  ],
-                  "additionalProperties": {}
+                  ]
                 }
               }
             }
@@ -12426,10 +13831,14 @@
                           "category": {
                             "type": "string",
                             "enum": [
+                              "draft",
                               "open",
+                              "scheduled",
                               "in_progress",
                               "waiting",
+                              "review",
                               "done",
+                              "closed",
                               "cancelled"
                             ]
                           },
@@ -13062,10 +14471,14 @@
             "schema": {
               "type": "string",
               "enum": [
+                "draft",
                 "open",
+                "scheduled",
                 "in_progress",
                 "waiting",
+                "review",
                 "done",
+                "closed",
                 "cancelled"
               ]
             }
@@ -13128,10 +14541,14 @@
                           "category": {
                             "type": "string",
                             "enum": [
+                              "draft",
                               "open",
+                              "scheduled",
                               "in_progress",
                               "waiting",
+                              "review",
                               "done",
+                              "closed",
                               "cancelled"
                             ]
                           },
@@ -13140,9 +14557,9 @@
                             "enum": [
                               "none",
                               "low",
-                              "normal",
-                              "high",
-                              "critical"
+                              "urgent",
+                              "very_urgent",
+                              "emergency"
                             ]
                           },
                           "customer_id": {

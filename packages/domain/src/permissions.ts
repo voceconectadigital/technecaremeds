@@ -102,6 +102,15 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('work_order', 'cancel', 'Cancelar ordens de serviço'),
   p('work_order', 'edit_closed', 'Editar ordem fechada ou cancelada'),
   p('work_order', 'edit_dates', 'Editar datas de criação e conclusão'),
+  // Comentar é ESCRITA, e por isso tem chave própria.
+  //
+  // A tentação era guardar a rota com `work_order.read`, já que qualquer um
+  // que enxerga a OS deveria poder falar sobre ela. Mas aí um perfil de
+  // consulta — auditoria, cliente interno, integração de leitura — passaria a
+  // poder escrever no histórico do atendimento, e a checagem do gerador de
+  // OpenAPI acusou exatamente isso: "escrita guardada por permissão de
+  // leitura". A checagem estava certa.
+  p('work_order', 'comment', 'Comentar em ordens de serviço'),
   p('work_order', 'read_costs', 'Ver custos da ordem de serviço', true),
   p('work_order', 'read_internal_notes', 'Ver observações internas', true),
 
@@ -262,6 +271,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'service_request.merge',
       'work_order.create',
       'work_order.update',
+      'work_order.comment',
       'work_order.assign',
       'work_order.schedule',
       'work_order.execute_any',
@@ -311,6 +321,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'service_request.merge',
       'work_order.create',
       'work_order.update',
+      'work_order.comment',
       'work_order.assign',
       'work_order.schedule',
       'work_order.execute_any',
@@ -346,6 +357,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'work_order.read',
       'work_order.execute',
       'work_order.complete',
+      'work_order.comment',
       'work_order.read_internal_notes',
       'time_entry.read',
       'time_entry.create',

@@ -167,26 +167,38 @@ function BlocoParadas() {
 
 /* -------------------------------------------------------------------------- */
 
+/*
+ * A ESCALA É A DA SOLICITAÇÃO, e não uma tradução.
+ *
+ * Este mapa dizia `critical`, `high` e `normal` — três valores que o banco não
+ * grava. O tipo do PostgreSQL é `request_priority`: none, low, urgent,
+ * very_urgent, emergency. O efeito na tela era mudo e feio: toda OS urgente
+ * procurava `TOM_PRIORIDADE['urgent']`, não achava, e renderizava um chip sem
+ * tom e sem rótulo — um retângulo vazio ao lado do título.
+ *
+ * Ninguém viu porque a massa de teste nunca passou de `none`.
+ */
 const TOM_PRIORIDADE = {
-  critical: 'bad',
-  high: 'warn',
-  normal: 'neutral',
+  emergency: 'bad',
+  very_urgent: 'bad',
+  urgent: 'warn',
   low: 'neutral',
   none: 'neutral',
 } as const;
 
 const ROTULO_PRIORIDADE = {
-  critical: 'Crítica',
-  high: 'Alta',
-  normal: 'Normal',
+  emergency: 'Emergência',
+  very_urgent: 'Muito urgente',
+  urgent: 'Urgente',
   low: 'Baixa',
   none: 'Sem prioridade',
 } as const;
 
 export function PrioridadeChip({ prioridade }: { prioridade: keyof typeof TOM_PRIORIDADE }) {
-  // Prioridade normal não vira chip: um chip cinza em toda linha é ruído que
-  // esconde os dois que importam.
-  if (prioridade === 'normal' || prioridade === 'none') return null;
+  // Sem urgência declarada não vira chip: um chip cinza em toda linha é ruído
+  // que esconde os que importam. "Baixa" também não — dizer "esta é menos
+  // importante" em cada linha não muda a decisão de ninguém.
+  if (prioridade === 'none' || prioridade === 'low') return null;
   return (
     <StatusChip tone={TOM_PRIORIDADE[prioridade]} size="sm">
       {ROTULO_PRIORIDADE[prioridade]}

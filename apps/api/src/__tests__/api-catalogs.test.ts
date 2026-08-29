@@ -229,9 +229,31 @@ describe('campos personalizados pela HTTP', () => {
  * do que a união foi criada para impedir.
  */
 describe('catálogos: contrato e domínio dizem a mesma coisa', () => {
-  it('as chaves do contrato são exatamente as do domínio', async () => {
+  it('as chaves de catálogo do contrato são exatamente as do domínio', async () => {
     const contratos = await import('@aurora/contracts');
     const dominio = await import('@aurora/domain');
     expect([...contratos.CATALOG_KEYS].sort()).toEqual([...dominio.CATALOG_KEYS].sort());
+  });
+
+  it('as categorias de situação do contrato são exatamente as do domínio', async () => {
+    // A do contrato tinha CINCO das nove: faltavam draft, scheduled, review e
+    // closed. Como o cliente confere a resposta contra o contrato em
+    // desenvolvimento, a primeira OS agendada faria a tela inteira falhar.
+    const contratos = await import('@aurora/contracts');
+    const dominio = await import('@aurora/domain');
+    expect([...contratos.STATUS_CATEGORIES].sort()).toEqual([...dominio.STATUS_CATEGORIES].sort());
+  });
+
+  it('a escala de urgência do contrato é exatamente a do domínio, na mesma ordem', async () => {
+    // Aqui a ORDEM também é conteúdo: a lista é decrescente de gravidade e a
+    // fila de triagem ordena por ela. Comparar só os conjuntos deixaria passar
+    // uma reordenação que muda a ordem de atendimento sem mudar lógica
+    // nenhuma.
+    const contratos = await import('@aurora/contracts');
+    const dominio = await import('@aurora/domain');
+    expect([...contratos.REQUEST_PRIORITIES]).toEqual([...dominio.REQUEST_PRIORITIES]);
+    expect([...contratos.WORK_ORDER_PRIORITIES].sort()).toEqual(
+      [...dominio.REQUEST_PRIORITIES].sort()
+    );
   });
 });

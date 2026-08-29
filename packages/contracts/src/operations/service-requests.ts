@@ -21,7 +21,20 @@ export const REQUEST_STATUSES = [
 ] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
-export const REQUEST_PRIORITIES = ['none', 'low', 'normal', 'high', 'critical'] as const;
+/**
+ * A urgência, na ordem em que o domínio a declara: da maior para a menor.
+ *
+ * Estava `['none', 'low', 'normal', 'high', 'critical']` — e `normal`, `high` e
+ * `critical` não existem. O tipo do PostgreSQL é `request_priority`, e o
+ * domínio o espelha. Três dos cinco valores do contrato eram invenção, e como
+ * a massa de teste nunca passou de `none`, nada reclamou.
+ *
+ * A ordem importa: é decrescente de gravidade, e a fila de triagem ordena por
+ * ela. Alfabetar a lista trocaria a ordem de atendimento sem que uma linha de
+ * lógica mudasse.
+ */
+export const REQUEST_PRIORITIES = ['emergency', 'very_urgent', 'urgent', 'low', 'none'] as const;
+export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
 export const SERVICE_REQUEST_SOURCES = ['portal', 'phone', 'email', 'walk_in', 'qr', 'system'] as const;
 
 /** A linha da fila de triagem — o mínimo para decidir o que atender primeiro. */
