@@ -36,6 +36,7 @@ export * from './operations/plans';
 export * from './operations/insights';
 export * from './operations/notifications';
 export * from './operations/documents';
+export * from './operations/automations';
 export * from './operations/directory';
 export * from './operations/search';
 export * from './operations/service-requests';

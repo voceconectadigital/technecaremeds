@@ -1820,8 +1820,8 @@
     },
     "/v1/automations/{id}/activate": {
       "post": {
-        "operationId": "AutomationsController.activate",
-        "summary": "(sem contrato) AutomationsController.activate",
+        "operationId": "automations.activate",
+        "summary": "Liga a regra",
         "tags": [
           "Automations"
         ],
@@ -1829,23 +1829,32 @@
           "automation.update"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
               }
             }
           },
@@ -1899,8 +1908,8 @@
     },
     "/v1/automations/{id}/pause": {
       "post": {
-        "operationId": "AutomationsController.pause",
-        "summary": "(sem contrato) AutomationsController.pause",
+        "operationId": "automations.pause",
+        "summary": "Pausa a regra",
         "tags": [
           "Automations"
         ],
@@ -1908,23 +1917,32 @@
           "automation.update"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
               }
             }
           },
@@ -1978,8 +1996,9 @@
     },
     "/v1/automations/{id}/runs": {
       "get": {
-        "operationId": "AutomationsController.runs",
-        "summary": "(sem contrato) AutomationsController.runs",
+        "operationId": "automations.runs",
+        "summary": "As últimas execuções desta regra",
+        "description": "`skipped` é resultado legítimo — a regra rodou e a condição não bateu — e distingui-lo de `failed` é o que separa \"não era o caso\" de \"quebrou\".",
         "tags": [
           "Automations"
         ],
@@ -1987,14 +2006,26 @@
           "automation.read"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 200
             }
           }
         ],
@@ -2003,7 +2034,103 @@
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "event_type": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "aggregate_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "actions_run": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "error": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "duration_ms": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "ran_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "event_type",
+                          "aggregate_id",
+                          "outcome",
+                          "actions_run",
+                          "error",
+                          "duration_ms",
+                          "ran_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
               }
             }
           },
@@ -2057,8 +2184,9 @@
     },
     "/v1/automations/{id}/simulate": {
       "post": {
-        "operationId": "AutomationsController.simulate",
-        "summary": "(sem contrato) AutomationsController.simulate",
+        "operationId": "automations.simulate",
+        "summary": "Conta quantos casos a regra pegaria, sem executar nada",
+        "description": "Roda contra os eventos que JÁ aconteceram: não é previsão, é contagem do passado. É a única forma de conhecer o alcance de uma regra antes de ligá-la.",
         "tags": [
           "Automations"
         ],
@@ -2066,23 +2194,50 @@
           "automation.update"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 365
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
               }
             }
           },
@@ -2136,8 +2291,9 @@
     },
     "/v1/automations/vocabulary": {
       "get": {
-        "operationId": "AutomationsController.vocabulary",
-        "summary": "(sem contrato) AutomationsController.vocabulary",
+        "operationId": "automations.vocabulary",
+        "summary": "Os gatilhos, condições e ações que existem",
+        "description": "O vocabulário é FECHADO. Uma automação que aceita expressão livre vira uma linguagem de programação que ninguém revisa, dentro de um sistema que ninguém testa.",
         "tags": [
           "Automations"
         ],
@@ -2145,14 +2301,20 @@
           "automation.read"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
         "responses": {
           "200": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
               }
             }
           },
@@ -2206,8 +2368,8 @@
     },
     "/v1/automations": {
       "get": {
-        "operationId": "AutomationsController.list",
-        "summary": "(sem contrato) AutomationsController.list",
+        "operationId": "automations.list",
+        "summary": "As regras de automação desta organização",
         "tags": [
           "Automations"
         ],
@@ -2215,14 +2377,114 @@
           "automation.read"
         ],
         "x-aurora-source": "apps/api/src/automations/automations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
         "responses": {
           "200": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "trigger_kind": {
+                            "type": "string"
+                          },
+                          "trigger_event": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "simulated_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "simulated_matches": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "quarantine_reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "action_count": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "state",
+                          "priority",
+                          "trigger_kind",
+                          "trigger_event",
+                          "simulated_at",
+                          "simulated_matches",
+                          "quarantine_reason",
+                          "action_count"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
               }
             }
           },

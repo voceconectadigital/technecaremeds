@@ -28,6 +28,7 @@ const TELAS = [
   '/indicadores',
   '/notificacoes',
   '/documentos',
+  '/configuracoes/automacoes',
   '/agenda',
   '/configuracoes',
 ];

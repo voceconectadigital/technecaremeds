@@ -34,6 +34,7 @@ import { PlanosPage, PlanoPage } from '../features/planos/lista';
 import { IndicadoresPage } from '../features/indicadores/painel';
 import { NotificacoesPage } from '../features/notificacoes/caixa';
 import { DocumentosPage } from '../features/documentos/lista';
+import { AutomacoesPage } from '../features/automacoes/lista';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -142,6 +143,7 @@ export const routeTree = raiz.addChildren([
   )),
 
   rotaProtegida('/configuracoes', MembrosPage),
+  rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
 ]);
 
 export const router = createRouter({

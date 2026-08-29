@@ -29,6 +29,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { Can, usePermissions } from '../../lib/permissions';
 import { GavetaDeAcesso } from './acesso';
+import { AlternadorDeConfiguracoes } from './alternador';
 
 export function MembrosPage() {
   const [convidando, setConvidando] = useState(false);
@@ -64,6 +65,10 @@ export function MembrosPage() {
         </Can>
       }
     >
+      <div className="mb-4">
+        <AlternadorDeConfiguracoes />
+      </div>
+
       <Card>
         {isLoading ? (
           <div className="p-3">
