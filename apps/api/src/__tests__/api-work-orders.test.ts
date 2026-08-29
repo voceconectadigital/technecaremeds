@@ -431,3 +431,68 @@ describe('permissões e isolamento na borda', () => {
     await http.get('/v1/work-orders/statuses').set(auth(EMAIL_COORD)).expect(200);
   });
 });
+
+describe('os filtros da lista', () => {
+  /*
+   * ESTE BLOCO EXISTE PORQUE EU QUEBREI UM DELES E NADA RECLAMOU.
+   *
+   * Ao acrescentar o filtro por ativo, um `$` se perdeu no marcador do
+   * parâmetro e a condição virou `w.assignee_membership_id = 4` — comparação
+   * de uuid com inteiro, 500 na cara de quem filtrasse por responsável. Nada
+   * acusou: dos quatro filtros da rota, só `limit` tinha teste.
+   *
+   * Um filtro sem teste é uma cláusula de SQL montada por concatenação que
+   * ninguém executa. Os quatro passam a ter.
+   */
+  it('filtra por cliente', async () => {
+    const r = await http.get(`/v1/work-orders?customer=${cliente}`).set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    expect(r.body.items.length).toBeGreaterThan(0);
+    for (const os of r.body.items) expect(os.customer_id).toBe(cliente);
+
+    // Um cliente que não existe devolve lista VAZIA, e não erro: a pergunta é
+    // legítima e a resposta é "nenhuma".
+    const vazio = await http
+      .get('/v1/work-orders?customer=0193d900-0000-7000-8000-999999999999')
+      .set(auth(EMAIL_COORD));
+    expect(vazio.status).toBe(200);
+    expect(vazio.body.items).toEqual([]);
+  });
+
+  it('filtra por responsável', async () => {
+    const r = await http.get(`/v1/work-orders?assignee=${TEC_MEM}`).set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    for (const os of r.body.items) expect(os.assignee_membership_id ?? TEC_MEM).toBe(TEC_MEM);
+  });
+
+  it('filtra por equipamento — é o histórico que a ficha do ativo mostra', async () => {
+    const r = await http.get(`/v1/work-orders?asset=${ativo}`).set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    expect(r.body.items.length).toBeGreaterThan(0);
+    for (const os of r.body.items) expect(os.asset_id).toBe(ativo);
+
+    // E o outro equipamento não aparece: sem isso, o teste passaria com um
+    // filtro que não filtra nada.
+    const outro = await http.get(`/v1/work-orders?asset=${ativoDois}`).set(auth(EMAIL_COORD));
+    expect(outro.status).toBe(200);
+    for (const os of outro.body.items) expect(os.asset_id).toBe(ativoDois);
+    const ids = new Set(r.body.items.map((o: { id: string }) => o.id));
+    for (const os of outro.body.items) expect(ids.has(os.id)).toBe(false);
+  });
+
+  it('filtra por categoria, e recusa categoria inventada', async () => {
+    const r = await http.get('/v1/work-orders?category=open').set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    for (const os of r.body.items) expect(os.category).toBe('open');
+
+    const ruim = await http.get('/v1/work-orders?category=inventada').set(auth(EMAIL_COORD));
+    expect(ruim.status).toBe(422);
+  });
+
+  it('identificador malformado nos filtros é recusado antes de chegar ao banco', async () => {
+    for (const filtro of ['customer', 'assignee', 'asset']) {
+      const r = await http.get(`/v1/work-orders?${filtro}=nao-e-uuid`).set(auth(EMAIL_COORD));
+      expect(r.status, filtro).toBe(422);
+    }
+  });
+});

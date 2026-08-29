@@ -24,6 +24,8 @@ import { OrdemPage } from '../features/ordens/ficha';
 import { AgendaPage } from '../features/agenda/pagina';
 import { MembrosPage } from '../features/configuracoes/membros';
 import { EmConstrucao } from './em-construcao';
+import { AtivosPage } from '../features/ativos/lista';
+import { AtivoPage } from '../features/ativos/ficha';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -92,13 +94,13 @@ export const routeTree = raiz.addChildren([
    * tela honesta sobre o que falta é melhor do que um 404 e melhor do que um
    * menu que muda de tamanho a cada semana.
    */
-  rotaProtegida('/ativos', () => (
-    <EmConstrucao
-      titulo="Ativos"
-      descricao="Árvore de locais, ficha do equipamento, histórico e etiquetas."
-      permissao="asset.read"
-    />
-  )),
+  rotaProtegida('/ativos', AtivosPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/ativos/$id',
+    component: AtivoPage,
+    beforeLoad: exigirSessao,
+  }),
   rotaProtegida('/estoque', () => (
     <EmConstrucao
       titulo="Estoque"

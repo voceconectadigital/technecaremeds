@@ -211,10 +211,30 @@ async function main() {
         `INSERT INTO aurora.customers (id, organization_id, name, is_internal) VALUES ($1, $2, $3, true)`,
         [clienteId, org, nomeCliente]
       );
-      const local = await createLocation(s, {
+      /*
+       * A ÁRVORE PRECISA TER GALHO.
+       *
+       * Havia um local só, e uma árvore de um nó não é árvore: não prova
+       * recuo, não prova expandir e recolher, e não prova que escolher um pai
+       * traz o que está nos filhos. Três níveis é o mínimo que exercita as
+       * três coisas — unidade, setor e sala.
+       */
+      const unidade = await createLocation(s, {
         customerId: clienteId,
         locationTypeId: tipos.get('unidade'),
+        name: org === E2E.orgA ? 'Unidade Alfa' : 'Unidade Beta',
+      });
+      const local = await createLocation(s, {
+        customerId: clienteId,
+        parentId: unidade,
+        locationTypeId: tipos.get('setor'),
         name: org === E2E.orgA ? 'UTI Alfa' : 'UTI Beta',
+      });
+      const sala = await createLocation(s, {
+        customerId: clienteId,
+        parentId: local,
+        locationTypeId: tipos.get('sala') ?? tipos.get('setor'),
+        name: org === E2E.orgA ? 'Leito 3 Alfa' : 'Leito 3 Beta',
       });
 
       await createCatalogItem(s, {
@@ -232,6 +252,17 @@ async function main() {
         locationId: local,
         assetNumber: org === E2E.orgA ? 'PAT-ALFA-001' : 'PAT-BETA-001',
       });
+      // Um segundo ativo, um nível ABAIXO: é ele que prova que escolher a UTI
+      // na árvore traz também o que está no leito dentro dela. Com um ativo
+      // só, "filtrar pela subárvore" e "filtrar pelo local exato" dão o mesmo
+      // resultado, e o teste não distingue os dois.
+      await createAsset(s, {
+        name: org === E2E.orgA ? 'Monitor Alfa-2' : 'Monitor Beta-2',
+        customerId: clienteId,
+        assetCategoryId: categoria,
+        locationId: sala,
+        assetNumber: org === E2E.orgA ? 'PAT-ALFA-002' : 'PAT-BETA-002',
+      });
     });
   }
 
@@ -240,8 +271,10 @@ async function main() {
   // própria massa é pior do que resumo nenhum.
   const [{ pessoas }] = await q(`SELECT count(*)::int AS pessoas FROM aurora.users`);
   const [{ vinculos }] = await q(`SELECT count(*)::int AS vinculos FROM aurora.memberships`);
+  const [{ locais }] = await q(`SELECT count(*)::int AS locais FROM aurora.locations`);
+  const [{ ativos }] = await q(`SELECT count(*)::int AS ativos FROM aurora.assets`);
   console.log(
-    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, 2 clientes, 2 ativos`
+    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos`
   );
 }
 

@@ -28,6 +28,7 @@ export * from './operations/session';
 export * from './operations/members';
 export * from './operations/catalogs';
 export * from './operations/work-order-detail';
+export * from './operations/assets';
 export * from './operations/directory';
 export * from './operations/search';
 export * from './operations/service-requests';

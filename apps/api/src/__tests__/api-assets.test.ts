@@ -33,8 +33,19 @@ const GESTOR_USER = newId(),
   GESTOR_MEM = newId();
 const TEC_USER = newId(),
   TEC_MEM = newId();
+const AUD_USER = newId(),
+  AUD_MEM = newId();
 const EMAIL_GESTOR = 'gestor@ast.test';
 const EMAIL_TEC = 'tecnico@ast.test';
+/**
+ * A auditora enxerga o ativo e NÃO enxerga nem valor nem observação interna.
+ *
+ * Existe porque o técnico não serve de sonda para os dois eixos: ele VÊ nota
+ * interna de propósito — "este aparelho já voltou três vezes pelo mesmo
+ * defeito" é contexto de manutenção — e não vê valor. Provar os dois filtros
+ * exige alguém que não veja nenhum dos dois.
+ */
+const EMAIL_AUD = 'auditora@ast.test';
 const auth = (email: string) => ({ authorization: `Bearer local:${email}:${email}` });
 
 let t: TestDatabase;
@@ -55,10 +66,12 @@ beforeAll(async () => {
 
   const sysCtx = buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'setup' });
   let tecnicoRole = '';
+  let auditorRole = '';
   await withTenant(t.db, sysCtx, async (s) => {
     const roles = await provisionFactoryRoles(s);
     await assignRole(s, GESTOR_MEM, roles.get('maintenance_manager')!);
     tecnicoRole = roles.get('technician')!;
+    auditorRole = roles.get('auditor')!;
 
     const tipos = await provisionStarterLocationTypes(s);
     cliente = await createCustomer(s, { name: 'Rede Hospitalar', isInternal: true });
@@ -110,6 +123,13 @@ beforeAll(async () => {
     { email: EMAIL_TEC, userName: 'Técnico', locationIds: [unidadeNorte] }
   );
   await withTenant(t.db, sysCtx, (s) => assignRole(s, TEC_MEM, tecnicoRole));
+
+  await seedMember(
+    t,
+    { organizationId: ORG, userId: AUD_USER, membershipId: AUD_MEM },
+    { email: EMAIL_AUD, userName: 'Auditora' }
+  );
+  await withTenant(t.db, sysCtx, (s) => assignRole(s, AUD_MEM, auditorRole));
 
   const env = loadEnv({
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
@@ -289,5 +309,101 @@ describe('importação', () => {
       .send({ customer_id: cliente, rows: [] });
     expect(r.status).toBe(403);
     expect(JSON.stringify(r.body)).toContain('asset.import');
+  });
+});
+
+describe('o que NÃO sai do servidor', () => {
+  it('valor financeiro e observação interna saem da consulta para quem não pode vê-los', async () => {
+    /*
+     * A ficha fazia `SELECT a.*`.
+     *
+     * A tabela tem `internal_notes` e três valores — compra, residual e
+     * reposição. `asset.read_financials` estava no catálogo de permissões
+     * desde o começo, sem nenhum lugar que a aplicasse: o valor de compra do
+     * parque inteiro trafegava para qualquer um com `asset.read`.
+     *
+     * A gestora tem a permissão; o técnico não. É a comparação que prova o
+     * filtro — um teste com um papel só confirmaria que o dado chega a quem
+     * deve e não diria nada sobre quem não deve.
+     */
+    // O ativo precisa TER valor e observação, senão o teste compara nulo com
+    // nulo e passa sem provar nada.
+    const sys = buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'valores' });
+    await withTenant(t.db, sys, (s2) =>
+      s2.query(
+        `UPDATE aurora.assets
+            SET purchase_value = 48000, residual_value = 12000,
+                replacement_value = 61000, currency = 'BRL',
+                internal_notes = 'Cliente contesta toda fatura deste parque.'
+          WHERE id = $1`,
+        [ativoNorte]
+      )
+    );
+
+    const daGestora = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_GESTOR));
+    expect(daGestora.status).toBe(200);
+    expect(daGestora.body.purchase_value).toBe('48000.00');
+    expect(daGestora.body.internal_notes).toContain('contesta toda fatura');
+
+    const doTecnico = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_TEC));
+    expect(doTecnico.status).toBe(200);
+    expect(doTecnico.body.purchase_value).toBeNull();
+    expect(doTecnico.body.residual_value).toBeNull();
+    expect(doTecnico.body.replacement_value).toBeNull();
+    // O técnico VÊ a observação interna, e isso é escolha: o histórico do
+    // defeito é contexto de quem vai consertar.
+    expect(doTecnico.body.internal_notes).toContain('contesta toda fatura');
+    // Mas nenhum valor está em canto nenhum do corpo — nem num campo esquecido.
+    expect(JSON.stringify(doTecnico.body)).not.toContain('48000');
+
+    // A auditora não vê nenhum dos dois.
+    const daAuditoria = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_AUD));
+    expect(daAuditoria.status).toBe(200);
+    expect(daAuditoria.body.internal_notes).toBeNull();
+    expect(daAuditoria.body.purchase_value).toBeNull();
+    expect(JSON.stringify(daAuditoria.body)).not.toContain('contesta toda fatura');
+    expect(JSON.stringify(daAuditoria.body)).not.toContain('48000');
+  });
+
+  it('a ficha satisfaz o contrato campo a campo, sem sobrar nem faltar', async () => {
+    // `a.*` devolvia quarenta e sete colunas, incluindo `organization_id`,
+    // `created_by` e `deleted_at`. Com `strict()`, coluna nova na tabela deixa
+    // de chegar ao navegador por acidente: alguém precisa declará-la aqui, e
+    // ao declarar decide se ela deve mesmo sair do servidor.
+    const { AssetDetail } = await import('@aurora/contracts');
+    const r = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_GESTOR));
+    const conferido = AssetDetail.strict().safeParse(r.body);
+    if (!conferido.success) {
+      throw new Error(
+        'a ficha do ativo divergiu do contrato:\n' +
+          conferido.error.issues
+            .map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`)
+            .join('\n')
+      );
+    }
+  });
+
+  it('a lista de ativos satisfaz o contrato', async () => {
+    const { assetsList } = await import('@aurora/contracts');
+    const r = await http.get('/v1/assets').set(auth(EMAIL_GESTOR));
+    const conferido = assetsList.response.safeParse(r.body);
+    if (!conferido.success) {
+      throw new Error(
+        'a lista de ativos divergiu do contrato:\n' +
+          conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+  });
+
+  it('a lista de locais satisfaz o contrato', async () => {
+    const { locationsList } = await import('@aurora/contracts');
+    const r = await http.get('/v1/locations').set(auth(EMAIL_GESTOR));
+    const conferido = locationsList.response.safeParse(r.body);
+    if (!conferido.success) {
+      throw new Error(
+        'a lista de locais divergiu do contrato:\n' +
+          conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
   });
 });

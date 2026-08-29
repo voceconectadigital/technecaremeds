@@ -75,6 +75,12 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('asset', 'transfer', 'Transferir e emprestar ativos'),
   p('asset', 'decommission', 'Descomissionar ativos'),
   p('asset', 'print_label', 'Imprimir etiquetas e QR Code'),
+  // A observação interna do EQUIPAMENTO existe pela mesma razão que a da
+  // ordem de serviço: "este aparelho já voltou três vezes pelo mesmo defeito"
+  // é contexto de manutenção, e "o cliente contesta toda fatura deste parque"
+  // não é coisa que se mostre no portal. A coluna existe desde o começo, e
+  // até agora nada a protegia — `a.*` devolvia para qualquer um.
+  p('asset', 'read_internal_notes', 'Ver observações internas do ativo', true),
   p('asset', 'read_financials', 'Ver valores e depreciação do ativo', true),
 
   // --- solicitações ---------------------------------------------------------
@@ -284,6 +290,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'work_order.edit_dates',
       'work_order.read_costs',
       'work_order.read_internal_notes',
+      'asset.read_internal_notes',
       'time_entry.approve',
       'time_entry.create_for_others',
       'maintenance_plan.create',
@@ -330,6 +337,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'work_order.cancel',
       'work_order.read_costs',
       'work_order.read_internal_notes',
+      'asset.read_internal_notes',
       'time_entry.create',
       'time_entry.update',
       'time_entry.approve',
@@ -359,6 +367,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'work_order.complete',
       'work_order.comment',
       'work_order.read_internal_notes',
+      'asset.read_internal_notes',
       'time_entry.read',
       'time_entry.create',
       'time_entry.update',

@@ -1,0 +1,240 @@
+/**
+ * Aurora — ativos e locais (SPEC v0.2 §06, §07 · EPIC-005).
+ *
+ * O NOME DA COISA É DA ORGANIZAÇÃO, e não nosso.
+ *
+ * A lista devolve `asset_label` junto com os itens porque "Ativo" é o rótulo
+ * de fábrica e não serve para todo mundo: um hospital diz "Equipamento", uma
+ * frota diz "Veículo", uma administradora diz "Elevador". Fixar a palavra na
+ * interface obriga a organização inteira a traduzir mentalmente, em toda tela,
+ * o dia inteiro — e é o tipo de atrito que faz um sistema parecer estrangeiro
+ * ao trabalho de quem o usa.
+ */
+import { defineOperation } from '../registry';
+import { z, Uuid, Timestamp } from '../primitives';
+
+export const ASSET_STATUSES = [
+  'active',
+  'under_maintenance',
+  'standby',
+  'loaned',
+  'decommissioned',
+  'disposed',
+] as const;
+export type AssetStatus = (typeof ASSET_STATUSES)[number];
+
+export const ASSET_OWNERSHIPS = ['owned', 'leased', 'loaned', 'rented', 'service_only'] as const;
+export type AssetOwnership = (typeof ASSET_OWNERSHIPS)[number];
+
+/* -------------------------------------------------------------------------- */
+/* Lista                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export const AssetRow = z.object({
+  id: Uuid,
+  name: z.string(),
+  tag: z.string().nullable(),
+  serial_number: z.string().nullable(),
+  asset_number: z.string().nullable(),
+  qr_token: z.string().nullable(),
+  status: z.enum(ASSET_STATUSES),
+  location_id: Uuid.nullable(),
+  /**
+   * O caminho materializado do local.
+   *
+   * Serve para filtrar a subárvore sem consulta recursiva: "tudo dentro da UTI"
+   * é um `LIKE` no prefixo, e não sete idas ao banco descendo nível a nível.
+   */
+  location_path: z.string().nullable(),
+  location_name: z.string().nullable(),
+  customer_id: Uuid,
+  asset_category_id: Uuid,
+  category_name: z.string(),
+  asset_model_id: Uuid.nullable(),
+  model_name: z.string().nullable(),
+  manufacturer_name: z.string().nullable(),
+  warranty_until: z.string().nullable(),
+});
+export type AssetRow = z.infer<typeof AssetRow>;
+
+export const assetsList = defineOperation({
+  operationId: 'assets.list',
+  method: 'GET',
+  path: '/assets',
+  summary: 'Ativos visíveis para esta pessoa',
+  description:
+    'O recorte por local NÃO é filtro de conveniência: a lista já vem limitada aos locais que o ' +
+    'vínculo alcança. Um filtro que a tela aplicasse depois seria um filtro que a tela pode ' +
+    'esquecer de aplicar.',
+  permissions: ['asset.read'],
+  query: z.object({
+    /** Restringe à subárvore deste local, e não só aos filhos diretos. */
+    location: Uuid.optional(),
+    status: z.enum(ASSET_STATUSES).optional(),
+    limit: z.coerce.number().int().positive().max(500).optional(),
+  }),
+  response: z.object({
+    items: z.array(AssetRow),
+    /** Como ESTA organização chama a coisa: "Equipamento", "Veículo", "Elevador". */
+    asset_label: z.string(),
+  }),
+});
+
+/* -------------------------------------------------------------------------- */
+/* Ficha                                                                      */
+/* -------------------------------------------------------------------------- */
+
+export const AssetTransfer = z.object({
+  id: Uuid,
+  kind: z.string(),
+  from_location_id: Uuid.nullable(),
+  to_location_id: Uuid.nullable(),
+  reason: z.string().nullable(),
+  occurred_at: Timestamp,
+  due_back_at: Timestamp.nullable(),
+  returned_at: Timestamp.nullable(),
+});
+export type AssetTransfer = z.infer<typeof AssetTransfer>;
+
+export const AssetDetail = z.object({
+  id: Uuid,
+  name: z.string(),
+  tag: z.string().nullable(),
+  serial_number: z.string().nullable(),
+  asset_number: z.string().nullable(),
+  barcode: z.string().nullable(),
+  qr_token: z.string().nullable(),
+  status: z.enum(ASSET_STATUSES),
+  ownership: z.enum(ASSET_OWNERSHIPS),
+
+  asset_category_id: Uuid,
+  category_name: z.string(),
+  asset_model_id: Uuid.nullable(),
+  model_name: z.string().nullable(),
+  manufacturer_name: z.string().nullable(),
+  customer_id: Uuid,
+  location_id: Uuid.nullable(),
+  location_name: z.string().nullable(),
+  location_path: z.string().nullable(),
+  parent_asset_id: Uuid.nullable(),
+
+  criticality_id: Uuid.nullable(),
+  operational_risk: z.string().nullable(),
+  default_priority: z.string().nullable(),
+  risk_class: z.string().nullable(),
+  anvisa_registration: z.string().nullable(),
+  inmetro_ordinance: z.string().nullable(),
+  requires_calibration: z.boolean(),
+  requires_electrical_test: z.boolean(),
+
+  manufactured_at: z.string().nullable(),
+  acquired_at: z.string().nullable(),
+  installed_at: z.string().nullable(),
+  warranty_until: z.string().nullable(),
+  useful_life_years: z.number().int().nullable(),
+  decommissioned_at: Timestamp.nullable(),
+  decommission_reason: z.string().nullable(),
+
+  owner_supplier_id: Uuid.nullable(),
+  sla_policy_id: Uuid.nullable(),
+
+  /**
+   * As especificações RESOLVIDAS: as do modelo, com as do ativo por cima.
+   *
+   * A combinação acontece no servidor. Deixá-la para a interface significaria
+   * que cada tela a faria de um jeito, e a que errasse mostraria a
+   * especificação do modelo num aparelho que teve a sua trocada.
+   */
+  specs: z.record(z.string(), z.unknown()),
+  /** Quais chaves o ativo sobrescreveu — para a tela poder marcar. */
+  specs_overridden: z.array(z.string()),
+  custom: z.record(z.string(), z.unknown()).nullable(),
+  show_on_work_order: z.array(z.string()).nullable(),
+  notes: z.string().nullable(),
+
+  /**
+   * Nulo para quem não tem `asset.read_internal_notes`.
+   *
+   * Nulo é a ausência REAL: o campo sai da consulta, não da renderização.
+   */
+  internal_notes: z.string().nullable().optional(),
+  /** Nulos para quem não tem `asset.read_financials`. */
+  purchase_value: z.string().nullable().optional(),
+  residual_value: z.string().nullable().optional(),
+  replacement_value: z.string().nullable().optional(),
+  currency: z.string().nullable().optional(),
+
+  /** Calculado no servidor a partir de `warranty_until` e da data de hoje. */
+  under_warranty: z.boolean(),
+  /**
+   * Idade em anos, da primeira data que existir: instalação, aquisição,
+   * fabricação. Nula quando nenhuma das três foi informada — e nula é
+   * diferente de zero, que diria "novo".
+   */
+  age_years: z.number().nullable(),
+  transfers: z.array(AssetTransfer),
+
+  created_at: Timestamp,
+  updated_at: Timestamp,
+});
+export type AssetDetail = z.infer<typeof AssetDetail>;
+
+export const assetDetail = defineOperation({
+  operationId: 'assets.detail',
+  method: 'GET',
+  path: '/assets/:id',
+  summary: 'Ficha do ativo, com especificações resolvidas e movimentações',
+  description:
+    'Observação interna e valores financeiros saem da CONSULTA para quem não tem a permissão — ' +
+    'não da tela. Escondido na renderização, o valor de compra do parque já teria trafegado.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  response: AssetDetail,
+  errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* Locais                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export const LocationRow = z.object({
+  id: Uuid,
+  name: z.string(),
+  code: z.string().nullable(),
+  parent_id: Uuid.nullable(),
+  /**
+   * O caminho materializado, do topo até aqui.
+   *
+   * É ele que permite montar a árvore inteira a partir de uma lista plana, sem
+   * consulta recursiva e sem N idas ao banco por nível.
+   */
+  path: z.string(),
+  depth: z.number().int(),
+  location_type_id: Uuid.nullable(),
+  location_type_name: z.string().nullable(),
+  customer_id: Uuid.nullable(),
+  is_mobile: z.boolean(),
+  status: z.string(),
+});
+export type LocationRow = z.infer<typeof LocationRow>;
+
+export const locationsList = defineOperation({
+  operationId: 'locations.list',
+  method: 'GET',
+  path: '/locations',
+  summary: 'Locais visíveis para esta pessoa, em lista plana',
+  description:
+    'Plana, e não aninhada: `path` e `depth` bastam para montar a árvore no cliente, e uma ' +
+    'estrutura aninhada obrigaria a percorrer tudo para achar um nó pelo id.',
+  permissions: ['location.read'],
+  query: z.object({
+    /**
+     * Restringe à subárvore deste local — não aos filhos diretos.
+     *
+     * O nome é `root` e não `parent` de propósito: `parent` prometeria um
+     * nível, e a rota devolve a descendência inteira.
+     */
+    root: Uuid.optional(),
+  }),
+  response: z.object({ items: z.array(LocationRow) }),
+});

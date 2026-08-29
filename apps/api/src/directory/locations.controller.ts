@@ -85,8 +85,10 @@ export class LocationsController {
     const items = await withTenant(this.db, ctx, (s) =>
       s.query(
         `SELECT l.id, l.parent_id, l.customer_id, l.location_type_id, l.name, l.code,
-                l.path, l.depth, l.status::text, l.is_mobile
+                l.path, l.depth, l.status::text AS status, l.is_mobile,
+                t.name AS location_type_name
            FROM aurora.locations l
+           LEFT JOIN aurora.location_types t ON t.id = l.location_type_id
           WHERE l.deleted_at IS NULL
             AND l.id IN (SELECT location_id FROM aurora.accessible_location_ids($1))
             AND ($2::uuid IS NULL OR l.path LIKE (

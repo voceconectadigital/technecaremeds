@@ -118,7 +118,33 @@ export class AssetsController {
     const assetId = uuidParam(id, 'id');
     return withTenant(this.db, ctx, async (s) => {
       const [row] = await s.query<Record<string, unknown>>(
-        `SELECT a.*, c.name AS category_name, l.name AS location_name,
+        // COLUNAS NOMEADAS, e dois campos que SAEM da consulta por permissão.
+        //
+        // Era `a.*`. A tabela tem `internal_notes` e três valores financeiros
+        // — compra, residual e reposição — e ambos existem justamente porque
+        // nem todo mundo deve vê-los: há `asset.read_financials` no catálogo
+        // de permissões desde o começo, sem nenhum lugar que a aplicasse.
+        //
+        // O filtro é na CONSULTA. Esconder na tela significa que o valor de
+        // compra do parque inteiro trafegou até o navegador de quem não pode
+        // vê-lo, e está no painel de rede.
+        `SELECT a.id, a.name, a.tag, a.serial_number, a.asset_number, a.barcode,
+                a.qr_token, a.status::text AS status, a.ownership::text AS ownership,
+                a.asset_category_id, a.asset_model_id, a.customer_id,
+                a.location_id, a.location_path, a.parent_asset_id,
+                a.criticality_id, a.operational_risk, a.default_priority, a.risk_class,
+                a.anvisa_registration, a.inmetro_ordinance,
+                a.requires_calibration, a.requires_electrical_test,
+                a.manufactured_at, a.acquired_at, a.installed_at, a.warranty_until,
+                a.useful_life_years, a.decommissioned_at, a.decommission_reason,
+                a.owner_supplier_id, a.specs, a.custom, a.show_on_work_order,
+                a.notes, a.sla_policy_id, a.created_at, a.updated_at,
+                CASE WHEN $2::boolean THEN a.internal_notes END AS internal_notes,
+                CASE WHEN $3::boolean THEN a.purchase_value::text END AS purchase_value,
+                CASE WHEN $3::boolean THEN a.residual_value::text END AS residual_value,
+                CASE WHEN $3::boolean THEN a.replacement_value::text END AS replacement_value,
+                CASE WHEN $3::boolean THEN a.currency END AS currency,
+                c.name AS category_name, l.name AS location_name,
                 m.name AS model_name, m.specs AS model_specs,
                 f.name AS manufacturer_name
            FROM aurora.assets a
@@ -127,7 +153,11 @@ export class AssetsController {
            LEFT JOIN aurora.asset_models m ON m.id = a.asset_model_id
            LEFT JOIN aurora.manufacturers f ON f.id = m.manufacturer_id
           WHERE a.id = $1 AND a.deleted_at IS NULL`,
-        [assetId]
+        [
+          assetId,
+          ctx.permissions.has('asset.read_internal_notes'),
+          ctx.permissions.has('asset.read_financials'),
+        ]
       );
       if (!row) throw new NotFoundError('Ativo', assetId);
 
@@ -138,6 +168,11 @@ export class AssetsController {
            FROM aurora.asset_transfers WHERE asset_id = $1 ORDER BY occurred_at DESC LIMIT 20`,
         [assetId]
       );
+
+      // `model_specs` é insumo do cálculo abaixo, e não campo da resposta:
+      // devolvê-lo faria a tela ter duas fontes para a mesma especificação e
+      // escolher a errada na metade dos casos.
+      delete row.model_specs;
 
       return {
         ...row,

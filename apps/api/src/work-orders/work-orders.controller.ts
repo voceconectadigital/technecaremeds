@@ -143,6 +143,7 @@ export class WorkOrdersController {
     @Query('customer') customer?: string,
     @Query('category') category?: string,
     @Query('assignee') assignee?: string,
+    @Query('asset') asset?: string,
     @Query('limit') limit?: string
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
@@ -170,6 +171,14 @@ export class WorkOrdersController {
     if (assignee !== undefined) {
       params.push(uuidParam(assignee, 'assignee'));
       condicoes.push(`w.assignee_membership_id = $${params.length}`);
+    }
+    if (asset !== undefined) {
+      // É o histórico do EQUIPAMENTO, e é o que responde à pergunta cara:
+      // "vale a pena consertar de novo?". Sem este filtro, a ficha do ativo
+      // teria de trazer a lista inteira e peneirar no navegador — o que, com
+      // cem mil ordens, significa não trazer.
+      params.push(uuidParam(asset, 'asset'));
+      condicoes.push(`w.asset_id = $${params.length}`);
     }
 
     params.push(max);

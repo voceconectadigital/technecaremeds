@@ -20,6 +20,7 @@ const TELAS = [
   '/solicitacoes/nova',
   '/ordens',
   '/ordens?vista=lista',
+  '/ativos',
   '/agenda',
   '/configuracoes',
 ];
