@@ -6354,6 +6354,1026 @@
         ]
       }
     },
+    "/v1/inventory/adjustments": {
+      "post": {
+        "operationId": "inventory.adjust",
+        "summary": "Ajusta o saldo, com motivo obrigatório",
+        "description": "É a única operação que muda o saldo sem um fato físico do outro lado. Sem motivo, o inventário que não fecha vira um ajuste anônimo — e a diferença entre furto, quebra e erro de lançamento, que é a informação que interessa, desaparece junto.",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.adjust"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "item_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "warehouse_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "qty": {
+                    "type": "number"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 5
+                  }
+                },
+                "required": [
+                  "item_id",
+                  "warehouse_id",
+                  "qty",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/balances": {
+      "get": {
+        "operationId": "inventory.balances",
+        "summary": "Saldos por item e almoxarifado",
+        "description": "`below_minimum=true` devolve só o que está abaixo do mínimo — a pergunta que quem compra faz de manhã, e que na referência exigia rodar um relatório.",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.read"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [
+          {
+            "name": "warehouse",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          },
+          {
+            "name": "below_minimum",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "item_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "warehouse_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "item_name": {
+                            "type": "string"
+                          },
+                          "warehouse_name": {
+                            "type": "string"
+                          },
+                          "on_hand": {
+                            "type": "string"
+                          },
+                          "reserved": {
+                            "type": "string"
+                          },
+                          "available": {
+                            "type": "string"
+                          },
+                          "min_qty": {
+                            "type": "string"
+                          },
+                          "average_cost": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "item_id",
+                          "warehouse_id",
+                          "sku",
+                          "item_name",
+                          "warehouse_name",
+                          "on_hand",
+                          "reserved",
+                          "available",
+                          "min_qty",
+                          "average_cost"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/ledger": {
+      "get": {
+        "operationId": "inventory.ledger",
+        "summary": "Extrato de um item num almoxarifado",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.read"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [
+          {
+            "name": "item",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          },
+          {
+            "name": "warehouse",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sequence": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "string"
+                              }
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "receipt",
+                              "issue",
+                              "adjustment",
+                              "transfer_out",
+                              "transfer_in",
+                              "consumption",
+                              "return",
+                              "scrap"
+                            ]
+                          },
+                          "qty": {
+                            "type": "string"
+                          },
+                          "unit_cost": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "ref_type": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "ref_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reverses_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "occurred_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "sequence",
+                          "kind",
+                          "qty",
+                          "unit_cost",
+                          "ref_type",
+                          "ref_id",
+                          "reason",
+                          "reverses_id",
+                          "occurred_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/minimums": {
+      "post": {
+        "operationId": "inventory.minimum",
+        "summary": "Define o mínimo de um item num almoxarifado",
+        "description": "O mínimo é por (item, almoxarifado) e não por item: a mesma peça pode ser crítica na base que atende a UTI e dispensável no depósito central. Um mínimo global avisaria onde não importa e ficaria calado onde importa.",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.update"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "item_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "warehouse_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "min_qty": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "item_id",
+                  "warehouse_id",
+                  "min_qty"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/movements/{id}/reversal": {
+      "post": {
+        "operationId": "inventory.reverse",
+        "summary": "Estorna um movimento sem apagá-lo",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.adjust"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 5
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/transfers": {
+      "post": {
+        "operationId": "inventory.transfer",
+        "summary": "Transfere entre almoxarifados",
+        "description": "Duas pernas, uma transação: sai de um e entra no outro juntos. Duas chamadas separadas deixariam a peça em lugar nenhum se a segunda falhasse, e o estoque só descobriria no inventário seguinte.",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.move"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "item_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "from_warehouse_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "to_warehouse_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "qty": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "item_id",
+                  "from_warehouse_id",
+                  "to_warehouse_id",
+                  "qty"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "out_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "in_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "out_id",
+                    "in_id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/inventory/work-orders/{id}/parts": {
+      "get": {
+        "operationId": "inventory.workOrderParts",
+        "summary": "Peças reservadas e consumidas numa ordem de serviço",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.read"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "item_name": {
+                            "type": "string"
+                          },
+                          "warehouse_name": {
+                            "type": "string"
+                          },
+                          "qty": {
+                            "type": "string"
+                          },
+                          "consumed_qty": {
+                            "type": "string"
+                          },
+                          "pending": {
+                            "type": "string"
+                          },
+                          "released_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sku",
+                          "item_name",
+                          "warehouse_name",
+                          "qty",
+                          "consumed_qty",
+                          "pending",
+                          "released_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/labels": {
       "post": {
         "operationId": "QrController.labels",

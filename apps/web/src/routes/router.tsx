@@ -26,6 +26,7 @@ import { MembrosPage } from '../features/configuracoes/membros';
 import { EmConstrucao } from './em-construcao';
 import { AtivosPage } from '../features/ativos/lista';
 import { AtivoPage } from '../features/ativos/ficha';
+import { EstoquePage } from '../features/estoque/lista';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -101,13 +102,7 @@ export const routeTree = raiz.addChildren([
     component: AtivoPage,
     beforeLoad: exigirSessao,
   }),
-  rotaProtegida('/estoque', () => (
-    <EmConstrucao
-      titulo="Estoque"
-      descricao="Saldos por almoxarifado, requisições e movimentações."
-      permissao="inventory.read"
-    />
-  )),
+  rotaProtegida('/estoque', EstoquePage),
   rotaProtegida('/contratos', () => (
     <EmConstrucao
       titulo="Contratos"

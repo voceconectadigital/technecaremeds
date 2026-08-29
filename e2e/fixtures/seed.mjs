@@ -79,11 +79,32 @@ async function q(sql, params) {
 
 async function main() {
   if (process.argv.includes('--reset')) {
-    // A cascata leva o resto: se apagar a organização deixasse órfão em alguma
-    // tabela, este comando falharia — e falhar aqui é melhor do que descobrir
-    // o órfão num cliente.
-    await q(`DELETE FROM aurora.organizations WHERE slug LIKE 'e2e-%'`);
-    await q(`DELETE FROM aurora.users WHERE email LIKE '%@e2e.test'`);
+    /*
+     * O RAZÃO DE ESTOQUE É IMUTÁVEL, e isso vale contra este script também.
+     *
+     * A migration 0030 põe um gatilho que RECUSA `UPDATE` e `DELETE` em
+     * `stock_movements`: correção de estoque é movimento inverso, nunca
+     * apagamento. A cascata do `DELETE` da organização esbarra nele.
+     *
+     * A saída NÃO é enfraquecer o gatilho. É desligá-lo aqui, explicitamente,
+     * pelo tempo do apagamento — este script roda como superusuário, e é uma
+     * limpeza de massa de teste, não um caminho da aplicação. Deixar a
+     * garantia mais frouxa para o `reset` funcionar seria trocar uma
+     * propriedade do produto pela conveniência de um script.
+     *
+     * O `ENABLE` volta no `finally`: um gatilho desligado por causa de uma
+     * falha no meio é pior do que o problema que ele resolve.
+     */
+    await q(`ALTER TABLE aurora.stock_movements DISABLE TRIGGER stock_movements_immutable`);
+    try {
+      // A cascata leva o resto: se apagar a organização deixasse órfão em
+      // alguma tabela, este comando falharia — e falhar aqui é melhor do que
+      // descobrir o órfão num cliente.
+      await q(`DELETE FROM aurora.organizations WHERE slug LIKE 'e2e-%'`);
+      await q(`DELETE FROM aurora.users WHERE email LIKE '%@e2e.test'`);
+    } finally {
+      await q(`ALTER TABLE aurora.stock_movements ENABLE TRIGGER stock_movements_immutable`);
+    }
   }
 
   const [{ existe }] = await q(
@@ -160,6 +181,10 @@ async function main() {
     createCatalogItem,
     createAssetCategory,
     createAsset,
+    createWarehouse,
+    createItem,
+    recordMovement,
+    setMinimum,
     withTenant,
   } = require('../../packages/db/src/index.ts');
   const { pgPoolAdapter } = require('../../packages/db/src/adapters.ts');
@@ -263,6 +288,45 @@ async function main() {
         locationId: sala,
         assetNumber: org === E2E.orgA ? 'PAT-ALFA-002' : 'PAT-BETA-002',
       });
+
+      /*
+       * ESTOQUE: dois itens, e um deles ABAIXO do mínimo de propósito.
+       *
+       * A tela de estoque abre na aba "abaixo do mínimo", e uma massa com tudo
+       * em ordem faria o teste passar contra uma tela vazia — que é o mesmo
+       * erro da spec de console que dava sete telas limpas visitando telas sem
+       * dado dentro.
+       *
+       * O saldo entra por RECEBIMENTO, e não por escrita direta na tabela de
+       * saldos: semear por fora produz um estado que a aplicação não sabe
+       * criar, e o teste passa a provar um mundo que não existe.
+       */
+      const deposito = await createWarehouse(s, { name: 'Depósito ' + (org === E2E.orgA ? 'Alfa' : 'Beta') });
+      const valvula = await createItem(s, {
+        sku: org === E2E.orgA ? 'VAL-ALFA' : 'VAL-BETA',
+        name: 'Válvula de exalação',
+        unit: 'un',
+      });
+      const filtro = await createItem(s, {
+        sku: org === E2E.orgA ? 'FIL-ALFA' : 'FIL-BETA',
+        name: 'Filtro HEPA',
+        unit: 'un',
+      });
+      await recordMovement(s, {
+        itemId: valvula,
+        warehouseId: deposito,
+        kind: 'receipt',
+        qty: 20,
+        unitCost: 150,
+      });
+      await recordMovement(s, {
+        itemId: filtro,
+        warehouseId: deposito,
+        kind: 'receipt',
+        qty: 3,
+        unitCost: 90,
+      });
+      await setMinimum(s, filtro, deposito, 10);
     });
   }
 
@@ -273,8 +337,9 @@ async function main() {
   const [{ vinculos }] = await q(`SELECT count(*)::int AS vinculos FROM aurora.memberships`);
   const [{ locais }] = await q(`SELECT count(*)::int AS locais FROM aurora.locations`);
   const [{ ativos }] = await q(`SELECT count(*)::int AS ativos FROM aurora.assets`);
+  const [{ saldos }] = await q(`SELECT count(*)::int AS saldos FROM aurora.stock_balances`);
   console.log(
-    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos`
+    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos, ${saldos} saldos`
   );
 }
 
