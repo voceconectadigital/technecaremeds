@@ -38,6 +38,11 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('organization', 'manage_members', 'Convidar, suspender e remover membros'),
   p('organization', 'manage_roles', 'Criar e editar papéis e permissões'),
   p('organization', 'manage_catalogs', 'Editar catálogos e taxonomias'),
+  // Separada de `manage_catalogs` porque são riscos diferentes: mexer num
+  // rótulo de catálogo afeta uma lista; criar campo personalizado obrigatório
+  // afeta todo formulário daquela entidade, para todo mundo, a partir do
+  // próximo salvamento.
+  p('organization', 'manage_custom_fields', 'Criar e editar campos personalizados'),
   p('organization', 'manage_billing', 'Gerenciar plano, assentos e faturamento'),
   p('organization', 'manage_integrations', 'Gerenciar chaves de API e webhooks'),
 
@@ -214,6 +219,12 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
     seatType: 'staff',
     permissions: [
       ...ALL_READ,
+      // Curadoria de taxonomia fica com quem entende de manutenção, não só com
+      // quem administra a conta. Deixar isso restrito ao administrador foi
+      // parte do que produziu, na referência, 360 "problemas relatados" que
+      // ninguém do domínio podia arrumar. Campos personalizados, esses sim,
+      // continuam com o administrador: mudam a estrutura do formulário.
+      'organization.manage_catalogs',
       'customer.create',
       'customer.update',
       'location.create',

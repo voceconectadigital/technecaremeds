@@ -9,12 +9,12 @@ Fonte de verdade de código: este repositório e o Git.
 
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
-| SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 27 ADRs      |
+| SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F1 — Acesso e diretório**                                                     |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório)                      |
-| Épico seguinte                   | EPIC-004 — catálogos e campos personalizados                                    |
-| Testes                           | **219**, todos verdes                                                           |
-| Migrations                       | 11 (`0000` a `0010`), idempotentes, reprodutíveis do zero                       |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos e campos personalizados) |
+| Épico seguinte                   | EPIC-005 — ativos e classificação                                               |
+| Testes                           | **306**, todos verdes                                                           |
+| Migrations                       | 13 (`0000` a `0012`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -60,7 +60,7 @@ No CI acrescentam-se `format:check` e varredura de segredos.
 
 ## EPIC-002 — Papéis e permissões · **concluído**
 
-- Catálogo de **105 permissões** como fonte única em código (`packages/domain/src/permissions.ts`); o banco é espelho e um teste garante que não divergem
+- Catálogo de **106 permissões** como fonte única em código (`packages/domain/src/permissions.ts`); o banco é espelho e um teste garante que não divergem
 - **11 papéis de fábrica**, `is_system` e não editáveis: customizar é duplicar
 - `deny` individual vence qualquer concessão de papel; revogação exige justificativa e aceita expiração
 - `escalationCheck`: ninguém concede o que não tem
@@ -94,6 +94,31 @@ Clientes, contatos, tipos de local, árvore de locais, fornecedores, equipes, ca
 
 ---
 
+## EPIC-004 — Catálogos governados e campos personalizados · **concluído**
+
+O problema, medido pela auditoria: 651 tipos de equipamento, 360 problemas, 344 origens; "fechada" convivendo com "Fechada" em 312 OS; "Emprestimo" ao lado de "Empréstimo de equipamento". Indicador fragmentado e combo inoperável não foram descuido de quem cadastrou — foram ausência de governança.
+
+**As três peças**
+
+1. Chave técnica estável (`key`, imutável) separada do rótulo (`label`, livre)
+2. Unicidade sobre o rótulo **normalizado** — sem acento, sem pontuação, sem caixa
+3. Arquivar e mesclar, para que a lista suja de hoje tenha conserto
+
+`aurora.normalize_label` é `IMMUTABLE`, alimenta uma coluna gerada e um índice único, e **não usa `unaccent`** (extensão, ADR-026). Um teste compara a implementação SQL com a de TypeScript sobre 15 entradas: duas implementações da mesma regra divergem sozinhas se ninguém comparar.
+
+**ADR-028 — catálogos planos em uma tabela só.** `catalog_items` com discriminador `catalog_key`. Isto **não** é a `Empresa` polimórfica: lá, conceitos com atributos diferentes foram forçados numa tabela e nenhum podia ter campo próprio. A regra aqui é explícita — mesma forma, mesma tabela; forma diferente, tabela diferente. `wait_reasons` continua tabela própria por ter `pauses_sla`.
+
+**Campos personalizados (ADR-009).** Definições tipadas em tabela; valores em `jsonb`. Validação pura em `packages/domain`, usada pelo servidor e pelo formulário — uma implementação só, porque duas não concordariam. Chave e **tipo** imutáveis (mudar `text` para `number` invalidaria de uma vez todo valor já gravado). Limite de 50 por entidade aplicado por gatilho, não só por código.
+
+**Governança por papel.** `organization.manage_catalogs` foi para o gestor de manutenção, não só para o administrador: manter a curadoria de taxonomia longe de quem entende do domínio é parte do que produziu os 360 "problemas relatados" que ninguém podia arrumar. Campos personalizados continuam com o administrador — mudam a estrutura do formulário para todo mundo.
+
+### Adiado deliberadamente
+
+- **Índice GIN em `custom`** só nas tabelas que existem hoje (customers, locations, suppliers). Ativos, OS e solicitações ganham o seu na migration que os criar.
+- **Promoção de campo personalizado a coluna nativa** (§29): é métrica de produto, não código.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -108,6 +133,8 @@ Clientes, contatos, tipos de local, árvore de locais, fornecedores, equipes, ca
 | 8   | **Mensagem inalcançável no limite de profundidade**                       | `RAISE` vinha depois do `UPDATE`; o `CHECK` disparava antes, com texto genérico   | Verificação movida para antes da cascata (0009)                                                          |
 | 9   | **Violação de integridade virava 500**                                    | Aninhamento inválido respondia "erro interno" em vez de explicar a regra          | `translatePostgresError`: só a classe 23 do SQLSTATE vira 4xx; o resto continua 500, porque é bug nosso   |
 | 10  | **Mover subárvore reatribuía o cliente em silêncio**                      | Encontrado na autoauditoria, não por teste vermelho                              | Passou a recusar explicitamente: transferir local entre clientes é operação de negócio própria            |
+| 11  | **Sugestão de mesclagem que nunca acharia nada**                          | Teste vermelho ao tentar criar o par "Empréstimo"/"Emprestimo" para exercitar a sugestão | O índice único sobre o rótulo normalizado impede esse par de existir — logo, sugerir por igualdade normalizada era código que parecia resolver e não resolvia. Reescrita para semelhança: contenção por tokens e distância de edição, com o motivo à vista |
+| 12  | **`minScore` que não era mínimo**                                         | O par "Ventilador"/"Ventliador" passava com score 0,80 sob um mínimo declarado de 0,82 | O teto arredondado era usado como filtro; agora serve só ao corte antecipado do cálculo e quem filtra é o score |
 
 ---
 
@@ -117,6 +144,7 @@ Clientes, contatos, tipos de local, árvore de locais, fornecedores, equipes, ca
 - **Banco de teste**: PGlite (ADR-022) — Docker indisponível e remoto bloqueado
 - **ADR-026 · sem `ltree`**: a extensão não existe no PGlite e não é garantida em PostgreSQL gerenciado. A árvore usa caminho materializado em `text` com índice `text_pattern_ops`. A SPEC foi corrigida em todas as seções afetadas.
 - **ADR-027 · sem `pg_trgm`**: mesma razão. Busca no núcleo com `tsvector` nativo e forma normalizada indexada; trigrama vira otimização opcional. A degradação é de qualidade de resultado, não de funcionalidade.
+- **ADR-028 · catálogos planos em `catalog_items`**: onde a SPEC v0.1 nomeia `work_order_types`, `failure_codes` e `rejection_reasons`, leia-se `catalog_items` com o `catalog_key` correspondente.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
 
 ---

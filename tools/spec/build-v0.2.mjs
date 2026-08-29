@@ -513,6 +513,19 @@ patch(
 );
 
 /* ============================================================
+   P17 — ADR-028: catálogos planos em uma tabela só
+
+   Decisão tomada na implementação do EPIC-004. Precisa estar na SPEC porque
+   renomeia tabelas que a v0.1 nomeava separadamente.
+   ============================================================ */
+patch(
+  'P17-adr028',
+  '| ADR-026 | Representação da árvore de locais |',
+  '| ADR-028 | Catálogos planos | (a) uma tabela por catálogo (`work_order_types`, `failure_codes`, `rejection_reasons`…); (b) uma tabela `catalog_items` com discriminador `catalog_key`; (c) EAV genérico | **(b)** | Os catálogos planos têm exatamente a mesma forma — chave técnica, rótulo, posição, cor, arquivado, mesclado — e nenhum deles tem campo próprio. Uma tabela por catálogo multiplicaria por seis o mesmo esquema, a mesma RLS, o mesmo gatilho de auditoria e a mesma função de mesclagem, e cada catálogo novo exigiria migration. **Isto não é a `Empresa` polimórfica da referência:** lá, conceitos com atributos e relacionamentos DIFERENTES foram forçados numa tabela, e por isso nenhum podia ter campo próprio. A regra aqui é o inverso e é explícita: mesma forma, mesma tabela; forma diferente, tabela diferente. Quem tem campo próprio continua separado — `customers`, `locations`, `suppliers`, e no EPIC-005 `manufacturers`, `asset_models`, `criticality_levels`. **Consequência:** onde a v0.1 nomeia `work_order_types`, `failure_codes` e `rejection_reasons`, leia-se `catalog_items` com o `catalog_key` correspondente. `wait_reasons` **permanece tabela própria**, por ter `pauses_sla` e responsável — campos que os demais não têm |\n' +
+    '| ADR-026 | Representação da árvore de locais |'
+);
+
+/* ============================================================
    cabeçalho de versão
    ============================================================ */
 patch(

@@ -13,6 +13,7 @@ import { MeController } from './platform/me.controller';
 import { LocationsController } from './directory/locations.controller';
 import { CustomersController } from './directory/customers.controller';
 import { TeamsController } from './directory/teams.controller';
+import { CatalogsController } from './catalogs/catalogs.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -42,6 +43,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       CustomersController,
       LocationsController,
       TeamsController,
+      CatalogsController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },

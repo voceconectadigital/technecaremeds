@@ -7,3 +7,4 @@ export * from './seeds';
 export * from './rbac';
 export * from './directory';
 export * from './pg-errors';
+export * from './catalogs';

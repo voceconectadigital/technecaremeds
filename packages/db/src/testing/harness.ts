@@ -13,6 +13,7 @@ import { pgliteAdapter } from '../adapters';
 import type { Database } from '../client';
 import { migrate } from '../migrator';
 import { syncPermissionCatalog } from '../rbac';
+import { syncCatalogDefinitions } from '../catalogs';
 
 export interface TestDatabase {
   db: Database;
@@ -41,6 +42,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 
   // o catálogo de permissões é espelho do código (§21)
   await syncPermissionCatalog(superuser);
+  await syncCatalogDefinitions(superuser);
 
   // a partir daqui, tudo passa pelo papel de aplicação
   const db = pgliteAdapter(pg, 'aurora_app');
