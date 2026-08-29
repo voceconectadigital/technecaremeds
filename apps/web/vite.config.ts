@@ -9,6 +9,13 @@ import { fileURLToPath } from 'node:url';
 const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export default defineConfig({
+  /*
+   * A raiz é a pasta da aplicação, e não o diretório de onde o comando foi
+   * chamado. Sem isto, rodar o Vite da raiz do repositório (como o Playwright
+   * faz) procura o `index.html` no lugar errado e o servidor sobe servindo
+   * nada.
+   */
+  root: dirname(fileURLToPath(import.meta.url)),
   plugins: [react(), tailwindcss()],
   resolve: {
     // Os pacotes do monorepo são consumidos pela FONTE, não pelo `dist`: o

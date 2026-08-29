@@ -37,7 +37,15 @@ export function EntrarPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg p-4">
       <Card className="w-full max-w-sm">
-        <form onSubmit={entrar} className="flex flex-col gap-5 p-6">
+        {/*
+         * `noValidate`: a validação NOSSA é a que roda.
+         *
+         * Sem isto, o navegador recusa o envio antes de o React ver o clique e
+         * mostra a bolha dele — no idioma do sistema operacional, sem relação
+         * com o campo, e invisível para leitor de tela. A nossa mensagem fica
+         * no campo, é anunciada, e está em português.
+         */}
+        <form onSubmit={entrar} noValidate className="flex flex-col gap-5 p-6">
           <header className="flex flex-col items-center gap-3 text-center">
             <span
               aria-hidden="true"

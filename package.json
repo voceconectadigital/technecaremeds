@@ -26,7 +26,12 @@
     "openapi": "node tools/openapi/generate.mjs",
     "openapi:check": "node tools/openapi/generate.mjs --check",
     "bench:seed": "node tools/bench/seed.mjs",
-    "bench": "node tools/bench/run.mjs"
+    "bench": "node tools/bench/run.mjs",
+    "e2e:api": "node tools/e2e/api.mjs",
+    "e2e:web": "vite --config apps/web/vite.config.ts --port 5311 --strictPort",
+    "e2e:db": "node tools/db/run.mjs migrate && node e2e/fixtures/seed.mjs --reset",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
@@ -50,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

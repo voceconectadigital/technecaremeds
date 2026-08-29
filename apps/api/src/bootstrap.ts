@@ -19,6 +19,34 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   // e continua sendo um teto: acima dele o cliente recebe 413, não 500.
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: false, limit: '1mb' }));
+  /*
+   * CORS por lista explícita, e nunca `*`.
+   *
+   * A interface e a API vivem em origens diferentes — em desenvolvimento por
+   * porta, em produção por domínio. Sem CORS o navegador recusa a chamada e a
+   * tela mostra "Failed to fetch", que não diz nada a ninguém.
+   *
+   * `credentials: true` combinado com `origin: '*'` é recusado pelo próprio
+   * navegador, e com razão: seria autorizar qualquer site a agir em nome de
+   * quem está logado. Por isso a lista é fechada.
+   */
+  const origens = deps.env.AURORA_CORS_ORIGINS.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  if (origens.length > 0) {
+    app.enableCors({
+      origin: origens,
+      credentials: true,
+      // Só o que a aplicação realmente manda. `x-aurora-organization` é a
+      // escolha de organização; `x-request-id` correlaciona com o log.
+      allowedHeaders: ['authorization', 'content-type', 'x-aurora-organization', 'x-request-id'],
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      maxAge: 600,
+    });
+    logger.info('CORS habilitado', { origens });
+  }
+
   app.useGlobalFilters(new DomainErrorFilter(logger));
   app.useGlobalGuards(new PermissionsGuard(app.get(Reflector)));
   // A rota do QR fica fora de `/v1`: o endereço vai impresso numa etiqueta que

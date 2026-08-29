@@ -32,3 +32,8 @@ supabase/.branches/
 
 # build da interface
 apps/web/dist/
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/

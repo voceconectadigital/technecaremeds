@@ -38,6 +38,19 @@ export const envSchema = z
     AURORA_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
     AURORA_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
+    /**
+     * Origens autorizadas a chamar a API pelo navegador, separadas por vírgula.
+     *
+     * VAZIO É O PADRÃO, e é o padrão certo: sem nenhum cabeçalho de CORS, só
+     * uma página servida da MESMA origem consegue chamar a API. Um `*` aqui
+     * deixaria qualquer site do mundo fazer requisição autenticada em nome de
+     * quem estivesse logado.
+     *
+     * Em desenvolvimento a interface roda numa porta e a API noutra, então a
+     * lista precisa ser explícita — nunca deduzida.
+     */
+    AURORA_CORS_ORIGINS: z.string().default(''),
+
     AURORA_ALLOW_UNSAFE_DEV: booleanish.default(false),
   })
   .superRefine((env, ctx) => {

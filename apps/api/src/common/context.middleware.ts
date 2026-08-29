@@ -23,17 +23,28 @@ export interface AuroraRequest extends IncomingRequest {
 type Next = (err?: unknown) => void;
 
 /**
- * Rotas que não passam pela resolução de contexto:
- *  · health — precisa responder quando tudo mais falhou
- *  · me/*   — responde ANTES de existir organização no contexto; é a rota que
- *             o seletor de organização usa. Faz a própria verificação de
- *             credencial.
- *  · q/*    — resolução pública de QR Code (§07). Não tem sessão por desenho;
- *             a consulta vai por função SECURITY DEFINER de argumento fixo, e
- *             a rota devolve a mesma resposta para token inexistente e para
- *             organização que não permite acesso anônimo.
+ * Rotas que NÃO passam pela resolução de contexto.
+ *
+ * A lista é de caminhos EXATOS, e não de prefixos. A versão anterior isentava
+ * `me/*` inteiro, com a justificativa que vale só para `me/organizations` — e
+ * quando `me/session` nasceu, herdou a isenção por acidente e passou a
+ * responder 500: ela PRECISA do contexto, porque o que ela devolve é
+ * justamente o contexto resolvido.
+ *
+ * Prefixo é conveniente e vaza. Caminho exato obriga a decidir de novo a cada
+ * rota nova, que é exatamente o que se quer numa lista de isenção.
+ *
+ *  · health/*        — precisa responder quando tudo mais falhou;
+ *  · me/organizations — responde ANTES de existir organização no contexto; é a
+ *                       rota que o seletor usa, e faz a própria verificação de
+ *                       credencial;
+ *  · q/*             — resolução pública de QR Code (§07). Não tem sessão por
+ *                       desenho: a consulta vai por função SECURITY DEFINER de
+ *                       argumento fixo, e a rota devolve a MESMA resposta para
+ *                       token inexistente e para organização que não permite
+ *                       acesso anônimo.
  */
-const PUBLIC_PATH = /(^|\/)(health|me|q)(\/|$)/;
+const PUBLIC_PATH = /(^|\/)(health(\/|$)|me\/organizations$|q\/)/;
 
 export function createContextMiddleware(resolver: ContextResolver, logger: StructuredLogger) {
   return async function contextMiddleware(req: AuroraRequest, _res: unknown, next: Next): Promise<void> {

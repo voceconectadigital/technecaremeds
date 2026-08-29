@@ -3,7 +3,22 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', 'docs/**', 'tools/**', '**/*.config.*'] },
+  {
+    // `tools/**` e `e2e/fixtures/*.mjs` são scripts de linha de comando: usam
+    // `process` e `console` por definição, e não fazem parte do que roda em
+    // produção. Os TESTES de e2e (`.spec.ts`) continuam sob as mesmas regras
+    // do resto, porque eles são código que a equipe lê e mantém.
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'docs/**',
+      'tools/**',
+      'e2e/fixtures/*.mjs',
+      '**/*.config.*',
+      'test-results/**',
+      'playwright-report/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

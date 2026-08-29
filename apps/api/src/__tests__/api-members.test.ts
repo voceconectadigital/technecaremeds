@@ -301,3 +301,39 @@ describe('a resposta cumpre o contrato', () => {
     expect(r.body.details.field).toBe('email');
   });
 });
+
+/*
+ * A rota de sessão precisa do CONTEXTO — ela existe para devolvê-lo.
+ *
+ * A lista de rotas isentas do middleware isentava `me/*` inteiro, com a
+ * justificativa que vale só para `me/organizations`. Quando `me/session`
+ * nasceu, herdou a isenção por acidente e respondia 500. Prefixo é
+ * conveniente e vaza; a lista virou de caminhos exatos.
+ */
+describe('me/session', () => {
+  it('devolve quem sou, onde estou e o que posso', async () => {
+    const r = await comoDona(http.get('/v1/me/session')).expect(200);
+
+    expect(r.body.user.email).toBe(DONA);
+    expect(r.body.organization.name).toBe('Membros A');
+    expect(r.body.membership.roles).toContain('admin');
+    // A lista é a MESMA que o guard usa: não há segunda avaliação, e por isso
+    // não há como as duas discordarem.
+    expect(r.body.permissions).toContain('organization.manage_members');
+    expect(r.body.permissions).toEqual([...r.body.permissions].sort());
+  });
+
+  it('sem credencial: 401, e não 500', async () => {
+    await http.get('/v1/me/session').expect(401);
+  });
+
+  it('a rota de organizações continua respondendo ANTES de haver contexto', async () => {
+    // Esta é a que precisa da isenção: é o seletor, e roda quando ainda não há
+    // organização escolhida.
+    const r = await http
+      .get('/v1/me/organizations')
+      .set('authorization', `Bearer ${tokenFor(DONA)}`)
+      .expect(200);
+    expect(r.body.items.length).toBeGreaterThan(0);
+  });
+});
