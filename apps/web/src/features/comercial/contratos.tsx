@@ -22,16 +22,7 @@
 import { Link, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { Boxes, FileSignature, Search, ShieldCheck } from 'lucide-react';
-import {
-  Card,
-  CardHeader,
-  EmptyState,
-  Select,
-  Skeleton,
-  SkeletonList,
-  StatusChip,
-  cn,
-} from '@aurora/ui';
+import { Card, CardHeader, EmptyState, Select, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import {
   contractAssets,
   contractDetail,
@@ -41,10 +32,9 @@ import {
   type ContractRow,
   type ContractStatus,
 } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
 import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
 
@@ -90,10 +80,7 @@ export function ContratosPage() {
   if (isError) return <ErrorScreen error={error} />;
 
   return (
-    <AppShell
-      title="Contratos"
-      subtitle="O que cada acordo cobre, até quando vale, e o que está por vencer."
-    >
+    <AppShell title="Contratos" subtitle="O que cada acordo cobre, até quando vale, e o que está por vencer.">
       <div className="flex flex-col gap-4">
         <AlternadorComercial />
 
@@ -258,18 +245,17 @@ export function ContratoPage() {
             </div>
 
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-              <Info rotulo="Vigência" valor={`${formatarData(c.starts_on)} → ${c.ends_on ? formatarData(c.ends_on) : 'sem fim'}`} />
+              <Info
+                rotulo="Vigência"
+                valor={`${formatarData(c.starts_on)} → ${c.ends_on ? formatarData(c.ends_on) : 'sem fim'}`}
+              />
               <Info rotulo="Natureza" valor={c.kind} />
               <Info
                 rotulo="Chamados inclusos"
                 valor={c.included_calls === null ? null : String(c.included_calls)}
                 vazio="Sem franquia"
               />
-              <Info
-                rotulo="Horas inclusas"
-                valor={c.included_hours}
-                vazio="Sem franquia"
-              />
+              <Info rotulo="Horas inclusas" valor={c.included_hours} vazio="Sem franquia" />
             </dl>
           </div>
         </Card>
@@ -355,9 +341,7 @@ export function ContratoPage() {
                         >
                           <span className="block truncate text-sm text-text">{a.name}</span>
                           {a.location_path && (
-                            <span className="block truncate text-xs text-muted">
-                              {a.location_path}
-                            </span>
+                            <span className="block truncate text-xs text-muted">{a.location_path}</span>
                           )}
                         </Link>
                       </li>

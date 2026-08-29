@@ -15,12 +15,10 @@ import { Inbox, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button, Card, EmptyState, SkeletonList, StatusChip, Tabs, cn } from '@aurora/ui';
 import { requestsQueue, type ServiceRequestRow, type RequestStatus } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
-import { useUrlState } from '../../lib/url-state';
-import { Can } from '../../lib/permissions';
 
 const ABAS = [
   { id: 'todas', label: 'Todas' },

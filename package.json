@@ -31,7 +31,8 @@
     "e2e:web": "vite --config apps/web/vite.config.ts --port 5311 --strictPort",
     "e2e:db": "node tools/db/run.mjs migrate && node e2e/fixtures/seed.mjs --reset",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "e2e:portal": "vite --config apps/portal/vite.config.ts --port 5312 --strictPort"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

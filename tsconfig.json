@@ -26,7 +26,13 @@
       "path": "packages/ui"
     },
     {
+      "path": "packages/app-kit"
+    },
+    {
       "path": "apps/web"
+    },
+    {
+      "path": "apps/portal"
     }
   ]
 }

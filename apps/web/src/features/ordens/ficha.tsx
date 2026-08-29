@@ -82,13 +82,12 @@ import {
   type WorkOrderPart,
   type WorkOrderTransition,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
-import { useUrlState } from '../../lib/url-state';
 
 const ABAS = [
   { id: 'resumo', label: 'Resumo' },
@@ -168,7 +167,13 @@ export function OrdemPage() {
       <div className="flex flex-col gap-4">
         <FaixaDeDecisao os={data} />
 
-        <Tabs aria-label="Seções da ordem de serviço" idPrefix="os" items={[...ABAS]} value={aba} onChange={setAba} />
+        <Tabs
+          aria-label="Seções da ordem de serviço"
+          idPrefix="os"
+          items={[...ABAS]}
+          value={aba}
+          onChange={setAba}
+        />
 
         <div
           role="tabpanel"
@@ -260,8 +265,8 @@ function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
             <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-bad" />
             <p className="text-sm text-bad-text">
               A janela programada não vale mais
-              {os.window_invalidated_reason ? `: ${os.window_invalidated_reason}` : '.'} Reprograme
-              antes de contar com ela.
+              {os.window_invalidated_reason ? `: ${os.window_invalidated_reason}` : '.'} Reprograme antes de
+              contar com ela.
             </p>
           </div>
         )}
@@ -375,9 +380,7 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
               <dt className="text-xs text-subtle">O que foi feito</dt>
               <dd className="mt-1 text-base whitespace-pre-wrap text-text">
                 {os.resolution || (
-                  <span className="text-subtle">
-                    Ainda não descrito. É pedido na transição de conclusão.
-                  </span>
+                  <span className="text-subtle">Ainda não descrito. É pedido na transição de conclusão.</span>
                 )}
               </dd>
             </div>
@@ -403,11 +406,7 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
           <Info rotulo="Patrimônio" valor={os.asset_serial_snapshot} />
           <Info rotulo="Aberta por" valor={os.created_by_name} />
           <Info rotulo="Aberta" valor={formatarDataRelativa(os.created_at)} />
-          <Info
-            rotulo="Veio da solicitação"
-            valor={os.service_request_number}
-            vazio="Aberta direto"
-          />
+          <Info rotulo="Veio da solicitação" valor={os.service_request_number} vazio="Aberta direto" />
           <Info
             rotulo="Iniciada"
             valor={os.started_at ? new Date(os.started_at).toLocaleString('pt-BR') : null}
@@ -524,8 +523,7 @@ function AbaExecucao({ id }: { id: string }) {
                 <li
                   key={p.id}
                   className={
-                    'flex items-baseline gap-3 px-2.5 py-2 ' +
-                    (i > 0 ? 'border-t border-border-subtle' : '')
+                    'flex items-baseline gap-3 px-2.5 py-2 ' + (i > 0 ? 'border-t border-border-subtle' : '')
                   }
                 >
                   <span className="min-w-0 flex-1">
@@ -539,8 +537,7 @@ function AbaExecucao({ id }: { id: string }) {
                   </span>
                   <span
                     className={
-                      'shrink-0 text-sm tabular-nums ' +
-                      (p.kind === 'return' ? 'text-muted' : 'text-text')
+                      'shrink-0 text-sm tabular-nums ' + (p.kind === 'return' ? 'text-muted' : 'text-text')
                     }
                     data-numeric
                   >
@@ -587,8 +584,7 @@ function AbaAnexos({ id }: { id: string }) {
               <li
                 key={a.id}
                 className={
-                  'flex items-baseline gap-3 px-2.5 py-2 ' +
-                  (i > 0 ? 'border-t border-border-subtle' : '')
+                  'flex items-baseline gap-3 px-2.5 py-2 ' + (i > 0 ? 'border-t border-border-subtle' : '')
                 }
               >
                 <span className="min-w-0 flex-1">
@@ -663,11 +659,7 @@ function AbaConversa({ id }: { id: string }) {
         {isLoading ? (
           <SkeletonList rows={3} label="comentários" />
         ) : !data || data.items.length === 0 ? (
-          <EmptyState
-            icon={<MessageSquare className="size-5" />}
-            title="Nada dito ainda"
-            className="py-6"
-          />
+          <EmptyState icon={<MessageSquare className="size-5" />} title="Nada dito ainda" className="py-6" />
         ) : (
           <ul className="flex flex-col gap-2 p-1">
             {data.items.map((c) => (
@@ -681,9 +673,7 @@ function AbaConversa({ id }: { id: string }) {
                 }
               >
                 <p className="flex items-center gap-1.5 text-xs text-muted">
-                  {c.visibility === 'internal' && (
-                    <Lock aria-hidden="true" className="size-3 shrink-0" />
-                  )}
+                  {c.visibility === 'internal' && <Lock aria-hidden="true" className="size-3 shrink-0" />}
                   <span className="font-medium text-text">{c.author_name ?? 'Alguém'}</span>
                   <span>·</span>
                   <span data-numeric>{formatarDataRelativa(c.created_at)}</span>
@@ -775,17 +765,12 @@ function AbaHistorico({ historico }: { historico: WorkOrderHistoryEntry[] }) {
         {historico.length === 0 && <li className="text-sm text-subtle">Ainda sem movimentação.</li>}
         {historico.map((h, i) => (
           <li key={`${h.changed_at}-${i}`} className="flex gap-3 text-sm">
-            <span
-              aria-hidden="true"
-              className="mt-1.5 size-2 shrink-0 rounded-full bg-border-strong"
-            />
+            <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-border-strong" />
             <span className="min-w-0 flex-1">
               <span className="block text-text">
                 {h.from_label ? `${h.from_label} → ` : ''}
                 {h.to_label}
-                {h.wait_reason_label && (
-                  <span className="text-muted"> ({h.wait_reason_label})</span>
-                )}
+                {h.wait_reason_label && <span className="text-muted"> ({h.wait_reason_label})</span>}
               </span>
               <span className="block text-xs text-muted" data-numeric>
                 {formatarDataRelativa(h.changed_at)}
@@ -847,9 +832,7 @@ function DialogoDeTransicao({
                 ...(valores.cause_failure_code_id
                   ? { cause_failure_code_id: valores.cause_failure_code_id }
                   : {}),
-                ...(valores.cancellation_reason
-                  ? { cancellation_reason: valores.cancellation_reason }
-                  : {}),
+                ...(valores.cancellation_reason ? { cancellation_reason: valores.cancellation_reason } : {}),
               });
             }}
           >
@@ -923,14 +906,11 @@ function DialogoDeTransicao({
 
         {/* Exigência que a tela ainda não sabe pedir: dito, e não escondido. */}
         {transicao.requires.some(
-          (c) =>
-            !['wait_reason_id', 'resolution', 'cause_failure_code_id', 'cancellation_reason'].includes(
-              c
-            )
+          (c) => !['wait_reason_id', 'resolution', 'cause_failure_code_id', 'cancellation_reason'].includes(c)
         ) && (
           <p className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-            Esta transição também exige: {transicao.requires.join(', ')}. Alguns desses campos ainda
-            não têm formulário nesta tela.
+            Esta transição também exige: {transicao.requires.join(', ')}. Alguns desses campos ainda não têm
+            formulário nesta tela.
           </p>
         )}
       </div>

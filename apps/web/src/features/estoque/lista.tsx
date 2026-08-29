@@ -44,11 +44,9 @@ import {
   type StockBalance,
   type StockMovement,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, Can, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
-import { Can } from '../../lib/permissions';
 import { formatarDataRelativa } from '../../routes/hoje';
 
 const ABAS = [
@@ -135,7 +133,9 @@ export function EstoquePage() {
               </div>
             ) : filtrados.length === 0 ? (
               <EmptyState
-                icon={aba === 'faltando' ? <Package className="size-5" /> : <PackageSearch className="size-5" />}
+                icon={
+                  aba === 'faltando' ? <Package className="size-5" /> : <PackageSearch className="size-5" />
+                }
                 title={
                   itens.length === 0
                     ? aba === 'faltando'
@@ -449,8 +449,12 @@ function DialogoAjuste({ saldo, onFechar }: { saldo: StockBalance; onFechar: () 
               diferenca > 0 ? 'bg-good-soft text-good-text' : 'bg-warn-soft text-warn-text'
             )}
           >
-            O ajuste será de <strong data-numeric>{diferenca > 0 ? '+' : ''}{diferenca}</strong> —{' '}
-            {diferenca > 0 ? 'há mais na prateleira do que no sistema' : 'falta na prateleira'}.
+            O ajuste será de{' '}
+            <strong data-numeric>
+              {diferenca > 0 ? '+' : ''}
+              {diferenca}
+            </strong>{' '}
+            — {diferenca > 0 ? 'há mais na prateleira do que no sistema' : 'falta na prateleira'}.
           </p>
         )}
 

@@ -8,9 +8,8 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { cn, Tooltip } from '@aurora/ui';
-import { usePermissions } from '../lib/permissions';
+import { usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { MAIN_NAV, SETTINGS_NAV, type NavItem } from './navigation';
-import { useSessionQuery } from '../lib/use-session-query';
 
 export interface SidebarProps {
   /** Chamado ao navegar — a gaveta do celular se fecha sozinha. */

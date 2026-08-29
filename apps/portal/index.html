@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      `viewport-fit=cover` e `maximum-scale` ausente.
+
+      O portal é usado em pé, no corredor, com uma mão. Bloquear o zoom seria
+      impedir quem enxerga pouco de ler o próprio chamado — e a WCAG 1.4.4
+      exige que o texto amplie até 200%.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f1f5f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1211" media="(prefers-color-scheme: dark)" />
+    <title>Portal — Aurora</title>
+    <script>
+      (function () {
+        try {
+          var escolhido = localStorage.getItem('aurora:tema');
+          if (escolhido === 'dark' || escolhido === 'light') {
+            document.documentElement.setAttribute('data-theme', escolhido);
+          }
+        } catch (e) {
+          /* Modo privado bloqueia o armazenamento. A página funciona sem. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

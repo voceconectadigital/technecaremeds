@@ -24,6 +24,7 @@ export default defineConfig({
     alias: {
       '@aurora/contracts': resolve(raiz, 'packages/contracts/src'),
       '@aurora/ui': resolve(raiz, 'packages/ui/src'),
+      '@aurora/app-kit': resolve(raiz, 'packages/app-kit/src'),
       '@aurora/domain': resolve(raiz, 'packages/domain/src'),
     },
   },

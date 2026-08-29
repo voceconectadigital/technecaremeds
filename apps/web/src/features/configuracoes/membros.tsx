@@ -24,10 +24,9 @@ import {
   useToast,
 } from '@aurora/ui';
 import { membersInvite, membersList, membersSuspend, type Member } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, Can, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { Can, usePermissions } from '../../lib/permissions';
 import { GavetaDeAcesso } from './acesso';
 import { AlternadorDeConfiguracoes } from './alternador';
 
@@ -161,9 +160,7 @@ export function MembrosPage() {
         )}
       </Card>
 
-      {vendoAcesso && (
-        <GavetaDeAcesso membro={vendoAcesso} onFechar={() => setVendoAcesso(null)} />
-      )}
+      {vendoAcesso && <GavetaDeAcesso membro={vendoAcesso} onFechar={() => setVendoAcesso(null)} />}
       <DialogoConvite open={convidando} onOpenChange={setConvidando} />
       {suspendendo && <DialogoSuspensao membro={suspendendo} onFechar={() => setSuspendendo(null)} />}
     </AppShell>

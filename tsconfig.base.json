@@ -28,6 +28,7 @@
       "@aurora/config": ["packages/config/src"],
       "@aurora/contracts": ["packages/contracts/src"],
       "@aurora/ui": ["packages/ui/src"],
+      "@aurora/app-kit": ["packages/app-kit/src"],
       "@aurora/web": ["apps/web/src"]
     }
   },

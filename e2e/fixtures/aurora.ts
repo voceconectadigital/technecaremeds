@@ -31,6 +31,15 @@ export const E2E = {
    * diz nada sobre quem não deve.
    */
   emailAuditora: 'auditora@e2e.test',
+  /**
+   * A enfermeira do cliente: assento de PORTAL, escopo de um cliente e um
+   * local.
+   *
+   * É a persona da SPEC §19 — "a enfermeira da UTI II vê a UTI II" — e é o
+   * escopo restrito que faz o teste de vazamento do portal provar alguma
+   * coisa. Com escopo aberto, ele passaria por acidente.
+   */
+  emailPortalA: 'enfermeira@e2e.test',
 } as const;
 
 export interface Sessao {

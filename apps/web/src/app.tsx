@@ -14,11 +14,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
-import { ApiError, ApiProvider } from './lib/api';
-import { PermissionsProvider } from './lib/permissions';
-import { SessionProvider } from './lib/session';
-import { ThemeProvider } from './lib/theme';
-import { useSessionQuery } from './lib/use-session-query';
+import {
+  ApiError,
+  ApiProvider,
+  PermissionsProvider,
+  SessionProvider,
+  ThemeProvider,
+  useSessionQuery,
+} from '@aurora/app-kit';
 import { router } from './routes/router';
 import { ErrorBoundary } from './shell/error-boundary';
 

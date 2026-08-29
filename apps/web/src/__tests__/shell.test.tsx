@@ -15,10 +15,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ApiError, type ApiClient, type OperationDefinition } from '@aurora/contracts';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
 import type { ReactNode } from 'react';
-import { ApiProvider } from '../lib/api';
-import { PermissionsProvider, Can, usePermissions } from '../lib/permissions';
-import { SessionProvider, useSession } from '../lib/session';
-import { ThemeProvider } from '../lib/theme';
+import {
+  ApiProvider,
+  Can,
+  PermissionsProvider,
+  SessionProvider,
+  ThemeProvider,
+  usePermissions,
+  useSession,
+} from '@aurora/app-kit';
 import { ErrorScreen } from '../shell/error-boundary';
 import { MAIN_NAV, SETTINGS_NAV } from '../shell/navigation';
 

@@ -20,10 +20,9 @@ import { useMemo, useState } from 'react';
 import { FileCheck2, FileWarning, Search } from 'lucide-react';
 import { Card, EmptyState, Select, SkeletonList, StatusChip, Tabs, cn, tabIds } from '@aurora/ui';
 import { documentsList, type DocumentRow } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
 import { formatarData } from '../comercial/orcamentos';
 import { AlternadorDeParque } from '../ativos/alternador';
 
@@ -55,10 +54,7 @@ export function DocumentosPage() {
 
   const itens = useMemo(() => data?.items ?? [], [data]);
 
-  const tipos = useMemo(
-    () => [...new Set(itens.map((d) => d.type_name))].sort(),
-    [itens]
-  );
+  const tipos = useMemo(() => [...new Set(itens.map((d) => d.type_name))].sort(), [itens]);
 
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -132,11 +128,7 @@ export function DocumentosPage() {
             ) : filtrados.length === 0 ? (
               <EmptyState
                 icon={
-                  aba === 'vencendo' ? (
-                    <FileCheck2 className="size-5" />
-                  ) : (
-                    <FileWarning className="size-5" />
-                  )
+                  aba === 'vencendo' ? <FileCheck2 className="size-5" /> : <FileWarning className="size-5" />
                 }
                 title={
                   itens.length === 0
@@ -163,9 +155,7 @@ export function DocumentosPage() {
                     )}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base text-text">
-                        {d.title || d.type_name}
-                      </span>
+                      <span className="block truncate text-base text-text">{d.title || d.type_name}</span>
                       <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
                         {[d.number, d.version > 1 ? `v${d.version}` : null, d.asset_name]
                           .filter(Boolean)

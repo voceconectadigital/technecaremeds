@@ -15,9 +15,7 @@ import { Link } from '@tanstack/react-router';
 import { ArrowRight, ClipboardList, Inbox, PauseCircle } from 'lucide-react';
 import { Card, CardHeader, EmptyState, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { requestsQueue, workOrdersBoard, type BoardColumn, type ServiceRequestRow } from '@aurora/contracts';
-import { useApiQuery } from '../lib/api';
-import { usePermissions } from '../lib/permissions';
-import { useSessionQuery } from '../lib/use-session-query';
+import { useApiQuery, usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { AppShell } from '../shell/app-shell';
 
 export function HojePage() {

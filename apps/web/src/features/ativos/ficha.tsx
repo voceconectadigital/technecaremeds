@@ -20,30 +20,10 @@
  * saiu do servidor".
  */
 import { Link, useParams } from '@tanstack/react-router';
-import {
-  BadgeCheck,
-  CalendarDays,
-  MapPin,
-  QrCode,
-  ShieldAlert,
-  Wrench,
-} from 'lucide-react';
-import {
-  Card,
-  CardHeader,
-  EmptyState,
-  Skeleton,
-  SkeletonList,
-  StatusChip,
-  cn,
-} from '@aurora/ui';
-import {
-  assetDetail,
-  workOrdersList,
-  type AssetDetail,
-  type WorkOrderRow,
-} from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { BadgeCheck, CalendarDays, MapPin, QrCode, ShieldAlert, Wrench } from 'lucide-react';
+import { Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
+import { assetDetail, workOrdersList, type AssetDetail, type WorkOrderRow } from '@aurora/contracts';
+import { useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
@@ -77,9 +57,7 @@ export function AtivoPage() {
   return (
     <AppShell
       title={data.name}
-      subtitle={[data.manufacturer_name, data.model_name, data.category_name]
-        .filter(Boolean)
-        .join(' · ')}
+      subtitle={[data.manufacturer_name, data.model_name, data.category_name].filter(Boolean).join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
     >
       <div className="flex flex-col gap-4">
@@ -230,11 +208,7 @@ export function AtivoPage() {
               <Card>
                 <CardHeader title="Identificação" />
                 <dl className="flex flex-col gap-3 p-4 text-sm">
-                  <Info
-                    rotulo="QR"
-                    valor={data.qr_token}
-                    icone={<QrCode className="size-3.5" />}
-                  />
+                  <Info rotulo="QR" valor={data.qr_token} icone={<QrCode className="size-3.5" />} />
                   <Info rotulo="Código de barras" valor={data.barcode} />
                 </dl>
               </Card>

@@ -53,6 +53,14 @@ export const E2E = {
   // e NÃO enxerga nota interna nem custo. Sem alguém assim na massa, todo
   // teste de vazamento é feito com quem pode ver tudo — e prova metade.
   userAuditora: '0193d900-0001-7000-8000-00000000000d',
+  /*
+   * A enfermeira do CLIENTE, com assento de portal.
+   *
+   * Escopo de um cliente e de um local: é a persona que a §19 descreve — "a
+   * enfermeira da UTI II vê a UTI II". Sem escopo restrito, um teste de
+   * vazamento do portal não prova nada.
+   */
+  userPortalA: '0193d900-0001-7000-8000-00000000000e',
 
   memCoordA: '0193d900-0002-7000-8000-00000000000a',
   memTecA: '0193d900-0002-7000-8000-00000000001a',
@@ -60,6 +68,7 @@ export const E2E = {
   memConsultoraA: '0193d900-0002-7000-8000-00000000001c',
   memConsultoraB: '0193d900-0002-7000-8000-00000000002c',
   memAuditoraA: '0193d900-0002-7000-8000-00000000001d',
+  memPortalA: '0193d900-0002-7000-8000-00000000001e',
 
   clienteA: '0193d900-0003-7000-8000-00000000000a',
   clienteB: '0193d900-0003-7000-8000-00000000000b',
@@ -69,6 +78,7 @@ export const E2E = {
   emailCoordB: 'coord.b@e2e.test',
   emailConsultora: 'consultora@e2e.test',
   emailAuditora: 'auditora@e2e.test',
+  emailPortalA: 'enfermeira@e2e.test',
 };
 
 const pool = new Pool({ connectionString: url, max: 4 });
@@ -132,6 +142,7 @@ async function main() {
     [E2E.userCoordB, E2E.emailCoordB, 'Bruno do Beta'],
     [E2E.userConsultora, E2E.emailConsultora, 'Carla Consultora'],
     [E2E.userAuditora, E2E.emailAuditora, 'Denise Auditora'],
+    [E2E.userPortalA, E2E.emailPortalA, 'Elisa Enfermeira'],
   ]) {
     await q(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [id, email, nome]);
   }
@@ -160,6 +171,44 @@ async function main() {
         mem,
         org,
       ]);
+      await c.query('COMMIT');
+    } catch (e) {
+      await c.query('ROLLBACK');
+      throw e;
+    } finally {
+      c.release();
+    }
+  }
+
+  /* ------------------------------------------- o vínculo do PORTAL */
+
+  /*
+   * Fora do laço acima de propósito.
+   *
+   * Este vínculo tem `seat_type = 'portal'` — só `staff` consome assento pago
+   * (§05) — e escopo RESTRITO por cliente e por local. O escopo restrito é o
+   * que faz o teste de vazamento valer alguma coisa: com `customer_scope =
+   * 'all'`, a enfermeira do Alfa enxergaria os chamados do Beta e o teste
+   * passaria sem provar nada.
+   *
+   * O cliente e o local ainda não existem neste ponto — são criados no bloco
+   * seguinte —, e por isso o escopo entra em `all` aqui e é APERTADO depois,
+   * quando os identificadores existem. É a única ordem possível sem inverter
+   * a criação do cliente, que depende do contexto de organização.
+   */
+  {
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query(
+        `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+         VALUES ($1, $2, $3, 'active', 'portal', false)`,
+        [E2E.memPortalA, E2E.orgA, E2E.userPortalA]
+      );
+      await c.query(
+        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
+        [E2E.memPortalA, E2E.orgA]
+      );
       await c.query('COMMIT');
     } catch (e) {
       await c.query('ROLLBACK');
@@ -226,6 +275,9 @@ async function main() {
       if (org === E2E.orgA) {
         await assignRole(s, E2E.memTecA, papeis.get('technician'));
         await assignRole(s, E2E.memAuditoraA, papeis.get('auditor'));
+        // `requester` é o papel do solicitante: lê o próprio chamado e abre
+        // outro. É tudo o que um usuário de portal precisa.
+        await assignRole(s, E2E.memPortalA, papeis.get('requester'));
       }
       // A consultora é coordenadora nas duas: mesmo papel, organizações
       // diferentes.
@@ -333,6 +385,24 @@ async function main() {
         unitCost: 90,
       });
       await setMinimum(s, filtro, deposito, 10);
+
+      /*
+       * O ESCOPO DO PORTAL É APERTADO AGORA, com os identificadores que
+       * acabaram de nascer: um cliente e um local.
+       *
+       * É a persona da §19 — "a enfermeira da UTI II vê a UTI II" — e é o que
+       * faz o teste de vazamento provar alguma coisa: sem o aperto, ela veria
+       * os chamados do Beta e o teste passaria por acidente.
+       */
+      if (org === E2E.orgA) {
+        await s.query(
+          `UPDATE aurora.membership_scopes
+              SET customer_scope = 'listed', customer_ids = $2,
+                  location_scope = 'listed', location_ids = $3
+            WHERE membership_id = $1`,
+          [E2E.memPortalA, [clienteId], [local]]
+        );
+      }
 
       /*
        * COMERCIAL: um contrato cobrindo a UTI, e um orçamento em rascunho.

@@ -15,7 +15,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Home, RotateCcw, ShieldOff } from 'lucide-react';
 import { Button, Card, EmptyState } from '@aurora/ui';
-import { ApiError } from '../lib/api';
+import { ApiError } from '@aurora/app-kit';
 
 interface Props {
   children: ReactNode;

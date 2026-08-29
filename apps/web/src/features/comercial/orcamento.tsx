@@ -39,7 +39,7 @@ import {
   type QuoteItem,
   type QuoteStatus,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarData, reais } from './orcamentos';
@@ -102,7 +102,18 @@ export function OrcamentoPage() {
   };
 
   const { data: versoes } = useApiQuery(quoteVersions, { params: { id } }) as {
-    data: { items: Array<{ id: string; version: number; status: QuoteStatus; total_cents: string; created_at: string; decided_at: string | null }> } | undefined;
+    data:
+      | {
+          items: Array<{
+            id: string;
+            version: number;
+            status: QuoteStatus;
+            total_cents: string;
+            created_at: string;
+            decided_at: string | null;
+          }>;
+        }
+      | undefined;
   };
 
   const mover = useApiMutation(quoteTransition, {
@@ -175,10 +186,9 @@ export function OrcamentoPage() {
                * diferentes.
                */
               <p className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
-                Este orçamento venceu pela data. O registro ainda diz
-                {' '}
-                <strong>{ROTULO[data.quote.status]}</strong> — a varredura que atualiza a situação
-                gravada roda periodicamente, e o que vale é a data.
+                Este orçamento venceu pela data. O registro ainda diz{' '}
+                <strong>{ROTULO[data.quote.status]}</strong> — a varredura que atualiza a situação gravada
+                roda periodicamente, e o que vale é a data.
               </p>
             )}
           </div>

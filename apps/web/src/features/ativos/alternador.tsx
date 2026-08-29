@@ -29,9 +29,7 @@ export function AlternadorDeParque() {
           aria-current={x.ativo ? 'page' : undefined}
           className={cn(
             'rounded-control px-3 py-1.5 text-sm transition-colors',
-            x.ativo
-              ? 'bg-accent-soft text-accent-text'
-              : 'text-muted hover:bg-surface-hover hover:text-text'
+            x.ativo ? 'bg-accent-soft text-accent-text' : 'text-muted hover:bg-surface-hover hover:text-text'
           )}
         >
           {x.rotulo}

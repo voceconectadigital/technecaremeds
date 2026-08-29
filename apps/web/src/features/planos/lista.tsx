@@ -17,23 +17,9 @@
  */
 import { Link, useParams } from '@tanstack/react-router';
 import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Repeat } from 'lucide-react';
-import {
-  Card,
-  CardHeader,
-  EmptyState,
-  Skeleton,
-  SkeletonList,
-  StatusChip,
-  cn,
-} from '@aurora/ui';
-import {
-  cycleCompliance,
-  planDetail,
-  plansList,
-  type PlanRow,
-  type PlanTask,
-} from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
+import { cycleCompliance, planDetail, plansList, type PlanRow, type PlanTask } from '@aurora/contracts';
+import { useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
@@ -52,10 +38,7 @@ export function PlanosPage() {
   const itens = data?.items ?? [];
 
   return (
-    <AppShell
-      title="Planos preventivos"
-      subtitle="O que se repete sozinho — e se está saindo no prazo."
-    >
+    <AppShell title="Planos preventivos" subtitle="O que se repete sozinho — e se está saindo no prazo.">
       <div className="flex flex-col gap-4">
         <AlternadorDeTrabalho />
 
@@ -98,7 +81,11 @@ export function PlanosPage() {
                      * e evita um trimestre.
                      */}
                     {p.task_count === 0 ? (
-                      <StatusChip tone="warn" size="sm" hint="Um plano sem tarefa nunca gera ordem de serviço">
+                      <StatusChip
+                        tone="warn"
+                        size="sm"
+                        hint="Um plano sem tarefa nunca gera ordem de serviço"
+                      >
                         Sem tarefa
                       </StatusChip>
                     ) : (
@@ -176,9 +163,7 @@ export function PlanoPage() {
                 Inclui atrasados
               </StatusChip>
             )}
-            {data.plan.description && (
-              <p className="w-full text-sm text-muted">{data.plan.description}</p>
-            )}
+            {data.plan.description && <p className="w-full text-sm text-muted">{data.plan.description}</p>}
           </div>
         </Card>
 
@@ -345,10 +330,8 @@ const ORDEM_ESTADO = [
 function IconeEstado({ estado }: { estado: string }) {
   const comum = 'size-3.5 shrink-0';
   if (estado === 'done') return <CircleCheck aria-hidden="true" className={`${comum} text-good`} />;
-  if (estado === 'skipped')
-    return <CircleSlash aria-hidden="true" className={`${comum} text-subtle`} />;
-  if (estado.startsWith('late'))
-    return <CircleAlert aria-hidden="true" className={`${comum} text-bad`} />;
+  if (estado === 'skipped') return <CircleSlash aria-hidden="true" className={`${comum} text-subtle`} />;
+  if (estado.startsWith('late')) return <CircleAlert aria-hidden="true" className={`${comum} text-bad`} />;
   return <CalendarClock aria-hidden="true" className={`${comum} text-muted`} />;
 }
 
@@ -372,9 +355,6 @@ const PLURAL: Record<string, string> = {
 
 /** "a cada 3 meses", e não "month/3". */
 function descreverFrequencia(t: PlanTask): string {
-  const unidade =
-    t.frequency_interval === 1
-      ? SINGULAR[t.frequency_unit]
-      : PLURAL[t.frequency_unit];
+  const unidade = t.frequency_interval === 1 ? SINGULAR[t.frequency_unit] : PLURAL[t.frequency_unit];
   return t.frequency_interval === 1 ? `a cada ${unidade}` : `a cada ${t.frequency_interval} ${unidade}`;
 }

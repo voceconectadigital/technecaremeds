@@ -328,8 +328,20 @@ describe('avisos', () => {
   });
 
   it('o sucesso sai sozinho depois do tempo', async () => {
+    /*
+     * 300ms, E NÃO 40 — e a diferença é entre um teste e um teste instável.
+     *
+     * Com 40ms, a asserção de que o aviso APARECEU corria contra o próprio
+     * relógio que o faz sumir: numa máquina carregada, tratar o clique e
+     * renderizar leva mais que isso, e o aviso já tinha ido embora quando a
+     * linha seguinte olhava. Passava quase sempre — e "quase sempre" é o pior
+     * resultado possível, porque ensina a reexecutar em vez de investigar.
+     *
+     * 300ms dá folga de uma ordem de grandeza para o agendamento do sistema
+     * operacional, e o `waitFor` continua terminando em menos de meio segundo.
+     */
     render(
-      <ToastProvider autoDismissMs={40}>
+      <ToastProvider autoDismissMs={300}>
         <Exemplo />
       </ToastProvider>
     );
@@ -340,8 +352,9 @@ describe('avisos', () => {
   });
 
   it('o erro NÃO desaparece sozinho, mesmo passado o tempo do sucesso', async () => {
+    // Mesma folga do caso acima, e pela mesma razão.
     render(
-      <ToastProvider autoDismissMs={40}>
+      <ToastProvider autoDismissMs={300}>
         <Exemplo />
       </ToastProvider>
     );

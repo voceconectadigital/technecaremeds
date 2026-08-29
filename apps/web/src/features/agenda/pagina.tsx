@@ -46,7 +46,7 @@ import {
   type ResourceLoad,
   type AgendaBucketItem,
 } from '@aurora/contracts';
-import { ApiError, useApi, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApi, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 

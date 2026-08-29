@@ -49,8 +49,7 @@ import {
   type PermissionOrigin,
   type Role,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
-import { usePermissions } from '../../lib/permissions';
+import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 
 export function GavetaDeAcesso({ membro, onFechar }: { membro: Member; onFechar: () => void }) {
   const { can } = usePermissions();
@@ -212,9 +211,7 @@ function PapeisDaPessoa({ membro }: { membro: Member }) {
   // Enquanto ninguém mexeu, o estado é o do servidor. Copiar para o estado
   // local na montagem faria a gaveta mostrar dados velhos depois de outra
   // pessoa ter mudado os papéis.
-  const atuais = new Set(
-    papeis.filter((p) => membro.roles.includes(p.key)).map((p) => p.id)
-  );
+  const atuais = new Set(papeis.filter((p) => membro.roles.includes(p.key)).map((p) => p.id));
   const selecao = escolhidos ?? atuais;
   const mudou = escolhidos !== null && !mesmosItens(escolhidos, atuais);
 
@@ -401,10 +398,7 @@ function DialogoExcecao({
       }
     >
       <div className="flex flex-col gap-4">
-        <Field
-          label="O que a exceção faz"
-          hint="Negar vence o papel. Conceder soma ao que os papéis já dão."
-        >
+        <Field label="O que a exceção faz" hint="Negar vence o papel. Conceder soma ao que os papéis já dão.">
           <Select value={efeito} onChange={(e) => setEfeito(e.target.value as 'grant' | 'deny')}>
             <option value="grant">Conceder esta permissão</option>
             <option value="deny">Negar esta permissão</option>

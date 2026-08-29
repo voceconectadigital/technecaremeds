@@ -24,6 +24,15 @@ const DATABASE_URL =
 
 const API_PORT = 3311;
 const WEB_PORT = 5311;
+/*
+ * O PORTAL SOBE NOUTRA PORTA, e não numa rota da web.
+ *
+ * São duas aplicações — a SPEC §19 pede navegação, vocabulário e densidade
+ * próprios —, e em produção serão dois domínios com dois conjuntos de
+ * cabeçalhos. Testá-las no mesmo servidor esconderia justamente o que a
+ * separação existe para garantir.
+ */
+const PORTAL_PORT = 5312;
 
 export default defineConfig({
   testDir: './e2e/specs',
@@ -57,7 +66,24 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
+      // O portal tem projeto próprio; este cobre a aplicação interna.
+      testIgnore: /portal.*\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+    },
+    {
+      /*
+       * O PORTAL É TESTADO NUM CELULAR, e não num monitor.
+       *
+       * A SPEC §19 diz o cenário: "em pé, no corredor". Testá-lo em 1440×900
+       * mediria uma tela que quase ninguém usa — e deixaria passar exatamente
+       * o que quebra num aparelho estreito.
+       */
+      name: 'portal',
+      testMatch: /portal.*\.spec\.ts$/,
+      use: {
+        ...devices['Pixel 7'],
+        baseURL: `http://localhost:${PORTAL_PORT}`,
+      },
     },
   ],
 
@@ -78,12 +104,23 @@ export default defineConfig({
         AURORA_DB_APP_ROLE: 'aurora_app',
         // A interface roda noutra porta: sem a origem na lista, o navegador
         // recusa a chamada e a tela mostra "Failed to fetch".
-        AURORA_CORS_ORIGINS: `http://localhost:${WEB_PORT}`,
+        // AS DUAS ORIGENS, separadas por vírgula: o portal roda noutra
+        // porta, e sem a origem na lista o navegador recusa a chamada e a tela
+        // mostra "Failed to fetch" — que foi exatamente o primeiro defeito que
+        // o Playwright achou nesta base.
+        AURORA_CORS_ORIGINS: `http://localhost:${WEB_PORT},http://localhost:${PORTAL_PORT}`,
       },
     },
     {
       command: 'npm run e2e:web',
       port: WEB_PORT,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { VITE_API_URL: `http://localhost:${API_PORT}/v1` },
+    },
+    {
+      command: 'npm run e2e:portal',
+      port: PORTAL_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: { VITE_API_URL: `http://localhost:${API_PORT}/v1` },

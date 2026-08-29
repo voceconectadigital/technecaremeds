@@ -21,7 +21,7 @@ import {
   workOrdersFromRequest,
   type ServiceRequestDetail,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';

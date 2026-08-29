@@ -28,15 +28,7 @@
  */
 import { useState } from 'react';
 import { HelpCircle, TrendingUp } from 'lucide-react';
-import {
-  Card,
-  CardHeader,
-  Dialog,
-  EmptyState,
-  Input,
-  Skeleton,
-  StatusChip,
-} from '@aurora/ui';
+import { Card, CardHeader, Dialog, EmptyState, Input, Skeleton, StatusChip } from '@aurora/ui';
 import {
   insightBacklog,
   insightFirstResponse,
@@ -50,9 +42,8 @@ import {
   type Coverage,
   type MetricDefinition,
 } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
-import { useUrlState } from '../../lib/url-state';
 
 interface Envelope {
   metric: string;
@@ -115,22 +106,14 @@ export function IndicadoresPage() {
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Indicador op={insightWorkOrdersOpened} periodo={periodo} onExplicar={setExplicando} />
-              <Indicador
-                op={insightWorkOrdersCompleted}
-                periodo={periodo}
-                onExplicar={setExplicando}
-              />
+              <Indicador op={insightWorkOrdersCompleted} periodo={periodo} onExplicar={setExplicando} />
               {/*
                 O backlog é FOTOGRAFIA, e não período: é o que está aberto num
                 instante. Misturá-lo com os de período faria alguém somar
                 "abertas" com "backlog" e chegar a um número que não significa
                 nada.
               */}
-              <Indicador
-                op={insightBacklog}
-                periodo={{ to: periodo.to }}
-                onExplicar={setExplicando}
-              />
+              <Indicador op={insightBacklog} periodo={{ to: periodo.to }} onExplicar={setExplicando} />
             </div>
           </section>
 
@@ -150,25 +133,15 @@ export function IndicadoresPage() {
               Prevenção
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Indicador
-                op={insightPreventiveVsCorrective}
-                periodo={periodo}
-                onExplicar={setExplicando}
-              />
+              <Indicador op={insightPreventiveVsCorrective} periodo={periodo} onExplicar={setExplicando} />
               <Indicador op={insightPlanCompliance} periodo={periodo} onExplicar={setExplicando} />
-              <Indicador
-                op={insightTimeByWaitReason}
-                periodo={periodo}
-                onExplicar={setExplicando}
-              />
+              <Indicador op={insightTimeByWaitReason} periodo={periodo} onExplicar={setExplicando} />
             </div>
           </section>
         </div>
       )}
 
-      {explicando && (
-        <DialogoDefinicao definicao={explicando} onFechar={() => setExplicando(null)} />
-      )}
+      {explicando && <DialogoDefinicao definicao={explicando} onFechar={() => setExplicando(null)} />}
     </AppShell>
   );
 }
@@ -322,13 +295,7 @@ function formatar(valor: number, unidade: string): string {
 
 /* -------------------------------------------------------------------------- */
 
-function DialogoDefinicao({
-  definicao,
-  onFechar,
-}: {
-  definicao: MetricDefinition;
-  onFechar: () => void;
-}) {
+function DialogoDefinicao({ definicao, onFechar }: { definicao: MetricDefinition; onFechar: () => void }) {
   return (
     <Dialog
       open
@@ -345,9 +312,7 @@ function DialogoDefinicao({
         <div>
           <dt className="text-xs font-semibold text-subtle">Dividido por</dt>
           <dd className="mt-0.5 text-text">
-            {definicao.denominator ?? (
-              <span className="text-subtle">nada — é uma contagem simples</span>
-            )}
+            {definicao.denominator ?? <span className="text-subtle">nada — é uma contagem simples</span>}
           </dd>
         </div>
 
@@ -373,9 +338,7 @@ function DialogoDefinicao({
           encontra diferença, e conclui que o sistema novo está errado.
         */}
         <div className="rounded-control bg-warn-soft px-3 py-2">
-          <dt className="text-xs font-semibold text-warn-text">
-            Antes de comparar com o sistema antigo
-          </dt>
+          <dt className="text-xs font-semibold text-warn-text">Antes de comparar com o sistema antigo</dt>
           <dd className="mt-0.5 text-warn-text">{definicao.comparability}</dd>
         </div>
 

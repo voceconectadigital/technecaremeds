@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button, Card, Field, Input } from '@aurora/ui';
-import { useSession } from '../lib/session';
+import { useSession } from '@aurora/app-kit';
 
 export function EntrarPage() {
   const { signIn } = useSession();

@@ -18,7 +18,7 @@ import {
   type CatalogKey,
   type WaitReason,
 } from '@aurora/contracts';
-import { useApiQuery } from './api';
+import { useApiQuery } from '@aurora/app-kit';
 
 /**
  * `CatalogKey` e não `string`: a tela de abrir solicitação pedia

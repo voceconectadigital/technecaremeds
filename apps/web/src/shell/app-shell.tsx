@@ -156,9 +156,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             </div>
             {/* `flex-wrap` e sem `shrink-0`: no estreito as ações quebram em
                 linhas em vez de empurrar o título para fora. */}
-            {actions && (
-              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>
-            )}
+            {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>}
           </section>
 
           <main

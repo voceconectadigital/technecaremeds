@@ -27,12 +27,11 @@ import {
   type BoardColumn,
   type WorkOrderRow,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { AlternadorDeTrabalho } from '../planos/alternador';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
-import { useUrlState } from '../../lib/url-state';
 
 export function OrdensPage() {
   const [vista, setVista] = useUrlState<'quadro' | 'lista'>('vista', 'quadro');

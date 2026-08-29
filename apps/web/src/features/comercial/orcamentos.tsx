@@ -22,10 +22,9 @@ import { useMemo, useState } from 'react';
 import { FileText, Search } from 'lucide-react';
 import { Card, EmptyState, Select, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { quotesList, QUOTE_STATUSES, type QuoteRow, type QuoteStatus } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
 import { AlternadorComercial } from './alternador';
 import { formatarDataRelativa } from '../../routes/hoje';
 
@@ -143,9 +142,7 @@ export function OrcamentosPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-base text-text" data-numeric>
                           {q.number}
-                          {q.version > 1 && (
-                            <span className="ml-1.5 text-xs text-muted">v{q.version}</span>
-                          )}
+                          {q.version > 1 && <span className="ml-1.5 text-xs text-muted">v{q.version}</span>}
                         </span>
                         <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
                           aberto {formatarDataRelativa(q.created_at)}

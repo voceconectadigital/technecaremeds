@@ -16,8 +16,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Building2, LogOut } from 'lucide-react';
 import { Button, Card, EmptyState, SkeletonList, StatusChip } from '@aurora/ui';
 import { meOrganizations, type OrganizationOption } from '@aurora/contracts';
-import { useApiQuery } from '../lib/api';
-import { useSession } from '../lib/session';
+import { useApiQuery, useSession } from '@aurora/app-kit';
 import { ErrorScreen } from '../shell/error-boundary';
 
 export function OrganizacoesPage() {

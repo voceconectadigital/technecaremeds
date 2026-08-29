@@ -21,16 +21,7 @@
  */
 import { useState } from 'react';
 import { AlertTriangle, FlaskConical, Pause, Play, Workflow } from 'lucide-react';
-import {
-  Button,
-  Card,
-  Dialog,
-  EmptyState,
-  SkeletonList,
-  StatusChip,
-  cn,
-  useToast,
-} from '@aurora/ui';
+import { Button, Card, Dialog, EmptyState, SkeletonList, StatusChip, cn, useToast } from '@aurora/ui';
 import {
   automationActivate,
   automationPause,
@@ -40,10 +31,9 @@ import {
   type AutomationRule,
   type RuleRun,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { Can } from '../../lib/permissions';
 import { formatarDataRelativa } from '../../routes/hoje';
 import { AlternadorDeConfiguracoes } from '../configuracoes/alternador';
 
@@ -180,8 +170,7 @@ function Simulacao({ regra }: { regra: AutomationRule }) {
     <span className="shrink-0 text-right">
       <span className="block text-xs text-subtle">simulada</span>
       <span className="block text-sm text-text tabular-nums" data-numeric>
-        {regra.simulated_matches ?? 0}{' '}
-        {(regra.simulated_matches ?? 0) === 1 ? 'caso' : 'casos'} em 30 dias
+        {regra.simulated_matches ?? 0} {(regra.simulated_matches ?? 0) === 1 ? 'caso' : 'casos'} em 30 dias
       </span>
     </span>
   );
@@ -235,10 +224,7 @@ function BotaoLigar({ regra }: { regra: AutomationRule }) {
       icon={<Play className="size-3.5" />}
       loading={ligar.isPending}
       onClick={() =>
-        ligar.mutate(
-          { params: { id: regra.id } },
-          { onSuccess: () => toast.success(`${regra.name} ligada`) }
-        )
+        ligar.mutate({ params: { id: regra.id } }, { onSuccess: () => toast.success(`${regra.name} ligada`) })
       }
     >
       {semSimulacao ? 'Ligar sem simular' : 'Ligar'}

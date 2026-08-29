@@ -71,12 +71,28 @@ export class PortalController {
     const eu = meuVinculo(req);
 
     return withTenant(this.db, ctx, async (s) => {
-      const [solicitacoes, ordens, orcamentos, visitas] = await Promise.all([
-        portalRequests(s, eu, { openOnly: true, limit: 20 }),
-        portalWorkOrders(s, eu, { limit: 20 }),
-        portalQuotes(s, eu),
-        portalSchedule(s, eu),
-      ]);
+      /*
+       * SEQUENCIAL, e não `Promise.all`.
+       *
+       * As quatro consultas rodam na MESMA sessão de banco — a mesma conexão,
+       * dentro da mesma transação, com o contexto do tenant fixado por
+       * `set_config`. O driver `pg` não multiplexa: disparar quatro consultas
+       * de uma vez na mesma conexão faz uma atropelar a outra, e o aviso de
+       * depreciação do driver é literal sobre isso.
+       *
+       * O sintoma que isso produziu aqui foi 403 no portal — o contexto do
+       * tenant se perdia no meio, a política de RLS não encontrava a
+       * organização, e a recusa parecia de permissão.
+       *
+       * O paralelismo que valeria a pena seria em quatro CONEXÕES, e o preço
+       * é abrir quatro transações com o mesmo contexto. Não vale: as quatro
+       * consultas somam poucos milissegundos, e a ida de rede que a tela
+       * economiza continua sendo uma só.
+       */
+      const solicitacoes = await portalRequests(s, eu, { openOnly: true, limit: 20 });
+      const ordens = await portalWorkOrders(s, eu, { limit: 20 });
+      const orcamentos = await portalQuotes(s, eu);
+      const visitas = await portalSchedule(s, eu);
 
       /*
        * O QUE PRECISA DE MIM vem separado do que está em andamento.

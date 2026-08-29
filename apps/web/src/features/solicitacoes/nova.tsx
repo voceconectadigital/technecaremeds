@@ -22,7 +22,7 @@ import { useState } from 'react';
 import { Button, Card, Field, Input, Select, Skeleton, Textarea, useToast } from '@aurora/ui';
 import { requestCreate, requestsQueue, catalogItems, type CatalogItem } from '@aurora/contracts';
 import { customersList, type Customer } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 
 const PRIORIDADES = [

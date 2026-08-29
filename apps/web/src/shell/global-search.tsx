@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Boxes, ClipboardList, FileText, Inbox, MapPin, Package, User, Users, Zap } from 'lucide-react';
 import { CommandPalette, type CommandItem } from '@aurora/ui';
 import { searchGlobal, type SearchResult, type SearchScope } from '@aurora/contracts';
-import { useApiQuery } from '../lib/api';
+import { useApiQuery } from '@aurora/app-kit';
 
 const ICONES: Record<SearchScope, typeof Boxes> = {
   asset: Boxes,

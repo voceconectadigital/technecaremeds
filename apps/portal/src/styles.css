@@ -1,0 +1,17 @@
+/**
+ * Aurora — folha de estilo do portal do cliente.
+ *
+ * Uma linha de Tailwind e uma de tokens. Toda cor, medida e movimento sai de
+ * `@aurora/ui`: um valor literal escrito numa tela é um valor que não muda
+ * quando o tema muda.
+ */
+@import 'tailwindcss';
+@import '../../../packages/ui/src/styles/tokens.css';
+
+/*
+ * O Tailwind v4 varre as fontes para achar as classes usadas. Sem apontar o
+ * pacote de interface, as classes que só existem lá dentro não entram na build
+ * e os componentes chegam sem estilo — o tipo de falha que só aparece em
+ * produção.
+ */
+@source '../../../packages/ui/src';

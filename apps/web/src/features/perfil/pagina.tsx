@@ -25,7 +25,7 @@ import { Building2, Clock, Globe, KeyRound, Mail, Shield } from 'lucide-react';
 import { Card, CardHeader, Skeleton, StatusChip, cn } from '@aurora/ui';
 import type { Session } from '@aurora/contracts';
 import { AppShell } from '../../shell/app-shell';
-import { useSessionQuery } from '../../lib/use-session-query';
+import { useSessionQuery } from '@aurora/app-kit';
 
 export function PerfilPage() {
   const { data, isLoading } = useSessionQuery() as {
@@ -42,10 +42,7 @@ export function PerfilPage() {
   }
 
   return (
-    <AppShell
-      title="Meu perfil"
-      subtitle="Quem você é neste sistema, e o que isso te permite fazer."
-    >
+    <AppShell title="Meu perfil" subtitle="Quem você é neste sistema, e o que isso te permite fazer.">
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader
@@ -64,11 +61,7 @@ export function PerfilPage() {
               // Belo Horizonte.
               nota="A agenda e os prazos são exibidos neste fuso."
             />
-            <Info
-              rotulo="Idioma"
-              valor={data.user.locale}
-              icone={<Globe className="size-3.5" />}
-            />
+            <Info rotulo="Idioma" valor={data.user.locale} icone={<Globe className="size-3.5" />} />
           </dl>
         </Card>
 
@@ -93,11 +86,7 @@ export function PerfilPage() {
               </dt>
               <dd className="mt-1 flex flex-wrap gap-1.5">
                 {data.membership.roles.length === 0 ? (
-                  <StatusChip
-                    tone="warn"
-                    size="sm"
-                    hint="Sem papel, você entra e não consegue fazer nada"
-                  >
+                  <StatusChip tone="warn" size="sm" hint="Sem papel, você entra e não consegue fazer nada">
                     Nenhum papel
                   </StatusChip>
                 ) : (
@@ -111,11 +100,7 @@ export function PerfilPage() {
             </div>
             <Info
               rotulo="Tipo de assento"
-              valor={
-                data.membership.seat_type === 'portal'
-                  ? 'Portal (cliente)'
-                  : 'Equipe'
-              }
+              valor={data.membership.seat_type === 'portal' ? 'Portal (cliente)' : 'Equipe'}
               nota={
                 data.membership.seat_type === 'portal'
                   ? 'Assentos de portal não consomem licença.'
@@ -152,9 +137,7 @@ export function PerfilPage() {
                     {chaves.map((k) => (
                       <span
                         key={k}
-                        className={cn(
-                          'rounded-control bg-surface-sunken px-1.5 py-0.5 text-xs text-muted'
-                        )}
+                        className={cn('rounded-control bg-surface-sunken px-1.5 py-0.5 text-xs text-muted')}
                         data-numeric
                       >
                         {k}
@@ -168,8 +151,8 @@ export function PerfilPage() {
             {data.permissions.length === 0 && (
               <p className="flex items-center gap-2 text-sm text-warn-text">
                 <KeyRound aria-hidden="true" className="size-4" />
-                Você não tem nenhuma permissão nesta organização — por isso as telas aparecem
-                vazias. Peça a quem administra para atribuir um papel.
+                Você não tem nenhuma permissão nesta organização — por isso as telas aparecem vazias. Peça a
+                quem administra para atribuir um papel.
               </p>
             )}
           </div>

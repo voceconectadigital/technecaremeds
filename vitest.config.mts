@@ -30,6 +30,7 @@ const alias = {
   '@aurora/config': resolve(raiz, 'packages/config/src'),
   '@aurora/contracts': resolve(raiz, 'packages/contracts/src'),
   '@aurora/ui': resolve(raiz, 'packages/ui/src'),
+  '@aurora/app-kit': resolve(raiz, 'packages/app-kit/src'),
   '@aurora/web': resolve(raiz, 'apps/web/src'),
 };
 

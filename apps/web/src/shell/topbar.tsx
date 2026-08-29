@@ -6,10 +6,7 @@ import { Bell, Building2, LogOut, Moon, Search, Sun, User } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Avatar, Button, CountBadge, Menu, cn, type MenuItem as MenuItemUi } from '@aurora/ui';
 import { meOrganizations } from '@aurora/contracts';
-import { useApiQuery } from '../lib/api';
-import { useSession } from '../lib/session';
-import { useSessionQuery } from '../lib/use-session-query';
-import { useTheme } from '../lib/theme';
+import { useApiQuery, useSession, useSessionQuery, useTheme } from '@aurora/app-kit';
 import { GlobalSearch } from './global-search';
 
 export interface TopbarProps {

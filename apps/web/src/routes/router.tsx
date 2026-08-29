@@ -17,8 +17,7 @@ import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@t
 import { EntrarPage } from './entrar';
 import { OrganizacoesPage } from './organizacoes';
 import { HojePage } from './hoje';
-import { lerSessaoGuardada } from '../lib/session-guard';
-
+import { lerSessaoGuardada } from '@aurora/app-kit';
 
 /* -------------------------------------------------------------------------- */
 

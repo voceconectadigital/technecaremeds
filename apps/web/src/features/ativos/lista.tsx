@@ -24,14 +24,7 @@
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { Boxes, ChevronRight, MapPin, Search } from 'lucide-react';
-import {
-  Card,
-  EmptyState,
-  Select,
-  SkeletonList,
-  StatusChip,
-  cn,
-} from '@aurora/ui';
+import { Card, EmptyState, Select, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import {
   assetsList,
   locationsList,
@@ -40,10 +33,9 @@ import {
   type AssetStatus,
   type LocationRow,
 } from '@aurora/contracts';
-import { useApiQuery } from '../../lib/api';
+import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
 import { AlternadorDeParque } from './alternador';
 
 const LIMITE = 500;
@@ -165,8 +157,8 @@ export function AtivosPage() {
              * nunca apareceu em nenhum relatório.
              */
             <p className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-              Esta lista mostra os primeiros {LIMITE}. Há mais {rotulo.toLowerCase()}s além destes —
-              escolha um local na árvore ou filtre por situação para chegar ao que procura.
+              Esta lista mostra os primeiros {LIMITE}. Há mais {rotulo.toLowerCase()}s além destes — escolha
+              um local na árvore ou filtre por situação para chegar ao que procura.
             </p>
           )}
 
@@ -324,9 +316,7 @@ function ArvoreDeLocais({
                 onClick={() => onEscolher(l.id)}
                 className={cn(
                   'min-w-0 flex-1 truncate rounded-control px-2 py-1.5 text-left text-sm transition-colors',
-                  escolhido === l.id
-                    ? 'bg-accent-soft text-accent-text'
-                    : 'text-text hover:bg-surface-hover'
+                  escolhido === l.id ? 'bg-accent-soft text-accent-text' : 'text-text hover:bg-surface-hover'
                 )}
                 title={l.location_type_name ? `${l.name} (${l.location_type_name})` : l.name}
               >

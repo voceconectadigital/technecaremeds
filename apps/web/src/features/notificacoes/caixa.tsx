@@ -50,10 +50,9 @@ import {
   type NotificationChannel,
   type NotificationType,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
+import { ApiError, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { useUrlState } from '../../lib/url-state';
 import { formatarDataRelativa } from '../../routes/hoje';
 
 const ABAS = [
@@ -81,24 +80,11 @@ export function NotificacoesPage() {
   }));
 
   return (
-    <AppShell
-      title="Notificações"
-      subtitle="O que o sistema te contou — e o que você quer que ele conte."
-    >
+    <AppShell title="Notificações" subtitle="O que o sistema te contou — e o que você quer que ele conte.">
       <div className="flex flex-col gap-4">
-        <Tabs
-          aria-label="Notificações"
-          idPrefix="notif"
-          items={abas}
-          value={aba}
-          onChange={setAba}
-        />
+        <Tabs aria-label="Notificações" idPrefix="notif" items={abas} value={aba} onChange={setAba} />
 
-        <div
-          role="tabpanel"
-          id={tabIds('notif', aba).painel}
-          aria-labelledby={tabIds('notif', aba).aba}
-        >
+        <div role="tabpanel" id={tabIds('notif', aba).painel} aria-labelledby={tabIds('notif', aba).aba}>
           {aba === 'caixa' ? (
             <Caixa itens={data?.items ?? []} naoLidas={data?.unread ?? 0} carregando={isLoading} />
           ) : (
@@ -141,7 +127,13 @@ function Caixa({
               icon={<Check className="size-4" />}
               loading={marcarTudo.isPending}
               onClick={() =>
-                marcarTudo.mutate({}, { onSuccess: (r) => toast.success(`${(r as { marked: number }).marked} marcadas como lidas`) })
+                marcarTudo.mutate(
+                  {},
+                  {
+                    onSuccess: (r) =>
+                      toast.success(`${(r as { marked: number }).marked} marcadas como lidas`),
+                  }
+                )
               }
             >
               Marcar tudo como lido
@@ -167,16 +159,11 @@ function Caixa({
                 <>
                   <span className="min-w-0 flex-1">
                     <span
-                      className={cn(
-                        'block truncate text-sm',
-                        lida ? 'text-muted' : 'font-medium text-text'
-                      )}
+                      className={cn('block truncate text-sm', lida ? 'text-muted' : 'font-medium text-text')}
                     >
                       {n.title}
                     </span>
-                    {n.body && (
-                      <span className="mt-0.5 block truncate text-xs text-muted">{n.body}</span>
-                    )}
+                    {n.body && <span className="mt-0.5 block truncate text-xs text-muted">{n.body}</span>}
                   </span>
                   <span className="shrink-0 text-xs text-muted" data-numeric>
                     {formatarDataRelativa(n.created_at)}
@@ -383,12 +370,7 @@ function SilencioNoturno() {
       <div className="flex flex-wrap items-end gap-3 p-4">
         <label className="flex flex-col gap-1 text-xs text-subtle">
           Começa
-          <Input
-            type="time"
-            value={inicio}
-            onChange={(e) => setInicio(e.target.value)}
-            className="w-28"
-          />
+          <Input type="time" value={inicio} onChange={(e) => setInicio(e.target.value)} className="w-28" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-subtle">
           Termina
