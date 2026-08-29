@@ -47,6 +47,12 @@ export default tseslint.config(
       // Rotina de plataforma: semear cria mais de uma organização por definição.
       // Exige o banco administrativo e recusa rodar sob o papel de aplicação.
       'packages/db/src/seeds/**',
+      // Rotina de plataforma: a dispersão do trabalho periódico precisa saber
+      // QUAIS organizações varrer, e essa pergunta não tem contexto de tenant
+      // por definição. Roda sob `aurora_scheduler` (migration 0041), que lê o
+      // identificador das organizações ativas e mais nada — o trabalho em si
+      // continua sob `withTenant` e sob a RLS.
+      'apps/workers/src/jobs/**',
       '**/__tests__/**',
     ],
     rules: { 'no-restricted-syntax': 'off', '@typescript-eslint/no-explicit-any': 'off' },

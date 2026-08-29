@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { newId, buildContext } from '@aurora/domain';
 import { withTenant, emitEvent, type PendingEvent } from '@aurora/db';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '@aurora/db/testing/harness';
-import { OutboxPublisher, IntervalScheduler, type EventSink } from '../outbox-publisher';
+import { OutboxPublisher, type EventSink } from '../outbox-publisher';
 
 const ORG_A = newId(),
   USER_A = newId(),
@@ -135,25 +135,5 @@ describe('publicador do outbox', () => {
         return tx.query(`UPDATE aurora.memberships SET job_title = 'invadido'`);
       })
     ).rejects.toThrow(/permission denied/i);
-  });
-});
-
-describe('agendador por intervalo', () => {
-  it('não sobrepõe execuções lentas', async () => {
-    const scheduler = new IntervalScheduler();
-    let concurrent = 0;
-    let maxConcurrent = 0;
-    let runs = 0;
-    scheduler.every(5, async () => {
-      concurrent++;
-      runs++;
-      maxConcurrent = Math.max(maxConcurrent, concurrent);
-      await new Promise((r) => setTimeout(r, 30));
-      concurrent--;
-    });
-    await new Promise((r) => setTimeout(r, 200));
-    await scheduler.stop();
-    expect(runs).toBeGreaterThan(0);
-    expect(maxConcurrent, 'execuções se sobrepuseram').toBe(1);
   });
 });

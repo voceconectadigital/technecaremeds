@@ -80,39 +80,17 @@ export class OutboxPublisher {
 }
 
 /**
- * Agendador como porta.
+ * NÃO EXISTE MAIS UM AGENDADOR AQUI.
  *
- * Em produção a implementação é pg-boss: fila durável no próprio PostgreSQL,
- * com enfileiramento na mesma transação do dado (ADR-017). Aqui o publicador
- * não sabe qual é — o que o torna testável sem infraestrutura.
+ * Havia um `IntervalScheduler` — `setInterval` que não sobrepunha execuções —
+ * como medida temporária enquanto não havia PostgreSQL real para o pg-boss.
+ * Ele saiu quando o `JobRuntime` entrou (`./jobs/runtime`), e saiu de vez em
+ * vez de ficar "por perto, por garantia":
+ *
+ *   · `setInterval` não sobrevive a reinício — a passada perdida some;
+ *   · não coordena DUAS instâncias do worker, e a segunda instância rodaria a
+ *     mesma varredura ao mesmo tempo, gerando a mesma OS preventiva duas vezes;
+ *   · não tem retentativa, nem carta morta: a falha vira `catch(() => undefined)`.
+ *
+ * Um substituto ruim deixado ao lado do bom é um substituto que alguém usa.
  */
-export interface Scheduler {
-  every(milliseconds: number, task: () => Promise<void>): void;
-  stop(): Promise<void>;
-}
-
-/** Implementação por intervalo, suficiente para desenvolvimento e teste. */
-export class IntervalScheduler implements Scheduler {
-  private readonly timers: NodeJS.Timeout[] = [];
-  private running = false;
-
-  every(milliseconds: number, task: () => Promise<void>): void {
-    const timer = setInterval(() => {
-      // não sobrepõe execuções: uma passada lenta não empilha outras
-      if (this.running) return;
-      this.running = true;
-      void task()
-        .catch(() => undefined)
-        .finally(() => {
-          this.running = false;
-        });
-    }, milliseconds);
-    timer.unref?.();
-    this.timers.push(timer);
-  }
-
-  async stop(): Promise<void> {
-    this.timers.forEach(clearInterval);
-    this.timers.length = 0;
-  }
-}

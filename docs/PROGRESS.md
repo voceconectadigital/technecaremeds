@@ -13,8 +13,8 @@ Fonte de verdade de código: este repositório e o Git.
 | Fase                             | **F7 — plataforma transversal**                                                               |
 | Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria) |
 | Épico seguinte                   | EPIC-009 (interface de OS), EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal)   |
-| Testes                           | **1298** (65 arquivos) em PGlite + **24** só contra PostgreSQL real, todos verdes |
-| Migrations                       | 41 (`0000` a `0040`), idempotentes, reprodutíveis do zero                       |
+| Testes                           | **1319** (66 arquivos) em PGlite + **29** só contra PostgreSQL real, todos verdes |
+| Migrations                       | 42 (`0000` a `0041`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
 
@@ -75,7 +75,7 @@ Corrigido em 24 arquivos de implementação (comentários de cabeçalho, migrati
 ### Pendente do EPIC-001
 
 - Geração de OpenAPI a partir dos controllers
-- pg-boss como agendador durável — adiado com motivo: exige PostgreSQL real, indisponível enquanto o remoto estiver bloqueado. O `IntervalScheduler` atual cobre o publicador do outbox e não sobrepõe execuções.
+- ~~pg-boss como agendador durável — adiado~~ **feito.** O pg-boss roda também em PGlite (adaptador `fromPglite`), então a suíte inteira dos trabalhos não depende de Docker. O `IntervalScheduler` foi REMOVIDO, e não deixado ao lado: `setInterval` não sobrevive a reinício, não coordena duas instâncias do worker e engole a falha num `catch`. Um substituto ruim deixado por perto é um substituto que alguém usa.
 
 ---
 
@@ -677,6 +677,46 @@ O que faltava era o que este épico entrega: **como ler**. Uma trilha que ningu�
 - **P18 · dois eventos de contrato**: o §17 pede alerta de vencimento e trata encerramento como fato de negócio, mas o catálogo declarava só `contract.activated`, `contract.expiring` e `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu" seriam o mesmo evento; sem `contract.terminated`, o encerramento por decisão humana só existiria na trilha de auditoria, invisível a qualquer automação. A SPEC foi corrigida pelo mesmo pipeline reproduzível dos demais patches.
 - **P19 · ausências pelo nome certo**: o dicionário de dados descrevia `kind(absence|training|meeting|other)` e vínculo com usuário ou equipe; o que existe desde a 0008 é `vacation|leave|training|other` preso ao vínculo. A SPEC foi corrigida para descrever o esquema real, com a regra de bloqueio dita pelos tipos que existem.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
+
+---
+
+## Trabalhos periódicos
+
+`apps/workers` roda em processo separado da API — uma varredura que percorre
+cem mil OS não pode competir por conexão com quem está esperando a tela abrir.
+
+**Cinco varreduras por organização** (SLA a cada 5 min; planos de hora em hora;
+orçamentos, contratos e documentos de madrugada) e **uma de plataforma** (o
+publicador do outbox, a cada minuto).
+
+A garantia que o desenho existe para dar: **nunca duas execuções concorrentes do
+mesmo trabalho lógico**. Toda fila usa política `exclusive` com `singletonKey`
+igual à organização — existe UM job por (fila, organização), enfileirado ou
+ativo. Cron sobreposto, worker lento, duas instâncias do processo: em nenhum
+caso a varredura da mesma organização roda duas vezes ao mesmo tempo. Isso
+importa porque as varreduras **abrem ciclo e geram ordem de serviço**: duas
+execuções concorrentes produziriam a mesma OS preventiva duas vezes, e quem
+descobriria seria o técnico, na agenda dele.
+
+Mais três decisões que valem ser lidas:
+
+- **o instante viaja com o job.** A organização enfileirada às 03:23 é medida
+  contra 03:23, mesmo que o worker só a processe às 04:10. Sem isso, "vence em
+  30 dias" significaria uma coisa na tentativa que falhou e outra na que deu
+  certo.
+- **falha não some.** Retentativa com recuo exponencial; esgotada, o job vai
+  para a fila de cartas mortas. Um trabalho que falha em silêncio é pior do que
+  um que não existe — cria a impressão de que a varredura aconteceu.
+- **papel próprio para a dispersão** (migration 0041). `aurora_app` não
+  consegue enumerar organizações, e é assim que tem de ser. A dispersão assume
+  `aurora_scheduler`, que lê o identificador das organizações ativas e mais
+  nada — há teste em PostgreSQL real provando que ele recebe `permission
+  denied` ao tentar ler ordem de serviço.
+
+**Sem trabalho agendado, e dito no próprio catálogo:** o *digest* de
+notificações (§26) e a automação com gatilho de agenda (§29). Nos dois casos
+falta a FUNÇÃO DE DOMÍNIO, não o agendamento — a §26 diz "resumo diário ou
+semanal" e não diz a que hora, e escolher a hora aqui seria inventar requisito.
 
 ---
 
