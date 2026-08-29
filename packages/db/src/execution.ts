@@ -15,6 +15,10 @@ import {
   type AnswerValue,
   type CompletionRequirement,
   type CompletionFacts,
+  validateAttachment,
+  buildStorageKey,
+  MAX_ATTACHMENTS_PER_ENTITY,
+  type AttachmentPurpose,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { pendingPartsCount } from './inventory';
@@ -438,20 +442,72 @@ export async function logTime(
 /* anexos e assinatura                                                         */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Registra um anexo.
+ *
+ * A CHAVE DE ARMAZENAMENTO É GERADA AQUI, e não recebida.
+ *
+ * A versão anterior aceitava a `storageKey` do cliente sem validar nada —
+ * quem chamasse a rota podia apontar o registro para o objeto de outro tenant,
+ * ou para um caminho com `..`. E o registro é justamente o que a interface usa
+ * depois para pedir a URL de leitura: apontar para o objeto errado é vazar o
+ * objeto errado.
+ *
+ * Agora nada do cliente entra no caminho. Sem entrada do cliente, não há
+ * travessia de diretório para impedir: ela não tem por onde entrar.
+ */
 export async function attachFile(
   session: TenantSession,
   input: {
     workOrderId?: string | null;
     checklistAnswerId?: string | null;
-    purpose: 'before' | 'after' | 'evidence' | 'document' | 'signature' | 'other';
-    storageKey: string;
+    purpose: AttachmentPurpose;
     fileName: string;
     contentType: string;
     byteSize: number;
     sha256?: string | null;
   }
-): Promise<string> {
+): Promise<{ id: string; storageKey: string }> {
+  const conferido = validateAttachment({
+    purpose: input.purpose,
+    fileName: input.fileName,
+    contentType: input.contentType,
+    byteSize: input.byteSize,
+  });
+
+  const entityId = input.workOrderId ?? input.checklistAnswerId;
+  if (!entityId) {
+    throw new ValidationError('o anexo precisa pertencer a uma ordem de serviço ou a uma resposta', {
+      field: 'work_order_id',
+    });
+  }
+
+  /*
+   * Teto por entidade.
+   *
+   * Sem ele, uma fila offline com defeito enche o armazenamento de uma
+   * organização e ninguém percebe até a fatura. O teto é conferido DENTRO da
+   * transação: duas gravações simultâneas na mesma OS veriam a mesma contagem
+   * fora dela.
+   */
+  const coluna = input.workOrderId ? 'work_order_id' : 'checklist_answer_id';
+  const [quantos] = await session.query<{ total: string }>(
+    `SELECT count(*)::text AS total FROM aurora.attachments WHERE ${coluna} = $1`,
+    [entityId]
+  );
+  if (Number(quantos!.total) >= MAX_ATTACHMENTS_PER_ENTITY) {
+    throw new ConflictError(`este registro já tem ${MAX_ATTACHMENTS_PER_ENTITY} anexos, que é o limite`);
+  }
+
   const id = newId();
+  const storageKey = buildStorageKey({
+    organizationId: session.context.organizationId,
+    entity: input.workOrderId ? 'work-orders' : 'checklist-answers',
+    entityId,
+    attachmentId: id,
+    extension: conferido.extension,
+  });
+
   await session.query(
     `INSERT INTO aurora.attachments
        (id, organization_id, work_order_id, checklist_answer_id, purpose, storage_key,
@@ -462,16 +518,18 @@ export async function attachFile(
       session.context.organizationId,
       input.workOrderId ?? null,
       input.checklistAnswerId ?? null,
-      input.purpose,
-      input.storageKey,
-      input.fileName,
-      input.contentType,
-      input.byteSize,
+      conferido.purpose,
+      storageKey,
+      // O nome original fica como METADADO — é o que a pessoa reconhece na
+      // tela —, nunca como caminho.
+      conferido.fileName,
+      conferido.contentType,
+      conferido.byteSize,
       input.sha256 ?? null,
       session.context.actorId,
     ]
   );
-  return id;
+  return { id, storageKey };
 }
 
 /**

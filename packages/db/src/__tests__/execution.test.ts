@@ -458,7 +458,6 @@ describe('anexos e assinatura', () => {
       await attachFile(s, {
         workOrderId: os,
         purpose: 'before',
-        storageKey: `wo/${os}/antes.jpg`,
         fileName: 'antes.jpg',
         contentType: 'image/jpeg',
         byteSize: 12_345,
@@ -466,7 +465,6 @@ describe('anexos e assinatura', () => {
       await attachFile(s, {
         workOrderId: os,
         purpose: 'after',
-        storageKey: `wo/${os}/depois.jpg`,
         fileName: 'depois.jpg',
         contentType: 'image/jpeg',
         byteSize: 23_456,
@@ -486,13 +484,15 @@ describe('anexos e assinatura', () => {
       withTenant(t.db, ctx, (s) =>
         attachFile(s, {
           purpose: 'other',
-          storageKey: 'solto.bin',
-          fileName: 'solto.bin',
-          contentType: 'application/octet-stream',
+          fileName: 'solto.pdf',
+          contentType: 'application/pdf',
           byteSize: 1,
         })
       )
-    ).rejects.toThrow(/att_has_owner|regra/i);
+      // Recusado pelo DOMÍNIO agora, antes de chegar ao banco: sem dono não
+      // há como gerar a chave de armazenamento, que é namespaceada por
+      // entidade.
+    ).rejects.toThrow(/precisa pertencer|att_has_owner/i);
   });
 
   it('assinatura por código exige e-mail; desenhada exige a imagem', async () => {
@@ -591,7 +591,6 @@ describe('bloco de conclusão com fatos reais — critério de aceite', () => {
       await attachFile(s, {
         workOrderId: os,
         purpose: 'before',
-        storageKey: `wo/${os}/a.jpg`,
         fileName: 'a.jpg',
         contentType: 'image/jpeg',
         byteSize: 10,
@@ -599,7 +598,6 @@ describe('bloco de conclusão com fatos reais — critério de aceite', () => {
       await attachFile(s, {
         workOrderId: os,
         purpose: 'after',
-        storageKey: `wo/${os}/b.jpg`,
         fileName: 'b.jpg',
         contentType: 'image/jpeg',
         byteSize: 10,
@@ -720,7 +718,6 @@ describe('o bloco de conclusão agora bloqueia a transição de verdade', () => 
         await attachFile(s, {
           workOrderId: w.id,
           purpose,
-          storageKey: `wo/${w.id}/${purpose}.jpg`,
           fileName: `${purpose}.jpg`,
           contentType: 'image/jpeg',
           byteSize: 10,
@@ -766,3 +763,113 @@ describe('o bloco de conclusão agora bloqueia a transição de verdade', () => 
     ).rejects.toThrow(/requisito de conclusão desconhecido: telepatia_do_tecnico/);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+
+describe('anexo: as garantias que o servidor dá', () => {
+  let alvo: string;
+
+  beforeAll(async () => {
+    alvo = await novaOsEmExecucao('OS para anexos');
+  }, 60_000);
+
+  it('a chave é gerada pelo servidor, com a organização abrindo o caminho', async () => {
+    const r = await withTenant(t.db, ctx, (s) =>
+      attachFile(s, {
+        workOrderId: alvo,
+        purpose: 'before',
+        fileName: 'antes.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 12_345,
+      })
+    );
+
+    expect(r.storageKey).toBe(`org/${ORG}/work-orders/${alvo}/${r.id}.jpg`);
+    expect(r.storageKey).not.toContain('..');
+  });
+
+  it('o nome do arquivo NUNCA entra no caminho', async () => {
+    const r = await withTenant(t.db, ctx, (s) =>
+      attachFile(s, {
+        workOrderId: alvo,
+        purpose: 'before',
+        // Travessia no nome: sobrevive como metadado limpo, some do caminho.
+        fileName: '../../../etc/passwd.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 100,
+      })
+    );
+
+    expect(r.storageKey).not.toContain('passwd');
+    expect(r.storageKey).not.toContain('..');
+
+    const [linha] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ file_name: string }>(`SELECT file_name FROM aurora.attachments WHERE id = $1`, [r.id])
+    );
+    // Guardado para exibição, já limpo.
+    expect(linha!.file_name).toBe('passwd.jpg');
+  });
+
+  it('tipo fora da lista da finalidade é recusado', async () => {
+    await expect(
+      withTenant(t.db, ctx, (s) =>
+        attachFile(s, {
+          workOrderId: alvo,
+          purpose: 'before',
+          fileName: 'pagina.html',
+          contentType: 'text/html',
+          byteSize: 100,
+        })
+      )
+    ).rejects.toThrow(/não é aceito/);
+  });
+
+  it('arquivo acima do teto é recusado antes de gravar', async () => {
+    const antes = await contarAnexos(alvo);
+    await expect(
+      withTenant(t.db, ctx, (s) =>
+        attachFile(s, {
+          workOrderId: alvo,
+          purpose: 'before',
+          fileName: 'gigante.jpg',
+          contentType: 'image/jpeg',
+          byteSize: 500 * 1024 * 1024,
+        })
+      )
+    ).rejects.toThrow(/limite/);
+    expect(await contarAnexos(alvo)).toBe(antes);
+  });
+
+  it('duas gravações seguidas nunca produzem a mesma chave', async () => {
+    const a = await withTenant(t.db, ctx, (s) =>
+      attachFile(s, {
+        workOrderId: alvo,
+        purpose: 'evidence',
+        fileName: 'igual.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 10,
+      })
+    );
+    const b = await withTenant(t.db, ctx, (s) =>
+      attachFile(s, {
+        workOrderId: alvo,
+        purpose: 'evidence',
+        fileName: 'igual.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 10,
+      })
+    );
+    // Mesmo nome, chaves diferentes: não existe sobrescrita por construção.
+    expect(a.storageKey).not.toBe(b.storageKey);
+  });
+});
+
+async function contarAnexos(workOrderId: string): Promise<number> {
+  const [linha] = await withTenant(t.db, ctx, (s) =>
+    s.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM aurora.attachments WHERE work_order_id = $1`,
+      [workOrderId]
+    )
+  );
+  return Number(linha!.total);
+}

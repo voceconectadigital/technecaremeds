@@ -27,7 +27,7 @@ import {
   completionRequirementsFor,
   type Database,
 } from '@aurora/db';
-import { NotFoundError, ValidationError } from '@aurora/domain';
+import { NotFoundError, ValidationError, type AttachmentPurpose } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
@@ -158,12 +158,17 @@ export class ExecutionController {
   }
 
   /**
-   * Registra um anexo já enviado ao armazenamento.
+   * Registra um anexo que JÁ FOI ENVIADO ao armazenamento.
    *
-   * O binário não passa por aqui: a aplicação envia direto ao armazenamento com
-   * uma URL assinada e depois registra a referência. Passar o arquivo pela API
-   * transformaria cada foto de campo — em rede de hospital, pelo celular — numa
-   * requisição que pode morrer no meio e não deixar rastro nem do envio.
+   * O arquivo não passa por esta rota. O cliente pede uma URL assinada, envia
+   * direto, e só então registra a referência aqui. Passar o arquivo pela API
+   * transformaria cada foto de campo — em rede de hospital, pelo celular —
+   * numa requisição que pode morrer no meio e não deixar rastro nem do envio.
+   *
+   * O CLIENTE NÃO ESCOLHE ONDE O ARQUIVO MORA. A chave de armazenamento é
+   * gerada pelo servidor, com a organização abrindo o caminho e o identificador
+   * do anexo como nome. Ela vem na resposta justamente para o cliente saber
+   * para onde enviar.
    */
   @Post(':id/attachments')
   @RequirePermissions('work_order.execute')
@@ -171,36 +176,24 @@ export class ExecutionController {
     @Req() req: AuroraRequest,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>
-  ): Promise<{ attachment_id: string }> {
+  ): Promise<{ attachment_id: string; storage_key: string }> {
     const ctx = req.auroraContext!;
-    const purposes = ['before', 'after', 'evidence', 'document', 'signature', 'other'] as const;
-    const purpose = purposes.includes(body.purpose as never)
-      ? (body.purpose as (typeof purposes)[number])
-      : null;
-    if (!purpose) {
-      throw new ValidationError('purpose inválido', { field: 'purpose', allowed: purposes });
-    }
-    for (const campo of ['storage_key', 'file_name', 'content_type'] as const) {
-      if (typeof body[campo] !== 'string' || (body[campo] as string).length === 0) {
-        throw new ValidationError(`${campo} é obrigatório`, { field: campo });
-      }
-    }
-    if (typeof body.byte_size !== 'number' || body.byte_size <= 0) {
-      throw new ValidationError('byte_size deve ser um número positivo', { field: 'byte_size' });
-    }
 
-    const attachmentId = await withTenant(this.db, ctx, (s) =>
+    const r = await withTenant(this.db, ctx, (s) =>
       attachFile(s, {
         workOrderId: uuidParam(id, 'id'),
-        purpose,
-        storageKey: body.storage_key as string,
+        // Tipo, tamanho, nome e finalidade são conferidos pelo domínio
+        // (`validateAttachment`): lista fechada de tipos por finalidade, teto
+        // de tamanho, e o nome limpo de tudo que quebraria cabeçalho ou log.
+        purpose: body.purpose as AttachmentPurpose,
         fileName: body.file_name as string,
         contentType: body.content_type as string,
         byteSize: body.byte_size as number,
         sha256: typeof body.sha256 === 'string' ? body.sha256 : null,
       })
     );
-    return { attachment_id: attachmentId };
+
+    return { attachment_id: r.id, storage_key: r.storageKey };
   }
 
   @Post(':id/signatures')

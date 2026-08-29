@@ -1,6 +1,7 @@
 export * from './id';
 export * from './context';
 export * from './errors';
+export * from './attachments';
 export * from './permissions';
 export * from './directory';
 export * from './catalogs';
