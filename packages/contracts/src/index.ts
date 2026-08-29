@@ -33,6 +33,7 @@ export * from './operations/roles';
 export * from './operations/inventory';
 export * from './operations/commercial';
 export * from './operations/plans';
+export * from './operations/insights';
 export * from './operations/directory';
 export * from './operations/search';
 export * from './operations/service-requests';

@@ -31,6 +31,7 @@ import { OrcamentosPage } from '../features/comercial/orcamentos';
 import { OrcamentoPage } from '../features/comercial/orcamento';
 import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
 import { PlanosPage, PlanoPage } from '../features/planos/lista';
+import { IndicadoresPage } from '../features/indicadores/painel';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -130,13 +131,7 @@ export const routeTree = raiz.addChildren([
     component: OrcamentoPage,
     beforeLoad: exigirSessao,
   }),
-  rotaProtegida('/indicadores', () => (
-    <EmConstrucao
-      titulo="Indicadores"
-      descricao="MTTR, MTBF, cumprimento de SLA e de plano preventivo, com definição e recorte."
-      permissao="insight.read"
-    />
-  )),
+  rotaProtegida('/indicadores', IndicadoresPage),
   rotaProtegida('/notificacoes', () => (
     <EmConstrucao titulo="Notificações" descricao="Caixa de avisos e preferências por canal." />
   )),
