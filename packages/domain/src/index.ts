@@ -16,3 +16,4 @@ export * from './quotes';
 export * from './schedule';
 export * from './documents';
 export * from './metrics';
+export * from './notifications';

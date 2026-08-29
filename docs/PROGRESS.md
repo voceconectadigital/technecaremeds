@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F7 — indicadores sobre o que já existe**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores) |
-| Épico seguinte                   | EPIC-020 — Portal do cliente, ou EPIC-019 — Notificações                               |
-| Testes                           | **1054**, todos verdes                                                           |
-| Migrations                       | 36 (`0000` a `0035`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F7 — indicadores e notificações**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações) |
+| Épico seguinte                   | EPIC-020 — Portal do cliente, ou EPIC-024 — Automações                                 |
+| Testes                           | **1114**, todos verdes                                                           |
+| Migrations                       | 37 (`0000` a `0036`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -477,6 +477,36 @@ O preço é o custo por escrita, que num CMMS é ordens de grandeza menor que o 
 
 ---
 
+## EPIC-019 — Notificações · **concluído**
+
+Este épico tem um inimigo declarado, e não é a falta de aviso: é o **excesso**. Um canal que manda dez e-mails por hora sobre a mesma OS é um canal que o destinatário filtra para uma pasta — e o aviso que importava se perde junto com os nove que não importavam. Por isso os três controles do §23 não são refinamento posterior: são a condição para o canal continuar existindo.
+
+**De-duplicação por janela.** Cada tipo declara quantos minutos silenciam o segundo aviso igual, e a chave é tipo + destinatário + agregado — **sem o canal**, de propósito: se a pessoa recebeu no aplicativo há dois minutos, mandar o mesmo por e-mail é repetir, não complementar.
+
+**Silêncio no fuso de quem recebe.** A janela pode atravessar a meia-noite ("das 20 h às 7 h") e a comparação ingênua responderia errado a noite inteira. E o cálculo é no fuso do destinatário: quem está em Manaus e configurou "não me acorde depois das 22 h" não quer que isso comece a valer às 19 h locais porque o servidor está em UTC. **O aviso silenciado não some — vira resumo**: descartá-lo transformaria "não me acorde" em "não me conte", que é outra coisa.
+
+**Só um aviso fura o silêncio no MVP.** SLA violado às três da manhã num hospital muda o que a pessoa de plantão faz; "OS atribuída a você" não muda, e acordar alguém com isso é o caminho mais curto para o silêncio ser desligado para sempre.
+
+**E-mail não verificado não recebe** — regra que a referência acertou e que copiamos literalmente. Mandar para endereço não confirmado queima a reputação do remetente e pode entregar informação de manutenção hospitalar a quem digitou o endereço errado. Endereço bloqueado conta como não verificado, e a supressão é **definitiva para aquele aviso**, não pendência guardada: manter na fila faria o dia da verificação despejar meses de aviso velho.
+
+**Outras decisões**
+
+- **A caixa é sempre a de quem pede.** O vínculo vem do contexto autenticado, nunca do corpo ou da query — há teste que passa `membershipId` alheio e confirma que a resposta continua sendo a própria. Aceitar esse parâmetro transformaria a caixa num leitor de mensagens alheias.
+- **Notificação e entrega são coisas diferentes.** Uma notificação vira N entregas, uma por canal. Colapsar as duas faria a caixa somar o mesmo aviso duas vezes quando ele também sai por e-mail.
+- **Cada público é uma consulta própria**, e não uma tabela genérica de regras: o executor está na OS, os coordenadores estão no papel, os mencionados estão no texto. Uma tabela de regras esconderia essas diferenças atrás de um `jsonb` que ninguém depura.
+- **A menção casa pela parte local do e-mail**, que é o que as pessoas digitam. Casar pelo nome exibido daria empate na primeira homonímia, e notificar a pessoa errada é pior que não notificar.
+- **O envio de fato não está simulado em lugar nenhum.** A entrega fica `pending` até que um adaptador real a marque. Um "enviado" falso some sem deixar rastro, e é a pior mentira possível num sistema de notificação.
+- **Marcar como lida é uma via só.** Deixar remarcar como não lida pareceria gentileza e faria a contagem deixar de significar "o que chegou desde a última vez que olhei".
+
+### Adiado deliberadamente
+
+- **O transporte** — SMTP, push, WhatsApp: são adaptadores externos, e a fila de saída existe justamente para recebê-los sem tocar no roteador.
+- **A montagem do resumo diário e semanal**: as entregas já são carimbadas como `digested` com a modalidade; juntar e enviar depende do agendador durável, que depende de PostgreSQL real (ADR-022).
+- **Contatos de cliente como destinatários**: não são vínculos, são pessoas de fora. Entram com o portal (EPIC-020), que é onde ganham identidade.
+- **O fluxo de verificação de e-mail** (envio e conferência do código): o que existe agora é o **efeito** — enquanto não verificado, o canal é suprimido —, para o roteador poder respeitá-lo desde já.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -515,6 +545,8 @@ O preço é o custo por escrita, que num CMMS é ordens de grandeza menor que o 
 | 32  | **A SPEC descrevia um tipo de ausência que o banco não tem**               | Encontrado ao implementar o bloqueio do §13                                                                   | O §13 e o dicionário falam em bloco de tipo `absence`; o enumerado criado no EPIC-003 é `vacation \| leave \| training \| other`. Em vez de inventar um valor novo, a SPEC foi corrigida (patch P19) para descrever o que existe, e a regra de bloqueio passou a ser dita pelos tipos reais. O vínculo também foi corrigido: o bloco aponta para `membership_id`, não para o usuário — a mesma pessoa pode ter vínculo em duas organizações |
 | 33  | **Tipo que exige assinatura jamais poderia ser emitido**                   | Teste do certificado de calibração: exigia assinatura para emitir, e assinar exigia o hash, que só nascia na emissão | Impasse fechado, e do tipo que só aparece quando alguém percorre o fluxo inteiro. O hash passou a ser congelado na entrada em REVISÃO — "em revisão" significa candidato congelado —, e a emissão apenas CONFERE que o conteúdo não mudou. O número saiu do resumo (só existe na emissão) e a identidade passou a vir do `id`, que é estável desde a criação. Voltar para rascunho descongela, e é recusado se alguém já tiver assinado |
 | 34  | **Dois jeitos de calcular o mesmo tempo**                                  | Teste do tempo por motivo de espera não encontrou o motivo "peça"                                              | As consultas de tempo por situação e por motivo recalculavam a duração por janela (`lead` sobre o histórico), enquanto o gatilho do EPIC-008 já grava `seconds_in_from` na linha que fecha cada permanência — e grava o motivo do estado que TERMINA, não do que começa. Duas maneiras de obter o mesmo número divergem no primeiro caso de borda, e o painel passaria a discordar do detalhe da OS sem ninguém perceber. Passou a ler a duração já gravada |
+| 35  | **Endereço de e-mail no texto virava menção**                              | Teste de `extractMentions` com "avise ana@hospital.test"                                                       | A expressão casava o arroba em qualquer posição, então o domínio virava nome de usuário. O resultado seria uma busca que não acha ninguém no melhor caso e que acha a pessoa errada no pior. Passou a exigir que o arroba não venha colado em outra palavra |
+| 36  | **O roteador aceitava "agora" e carimbava outro instante**                 | Teste "passada a janela, o aviso volta a sair" falhou: a de-duplicação nunca abria                             | A notificação era gravada com `now()` do banco enquanto a janela era medida contra o instante recebido por parâmetro. Um roteador que se contradiz assim tem de-duplicação que nunca fecha — e nenhum teste de tempo consegue ser determinístico. Passou a gravar o instante que recebeu |
 
 ---
 
