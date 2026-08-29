@@ -568,10 +568,7 @@ export class WorkOrdersController {
   /** Anexos e fotos. Nunca a chave de armazenamento. */
   @Get(':id/attachments')
   @RequirePermissions('work_order.read')
-  async attachments(
-    @Req() req: AuroraRequest,
-    @Param('id') id: string
-  ): Promise<{ items: unknown[] }> {
+  async attachments(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const woId = uuidParam(id, 'id');
     const items = await withTenant(this.db, ctx, (s) => listAttachments(s, woId));

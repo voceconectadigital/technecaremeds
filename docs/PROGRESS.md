@@ -870,18 +870,92 @@ sair bonito. O que a conferência acusa, e que entra no `npm run verify`:
   legítimo (transições, cuja permissão é a da aresta do grafo) declaram a
   exceção no próprio controller, com `@PermissionsCheckedInHandler`.
 
-**Cobertura atual: 8 de 135 rotas (6%).** Está dito de propósito. Contrato nasce
-quando a tela que o usa nasce — escrever os 135 de uma vez produziria esquemas
-que ninguém exercita, e esquema não exercitado erra no campo opcional. O número
-sobe junto com `apps/web`.
+**Cobertura atual: 103 de 174 rotas (59%).** Está dito de propósito. Contrato
+nasce quando a tela que o usa nasce — escrever os 174 de uma vez produziria
+esquemas que ninguém exercita, e esquema não exercitado erra no campo opcional.
+O número sobe junto com `apps/web`, e as 71 rotas restantes são as que nenhuma
+tela chama ainda.
 
 ---
 
 ## Lacunas conhecidas, ditas por extenso
 
 - **`aurora.fn_calendar_window_no_overlap` usa advisory lock** porque `EXCLUDE` exigiria `btree_gist` (extensão). Corretude sob concorrência depende desse lock; está comentado na migration.
-- **PGlite continua sendo o banco padrão dos testes**, e continua tendo uma conexão só. O que ele não prova agora tem suíte própria contra PostgreSQL 16.14 em Docker (`AURORA_TEST_PG_URL`): reuso de pool, concorrência, `SKIP LOCKED`, advisory lock disputado e RLS sob papel que não é dono das tabelas. São 24 testes que ficam PULADOS sem a variável — e dizem isso, em vez de passar em silêncio.
-- **A suíte de PostgreSQL real não roda na integração contínua.** Depende de um contêiner que só existe na máquina de desenvolvimento. Enquanto não houver serviço de banco no fluxo de CI, ela é uma verificação manual — e uma verificação manual é uma verificação que uma pessoa apressada pula.
+- **PGlite continua sendo o banco padrão dos testes**, e continua tendo uma conexão só. O que ele não prova agora tem suíte própria contra PostgreSQL 16.14 em Docker (`AURORA_TEST_PG_URL`): reuso de pool, concorrência, `SKIP LOCKED`, advisory lock disputado e RLS sob papel que não é dono das tabelas. São 30 testes que ficam PULADOS sem a variável — e dizem isso, em vez de passar em silêncio. **Desde 29/08/2026 a variável é definida na integração contínua**, então eles rodam a cada envio.
+- ~~**A suíte de PostgreSQL real não roda na integração contínua.**~~ **Fechada em 29/08/2026.** O fluxo ganhou três tarefas: `estatico` (sem banco), `banco` (PostgreSQL 16 em contêiner de serviço, com `AURORA_TEST_PG_URL` definido) e `navegador` (Playwright contra a API sob o papel sem privilégio). Nada mais depende da máquina de desenvolvimento.
+
+---
+
+## Integração contínua: o que passou a rodar fora desta máquina
+
+Até 29/08/2026 o fluxo tinha uma tarefa só, sem banco. Tudo que exigia
+PostgreSQL — a suíte contra servidor real e a de ponta a ponta inteira — rodava
+aqui, à mão. Uma verificação manual é uma verificação que uma pessoa apressada
+pula, e o efeito prático é que ela deixa de existir sem ninguém decidir isso.
+
+São três tarefas agora, e a divisão tem motivo:
+
+| Tarefa | Banco | O que prova |
+| --- | --- | --- |
+| `estatico` | nenhum | auditoria da SPEC, typecheck, lint, formatação, OpenAPI, segredos |
+| `banco` | PostgreSQL 16 de serviço | as 1.516 provas, com `AURORA_TEST_PG_URL` ligado — as 30 que dependem de servidor real deixam de ser puladas |
+| `navegador` | PostgreSQL 16 de serviço | as 135 provas de ponta a ponta, com a API sob `aurora_e2e_api` (NOBYPASSRLS), como em produção |
+
+A `estatico` é separada de propósito: termina em segundos e pega a maioria dos
+erros. Deixá-la atrás da subida de um PostgreSQL faria quem errou uma vírgula
+esperar dois minutos para descobrir.
+
+### Três defeitos que só apareceram ao montar isto
+
+**1. Duas instâncias migrando o mesmo banco quebravam uma.** `migrate()` não
+tomava trava nenhuma. Duas chamadas simultâneas contra um banco vazio liam
+`schema_migrations` vazia, as duas decidiam aplicar a 0000, e a perdedora morria
+— não em "relation already exists", como eu esperava, mas antes disso, no
+`CREATE SCHEMA IF NOT EXISTS`: `IF NOT EXISTS` **não é atômico** contra outra
+sessão, e a segunda falha com violação de unicidade em `pg_namespace`.
+
+Não é hipótese de laboratório: é o que acontece num deploy gradual com duas
+instâncias da API, ou com a API e o worker subindo lado a lado. Aqui apareceu
+porque duas suítes de teste em processos distintos passaram a migrar o mesmo
+banco.
+
+A correção é `pg_advisory_xact_lock` — de **transação**, não de sessão: morre no
+COMMIT. Trava de sessão precisaria de `unlock` na mesma conexão física que a
+tomou, e num pool essa não é garantidamente a mesma; trava de sessão esquecida
+num pool trava o próximo deploy e ninguém descobre por quê. Dentro da trava, a
+migration é **reconferida** antes de aplicar: é a reconferência que transforma
+"aplicar duas vezes" em "aplicar uma e pular a outra".
+
+A prova é um teste que cria um banco novo, roda duas migrações concorrentes e
+exige que as duas terminem e que cada migration apareça uma vez só. Desligando a
+trava, ele falha com a violação em `pg_namespace` — foi assim que o defeito foi
+confirmado, e não por leitura do código.
+
+**2. Uma variável de ambiente servia a dois usuários incompatíveis.**
+`AURORA_E2E_DATABASE_URL` era lida em dois lugares: pela configuração do
+Playwright, como o usuário da API (`aurora_e2e_api`, sem BYPASSRLS), e pelo
+`global-setup`, como o usuário que planta a massa. Mas a massa é plantada por
+quem **desliga um gatilho** (`ALTER TABLE ... DISABLE TRIGGER`, privilégio de
+dono) e apaga organizações por fora da RLS.
+
+Enquanto ninguém definia a variável, cada arquivo caía no seu próprio padrão e
+os dois estavam certos por acidente. Defini-la — que é exatamente o que um
+ambiente de CI faz — entregaria o usuário sem privilégio ao arranjo, e a suíte
+inteira morreria na primeira linha. O `global-setup` passou a ler
+`AURORA_E2E_ADMIN_DATABASE_URL`.
+
+**3. Um teste de ponta a ponta que passava por sorte.** O horário de silêncio
+falhou uma vez em duas execuções completas. Não era lentidão:
+`getByText('Horário de silêncio')` casa **dois** elementos naquela tela — o
+título do cartão e o texto só-para-leitor-de-tela de cada tipo que atravessa o
+silêncio, que sai de `hint` num `Badge`. O segundo só existe depois que a lista
+de tipos chega do servidor, então a prova passava ou falhava conforme a consulta
+respondesse antes ou depois da asserção. Corrigido para `getByRole('heading')`,
+que casa um só antes e depois.
+
+A classe de defeito é geral — todo `hint` de `Badge` vira texto invisível que o
+`getByText` enxerga —, então os 26 `hint` da aplicação foram cruzados com as 46
+buscas por texto sem `.first()` da suíte. Nenhuma outra colisão.
 
 ---
 

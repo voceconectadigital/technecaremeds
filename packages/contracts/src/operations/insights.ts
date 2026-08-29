@@ -242,4 +242,3 @@ export const insightTimeByStatus = defineOperation({
   query: recorte,
   response: envelope(z.record(z.string(), z.unknown())),
 });
-

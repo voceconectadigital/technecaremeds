@@ -9,9 +9,7 @@
 import { test, expect, E2E, apiUrl } from '../fixtures/aurora';
 
 test.describe('EPIC-005 · parque de ativos', () => {
-  test('a árvore recorta a lista, e o recorte inclui a subárvore', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('a árvore recorta a lista, e o recorte inclui a subárvore', async ({ comoCoordenadorA: page }) => {
     await page.goto('/ativos');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 

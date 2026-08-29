@@ -148,9 +148,7 @@ describe('saldos', () => {
     const r = await http.get('/v1/inventory/balances').set(auth(EMAIL_GESTOR));
     const conferido = inventoryBalances.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 
@@ -226,26 +224,20 @@ describe('transferência', () => {
       .filter((b: { sku: string }) => b.sku === 'VAL-001')
       .reduce((acc: number, b: { on_hand: string }) => acc + Number(b.on_hand), 0);
 
-    const r = await http
-      .post('/v1/inventory/transfers')
-      .set(auth(EMAIL_GESTOR))
-      .send({
-        item_id: valvula,
-        from_warehouse_id: central,
-        to_warehouse_id: base,
-        qty: 5,
-        reason: 'reposição da base',
-      });
+    const r = await http.post('/v1/inventory/transfers').set(auth(EMAIL_GESTOR)).send({
+      item_id: valvula,
+      from_warehouse_id: central,
+      to_warehouse_id: base,
+      qty: 5,
+      reason: 'reposição da base',
+    });
     expect(r.status).toBe(201);
     expect(r.body.out_id).toBeTruthy();
     expect(r.body.in_id).toBeTruthy();
 
     const depois = await http.get('/v1/inventory/balances').set(auth(EMAIL_GESTOR));
     const linhas = depois.body.items.filter((b: { sku: string }) => b.sku === 'VAL-001');
-    const totalDepois = linhas.reduce(
-      (acc: number, b: { on_hand: string }) => acc + Number(b.on_hand),
-      0
-    );
+    const totalDepois = linhas.reduce((acc: number, b: { on_hand: string }) => acc + Number(b.on_hand), 0);
 
     // A transferência MOVE, não cria nem destrói. O total conservado é a
     // afirmação que distingue uma transferência de duas pernas de duas
@@ -314,9 +306,7 @@ describe('estorno', () => {
     const extrato = await http
       .get(`/v1/inventory/ledger?item=${filtro}&warehouse=${central}`)
       .set(auth(EMAIL_GESTOR));
-    const estorno = extrato.body.items.find(
-      (m: { reverses_id: string | null }) => m.reverses_id !== null
-    );
+    const estorno = extrato.body.items.find((m: { reverses_id: string | null }) => m.reverses_id !== null);
     expect(estorno).toBeTruthy();
     expect(estorno.reverses_id).toBe(criado.body.id);
     // O movimento ORIGINAL continua lá: o estorno somou uma linha, não
@@ -333,9 +323,7 @@ describe('estorno', () => {
       .set(auth(EMAIL_GESTOR));
     const conferido = inventoryLedger.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 });

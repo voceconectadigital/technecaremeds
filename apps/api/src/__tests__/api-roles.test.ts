@@ -82,9 +82,7 @@ describe('catálogo e papéis', () => {
     const r = await http.get('/v1/permissions').set(auth(EMAIL_ADMIN));
     expect(r.status).toBe(200);
     expect(r.body.items).toHaveLength(PERMISSION_KEYS.length);
-    expect(r.body.items.map((p: { key: string }) => p.key).sort()).toEqual(
-      [...PERMISSION_KEYS].sort()
-    );
+    expect(r.body.items.map((p: { key: string }) => p.key).sort()).toEqual([...PERMISSION_KEYS].sort());
   });
 
   it('as permissões de campo vêm marcadas', async () => {
@@ -117,9 +115,7 @@ describe('catálogo e papéis', () => {
     const r = await http.get('/v1/roles').set(auth(EMAIL_ADMIN));
     const conferido = rolesList.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 });
@@ -229,9 +225,7 @@ describe('a explicação', () => {
     const r = await http.get(`/v1/memberships/${TEC_MEM}/permissions`).set(auth(EMAIL_ADMIN));
     const conferido = membershipPermissions.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 });
@@ -294,9 +288,7 @@ describe('troca de papéis', () => {
       .set(auth(EMAIL_ADMIN))
       .send({ role_ids: [papeis.get('coordinator')!] })
       .expect(200);
-    const denovo = await http
-      .get(`/v1/memberships/${TEC_MEM}/permissions`)
-      .set(auth(EMAIL_ADMIN));
+    const denovo = await http.get(`/v1/memberships/${TEC_MEM}/permissions`).set(auth(EMAIL_ADMIN));
     expect(new Set(denovo.body.effective)).toEqual(new Set(r.body.effective));
   });
 });

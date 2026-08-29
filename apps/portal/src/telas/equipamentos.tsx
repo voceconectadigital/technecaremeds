@@ -76,11 +76,7 @@ export function EquipamentosPage() {
                 )}
 
                 {a.warranty_until && (
-                  <StatusChip
-                    tone="info"
-                    size="sm"
-                    hint={`Garantia até ${formatarData(a.warranty_until)}`}
-                  >
+                  <StatusChip tone="info" size="sm" hint={`Garantia até ${formatarData(a.warranty_until)}`}>
                     <BadgeCheck aria-hidden="true" className="mr-1 inline size-3" />
                     garantia
                   </StatusChip>
@@ -128,9 +124,7 @@ export function DocumentosPage() {
                 )}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base text-text">
-                    {d.title || d.type_name}
-                  </span>
+                  <span className="block truncate text-base text-text">{d.title || d.type_name}</span>
                   <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
                     {[d.number, d.asset_name].filter(Boolean).join(' · ')}
                   </span>
@@ -192,15 +186,10 @@ export function OrcamentosPage() {
                       {q.number}
                     </span>
                     <span className="block text-xs text-warn-text/80">
-                      {q.valid_until
-                        ? `Vale até ${formatarData(q.valid_until)}`
-                        : 'Aguardando sua decisão'}
+                      {q.valid_until ? `Vale até ${formatarData(q.valid_until)}` : 'Aguardando sua decisão'}
                     </span>
                   </span>
-                  <span
-                    className="shrink-0 text-base font-semibold text-warn-text tabular-nums"
-                    data-numeric
-                  >
+                  <span className="shrink-0 text-base font-semibold text-warn-text tabular-nums" data-numeric>
                     {reais(q.total_cents)}
                   </span>
                 </li>
@@ -235,9 +224,7 @@ export function OrcamentosPage() {
                       {q.number}
                       {q.version > 1 && <span className="ml-1 text-xs text-muted">v{q.version}</span>}
                     </span>
-                    <span className="block text-xs text-muted">
-                      {ROTULO_ORCAMENTO[q.status] ?? q.status}
-                    </span>
+                    <span className="block text-xs text-muted">{ROTULO_ORCAMENTO[q.status] ?? q.status}</span>
                   </span>
                   <span className="shrink-0 text-sm text-text tabular-nums" data-numeric>
                     {reais(q.total_cents)}

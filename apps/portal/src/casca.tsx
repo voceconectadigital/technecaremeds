@@ -114,10 +114,7 @@ export function Casca({ titulo, subtitulo, acoes, children }: CascaProps) {
                   : 'text-muted hover:bg-surface-hover hover:text-text'
               )}
             >
-              <Icone
-                aria-hidden="true"
-                className={cn('size-5', d.destaque && !ativo && 'text-accent')}
-              />
+              <Icone aria-hidden="true" className={cn('size-5', d.destaque && !ativo && 'text-accent')} />
               {d.rotulo}
             </Link>
           );

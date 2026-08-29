@@ -333,9 +333,7 @@ describe('PORTAL-004 · outro cliente não aparece', () => {
      *
      * As duas respostas têm de ser indistinguíveis.
      */
-    const doOutro = await http
-      .get(`/v1/portal/requests/${solicitacaoDoB}`)
-      .set(auth(EMAIL_PORTAL));
+    const doOutro = await http.get(`/v1/portal/requests/${solicitacaoDoB}`).set(auth(EMAIL_PORTAL));
     const inexistente = await http
       .get('/v1/portal/requests/0193d900-0000-7000-8000-999999999999')
       .set(auth(EMAIL_PORTAL));
@@ -430,14 +428,11 @@ describe('PORTAL-010 · a escrita é mínima, e não aceita o cliente do corpo',
      * outro cliente — e o chamado apareceria na fila da prestadora como se
      * fosse legítimo.
      */
-    const r = await http
-      .post('/v1/portal/requests')
-      .set(auth(EMAIL_PORTAL))
-      .send({
-        summary: 'Bomba de infusão com alarme',
-        customer_id: clienteB,
-        source: 'phone',
-      });
+    const r = await http.post('/v1/portal/requests').set(auth(EMAIL_PORTAL)).send({
+      summary: 'Bomba de infusão com alarme',
+      customer_id: clienteB,
+      source: 'phone',
+    });
     expect(r.status).toBe(201);
 
     const criada = await http.get('/v1/portal/requests').set(auth(EMAIL_PORTAL));
@@ -448,9 +443,7 @@ describe('PORTAL-010 · a escrita é mínima, e não aceita o cliente do corpo',
 
     // A prova de que o cliente NÃO foi o do corpo: a solicitação aparece para
     // o portal do Alfa, cujo escopo é só o Alfa.
-    const interna = await http
-      .get(`/v1/service-requests/${nova.id}`)
-      .set(auth(EMAIL_COORD));
+    const interna = await http.get(`/v1/service-requests/${nova.id}`).set(auth(EMAIL_COORD));
     expect(interna.body.customer_id).toBe(clienteA);
     // E a origem é `portal`, sempre: deixá-la vir do corpo faria o indicador
     // de autoatendimento medir ficção.

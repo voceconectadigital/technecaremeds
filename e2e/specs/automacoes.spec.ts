@@ -8,9 +8,7 @@
 import { test, expect } from '../fixtures/aurora';
 
 test.describe('EPIC-024 · automações', () => {
-  test('a rota existe e tem porta a partir de Configurações', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('a rota existe e tem porta a partir de Configurações', async ({ comoCoordenadorA: page }) => {
     /*
      * A rota existia e nada levava até ela — que é a mesma coisa que não
      * existir. O alternador é a porta.

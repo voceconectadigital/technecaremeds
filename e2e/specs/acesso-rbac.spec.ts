@@ -38,10 +38,9 @@ test.describe('EPIC-002 · acesso e permissões', () => {
     const { items } = await membros.json();
     const tecnico = items.find((m: { email: string }) => m.email === E2E.emailTecA);
 
-    const antes = await page.request.get(
-      `${apiUrl()}/memberships/${tecnico.membership_id}/permissions`,
-      { headers: cab }
-    );
+    const antes = await page.request.get(`${apiUrl()}/memberships/${tecnico.membership_id}/permissions`, {
+      headers: cab,
+    });
     const corpoAntes = await antes.json();
     expect(corpoAntes.effective).toContain('work_order.complete');
 
@@ -62,9 +61,7 @@ test.describe('EPIC-002 · acesso e permissões', () => {
 
     const dialogoExcecao = page.getByRole('dialog').filter({ hasText: 'Exceção de permissão' });
     await dialogoExcecao.getByLabel('O que a exceção faz').selectOption('deny');
-    await dialogoExcecao
-      .getByLabel('Motivo')
-      .fill('em treinamento até a avaliação de novembro');
+    await dialogoExcecao.getByLabel('Motivo').fill('em treinamento até a avaliação de novembro');
     await dialogoExcecao.getByRole('button', { name: 'Salvar exceção' }).click();
 
     /*
@@ -75,10 +72,9 @@ test.describe('EPIC-002 · acesso e permissões', () => {
      * efetivas responde.
      */
     await expect(dialogoExcecao).toBeHidden({ timeout: 15_000 });
-    const depois = await page.request.get(
-      `${apiUrl()}/memberships/${tecnico.membership_id}/permissions`,
-      { headers: cab }
-    );
+    const depois = await page.request.get(`${apiUrl()}/memberships/${tecnico.membership_id}/permissions`, {
+      headers: cab,
+    });
     const corpoDepois = await depois.json();
     expect(corpoDepois.effective).not.toContain('work_order.complete');
 
@@ -91,9 +87,7 @@ test.describe('EPIC-002 · acesso e permissões', () => {
     expect(doPapel.length).toBeGreaterThan(0);
   });
 
-  test('exceção sem motivo não é aceita, e a tela diz por quê', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('exceção sem motivo não é aceita, e a tela diz por quê', async ({ comoCoordenadorA: page }) => {
     await page.goto('/configuracoes');
     await page.getByRole('button', { name: /Ações para Rafael/ }).click();
     await page.getByRole('menuitem', { name: /Ver acesso e permissões/ }).click();

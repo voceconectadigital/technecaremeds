@@ -19,8 +19,23 @@ import { fileURLToPath } from 'node:url';
 export default function globalSetup(): void {
   const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
+  /*
+   * A MASSA É PLANTADA PELO DONO DO BANCO, e não pelo papel da aplicação.
+   *
+   * São duas variáveis porque são dois usuários, e confundi-los quebra de um
+   * jeito difícil de ler. `AURORA_E2E_DATABASE_URL` é o que a API usa:
+   * `aurora_e2e_api`, sem BYPASSRLS, igual a produção. Este script precisa de
+   * outra coisa — ele desliga um gatilho (`ALTER TABLE ... DISABLE TRIGGER`,
+   * privilégio de dono) e apaga organizações inteiras por fora da RLS.
+   *
+   * Enquanto ninguém definia nenhuma das duas, cada arquivo caía no seu padrão
+   * e ninguém notava. Definir só `AURORA_E2E_DATABASE_URL` — que é o que um
+   * ambiente de integração contínua faria — passaria o usuário sem privilégio
+   * para cá, e a suíte inteira morreria na primeira linha do arranjo.
+   */
   const DATABASE_URL =
-    process.env.AURORA_E2E_DATABASE_URL ?? 'postgres://postgres:aurora_dev_local@localhost:15432/aurora_e2e';
+    process.env.AURORA_E2E_ADMIN_DATABASE_URL ??
+    'postgres://postgres:aurora_dev_local@localhost:15432/aurora_e2e';
 
   execFileSync(process.execPath, [join(raiz, 'e2e', 'fixtures', 'seed.mjs'), '--reset'], {
     cwd: raiz,

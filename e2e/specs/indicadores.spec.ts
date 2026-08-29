@@ -24,7 +24,10 @@ test.describe('EPIC-021 · indicadores', () => {
       });
     }
 
-    await page.getByRole('button', { name: /Como .* é calculado/ }).first().click();
+    await page
+      .getByRole('button', { name: /Como .* é calculado/ })
+      .first()
+      .click();
 
     const dialogo = page.getByRole('dialog');
     await expect(dialogo).toBeVisible();
@@ -42,9 +45,7 @@ test.describe('EPIC-021 · indicadores', () => {
     await expect(dialogo.getByText('Antes de comparar com o sistema antigo')).toBeVisible();
   });
 
-  test('o período fica na URL e sobrevive ao recarregamento', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('o período fica na URL e sobrevive ao recarregamento', async ({ comoCoordenadorA: page }) => {
     // Um recorte que se perde é um recorte refeito toda vez — e um painel que
     // não pode ser mandado por link vira captura de tela no WhatsApp.
     await page.goto('/indicadores');

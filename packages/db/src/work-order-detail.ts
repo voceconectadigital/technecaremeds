@@ -43,10 +43,7 @@ export interface CommentRow {
  * lê-las já vaza a informação sensível: "há três notas internas sobre a sua
  * garantia" diz demais mesmo sem o texto.
  */
-export async function listComments(
-  session: TenantSession,
-  workOrderId: string
-): Promise<CommentRow[]> {
+export async function listComments(session: TenantSession, workOrderId: string): Promise<CommentRow[]> {
   const podeVerInterna = session.context.permissions.has('work_order.read_internal_notes');
 
   return session.query<CommentRow>(
@@ -87,10 +84,7 @@ export async function addComment(session: TenantSession, input: NewComment): Pro
   }
   // Escrever nota interna exige poder LER nota interna. Sem isso, alguém
   // escreveria num canal que não consegue conferir depois.
-  if (
-    input.visibility === 'internal' &&
-    !session.context.permissions.has('work_order.read_internal_notes')
-  ) {
+  if (input.visibility === 'internal' && !session.context.permissions.has('work_order.read_internal_notes')) {
     throw new Error('sem permissão para nota interna');
   }
 
@@ -99,13 +93,7 @@ export async function addComment(session: TenantSession, input: NewComment): Pro
        (id, organization_id, work_order_id, body, visibility, author_membership_id)
      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)
      RETURNING id`,
-    [
-      session.context.organizationId,
-      input.workOrderId,
-      corpo,
-      input.visibility,
-      session.context.membershipId,
-    ]
+    [session.context.organizationId, input.workOrderId, corpo, input.visibility, session.context.membershipId]
   );
   return rows[0]!.id;
 }
@@ -141,10 +129,7 @@ export interface TimeEntryRow {
  * separa quem executa de quem fatura. O técnico aponta a hora e não precisa
  * saber por quanto ela é cobrada do cliente.
  */
-export async function listTimeEntries(
-  session: TenantSession,
-  workOrderId: string
-): Promise<TimeEntryRow[]> {
+export async function listTimeEntries(session: TenantSession, workOrderId: string): Promise<TimeEntryRow[]> {
   const podeVerCusto = session.context.permissions.has('work_order.read_costs');
 
   return session.query<TimeEntryRow>(
@@ -195,10 +180,7 @@ export interface AttachmentRow {
  * `byte_size` viaja como texto porque é `bigint`: acima de 2^53 o JavaScript
  * perde precisão em silêncio, e "em silêncio" é a parte cara.
  */
-export async function listAttachments(
-  session: TenantSession,
-  workOrderId: string
-): Promise<AttachmentRow[]> {
+export async function listAttachments(session: TenantSession, workOrderId: string): Promise<AttachmentRow[]> {
   return session.query<AttachmentRow>(
     `SELECT a.id, a.purpose::text AS purpose, a.file_name, a.content_type,
             a.byte_size::text AS byte_size, a.sha256, a.taken_at, a.uploaded_at,

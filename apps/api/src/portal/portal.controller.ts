@@ -133,10 +133,7 @@ export class PortalController {
 
   /** As minhas solicitações, com o vocabulário do cliente. */
   @Get('requests')
-  async requests(
-    @Req() req: AuroraRequest,
-    @Query('open') open?: string
-  ): Promise<{ items: unknown[] }> {
+  async requests(@Req() req: AuroraRequest, @Query('open') open?: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
     const linhas = await withTenant(this.db, ctx, (s) =>

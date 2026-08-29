@@ -21,14 +21,7 @@ export const PLAN_TARGET_KINDS = ['asset', 'asset_category', 'location_subtree']
  * escrevê-las como "a cada 3 meses" perderia a palavra que está no contrato e
  * na norma.
  */
-export const PLAN_FREQUENCY_UNITS = [
-  'day',
-  'week',
-  'month',
-  'quarter',
-  'semester',
-  'year',
-] as const;
+export const PLAN_FREQUENCY_UNITS = ['day', 'week', 'month', 'quarter', 'semester', 'year'] as const;
 
 export const PlanRow = z.object({
   id: Uuid,
@@ -149,9 +142,7 @@ export const planTaskAssets = defineOperation({
   permissions: ['maintenance_plan.read'],
   params: z.object({ taskId: Uuid }),
   response: z.object({
-    items: z.array(
-      z.object({ id: Uuid, name: z.string(), location_path: z.string().nullable() })
-    ),
+    items: z.array(z.object({ id: Uuid, name: z.string(), location_path: z.string().nullable() })),
   }),
 });
 

@@ -72,10 +72,7 @@ export class RolesController {
   /** O que um papel concede. */
   @Get('roles/:id/permissions')
   @RequirePermissions('organization.manage_roles')
-  async ofRole(
-    @Req() req: AuroraRequest,
-    @Param('id') id: string
-  ): Promise<{ items: string[] }> {
+  async ofRole(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: string[] }> {
     const ctx = req.auroraContext!;
     const roleId = uuidParam(id, 'id');
     const items = await withTenant(this.db, ctx, (s) => rolePermissions(s, roleId));
@@ -112,12 +109,12 @@ export class RolesController {
      *
      * A regra é a de `aurora.effective_permissions`: `deny` vence.
      */
-    const negadas = new Set(
-      items.filter((i) => i.effect === 'deny').map((i) => i.permission_key)
-    );
+    const negadas = new Set(items.filter((i) => i.effect === 'deny').map((i) => i.permission_key));
     const efetivas = [
       ...new Set(
-        items.filter((i) => i.effect === 'grant' && !negadas.has(i.permission_key)).map((i) => i.permission_key)
+        items
+          .filter((i) => i.effect === 'grant' && !negadas.has(i.permission_key))
+          .map((i) => i.permission_key)
       ),
     ].sort();
 
@@ -156,9 +153,8 @@ export class RolesController {
       );
     }
 
-    const vence = body.expires_at === undefined || body.expires_at === null
-      ? null
-      : new Date(String(body.expires_at));
+    const vence =
+      body.expires_at === undefined || body.expires_at === null ? null : new Date(String(body.expires_at));
     if (vence !== null && Number.isNaN(vence.getTime())) {
       throw new ValidationError('expires_at não é uma data válida', { field: 'expires_at' });
     }

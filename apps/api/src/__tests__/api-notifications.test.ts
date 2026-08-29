@@ -332,8 +332,7 @@ describe('a resposta e o contrato', () => {
     const conferidos = notificationTypes.response.safeParse(tipos.body);
     if (!conferidos.success) {
       throw new Error(
-        'tipos:\n' +
-          conferidos.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+        'tipos:\n' + conferidos.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
       );
     }
   });

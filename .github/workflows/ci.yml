@@ -9,7 +9,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
+  # ---------------------------------------------------------------------------
+  # O portão rápido: nada que precise de banco.
+  #
+  # Separado do resto de propósito. Typecheck e lint terminam em segundos e
+  # pegam a maioria dos erros; deixá-los atrás da subida de um PostgreSQL faria
+  # quem errou uma vírgula esperar dois minutos para descobrir.
+  # ---------------------------------------------------------------------------
+  estatico:
+    name: Estático
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +39,150 @@ jobs:
       - name: Formatação
         run: npm run format:check
 
-      # A suíte de isolamento roda contra PostgreSQL real (PGlite) e é
-      # bloqueante: nenhum vazamento cross-tenant entra em main.
-      - name: Testes
-        run: npm test
+      # O documento de OpenAPI é GERADO do roteador real. Este passo falha se
+      # ele estiver desatualizado, se uma rota perdeu contrato, se uma escrita
+      # ficou guardada por permissão de leitura, ou se uma rota literal foi
+      # sombreada por uma de parâmetro.
+      - name: Contratos e OpenAPI
+        run: npm run openapi:check
 
       - name: Verificação de segredos versionados
         run: node tools/ci/check-secrets.mjs
+
+  # ---------------------------------------------------------------------------
+  # A suíte contra PostgreSQL DE VERDADE.
+  #
+  # POR QUE ISTO PRECISOU EXISTIR
+  #
+  # A suíte roda em PGlite por padrão — PostgreSQL 16 compilado em WebAssembly,
+  # no processo. É rápido e fiel o bastante para a maior parte, e foi decisão
+  # registrada (ADR-022).
+  #
+  # Mas PGlite é UM PROCESSO E UMA CONEXÃO. Três coisas que este produto
+  # depende não podem ser exercitadas ali:
+  #
+  #   · o pool, e o que acontece quando ele satura;
+  #   · concorrência real entre transações — bloqueio, serialização, o
+  #     comportamento de `FOR UPDATE`;
+  #   · a RLS sob um papel de banco SEM BYPASSRLS, que é o papel de produção.
+  #
+  # O terceiro é o que mais importa: o isolamento entre organizações é a
+  # propriedade central deste sistema, e ele é imposto por políticas de linha
+  # que só valem quando a conexão NÃO é de superusuário. Testar isso num
+  # processo que roda como dono do banco testaria um sistema sem RLS.
+  # ---------------------------------------------------------------------------
+  banco:
+    name: Testes contra PostgreSQL 16
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: aurora_ci
+        ports: ['5432:5432']
+        # Sem a checagem de saúde, os passos começam antes de o banco aceitar
+        # conexão — e a falha aparece como "connection refused" intermitente,
+        # que é o tipo de instabilidade que ensina a reexecutar o CI.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:ci_only_not_a_secret@localhost:5432/aurora_ci
+      # É esta variável que LIGA as suítes contra PostgreSQL real. Sem ela
+      # elas não falham: elas são PULADAS, com `describe.skipIf`, e a execução
+      # fica verde com 24 provas a menos. Era exatamente esse o estado até aqui
+      # — as provas existiam e só rodavam nesta máquina.
+      AURORA_TEST_PG_URL: postgres://postgres:ci_only_not_a_secret@localhost:5432/aurora_ci
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # As migrations rodam do zero, sempre. É o que prova que elas são
+      # reprodutíveis a partir de um banco vazio — e não só idempotentes sobre
+      # um banco que já existe.
+      - name: Migrations do zero
+        run: npm run db:migrate
+
+      - name: Suíte completa contra PostgreSQL real
+        run: npm test
+
+  # ---------------------------------------------------------------------------
+  # Ponta a ponta, no navegador.
+  #
+  # Roda com a API sob um papel de banco SEM privilégio — o mesmo desenho de
+  # produção. O boot da API RECUSA subir com um papel que tenha SUPERUSER ou
+  # BYPASSRLS, e essa recusa é uma propriedade que este job exercita de graça:
+  # se alguém afrouxar o papel, o CI não sobe.
+  # ---------------------------------------------------------------------------
+  navegador:
+    name: Ponta a ponta
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci_only_not_a_secret
+          POSTGRES_DB: aurora_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:ci_only_not_a_secret@localhost:5432/aurora_e2e
+      # DOIS USUÁRIOS, de propósito. A API usa o papel sem privilégio, igual a
+      # produção; a massa de teste é plantada pelo dono do banco, porque ela
+      # desliga gatilho e apaga organização inteira por fora da RLS.
+      AURORA_E2E_DATABASE_URL: postgres://aurora_e2e_api:e2e_ci_only_2026@localhost:5432/aurora_e2e
+      AURORA_E2E_ADMIN_DATABASE_URL: postgres://postgres:ci_only_not_a_secret@localhost:5432/aurora_e2e
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Migrations
+        run: npm run db:migrate
+
+      # O papel da aplicação: LOGIN, herda `aurora_app`, NOBYPASSRLS,
+      # NOSUPERUSER. É ele que a API usa — medir com superusuário mediria um
+      # sistema sem RLS.
+      - name: Papel de aplicação do E2E
+        run: node tools/e2e/provision-role.mjs
+        env:
+          AURORA_E2E_DB_PASSWORD: e2e_ci_only_2026
+
+      - name: Navegadores do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Ponta a ponta
+        run: npm run e2e
+
+      # O relatório só interessa quando falha — e aí interessa muito: sem ele,
+      # investigar uma falha de CI exige reproduzir localmente o que já
+      # aconteceu no servidor.
+      - name: Relatório da execução
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

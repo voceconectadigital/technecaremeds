@@ -126,10 +126,7 @@ export class InventoryController {
    */
   @Post('adjustments')
   @RequirePermissions('inventory.adjust')
-  async adjust(
-    @Req() req: AuroraRequest,
-    @Body() body: Record<string, unknown>
-  ): Promise<{ id: string }> {
+  async adjust(@Req() req: AuroraRequest, @Body() body: Record<string, unknown>): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
     const itemId = uuidParam(String(body.item_id ?? ''), 'item_id');
     const warehouseId = uuidParam(String(body.warehouse_id ?? ''), 'warehouse_id');
@@ -150,9 +147,7 @@ export class InventoryController {
       );
     }
 
-    const id = await withTenant(this.db, ctx, (s) =>
-      adjust(s, itemId, warehouseId, qty, motivo)
-    );
+    const id = await withTenant(this.db, ctx, (s) => adjust(s, itemId, warehouseId, qty, motivo));
     return { id };
   }
 
@@ -219,10 +214,7 @@ export class InventoryController {
    */
   @Post('minimums')
   @RequirePermissions('inventory.update')
-  async minimum(
-    @Req() req: AuroraRequest,
-    @Body() body: Record<string, unknown>
-  ): Promise<{ ok: true }> {
+  async minimum(@Req() req: AuroraRequest, @Body() body: Record<string, unknown>): Promise<{ ok: true }> {
     const ctx = req.auroraContext!;
     const itemId = uuidParam(String(body.item_id ?? ''), 'item_id');
     const warehouseId = uuidParam(String(body.warehouse_id ?? ''), 'warehouse_id');

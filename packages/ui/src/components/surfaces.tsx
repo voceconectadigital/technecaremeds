@@ -60,13 +60,7 @@ export interface CardHeaderProps {
   headingLevel?: 2 | 3 | 4;
 }
 
-export function CardHeader({
-  title,
-  description,
-  actions,
-  className,
-  headingLevel = 2,
-}: CardHeaderProps) {
+export function CardHeader({ title, description, actions, className, headingLevel = 2 }: CardHeaderProps) {
   const H = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
 
   return (

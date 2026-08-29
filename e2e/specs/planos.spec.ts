@@ -85,10 +85,9 @@ test.describe('EPIC-013 · planos preventivos', () => {
     const { tasks } = await detalhe.json();
     const ciclo = tasks[0].open_cycle_id;
 
-    const cumprimento = await page.request.get(
-      `${apiUrl()}/maintenance-plans/cycles/${ciclo}/compliance`,
-      { headers: cab }
-    );
+    const cumprimento = await page.request.get(`${apiUrl()}/maintenance-plans/cycles/${ciclo}/compliance`, {
+      headers: cab,
+    });
     const { items: itensDoCiclo } = await cumprimento.json();
     expect(itensDoCiclo.length).toBeGreaterThan(0);
 
@@ -106,10 +105,9 @@ test.describe('EPIC-013 · planos preventivos', () => {
 
     // E o item passa a contar como PULADO, e não como atrasado: a distinção é
     // o que faz o indicador significar algo.
-    const depois = await page.request.get(
-      `${apiUrl()}/maintenance-plans/cycles/${ciclo}/compliance`,
-      { headers: cab }
-    );
+    const depois = await page.request.get(`${apiUrl()}/maintenance-plans/cycles/${ciclo}/compliance`, {
+      headers: cab,
+    });
     const corpo = await depois.json();
     const item = corpo.items.find((i: { id: string }) => i.id === itensDoCiclo[0].id);
     expect(item.state).toBe('skipped');

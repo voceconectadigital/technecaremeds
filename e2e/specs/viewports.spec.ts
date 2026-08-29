@@ -43,9 +43,7 @@ const TELAS = ['/', '/ordens?vista=lista', '/ativos', '/estoque', '/indicadores'
 
 for (const v of LARGURAS) {
   for (const caminho of TELAS) {
-    test(`${caminho} cabe em ${v.width}×${v.height} (${v.nome})`, async ({
-      comoCoordenadorA: page,
-    }) => {
+    test(`${caminho} cabe em ${v.width}×${v.height} (${v.nome})`, async ({ comoCoordenadorA: page }) => {
       await page.setViewportSize({ width: v.width, height: v.height });
       await page.goto(caminho);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });

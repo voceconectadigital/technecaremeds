@@ -46,10 +46,7 @@ export function AbrirPage() {
   });
 
   return (
-    <Casca
-      titulo="Abrir chamado"
-      subtitulo="Diga o que está acontecendo. O resto pode vir depois."
-    >
+    <Casca titulo="Abrir chamado" subtitulo="Diga o que está acontecendo. O resto pode vir depois.">
       <Card className="mx-auto max-w-xl">
         {/*
           `noValidate`: a validação nossa é a que roda. A do navegador aparece
@@ -104,10 +101,7 @@ export function AbrirPage() {
 
           <EscolhaDeEquipamento escolhido={equipamento} onEscolher={setEquipamento} />
 
-          <Field
-            label="Mais detalhes"
-            hint="Opcional. Desde quando, o que já tentaram, o que muda o quadro."
-          >
+          <Field label="Mais detalhes" hint="Opcional. Desde quando, o que já tentaram, o que muda o quadro.">
             <Textarea
               value={detalhes}
               onChange={(e) => setDetalhes(e.target.value)}
@@ -209,8 +203,7 @@ function EscolhaDeEquipamento({
         <ul className="mt-1 flex flex-col overflow-hidden rounded-control border border-border-subtle">
           {encontrados.length === 0 ? (
             <li className="px-3 py-2 text-xs text-subtle">
-              Nenhum equipamento com esse nome no seu setor. Você pode abrir o chamado sem
-              escolher.
+              Nenhum equipamento com esse nome no seu setor. Você pode abrir o chamado sem escolher.
             </li>
           ) : (
             encontrados.map((a, i) => (

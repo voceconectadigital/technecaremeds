@@ -84,15 +84,16 @@ test.describe('EPIC-016 · orçamentos', () => {
     // menu, para quem chegou pelo caminho de contrato descobrir que o outro
     // existe.
     await page.goto('/contratos');
-    await page.getByRole('navigation', { name: 'Contratos e orçamentos' }).getByRole('link', { name: 'Orçamentos' }).click();
+    await page
+      .getByRole('navigation', { name: 'Contratos e orçamentos' })
+      .getByRole('link', { name: 'Orçamentos' })
+      .click();
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Orçamentos');
     expect(page.url()).toContain('/orcamentos');
   });
 
-  test('a ficha mostra a versão atual e a linha do tempo das versões', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('a ficha mostra a versão atual e a linha do tempo das versões', async ({ comoCoordenadorA: page }) => {
     await page.goto('/orcamentos');
     const primeiro = page.getByRole('link', { name: /QT-/ }).first();
     await expect(primeiro).toBeVisible({ timeout: 15_000 });

@@ -54,9 +54,7 @@ export function EntrarPage() {
         >
           <header className="flex flex-col items-center gap-2 text-center">
             <h1 className="text-xl font-semibold text-text">Portal do cliente</h1>
-            <p className="text-sm text-muted">
-              Acompanhe seus chamados e abra novos, de onde estiver.
-            </p>
+            <p className="text-sm text-muted">Acompanhe seus chamados e abra novos, de onde estiver.</p>
           </header>
 
           <Field label="Seu e-mail" required error={erro}>
@@ -78,8 +76,8 @@ export function EntrarPage() {
           </Button>
 
           <p className="text-center text-xs text-subtle">
-            Ambiente de desenvolvimento: qualquer e-mail cadastrado entra sem senha. A API recusa
-            este modo fora de desenvolvimento.
+            Ambiente de desenvolvimento: qualquer e-mail cadastrado entra sem senha. A API recusa este modo
+            fora de desenvolvimento.
           </p>
         </form>
       </Card>

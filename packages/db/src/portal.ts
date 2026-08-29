@@ -355,10 +355,7 @@ export interface PortalQuoteRow {
  * quanto daquele preço é margem é conversa nossa — a SPEC §19 lista margem
  * entre o que não vaza.
  */
-export async function portalQuotes(
-  session: TenantSession,
-  membershipId: string
-): Promise<PortalQuoteRow[]> {
+export async function portalQuotes(session: TenantSession, membershipId: string): Promise<PortalQuoteRow[]> {
   return session.query<PortalQuoteRow>(
     `SELECT q.id, q.number, q.version, q.status::text AS status,
             q.valid_until::text AS valid_until,

@@ -56,9 +56,7 @@ const cabDaEquipe = {
 };
 
 test.describe('PORTAL · a navegação cabe no polegar', () => {
-  test('a barra fica embaixo, com quatro destinos alcançáveis', async ({
-    comoEnfermeira: page,
-  }) => {
+  test('a barra fica embaixo, com quatro destinos alcançáveis', async ({ comoEnfermeira: page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Início');
 
@@ -102,9 +100,7 @@ test.describe('PORTAL · a navegação cabe no polegar', () => {
 });
 
 test.describe('PORTAL · abrir chamado em trinta segundos', () => {
-  test('só o problema é obrigatório; o resto não trava o envio', async ({
-    comoEnfermeira: page,
-  }) => {
+  test('só o problema é obrigatório; o resto não trava o envio', async ({ comoEnfermeira: page }) => {
     /*
      * UM CAMPO OBRIGATÓRIO A MAIS custa cinco segundos e uma chance de
      * desistir; um que a pessoa não sabe responder custa o chamado inteiro.
@@ -179,9 +175,7 @@ test.describe('PORTAL · nada interno aparece', () => {
     expect(alvo).toBeTruthy();
   });
 
-  test('o escopo limita a lista ao cliente e ao local do vínculo', async ({
-    comoEnfermeira: page,
-  }) => {
+  test('o escopo limita a lista ao cliente e ao local do vínculo', async ({ comoEnfermeira: page }) => {
     /*
      * A enfermeira do Alfa não vê o Beta.
      *

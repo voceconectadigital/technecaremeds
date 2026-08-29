@@ -101,14 +101,9 @@ test.describe('acessibilidade em diálogo', () => {
     await expect(dialogo).toBeVisible();
     await expect(dialogo).toHaveAttribute('aria-labelledby', /.+/);
 
-    const resultado = await new AxeBuilder({ page })
-      .withTags(ETIQUETAS)
-      .include('[role="dialog"]')
-      .analyze();
+    const resultado = await new AxeBuilder({ page }).withTags(ETIQUETAS).include('[role="dialog"]').analyze();
 
-    const resumo = resultado.violations
-      .map((v) => `  · [${v.impact ?? '—'}] ${v.id}: ${v.help}`)
-      .join('\n');
+    const resumo = resultado.violations.map((v) => `  · [${v.impact ?? '—'}] ${v.id}: ${v.help}`).join('\n');
     expect(resultado.violations, `acessibilidade no diálogo:\n${resumo}`).toEqual([]);
 
     // ESC fecha: um diálogo que só fecha no botão prende quem usa teclado.

@@ -17,11 +17,7 @@ import { Link } from '@tanstack/react-router';
 import { CalendarClock, CheckCircle2, CircleAlert, Inbox } from 'lucide-react';
 import { Card, CardHeader, EmptyState, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { useApiQuery } from '@aurora/app-kit';
-import {
-  portalHome,
-  type PortalRequest,
-  type PortalVisit,
-} from '@aurora/contracts';
+import { portalHome, type PortalRequest, type PortalVisit } from '@aurora/contracts';
 import { Casca } from '../casca';
 import { quando, reais } from '../formato';
 

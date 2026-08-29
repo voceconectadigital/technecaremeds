@@ -17,16 +17,11 @@ const cab = {
 };
 
 test.describe('EPIC-018 · documentos', () => {
-  test('abre no que vence, e explica por que o acervo pode ter mais', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('abre no que vence, e explica por que o acervo pode ter mais', async ({ comoCoordenadorA: page }) => {
     await page.goto('/documentos');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Documentos');
 
-    await expect(page.getByRole('tab', { name: /Vencendo/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await expect(page.getByRole('tab', { name: /Vencendo/ })).toHaveAttribute('aria-selected', 'true');
 
     /*
      * O VAZIO É EXPLICADO, e a explicação diz a distinção que importa:
@@ -81,9 +76,7 @@ test.describe('EPIC-018 · documentos', () => {
     const dezAnos = await page.request.get(`${apiUrl()}/documents?expiring_within_days=3650`, {
       headers: cab,
     });
-    expect((await zero.json()).items.length).toBeLessThanOrEqual(
-      (await dezAnos.json()).items.length
-    );
+    expect((await zero.json()).items.length).toBeLessThanOrEqual((await dezAnos.json()).items.length);
   });
 
   test('janela inválida é recusada', async ({ comoCoordenadorA: page }) => {

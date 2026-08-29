@@ -34,9 +34,7 @@ test.describe('EPIC-015 · estoque', () => {
     await expect(page.getByText('Válvula de exalação')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('o extrato abre em gaveta, sem tirar a pessoa da lista', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('o extrato abre em gaveta, sem tirar a pessoa da lista', async ({ comoCoordenadorA: page }) => {
     await page.goto('/estoque?aba=tudo');
     await page.getByRole('button', { name: /Válvula de exalação/ }).click();
 
@@ -78,9 +76,7 @@ test.describe('EPIC-015 · estoque', () => {
     await dialogo.getByRole('button', { name: 'Registrar ajuste' }).click();
     await expect(dialogo.getByText(/Escreva o motivo/)).toBeVisible();
 
-    await dialogo
-      .getByLabel('Motivo')
-      .fill('duas unidades danificadas no transporte, descartadas');
+    await dialogo.getByLabel('Motivo').fill('duas unidades danificadas no transporte, descartadas');
     await dialogo.getByRole('button', { name: 'Registrar ajuste' }).click();
     await expect(dialogo).toBeHidden({ timeout: 15_000 });
 

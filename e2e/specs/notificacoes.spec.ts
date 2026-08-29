@@ -63,7 +63,25 @@ test.describe('EPIC-023 · notificações', () => {
   }) => {
     await page.goto('/notificacoes?aba=preferencias');
 
-    await expect(page.getByText('Horário de silêncio')).toBeVisible({ timeout: 15_000 });
+    /*
+     * PELO PAPEL, e não pelo texto solto. A diferença aqui não é estilo.
+     *
+     * `getByText('Horário de silêncio')` casa DUAS coisas nesta tela: o título
+     * do cartão e o texto só-para-leitor-de-tela de cada tipo que atravessa o
+     * silêncio ("...atravessa o horário de silêncio..."). O segundo só existe
+     * depois que a lista de tipos chega do servidor.
+     *
+     * O resultado era uma prova que passava ou falhava conforme a consulta
+     * respondesse antes ou depois da asserção — e falhava com "strict mode
+     * violation", que soa como defeito do teste e não como o que era: a
+     * consulta tinha acabado de chegar. Passou dezenas de vezes até a máquina
+     * ficar rápida o bastante.
+     *
+     * O papel `heading` casa um elemento só, hoje e depois de a lista chegar.
+     */
+    await expect(page.getByRole('heading', { name: 'Horário de silêncio' })).toBeVisible({
+      timeout: 15_000,
+    });
 
     /*
      * PROMETER SILÊNCIO ABSOLUTO SERIA PIOR do que não prometer.
@@ -84,9 +102,6 @@ test.describe('EPIC-023 · notificações', () => {
     expect(page.url()).toContain('aba=preferencias');
 
     await page.reload();
-    await expect(page.getByRole('tab', { name: 'Preferências' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await expect(page.getByRole('tab', { name: 'Preferências' })).toHaveAttribute('aria-selected', 'true');
   });
 });

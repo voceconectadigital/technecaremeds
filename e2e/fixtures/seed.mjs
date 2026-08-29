@@ -205,10 +205,10 @@ async function main() {
          VALUES ($1, $2, $3, 'active', 'portal', false)`,
         [E2E.memPortalA, E2E.orgA, E2E.userPortalA]
       );
-      await c.query(
-        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
-        [E2E.memPortalA, E2E.orgA]
-      );
+      await c.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
+        E2E.memPortalA,
+        E2E.orgA,
+      ]);
       await c.query('COMMIT');
     } catch (e) {
       await c.query('ROLLBACK');

@@ -51,10 +51,7 @@ export class PlansController {
    */
   @Get()
   @RequirePermissions('maintenance_plan.read')
-  async list(
-    @Req() req: AuroraRequest,
-    @Query('customer') customer?: string
-  ): Promise<{ items: unknown[] }> {
+  async list(@Req() req: AuroraRequest, @Query('customer') customer?: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const customerId = optionalUuid(customer, 'customer');
 
@@ -161,10 +158,7 @@ export class PlansController {
    */
   @Get('tasks/:taskId/assets')
   @RequirePermissions('maintenance_plan.read')
-  async targets(
-    @Req() req: AuroraRequest,
-    @Param('taskId') taskId: string
-  ): Promise<{ items: unknown[] }> {
+  async targets(@Req() req: AuroraRequest, @Param('taskId') taskId: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const id = uuidParam(taskId, 'taskId');
     const items = await withTenant(this.db, ctx, async (s) => {
@@ -188,10 +182,7 @@ export class PlansController {
    */
   @Get('cycles/:cycleId/compliance')
   @RequirePermissions('maintenance_plan.read')
-  async compliance(
-    @Req() req: AuroraRequest,
-    @Param('cycleId') cycleId: string
-  ): Promise<unknown> {
+  async compliance(@Req() req: AuroraRequest, @Param('cycleId') cycleId: string): Promise<unknown> {
     const ctx = req.auroraContext!;
     const id = uuidParam(cycleId, 'cycleId');
     return withTenant(this.db, ctx, (s) => cycleCompliance(s, id));
@@ -207,10 +198,7 @@ export class PlansController {
    */
   @Post('tasks/:taskId/cycles')
   @RequirePermissions('maintenance_plan.generate_cycle')
-  async generate(
-    @Req() req: AuroraRequest,
-    @Param('taskId') taskId: string
-  ): Promise<{ cycle: unknown }> {
+  async generate(@Req() req: AuroraRequest, @Param('taskId') taskId: string): Promise<{ cycle: unknown }> {
     const ctx = req.auroraContext!;
     const id = uuidParam(taskId, 'taskId');
     const r = await withTenant(this.db, ctx, (s) => generateCycle(s, id));

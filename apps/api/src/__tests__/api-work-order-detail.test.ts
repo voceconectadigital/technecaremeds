@@ -188,9 +188,7 @@ describe('comentários e notas internas', () => {
     // que DEVE estar lá. O que não pode viajar é o texto da nota e qualquer
     // item marcado como interno.
     expect(JSON.stringify(daAuditoria.body.items)).not.toContain('avaliar troca');
-    expect(daAuditoria.body.items.map((c: { visibility: string }) => c.visibility)).toEqual([
-      'customer',
-    ]);
+    expect(daAuditoria.body.items.map((c: { visibility: string }) => c.visibility)).toEqual(['customer']);
   });
 
   it('escrever nota interna sem poder lê-la é recusado com 403', async () => {
@@ -297,9 +295,7 @@ describe('a resposta e o contrato', () => {
     if (!conferido.success) {
       throw new Error(
         'a ficha divergiu do contrato:\n' +
-          conferido.error.issues
-            .map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`)
-            .join('\n')
+          conferido.error.issues.map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`).join('\n')
       );
     }
   });

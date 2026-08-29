@@ -252,8 +252,6 @@ describe('catálogos: contrato e domínio dizem a mesma coisa', () => {
     const contratos = await import('@aurora/contracts');
     const dominio = await import('@aurora/domain');
     expect([...contratos.REQUEST_PRIORITIES]).toEqual([...dominio.REQUEST_PRIORITIES]);
-    expect([...contratos.WORK_ORDER_PRIORITIES].sort()).toEqual(
-      [...dominio.REQUEST_PRIORITIES].sort()
-    );
+    expect([...contratos.WORK_ORDER_PRIORITIES].sort()).toEqual([...dominio.REQUEST_PRIORITIES].sort());
   });
 });

@@ -177,10 +177,7 @@ export interface OverrideInput {
   expiresAt: Date | null;
 }
 
-export async function setPermissionOverride(
-  session: TenantSession,
-  input: OverrideInput
-): Promise<void> {
+export async function setPermissionOverride(session: TenantSession, input: OverrideInput): Promise<void> {
   const motivo = input.reason.trim();
   if (motivo.length < 5) {
     throw new Error('exceção de permissão exige motivo com ao menos cinco caracteres');
@@ -234,9 +231,7 @@ export async function setMemberRoles(
   membershipId: string,
   roleIds: readonly string[]
 ): Promise<void> {
-  await session.query(`DELETE FROM aurora.membership_roles WHERE membership_id = $1`, [
-    membershipId,
-  ]);
+  await session.query(`DELETE FROM aurora.membership_roles WHERE membership_id = $1`, [membershipId]);
   for (const roleId of roleIds) {
     await session.query(
       `INSERT INTO aurora.membership_roles (organization_id, membership_id, role_id, created_by)

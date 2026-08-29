@@ -376,9 +376,7 @@ describe('o que NÃO sai do servidor', () => {
     if (!conferido.success) {
       throw new Error(
         'a ficha do ativo divergiu do contrato:\n' +
-          conferido.error.issues
-            .map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`)
-            .join('\n')
+          conferido.error.issues.map((i) => `  · ${i.path.join('.') || '(raiz)'}: ${i.message}`).join('\n')
       );
     }
   });

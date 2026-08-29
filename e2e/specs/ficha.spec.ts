@@ -17,10 +17,7 @@ const cab = {
 };
 
 /** Cria uma OS pela API, pelo mesmo caminho que a tela usa. */
-async function criarOrdem(
-  page: Page,
-  titulo: string
-): Promise<{ id: string; number: string }> {
+async function criarOrdem(page: Page, titulo: string): Promise<{ id: string; number: string }> {
   const req = await page.request.post(`${apiUrl()}/service-requests`, {
     headers: cab,
     data: { customer_id: E2E.clienteA, summary: titulo, source: 'phone' },
@@ -43,9 +40,7 @@ async function criarOrdem(
 }
 
 test.describe('EPIC-009 · ficha da ordem de serviço', () => {
-  test('as cinco abas abrem, e a URL leva a pessoa de volta à mesma', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('as cinco abas abrem, e a URL leva a pessoa de volta à mesma', async ({ comoCoordenadorA: page }) => {
     const os = await criarOrdem(page, 'OS da ficha completa');
     await page.goto(`/ordens/${os.id}`);
 
@@ -72,10 +67,7 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
     await page.getByRole('tab', { name: 'Conversa' }).click();
     expect(page.url()).toContain('aba=conversa');
     await page.reload();
-    await expect(page.getByRole('tab', { name: 'Conversa' })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
+    await expect(page.getByRole('tab', { name: 'Conversa' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a nota interna aparece marcada, e some para quem não pode lê-la', async ({
@@ -88,9 +80,7 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
     // Escreve uma nota interna PELA TELA — não pela API. O caminho que a
     // pessoa usa é o caminho que o teste tem de exercitar.
     await page.getByRole('combobox', { name: /quem vê/i }).selectOption('internal');
-    await page
-      .getByRole('textbox')
-      .fill('Terceira vez neste equipamento; avaliar substituição.');
+    await page.getByRole('textbox').fill('Terceira vez neste equipamento; avaliar substituição.');
     await page.getByRole('button', { name: 'Publicar' }).click();
 
     const interna = page.getByText('Terceira vez neste equipamento');
@@ -144,9 +134,7 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
     await expect(page.getByText('em curso')).toBeVisible();
   });
 
-  test('sem dados, cada aba explica o vazio em vez de mostrar nada', async ({
-    comoCoordenadorA: page,
-  }) => {
+  test('sem dados, cada aba explica o vazio em vez de mostrar nada', async ({ comoCoordenadorA: page }) => {
     // Vazio e erro são coisas diferentes, e uma OS recém-aberta sem peça, sem
     // anexo e sem conversa é o caso COMUM — não uma falha.
     const os = await criarOrdem(page, 'OS recém-aberta');

@@ -20,7 +20,7 @@ import { Pool } from 'pg';
 import { newId, buildContext, PERMISSION_KEYS } from '@aurora/domain';
 import { pgPoolAdapter } from '../adapters';
 import { withTenant } from '../client';
-import { migrate } from '../migrator';
+import { migrate, type MigrateResult } from '../migrator';
 import { syncPermissionCatalog } from '../rbac';
 import { syncCatalogDefinitions } from '../catalogs';
 import { createCustomer, createLocation, provisionStarterLocationTypes } from '../directory';
@@ -696,4 +696,91 @@ describe.skipIf(!rodar)('convite sob o papel de aplicação real', () => {
       )
     ).rejects.toThrow();
   });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(!rodar)('duas instâncias migrando o mesmo banco', () => {
+  /*
+   * ESTE É O TESTE QUE O PGLITE NÃO PODE FAZER.
+   *
+   * Ele tem uma conexão só; "dois processos migrando ao mesmo tempo" não
+   * existe lá. E é exatamente o que acontece num deploy gradual: duas
+   * instâncias da API sobem juntas, as duas chamam `migrate()` contra o mesmo
+   * banco vazio, e sem trava as duas tentam criar as mesmas tabelas.
+   *
+   * O banco é NOVO — criado aqui e derrubado no fim. Correr a migração contra
+   * o banco da suíte não provaria nada: tudo já está aplicado, e as duas
+   * chamadas pulariam tudo sem disputar coisa alguma.
+   */
+  const nome = `aurora_corrida_${Date.now().toString(36)}`;
+
+  it('as duas terminam, e cada migration é aplicada uma única vez', async () => {
+    // `CREATE DATABASE` não roda dentro de transação — daí a consulta direta
+    // no pool, em autocommit, e não um `db.transaction`.
+    await admin.query(`CREATE DATABASE ${nome}`);
+
+    // `globalThis.URL` porque a constante `URL` deste arquivo é a string de
+    // conexão, e ela sombreia o construtor.
+    const url = new globalThis.URL(URL!);
+    url.pathname = `/${nome}`;
+
+    const a = new Pool({ connectionString: url.toString(), max: 2 });
+    const b = new Pool({ connectionString: url.toString(), max: 2 });
+
+    try {
+      /*
+       * `allSettled`, e não `all`.
+       *
+       * `Promise.all` rejeita no primeiro erro e devolve o controle enquanto a
+       * outra migração AINDA ESTÁ RODANDO — e aí a limpeza tenta derrubar um
+       * banco com conexão aberta, falha, e mascara o erro de verdade com um
+       * "database is being accessed by other users". Foi o que aconteceu na
+       * primeira vez que este teste rodou sem a trava: o defeito apareceu, mas
+       * deixou um banco órfão para trás.
+       */
+      const [p1, p2] = await Promise.allSettled([
+        migrate(pgPoolAdapter(a, null)),
+        migrate(pgPoolAdapter(b, null)),
+      ]);
+
+      /*
+       * NENHUMA DAS DUAS PODE FALHAR. Antes da trava, a perdedora morria já no
+       * `CREATE SCHEMA IF NOT EXISTS`, com violação de unicidade em
+       * `pg_namespace` — e o processo que a chamou não subia.
+       */
+      for (const p of [p1, p2]) {
+        if (p.status === 'rejected') throw p.reason;
+      }
+      const r1 = (p1 as PromiseFulfilledResult<MigrateResult>).value;
+      const r2 = (p2 as PromiseFulfilledResult<MigrateResult>).value;
+
+      const total = r1.applied.length + r1.skipped.length;
+      expect(total).toBeGreaterThan(40);
+      expect(r2.applied.length + r2.skipped.length).toBe(total);
+
+      // Cada migration aplicada por EXATAMENTE UMA das duas: nenhuma foi
+      // aplicada duas vezes, e nenhuma ficou de fora.
+      const aplicadas = [...r1.applied, ...r2.applied];
+      expect(new Set(aplicadas).size).toBe(aplicadas.length);
+      expect(aplicadas.length).toBe(total);
+
+      const { rows } = await a.query<{ nome: string; vezes: number }>(
+        `SELECT name AS nome, count(*)::int AS vezes
+           FROM aurora.schema_migrations GROUP BY name HAVING count(*) > 1`
+      );
+      expect(rows).toEqual([]);
+
+      const { rows: contagem } = await a.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM aurora.schema_migrations`
+      );
+      expect(contagem[0].total).toBe(total);
+    } finally {
+      await a.end();
+      await b.end();
+      // Sem conexão aberta, o DROP passa; com uma aberta, o PostgreSQL recusa
+      // e o banco de teste fica para trás em toda execução.
+      await admin.query(`DROP DATABASE IF EXISTS ${nome}`);
+    }
+  }, 300_000);
 });

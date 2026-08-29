@@ -314,9 +314,7 @@ describe('a lista e o recorte de vencimento', () => {
 
     const conferido = documentsList.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 

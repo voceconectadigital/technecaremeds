@@ -16,11 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import { newId, buildContext } from '@aurora/domain';
-import {
-  createTestDatabase,
-  seedOrganization,
-  type TestDatabase,
-} from '@aurora/db/testing/harness';
+import { createTestDatabase, seedOrganization, type TestDatabase } from '@aurora/db/testing/harness';
 import {
   withTenant,
   provisionFactoryRoles,
@@ -165,9 +161,7 @@ describe('planos', () => {
     const r = await http.get('/v1/maintenance-plans').set(auth(EMAIL));
     const conferido = plansList.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 
@@ -180,9 +174,7 @@ describe('planos', () => {
 
     const conferido = planDetail.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 
@@ -194,9 +186,7 @@ describe('planos', () => {
      * e o sintoma real seria uma preventiva que ignora tudo que está nas
      * salas, que é onde os equipamentos ficam.
      */
-    const r = await http
-      .get(`/v1/maintenance-plans/tasks/${tarefa}/assets`)
-      .set(auth(EMAIL));
+    const r = await http.get(`/v1/maintenance-plans/tasks/${tarefa}/assets`).set(auth(EMAIL));
     expect(r.status).toBe(200);
     const nomes = r.body.items.map((a: { name: string }) => a.name).sort();
     expect(nomes).toEqual(['Monitor na sala', 'Ventilador no setor']);
@@ -205,9 +195,7 @@ describe('planos', () => {
 
 describe('cumprimento', () => {
   it('traz o resumo E os itens, com os seis estados do domínio', async () => {
-    const r = await http
-      .get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`)
-      .set(auth(EMAIL));
+    const r = await http.get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`).set(auth(EMAIL));
     expect(r.status).toBe(200);
     expect(r.body.items).toHaveLength(2);
     expect(r.body.summary.expected).toBe(2);
@@ -236,9 +224,7 @@ describe('cumprimento', () => {
      * Dispensar exige justificativa; é isso que impede a dispensa de virar a
      * saída fácil para melhorar o indicador.
      */
-    const antes = await http
-      .get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`)
-      .set(auth(EMAIL));
+    const antes = await http.get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`).set(auth(EMAIL));
     const item = antes.body.items[0];
 
     await http
@@ -247,9 +233,7 @@ describe('cumprimento', () => {
       .send({ reason: 'equipamento em comodato, devolvido ao fornecedor' })
       .expect(201);
 
-    const depois = await http
-      .get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`)
-      .set(auth(EMAIL));
+    const depois = await http.get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`).set(auth(EMAIL));
     expect(depois.body.summary.expected).toBe(2);
     expect(depois.body.summary.skipped).toBe(1);
 
@@ -258,9 +242,7 @@ describe('cumprimento', () => {
   });
 
   it('pular sem motivo é recusado', async () => {
-    const r0 = await http
-      .get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`)
-      .set(auth(EMAIL));
+    const r0 = await http.get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`).set(auth(EMAIL));
     const outro = r0.body.items.find((i: { state: string }) => i.state !== 'skipped');
 
     const r = await http
@@ -273,14 +255,10 @@ describe('cumprimento', () => {
 
   it('o cumprimento satisfaz o contrato', async () => {
     const { cycleCompliance } = await import('@aurora/contracts');
-    const r = await http
-      .get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`)
-      .set(auth(EMAIL));
+    const r = await http.get(`/v1/maintenance-plans/cycles/${cicloId}/compliance`).set(auth(EMAIL));
     const conferido = cycleCompliance.response.safeParse(r.body);
     if (!conferido.success) {
-      throw new Error(
-        conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
-      );
+      throw new Error(conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n'));
     }
   });
 });
@@ -305,9 +283,7 @@ describe('gerar ciclo', () => {
      * Por isso a consulta pega o ciclo de maior `seq`, e este teste guarda
      * essa propriedade.
      */
-    const r = await http
-      .post(`/v1/maintenance-plans/tasks/${tarefa}/cycles`)
-      .set(auth(EMAIL));
+    const r = await http.post(`/v1/maintenance-plans/tasks/${tarefa}/cycles`).set(auth(EMAIL));
     expect(r.status).toBe(201);
     expect(r.body.cycle.seq).toBe(2);
 

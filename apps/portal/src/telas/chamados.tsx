@@ -16,15 +16,7 @@
  */
 import { Link, useParams } from '@tanstack/react-router';
 import { CircleAlert, Inbox, MessageSquare } from 'lucide-react';
-import {
-  Card,
-  CardHeader,
-  EmptyState,
-  Skeleton,
-  SkeletonList,
-  StatusChip,
-  cn,
-} from '@aurora/ui';
+import { Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { useApiQuery } from '@aurora/app-kit';
 import {
   portalComments,
@@ -139,9 +131,7 @@ export function ChamadoPage() {
               {r.asset_name && <span className="text-sm text-muted">{r.asset_name}</span>}
               {r.location_name && <span className="text-sm text-muted">· {r.location_name}</span>}
             </div>
-            {r.description && (
-              <p className="text-sm whitespace-pre-wrap text-text">{r.description}</p>
-            )}
+            {r.description && <p className="text-sm whitespace-pre-wrap text-text">{r.description}</p>}
           </div>
         </Card>
 
@@ -187,9 +177,7 @@ function Atendimento({ os }: { os: PortalWorkOrder }) {
               os.waiting_on_customer ? 'bg-warn-soft text-warn-text' : 'bg-surface-sunken text-muted'
             )}
           >
-            {os.waiting_on_customer && (
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            )}
+            {os.waiting_on_customer && <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
             {os.wait_label}
           </p>
         )}
