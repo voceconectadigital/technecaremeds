@@ -1,6 +1,13 @@
 # AURORA — RELATÓRIO DA SESSÃO DE 29/08/2026
 
-**Branch:** `main` · **HEAD inicial:** `7b88baa` · **HEAD final:** `839ae75` · **Árvore:** limpa
+**Branch:** `main` · **HEAD inicial:** `7b88baa` · **HEAD final:** `6a07108` · **Árvore:** limpa
+
+> **Errata (medida no Git em 29/08/2026).** Este relatório dizia HEAD final `839ae75` e 40
+> commits. Os dois números estavam um a menos, e pela razão mais banal: o relatório foi
+> escrito ANTES do commit que o contém, e depois refeito — o commit final é `6a07108`
+> ("docs: relatório da sessão refeito e completo"), o décimo da sessão e o 42º do
+> repositório. `839ae75` existe e é real; é apenas o penúltimo. Os números abaixo foram
+> corrigidos contra `git rev-list --count`, que é a fonte de verdade.
 
 Esta sessão levou o Aurora do backend pronto até a **primeira interface que funciona ponta a
 ponta**, passando por PostgreSQL real, contratos compartilhados, fila durável e medição de
@@ -32,9 +39,9 @@ relatório (seção 10).
 | | |
 | --- | --- |
 | HEAD inicial | `7b88baa` |
-| HEAD final | `839ae75` |
-| Commits nesta sessão | 9 |
-| Commits no total | 40 |
+| HEAD final | `6a07108` |
+| Commits nesta sessão | 10 |
+| Commits no total | 42 |
 | Branch | `main` |
 | Árvore de trabalho | limpa (0 arquivos modificados) |
 | Push para remoto | **não feito** — não há autorização inequívoca no ambiente |
@@ -51,6 +58,7 @@ b4d6a18  feat(ui): design system próprio da Aurora
 cb42ae8  feat(web): esqueleto da aplicação e o primeiro fluxo vertical
 dbffb1c  perf(work-orders): mede com 100 mil OS, e corrige o que a medição mostrou
 839ae75  docs: relatório medido da sessão
+6a07108  docs: relatório da sessão refeito e completo
 ```
 
 ---

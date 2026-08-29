@@ -10,10 +10,13 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F9 — interface**                                                                            |
+| Fase                             | **F9 — interface** (fechando `apps/web`)                                                       |
 | Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria) |
 | Épico seguinte                   | EPIC-009 (interface de OS), EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal)   |
-| Testes                           | **1364** (68 arquivos) + **29** só contra PostgreSQL real, todos verdes |
+| Testes                           | **1399** unitários e de HTTP (69 arquivos) + **31** de ponta a ponta no navegador (Playwright), todos verdes |
+| Estado do Git                    | HEAD `4f4d9ff` · **48 commits** · branch `main` · árvore limpa · **sem push** (não há autorização inequívoca) |
+| Rotas e contratos                | 137 rotas nos controllers, **29 com contrato** (21%) — a cobertura sobe por consumidor real, não por contrato vazio |
+| Vulnerabilidades (`npm audit`)   | **0** |
 | Migrations                       | 42 (`0000` a `0041`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
