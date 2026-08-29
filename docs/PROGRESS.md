@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F6 — comercial: contratos e orçamentos**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos) |
-| Épico seguinte                   | EPIC-013 — Agenda, ou EPIC-018 — Documentos                                            |
-| Testes                           | **875**, todos verdes                                                           |
-| Migrations                       | 33 (`0000` a `0032`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F6 — comercial e programação**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda) |
+| Épico seguinte                   | EPIC-018 — Documentos, ou EPIC-021 — Analytics                                         |
+| Testes                           | **927**, todos verdes                                                           |
+| Migrations                       | 34 (`0000` a `0033`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -385,6 +385,36 @@ Este épico fecha um elo aberto desde o EPIC-008: o motivo de espera "aguardando
 
 ---
 
+## EPIC-013 — Agenda · **concluído**
+
+Na referência auditada há **2.950 serviços não agendados**. A agenda existe e não é usada, e o diagnóstico é ergonômico: programar custa mais do que ligar para o técnico. Tudo neste épico serve a uma meta só — inverter essa conta.
+
+**Não existe entidade "agendamento" (ADR-011).** A programação vive na própria OS e a agenda é uma projeção. Um evento de agenda fora da OS criaria duas fontes de verdade e a obrigação de sincronizá-las — e é sempre a sincronização que falha calada. A migration é pequena de propósito: acrescenta a contagem de reagendamentos, o carimbo de janela invalidada e a frase da janela do local. A exceção é `availability_blocks`, que é entidade própria: férias não é OS e não deve virar uma.
+
+**Conferir antes de soltar o cartão.** `POST /schedule/check` devolve os conflitos sem gravar nada. Descobrir o conflito só depois de salvar é precisamente o custo que faz o coordenador desistir — e há teste que confirma que conferir não escreve.
+
+**Bloqueia o que é erro; avisa o que é decisão.** Esta é a decisão central do §13 e ela é de produto, não de implementação. Ausência bloqueia: agendar trabalho para quem está de férias não é escolha difícil, é engano. Sobreposição avisa: duas OS no mesmo horário são legítimas numa ronda, três não são, e o sistema não sabe que aquelas duas ficam no mesmo andar. Capacidade e janela do local também avisam. A lista de conflitos volta **inteira**, nunca o primeiro: quem descobre o segundo problema depois de resolver o primeiro tem duas tentativas por OS, e a terceira faz por telefone.
+
+**Quem entra de férias arrasta consigo o que estava marcado.** É o caso que a agenda da referência não cobre e que produz o telefonema: o técnico entra de férias e as OS marcadas para aquela semana continuam marcadas, sem ninguém saber. Aqui um gatilho joga essas OS no balde "Reagendar" no mesmo instante, **com o motivo escrito** ("a pessoa entrou em férias de 07/04 a 20/04"). E a janela **não** é apagada: é ela que o coordenador usa para remarcar perto da data original.
+
+**Outras decisões**
+
+- **A primeira marcação não é reagendamento.** Marcar a janela pela primeira vez é agendar. Somar a primeira faria toda OS programada nascer com um reagendamento no histórico, e o sinal de "mais de três" perderia o sentido.
+- **A contagem é por gatilho**, porque a janela muda por vários caminhos — tela, arrasto, geração de ciclo preventivo, correção em lote. Contar em um deles é contar em alguns, e um número que conta "alguns" é pior que número nenhum: parece confiável.
+- **Sem jornada cadastrada, a ocupação é `null`, não zero.** Um técnico sem jornada não está com o dia livre, está com o cadastro incompleto — e mostrar 0 % faria o coordenador empilhar trabalho justamente em quem o sistema conhece menos.
+- **"Reagendar" vem antes de "atrasada" na ordem dos baldes.** Uma OS cuja janela caiu sobre férias não está atrasada por culpa de ninguém; misturar as duas junta o problema de programação com o de execução, que são conversas diferentes com pessoas diferentes.
+- **Registrar ausência é operação de agenda**, e por isso exige `work_order.schedule` e não `team.manage`. Quem entra e sai da equipe é assunto do gestor; férias são o insumo de que a programação depende, e exigir aqui uma permissão que o coordenador não tem garantiria agenda marcada por cima de férias — a falha que o épico existe para impedir.
+- **A janela cabe no local? Reaproveita o motor de tempo útil do EPIC-010.** Uma segunda leitura de calendário divergiria da primeira no primeiro feriado municipal. Sem calendário no local a resposta é `null` e não `false`: não saber é diferente de não caber, e o aviso falso é o que faz os avisos verdadeiros serem ignorados.
+- **O intervalo do calendário é limitado a 62 dias.** Sem limite, um `from`/`to` de um ano devolveria a agenda inteira da organização numa resposta só.
+
+### Adiado deliberadamente
+
+- **Sugestão de agrupamento por deslocamento** ("mais 6 preventivas neste mesmo setor — agendar juntas?"): a SPEC a coloca em Fase 3 e ela depende de dado de rota que não existe.
+- **Notificação de fato**: o evento `work_order.rescheduled` já sai com valores anterior e novo e com a decisão de avisar o solicitante calculada (limiar de 4 h). Quem entrega o aviso é o EPIC-019.
+- **Bloqueio de sala**: `availability_blocks` prende-se ao vínculo da pessoa. Bloquear um recurso físico exige outro alvo, e nenhum cliente pediu.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -419,6 +449,8 @@ Este épico fecha um elo aberto desde o EPIC-008: o motivo de espera "aguardando
 | 28  | **Renovar calava o contrato para sempre**                                 | Autoauditoria da idempotência da varredura                                                                    | O último marco avisado era lido sem recorte de vigência: um contrato que avisou aos 30 dias e depois foi renovado por mais um ano carregaria esse 30 adiante, e nenhum aviso da vigência nova passaria pela comparação — ficaria silencioso justamente por ter sido bem administrado da primeira vez. O recorte passou a ser pela data de término, e há teste que renova e exige o aviso novo |
 | 29  | **Buraco na convenção de chave composta, em `customer_contacts`**          | Falha ao criar a chave estrangeira do aprovador do orçamento                                                  | A tabela nasceu no EPIC-003 sem `UNIQUE (id, organization_id)` e ninguém percebeu porque nada apontava para ela. A convenção existe por um motivo concreto (ADR-011): a verificação de chave estrangeira roda como dona da tabela e IGNORA a RLS, então uma FK só por `id` aceitaria apontar para a linha de outro tenant — o aprovador poderia ser um contato de outra organização. Corrigido na 0032 |
 | 30  | **O PROGRESS afirmava uma coluna gerada que não existe**                   | Consulta de reserva do orçamento quebrou em `column "available" does not exist`                               | O registro do EPIC-015 dizia que `available` era coluna gerada em `stock_balances`; na verdade o disponível é calculado na consulta de saldo. O texto foi corrigido: documento que descreve o que não existe é pior que documento ausente, porque o próximo leitor confia nele |
+| 31  | **O balde "Reagendar" mostrava o quê sem o porquê**                        | Teste de borda leu a linha do painel e recebeu `window_invalidated_reason` indefinido                          | A consulta dos baldes trazia o carimbo da invalidação mas não o motivo. Mostrar que algo precisa ser remarcado sem dizer por que manda o coordenador para outra tela — e cada tela a mais é um passo na direção do telefonema que este épico existe para evitar |
+| 32  | **A SPEC descrevia um tipo de ausência que o banco não tem**               | Encontrado ao implementar o bloqueio do §13                                                                   | O §13 e o dicionário falam em bloco de tipo `absence`; o enumerado criado no EPIC-003 é `vacation \| leave \| training \| other`. Em vez de inventar um valor novo, a SPEC foi corrigida (patch P19) para descrever o que existe, e a regra de bloqueio passou a ser dita pelos tipos reais. O vínculo também foi corrigido: o bloco aponta para `membership_id`, não para o usuário — a mesma pessoa pode ter vínculo em duas organizações |
 
 ---
 
@@ -430,6 +462,7 @@ Este épico fecha um elo aberto desde o EPIC-008: o motivo de espera "aguardando
 - **ADR-027 · sem `pg_trgm`**: mesma razão. Busca no núcleo com `tsvector` nativo e forma normalizada indexada; trigrama vira otimização opcional. A degradação é de qualidade de resultado, não de funcionalidade.
 - **ADR-028 · catálogos planos em `catalog_items`**: onde a SPEC v0.1 nomeia `work_order_types`, `failure_codes` e `rejection_reasons`, leia-se `catalog_items` com o `catalog_key` correspondente.
 - **P18 · dois eventos de contrato**: o §17 pede alerta de vencimento e trata encerramento como fato de negócio, mas o catálogo declarava só `contract.activated`, `contract.expiring` e `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu" seriam o mesmo evento; sem `contract.terminated`, o encerramento por decisão humana só existiria na trilha de auditoria, invisível a qualquer automação. A SPEC foi corrigida pelo mesmo pipeline reproduzível dos demais patches.
+- **P19 · ausências pelo nome certo**: o dicionário de dados descrevia `kind(absence|training|meeting|other)` e vínculo com usuário ou equipe; o que existe desde a 0008 é `vacation|leave|training|other` preso ao vínculo. A SPEC foi corrigida para descrever o esquema real, com a regra de bloqueio dita pelos tipos que existem.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
 
 ---

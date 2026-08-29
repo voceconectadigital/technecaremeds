@@ -21,6 +21,7 @@ import { WorkOrdersController } from './work-orders/work-orders.controller';
 import { ExecutionController, ExecutionResourcesController } from './work-orders/execution.controller';
 import { ContractsController, AssetContractController } from './contracts/contracts.controller';
 import { QuotesController } from './quotes/quotes.controller';
+import { ScheduleController } from './schedule/schedule.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -60,6 +61,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       ContractsController,
       AssetContractController,
       QuotesController,
+      ScheduleController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },

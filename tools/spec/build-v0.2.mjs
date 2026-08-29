@@ -544,6 +544,35 @@ patch(
 );
 
 /* ============================================================
+   P19 — ausências: o tipo "absence" não existe no esquema
+
+   Encontrado ao implementar o EPIC-013. O §13 e o dicionário de dados falam em
+   bloco "de tipo `absence`", mas o enumerado criado no EPIC-003 é
+   `vacation | leave | training | other` — e é ele que está no banco desde a
+   migration 0008. Deixar a SPEC descrevendo um valor que não existe faria o
+   próximo leitor procurar por ele.
+
+   A regra de bloqueio passa a ser dita pelo que existe: férias e afastamento
+   BLOQUEIAM (a pessoa não está disponível de forma alguma); treinamento e
+   "outros" — que abrigam reunião e reserva de sala — AVISAM, porque a pessoa
+   está presente e alguém pode legitimamente decidir o contrário.
+
+   O vínculo também é corrigido: o bloco aponta para o VÍNCULO
+   (`membership_id`), não para o usuário, porque a mesma pessoa pode ter
+   vínculo em duas organizações e as férias são de um deles.
+   ============================================================ */
+patch(
+  'P19-dicionario-ausencias',
+  'user_id ou team_id, kind(absence\\|training\\|meeting\\|other), starts_at, ends_at, note | N:1 user/team | Bloqueia agendamento quando `absence`',
+  'membership_id, kind(vacation\\|leave\\|training\\|other), starts_at, ends_at, note | N:1 membership | Bloqueia agendamento em `vacation` e `leave`; avisa em `training` e `other`'
+);
+patch(
+  'P19-regra-ausencias',
+  '**Bloqueio**. Agendar sobre um `availability_block` de tipo `absence` é recusado',
+  '**Bloqueio** em `vacation` e `leave` — a pessoa não está disponível de forma alguma. **Aviso** em `training` e `other`: há compromisso, mas a pessoa está presente e o coordenador pode decidir o contrário'
+);
+
+/* ============================================================
    cabeçalho de versão
    ============================================================ */
 patch(

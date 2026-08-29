@@ -13,3 +13,4 @@ export * from './business-time';
 export * from './maintenance-plans';
 export * from './contracts';
 export * from './quotes';
+export * from './schedule';

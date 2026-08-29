@@ -939,7 +939,7 @@ Exceção: `availability_blocks` é entidade própria — férias, treinamento, 
 | --- | --- |
 | Jornada | `user.daily_hours` × calendário da equipe define a capacidade diária. A barra de carga mostra ocupação em % e fica vermelha acima de 100 % |
 | Sobreposição | Aviso, não bloqueio. Duas OS no mesmo horário é legítimo em ronda; três não é. O sistema informa, o humano decide |
-| Férias e ausências | **Bloqueio**. Agendar sobre um `availability_block` de tipo `absence` é recusado |
+| Férias e ausências | **Bloqueio** em `vacation` e `leave` — a pessoa não está disponível de forma alguma. **Aviso** em `training` e `other`: há compromisso, mas a pessoa está presente e o coordenador pode decidir o contrário |
 | Fora do calendário do local | Aviso com o motivo ("UTI só libera equipamento entre 14 h e 16 h") |
 | Deslocamento | **Fase 3** Sugestão de agrupamento por local: "mais 6 preventivas pendentes neste mesmo setor — agendar juntas?" |
 
@@ -1655,7 +1655,7 @@ Convenções obrigatórias, aplicadas sem exceção: chave primária `uuid v7` g
 | `teams` | Equipes | name, code, calendar_id, default_warehouse_id, coverage jsonb, lead_user_id | N:N users | — | T S H |
 | `team_members` | Composição | role_in_team, skills[] | N:N | — | T — H |
 | `calendars` / `calendar_windows` / `calendar_exceptions` | Cobertura de horário | name, timezone; weekday, start, end; date, kind, note | usado por SLA e agenda | Janelas não sobrepostas no mesmo dia | T S H |
-| `availability_blocks` | Indisponibilidade | user_id ou team_id, kind(absence\|training\|meeting\|other), starts_at, ends_at, note | N:1 user/team | Bloqueia agendamento quando `absence` | T S H |
+| `availability_blocks` | Indisponibilidade | membership_id, kind(vacation\|leave\|training\|other), starts_at, ends_at, note | N:1 membership | Bloqueia agendamento em `vacation` e `leave`; avisa em `training` e `other` | T S H |
 
 ### ASSETS
 
