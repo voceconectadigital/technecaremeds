@@ -85,6 +85,25 @@ export async function withTenant<T>(
 }
 
 /**
+ * Sessão de plataforma: transação sob o papel da aplicação, SEM contexto de
+ * tenant. Existe para o punhado de operações que legitimamente não pertencem a
+ * uma organização — hoje, apenas a resolução de identidade, que só alcança
+ * dados através de uma função SECURITY DEFINER de consulta fixa (migration
+ * 0004). Não dá acesso a tabela de negócio: sem contexto, a RLS nega tudo.
+ */
+export async function withPlatformSession<T>(
+  db: Database,
+  fn: (client: SqlClient) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    if (db.appRole) {
+      await tx.query(`SET LOCAL ROLE ${quoteIdent(db.appRole)}`);
+    }
+    return fn(tx);
+  });
+}
+
+/**
  * Escotilha administrativa, deliberadamente feia de escrever e fácil de achar.
  *
  * Uso legítimo: migrations, publicador do outbox, rotinas de plataforma que
@@ -99,7 +118,16 @@ export async function unsafeCrossTenant<T>(
   if (!reason || reason.length < 10) {
     throw new TypeError('unsafeCrossTenant exige uma justificativa explícita com ao menos 10 caracteres');
   }
-  return db.transaction((tx) => fn(tx));
+  return db.transaction(async (tx) => {
+    // Fidelidade com produção: em runtime a API SEMPRE está sob o papel de
+    // aplicação, inclusive aqui. Sem este SET LOCAL ROLE o ambiente de teste
+    // rodaria como superusuário e esconderia falhas que só apareceriam em
+    // produção — exatamente o tipo de divergência que este projeto não aceita.
+    if (db.appRole) {
+      await tx.query(`SET LOCAL ROLE ${quoteIdent(db.appRole)}`);
+    }
+    return fn(tx);
+  });
 }
 
 /** Aspas em identificador — só para nomes de papel vindos de configuração. */

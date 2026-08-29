@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { newId, buildContext } from '@aurora/domain';
-import { withTenant } from '../client';
+import { withTenant, withPlatformSession } from '../client';
 import { assertAppRoleIsSafe, inspectCurrentRole, UnsafeDatabaseRoleError } from '../guards';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '../testing/harness';
 
@@ -279,5 +279,64 @@ describe('guardas de boot (§37)', () => {
     // no harness a conexão é superusuário fora de transação: caso adversarial ideal
     await expect(assertAppRoleIsSafe(t.db, false)).rejects.toThrow(UnsafeDatabaseRoleError);
     await expect(assertAppRoleIsSafe(t.db, true)).resolves.toBeTruthy();
+  });
+});
+
+describe('resolução de identidade — o único caminho cross-tenant (migration 0004)', () => {
+  it('REGRESSÃO: funciona sob o papel real da aplicação, não só como superusuário', async () => {
+    // Este teste existe porque a versão anterior fazia a consulta direta em
+    // aurora.memberships. Como superusuário ignora RLS, os testes passavam e
+    // TODO login teria falhado em produção com "falha fechada".
+    const rows = await withPlatformSession(t.db, (c) =>
+      c.query<{ organization_id: string }>('SELECT * FROM aurora.find_memberships_for_email($1)', [
+        'a@aurora.test',
+      ])
+    );
+    expect(rows, 'identidade não resolveu sob aurora_app').toHaveLength(1);
+    expect(rows[0]!.organization_id).toBe(ORG_A);
+  });
+
+  it('a função só devolve dados do e-mail consultado', async () => {
+    const rows = await withPlatformSession(t.db, (c) =>
+      c.query('SELECT * FROM aurora.find_memberships_for_email($1)', ['b@aurora.test'])
+    );
+    expect(rows).toHaveLength(1);
+    expect((rows[0] as { organization_id: string }).organization_id).toBe(ORG_B);
+  });
+
+  it('e-mail inexistente devolve vazio, sem erro que revele existência', async () => {
+    const rows = await withPlatformSession(t.db, (c) =>
+      c.query('SELECT * FROM aurora.find_memberships_for_email($1)', ['ninguem@lugar.test'])
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it('a leitura direta das tabelas continua bloqueada sob o papel da aplicação', async () => {
+    // a função é a ÚNICA porta: consulta crua segue negada
+    const rows = await withPlatformSession(t.db, (c) => c.query('SELECT id FROM aurora.memberships'));
+    expect(rows, 'leitura crua cross-tenant deixou de ser bloqueada').toEqual([]);
+  });
+
+  it('aurora_app não é membro de aurora_identity — não pode assumir o papel', async () => {
+    // SET ROLE valida a associação do *session user*, e no harness ele é
+    // superusuário: um teste de "SET ROLE deve falhar" passaria por acidente do
+    // ambiente. A propriedade verificável e independente de ambiente é o grafo
+    // de associação de papéis.
+    const members = await t.raw(
+      `SELECT r.rolname AS member
+         FROM pg_auth_members am
+         JOIN pg_roles g ON g.oid = am.roleid
+         JOIN pg_roles r ON r.oid = am.member
+        WHERE g.rolname = 'aurora_identity'`
+    );
+    expect(members.map((m) => m.member)).not.toContain('aurora_app');
+  });
+
+  it('aurora_identity só tem SELECT — não escreve em lugar nenhum', async () => {
+    const grants = await t.raw(
+      `SELECT DISTINCT privilege_type FROM information_schema.role_table_grants
+        WHERE table_schema='aurora' AND grantee='aurora_identity' ORDER BY privilege_type`
+    );
+    expect(grants.map((g) => g.privilege_type)).toEqual(['SELECT']);
   });
 });

@@ -43,10 +43,6 @@ export default tseslint.config(
       // guards.ts só consulta catálogo do sistema (pg_roles), nunca tabela de negócio
       'packages/db/src/guards.ts',
       'packages/db/src/testing/**',
-      // Exceção consciente: a resolução de identidade PRECISA atravessar
-      // organizações — o tenant é justamente o resultado dessa consulta.
-      // Lê apenas memberships/users/organizations do próprio portador.
-      'apps/api/src/common/context.resolver.ts',
       '**/__tests__/**',
     ],
     rules: { 'no-restricted-syntax': 'off', '@typescript-eslint/no-explicit-any': 'off' },

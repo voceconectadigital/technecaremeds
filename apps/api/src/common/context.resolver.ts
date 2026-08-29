@@ -11,7 +11,7 @@
  */
 import { newId, buildContext, type RequestContext, type RequestSource } from '@aurora/domain';
 import { UnauthenticatedError, ForbiddenError } from '@aurora/domain';
-import { unsafeCrossTenant, type Database } from '@aurora/db';
+import { withPlatformSession, type Database } from '@aurora/db';
 import type { AuthProvider, AuthenticatedIdentity } from '../auth/auth-provider.port';
 
 export interface IncomingRequest {
@@ -76,36 +76,18 @@ export class ContextResolver {
   }
 
   /**
-   * Consulta de plataforma: precisa atravessar organizações para descobrir a
-   * quais o usuário pertence — é justamente o que ainda não pode ser
-   * tenant-scoped, porque o tenant é o resultado desta consulta.
+   * Único caminho de leitura cross-tenant do sistema (migration 0004).
    *
-   * Só lê `memberships`/`users`/`membership_scopes` e só devolve linhas do
-   * próprio portador da credencial.
+   * A função é SECURITY DEFINER, pertence a um papel dedicado que a API não
+   * pode assumir, tem consulta fixa e filtra sempre pelo e-mail do portador da
+   * credencial. Não há como usá-la para varrer dados de terceiros.
    */
   private async findMembership(
     identity: AuthenticatedIdentity,
     requestedOrganizationId: string | null
   ): Promise<MembershipRow> {
-    const rows = await unsafeCrossTenant(
-      this.db,
-      'resolução de identidade: descobrir a quais organizações o portador da credencial pertence',
-      (c) =>
-        c.query<MembershipRow>(
-          `SELECT m.id AS membership_id, m.organization_id, m.user_id, m.status::text, m.seat_type::text,
-                  s.customer_scope::text, s.customer_ids, s.location_scope::text, s.location_ids,
-                  s.assignment_scope::text, s.warehouse_ids
-             FROM aurora.memberships m
-             JOIN aurora.users u ON u.id = m.user_id
-             LEFT JOIN aurora.membership_scopes s ON s.membership_id = m.id
-             JOIN aurora.organizations o ON o.id = m.organization_id
-            WHERE lower(u.email) = lower($1)
-              AND u.deleted_at IS NULL AND u.status = 'active'
-              AND m.deleted_at IS NULL AND m.status = 'active'
-              AND o.deleted_at IS NULL AND o.status = 'active'
-            ORDER BY m.created_at`,
-          [identity.email]
-        )
+    const rows = await withPlatformSession(this.db, (c) =>
+      c.query<MembershipRow>('SELECT * FROM aurora.find_memberships_for_email($1)', [identity.email])
     );
 
     if (rows.length === 0) {
