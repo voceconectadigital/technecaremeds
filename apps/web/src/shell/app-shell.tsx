@@ -108,16 +108,58 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             }
           />
 
-          <div className="flex items-start justify-between gap-4 border-b border-border bg-surface px-4 py-3 md:px-6">
+          {/*
+            `<section>` NOMEADA, e não `<div>` nem `<header>`.
+            
+            Um `<div>` não é marco, e todo conteúdo de uma página precisa estar
+            dentro de um: a auditoria acusou "some page content is not
+            contained by landmarks" nas dezesseis telas, porque o título, o
+            subtítulo e as ações ficavam fora de qualquer região nomeada. Para
+            quem navega por marcos, os atalhos pulavam de `navigation` direto
+            para `main`, por cima do título — que é a informação que diz onde a
+            pessoa está.
+            
+            `<header>` seria o elemento óbvio, e está errado: fora de `article`
+            ou `section`, ele vira o marco `banner`, e a barra superior já é o
+            `banner` desta página. Dois `banner` fazem o leitor de tela
+            anunciar dois "cabeçalho da página" e a pessoa não sabe qual é o do
+            site e qual é da tela.
+            
+            `<section>` com nome acessível é marco `region` — que é exatamente
+            o que isto é: uma região da página, nomeada pelo próprio título.
+          */}
+          <section
+            aria-labelledby="titulo-da-pagina"
+            /*
+              EMPILHA NO ESTREITO, e por um defeito medido.
+              
+              Era `flex` numa linha só com as ações em `shrink-0`. Em 390px as
+              ações da tela de ordens — o alternador mais o par Quadro/Lista —
+              tomavam a largura inteira, o contêiner do título encolhia a zero,
+              e o `<h1>` DESAPARECIA. A auditoria de larguras acusou:
+              "expected visible, received hidden".
+              
+              Um título invisível não é só estética: é o `<h1>` da página, o
+              primeiro item do índice de quem usa leitor de tela e a única
+              confirmação de onde a pessoa está.
+            */
+            className="flex flex-col gap-2 border-b border-border bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 md:px-6"
+          >
             <div className="min-w-0">
               {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-1" />}
               {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
                   não vê a tela. */}
-              <h1 className="truncate text-xl font-semibold text-text">{title}</h1>
+              <h1 id="titulo-da-pagina" className="truncate text-xl font-semibold text-text">
+                {title}
+              </h1>
               {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
             </div>
-            {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
-          </div>
+            {/* `flex-wrap` e sem `shrink-0`: no estreito as ações quebram em
+                linhas em vez de empurrar o título para fora. */}
+            {actions && (
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>
+            )}
+          </section>
 
           <main
             id="conteudo"

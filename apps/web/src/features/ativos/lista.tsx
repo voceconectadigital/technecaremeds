@@ -304,7 +304,10 @@ function ArvoreDeLocais({
                   onClick={() => alternar(l.id)}
                   aria-expanded={aberto}
                   aria-label={`${aberto ? 'Recolher' : 'Expandir'} ${l.name}`}
-                  className="rounded-control p-1 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+                  // `min-h`/`min-w` de 24px: o ícone de 14 com folga de 4 dava
+                  // 22×22, abaixo do mínimo de alvo de toque da WCAG 2.2
+                  // (2.5.8). No dedo, 2px separam apontar de adivinhar.
+                  className="flex min-h-6 min-w-6 items-center justify-center rounded-control p-1 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
                 >
                   <ChevronRight
                     aria-hidden="true"

@@ -57,7 +57,7 @@ function BlocoTriagem() {
         actions={
           <Link
             to="/solicitacoes"
-            className="flex items-center gap-1 text-sm font-medium text-accent-text hover:underline"
+            className="-mx-1 flex min-h-6 items-center gap-1 rounded-control px-1 text-sm font-medium text-accent-text hover:underline"
           >
             Ver fila
             <ArrowRight aria-hidden="true" className="size-3.5" />
@@ -123,7 +123,7 @@ function BlocoParadas() {
         actions={
           <Link
             to="/ordens"
-            className="flex items-center gap-1 text-sm font-medium text-accent-text hover:underline"
+            className="-mx-1 flex min-h-6 items-center gap-1 rounded-control px-1 text-sm font-medium text-accent-text hover:underline"
           >
             Ver quadro
             <ArrowRight aria-hidden="true" className="size-3.5" />

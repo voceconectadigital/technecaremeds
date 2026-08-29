@@ -49,6 +49,20 @@
     --aurora-neutral-300: #aeb9b8;
     --aurora-neutral-400: #8a9695;
     --aurora-neutral-500: #6b7877;
+    /*
+     * O degrau que faltava, e por que ele existe.
+     *
+     * `text-subtle` apontava para o 500 (#6b7877), que dá 4,02:1 sobre a
+     * superfície rebaixada do quadro e 4,17:1 sobre a do parque — abaixo dos
+     * 4,5:1 que a WCAG AA exige para texto pequeno. A auditoria automatizada
+     * acusou em cinco telas.
+     *
+     * Escurecer até o 600 resolveria o contraste e apagaria a HIERARQUIA:
+     * `muted` já é o 600, e os dois passariam a ser a mesma cor. Este degrau
+     * intermediário dá 4,95:1 no pior fundo e continua visivelmente mais claro
+     * que `muted`.
+     */
+    --aurora-neutral-550: #5c6a69;
     --aurora-neutral-600: #526060;
     --aurora-neutral-700: #3c4a4a;
     --aurora-neutral-800: #26312f;
@@ -98,7 +112,7 @@
 
     --aurora-text: var(--aurora-neutral-900);
     --aurora-text-muted: var(--aurora-neutral-600);
-    --aurora-text-subtle: var(--aurora-neutral-500);
+    --aurora-text-subtle: var(--aurora-neutral-550);
     --aurora-text-on-accent: var(--aurora-neutral-0);
     --aurora-text-inverse: var(--aurora-neutral-0);
 

@@ -45,9 +45,30 @@ export interface CardHeaderProps {
   /** Ações do cabeçalho — botões, menu. */
   actions?: ReactNode;
   className?: string;
+  /**
+   * O nível do cabeçalho na hierarquia da página.
+   *
+   * O padrão é 2: a tela tem um `<h1>` (o título, no marco de cabeçalho), e
+   * um cartão logo abaixo dele é um `<h2>`. Era `<h3>` fixo, e o salto de 1
+   * para 3 é violação de `heading-order` — para quem navega por cabeçalhos,
+   * um nível pulado se lê como "há uma seção aqui que eu não estou ouvindo".
+   *
+   * Passe 3 quando o cartão já estiver DENTRO de uma seção com `<h2>` própria
+   * — é o caso do painel de indicadores, que agrupa por Volume, Tempo e
+   * Prevenção.
+   */
+  headingLevel?: 2 | 3 | 4;
 }
 
-export function CardHeader({ title, description, actions, className }: CardHeaderProps) {
+export function CardHeader({
+  title,
+  description,
+  actions,
+  className,
+  headingLevel = 2,
+}: CardHeaderProps) {
+  const H = `h${headingLevel}` as 'h2' | 'h3' | 'h4';
+
   return (
     <div
       className={cn(
@@ -56,7 +77,9 @@ export function CardHeader({ title, description, actions, className }: CardHeade
       )}
     >
       <div className="min-w-0">
-        <h3 className="truncate text-md font-semibold text-text">{title}</h3>
+        {/* O TAMANHO é do estilo; o NÍVEL é da estrutura. Um cartão parece
+            igual em qualquer nível, e é a árvore de cabeçalhos que muda. */}
+        <H className="truncate text-md font-semibold text-text">{title}</H>
         {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

@@ -156,7 +156,25 @@ function Quadro() {
   }
 
   return (
-    <div className="flex h-full gap-3 overflow-x-auto p-4">
+    /*
+     * A FAIXA QUE ROLA PRECISA RECEBER FOCO.
+     *
+     * Um contêiner com rolagem horizontal e nenhum elemento focável dentro do
+     * trecho fora da tela é uma região que só o mouse alcança: quem navega por
+     * teclado chega ao fim das colunas visíveis e não tem como puxar as
+     * seguintes. A auditoria chama isso de `scrollable-region-focusable`, e o
+     * impacto é sério.
+     *
+     * `tabIndex={0}` põe a faixa na ordem de tabulação; as setas do teclado
+     * então rolam. O `role="group"` com rótulo é o que faz o leitor de tela
+     * anunciar o que a pessoa acabou de alcançar em vez de dizer só "grupo".
+     */
+    <div
+      role="group"
+      aria-label="Colunas do quadro — use as setas para rolar"
+      tabIndex={0}
+      className="flex h-full gap-3 overflow-x-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
       {(colunas.data?.columns ?? []).map((coluna) => {
         const cartoes = porColuna.get(coluna.key) ?? [];
         const destacada = alvo === coluna.key && arrastando?.status_key !== coluna.key;

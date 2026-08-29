@@ -219,7 +219,13 @@ test.describe('E2E-WEB-010, 011 e 012 · agenda', () => {
 
     // Os contadores vêm prontos do servidor: fazer a tela contar significaria
     // carregar a lista inteira só para exibir três números.
-    await expect(page.locator('h3').first()).toBeVisible({ timeout: 15_000 });
+    // Pelo PAPEL, e não pela tag: o nível do cabeçalho do cartão passou de 3
+    // para 2 quando a hierarquia foi corrigida (h1 → h3 é salto), e um teste
+    // preso à tag quebra a cada ajuste de estrutura sem que nada tenha
+    // regredido para quem usa a tela.
+    await expect(page.getByRole('heading', { name: 'Atrasadas' })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('E2E-WEB-010 · a conferência de conflito acontece ANTES de salvar', async ({

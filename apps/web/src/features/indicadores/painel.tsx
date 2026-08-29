@@ -219,6 +219,10 @@ function Indicador({
   return (
     <Card>
       <CardHeader
+        // Nível 3: este cartão já está DENTRO de uma seção com `<h2>` própria
+        // (Volume, Tempo, Prevenção). Deixá-lo em 2 criaria dois irmãos de
+        // mesmo nível onde há hierarquia real.
+        headingLevel={3}
         title={data.definition.label}
         actions={
           <button
