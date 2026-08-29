@@ -1,34 +1,85 @@
 /**
  * Aurora — ficha da ordem de serviço (SPEC v0.2 §09, §10, §12 · EPIC-009).
  *
- * As transições vêm do servidor com `requires`: os campos que aquela transição
- * exige e que ainda não foram informados. A tela PEDE antes de enviar, em vez
- * de mandar, tomar 422 e traduzir o erro de volta em formulário.
+ * O DESENHO: CABEÇALHO DE DECISÃO, RESUMO, ABAS.
  *
- * É a diferença prática entre "concluir" abrir um diálogo que pede a resolução
- * e "concluir" dar erro dizendo que falta a resolução.
+ * A ficha tem vinte e três informações a mostrar. Abertas de uma vez, numa
+ * tela infinita, elas se anulam: quem abre para decidir o que fazer agora
+ * rola por peças e anexos até achar a situação, e quem abre para conferir o
+ * apontamento rola pelo diagnóstico até achar as horas.
+ *
+ * Então a tela responde em três camadas, na ordem em que as perguntas chegam:
+ *
+ *   1. CABEÇALHO — o que dá para fazer com esta OS agora. São os botões de
+ *      transição, e eles vêm do servidor: só aparece o que esta pessoa pode
+ *      fazer a partir deste estado.
+ *   2. RESUMO — as seis coisas que decidem: situação, prazo, quem, quando,
+ *      qual equipamento, onde. Ficam SEMPRE visíveis, fora das abas, porque
+ *      são o contexto de tudo o que as abas dizem. Uma hora apontada sem
+ *      saber que a OS está parada aguardando peça não significa nada.
+ *   3. ABAS — o resto, sob demanda, cada uma buscando o seu quando é aberta.
+ *
+ * POR QUE AS ABAS BUSCAM SEPARADO
+ *
+ * Carregar horas, peças, anexos e conversa de toda OS que alguém abre paga
+ * cinco consultas para mostrar uma. A maioria das aberturas é para ver a
+ * situação e fechar.
+ *
+ * O QUE ESTA TELA NÃO FAZ, E POR QUÊ
+ *
+ * Não edita os campos da OS. Editar exige `work_order.update`, bloqueio
+ * otimista por `version` e uma conversa sobre o que pode mudar depois de
+ * fechada — é trabalho próprio, e enfiá-lo aqui produziria um formulário que
+ * salva metade das coisas. A ficha LÊ e faz TRANSIÇÃO; as transições é que
+ * escrevem, e escrevem pelo caminho que o servidor valida.
  */
 import { useParams } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Clock, Play } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarClock,
+  Clock,
+  Lock,
+  MessageSquare,
+  Package,
+  Paperclip,
+  Play,
+  User,
+} from 'lucide-react';
 import {
   Button,
   Card,
   CardHeader,
   Dialog,
+  EmptyState,
   Field,
+  Progress,
   Select,
   Skeleton,
+  SkeletonList,
   StatusChip,
+  Tabs,
   Textarea,
+  tabIds,
   useToast,
 } from '@aurora/ui';
 import {
+  workOrderAttachments,
+  workOrderComment,
+  workOrderComments,
   workOrderDetail,
+  workOrderParts,
+  workOrderTimeEntries,
   workOrdersBoard,
   workOrdersList,
   workOrderTransition,
+  type Attachment,
+  type SlaClock,
+  type TimeEntry,
+  type WorkOrderComment,
   type WorkOrderDetail,
+  type WorkOrderHistoryEntry,
+  type WorkOrderPart,
   type WorkOrderTransition,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
@@ -37,11 +88,23 @@ import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
+import { useUrlState } from '../../lib/url-state';
+
+const ABAS = [
+  { id: 'resumo', label: 'Resumo' },
+  { id: 'execucao', label: 'Execução' },
+  { id: 'anexos', label: 'Anexos' },
+  { id: 'conversa', label: 'Conversa' },
+  { id: 'historico', label: 'Histórico' },
+] as const;
 
 export function OrdemPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const toast = useToast();
   const [pedindo, setPedindo] = useState<WorkOrderTransition | null>(null);
+  // A aba fica na URL: quem manda o link da conversa quer que o outro caia na
+  // conversa, e recarregar a página não deve devolver a pessoa ao resumo.
+  const [aba, setAba] = useUrlState<string>('aba', 'resumo');
 
   const { data, isLoading, isError, error } = useApiQuery(workOrderDetail, { params: { id } }) as {
     data: WorkOrderDetail | undefined;
@@ -102,77 +165,23 @@ export function OrdemPage() {
         </div>
       }
     >
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <Card>
-            <CardHeader
-              title="Situação"
-              actions={
-                <div className="flex items-center gap-2">
-                  <PrioridadeChip prioridade={data.priority} />
-                  <StatusChip tone={tomDaCategoria(data.status_category)}>{data.status_label}</StatusChip>
-                </div>
-              }
-            />
-            <div className="flex flex-col gap-4 p-4">
-              {data.wait_reason_label && (
-                <div className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2">
-                  <Clock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warn" />
-                  <p className="text-sm text-warn-text">
-                    Parada: {data.wait_reason_label}.{' '}
-                    {/* Cronômetro pausado e correndo são coisas diferentes, e
-                        a diferença muda quem cobra de quem. */}
-                    {data.pauses_sla
-                      ? 'O relógio do SLA está pausado enquanto isso.'
-                      : 'O relógio do SLA continua correndo.'}
-                  </p>
-                </div>
-              )}
+      <div className="flex flex-col gap-4">
+        <FaixaDeDecisao os={data} />
 
-              <p className="text-base whitespace-pre-wrap text-text">
-                {data.description || <span className="text-subtle">Sem descrição.</span>}
-              </p>
+        <Tabs aria-label="Seções da ordem de serviço" idPrefix="os" items={[...ABAS]} value={aba} onChange={setAba} />
 
-              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
-                <Info rotulo="Natureza" valor={data.work_order_type_label} />
-                <Info rotulo="Cliente" valor={data.customer_name} />
-                <Info rotulo="Equipamento" valor={data.asset_name_snapshot} />
-                <Info rotulo="Local" valor={data.location_name_snapshot} />
-                <Info
-                  rotulo="Programada para"
-                  valor={data.scheduled_start ? new Date(data.scheduled_start).toLocaleString('pt-BR') : null}
-                />
-                <Info rotulo="Aberta" valor={formatarDataRelativa(data.created_at)} />
-              </dl>
-            </div>
-          </Card>
+        <div
+          role="tabpanel"
+          id={tabIds('os', aba).painel}
+          aria-labelledby={tabIds('os', aba).aba}
+          tabIndex={0}
+        >
+          {aba === 'resumo' && <AbaResumo os={data} />}
+          {aba === 'execucao' && <AbaExecucao id={id} />}
+          {aba === 'anexos' && <AbaAnexos id={id} />}
+          {aba === 'conversa' && <AbaConversa id={id} />}
+          {aba === 'historico' && <AbaHistorico historico={data.history} />}
         </div>
-
-        <Card>
-          <CardHeader title="Histórico" description="Cada mudança, e quanto tempo levou." />
-          <ol className="flex flex-col gap-3 p-4">
-            {data.history.length === 0 && <li className="text-sm text-subtle">Ainda sem movimentação.</li>}
-            {data.history.map((h, i) => {
-              const linha = h as Record<string, string | null>;
-              return (
-                <li key={i} className="flex gap-3 text-sm">
-                  <span aria-hidden="true" className="mt-1.5 size-2 shrink-0 rounded-full bg-border-strong" />
-                  <span className="min-w-0">
-                    <span className="block text-text">
-                      {linha.from_label ? `${linha.from_label} → ` : ''}
-                      {linha.to_label ?? linha.to_status ?? '—'}
-                    </span>
-                    {linha.changed_at && (
-                      <span className="block text-xs text-muted">
-                        {formatarDataRelativa(linha.changed_at)}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </Card>
       </div>
 
       {pedindo && (
@@ -198,14 +207,604 @@ export function OrdemPage() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* A faixa de decisão                                                         */
+/* -------------------------------------------------------------------------- */
 
 /**
- * O diálogo que pede o que falta.
+ * As seis coisas que decidem, sempre visíveis.
  *
- * Os campos vêm de `requires`, que vem do servidor. Uma lista fixa aqui
- * divergiria do grafo de estados no dia em que alguém acrescentasse uma
- * exigência — e a divergência só apareceria como 422 na cara do usuário.
+ * Fica FORA das abas porque é o contexto de tudo o que elas dizem. Ler "3h
+ * apontadas" sem saber que a OS está parada há dois dias aguardando peça leva
+ * à conclusão errada — e é justamente na aba de execução que a pessoa está
+ * quando pensa nisso.
  */
+function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusChip tone={tomDaCategoria(os.status_category)}>{os.status_label}</StatusChip>
+          <PrioridadeChip prioridade={os.priority} />
+          {os.criticality_label && (
+            <StatusChip tone="neutral" size="sm">
+              {os.criticality_label}
+            </StatusChip>
+          )}
+          <span className="text-sm text-muted">{os.work_order_type_label}</span>
+          {os.reschedule_count > 0 && (
+            // Remarcar quatro vezes não é detalhe de agenda: é o sintoma de um
+            // atendimento que ninguém está conseguindo fazer.
+            <StatusChip tone="warn" size="sm">
+              Remarcada {os.reschedule_count}×
+            </StatusChip>
+          )}
+        </div>
+
+        {os.wait_reason_label && (
+          <div className="flex items-start gap-2 rounded-control bg-warn-soft px-3 py-2">
+            <Clock aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warn" />
+            <p className="text-sm text-warn-text">
+              Parada: {os.wait_reason_label}.{' '}
+              {/* Cronômetro pausado e correndo são coisas diferentes, e a
+                  diferença muda quem cobra de quem. */}
+              {os.pauses_sla
+                ? 'O relógio do SLA está pausado enquanto isso.'
+                : 'O relógio do SLA continua correndo.'}
+              {os.wait_note && <span className="mt-1 block text-warn-text/90">{os.wait_note}</span>}
+            </p>
+          </div>
+        )}
+
+        {os.window_invalidated_at && (
+          <div className="flex items-start gap-2 rounded-control bg-bad-soft px-3 py-2">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-bad" />
+            <p className="text-sm text-bad-text">
+              A janela programada não vale mais
+              {os.window_invalidated_reason ? `: ${os.window_invalidated_reason}` : '.'} Reprograme
+              antes de contar com ela.
+            </p>
+          </div>
+        )}
+
+        <Sla relogios={os.sla} />
+
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+          <Info
+            rotulo="Responsável"
+            valor={os.assignee_name ?? os.team_name}
+            icone={<User className="size-3.5" />}
+            vazio="Sem responsável"
+          />
+          <Info
+            rotulo="Programada"
+            valor={os.scheduled_start ? new Date(os.scheduled_start).toLocaleString('pt-BR') : null}
+            icone={<CalendarClock className="size-3.5" />}
+            vazio="Sem data"
+          />
+          <Info rotulo="Equipamento" valor={os.asset_name_snapshot} vazio="Sem equipamento" />
+          <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+        </dl>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Os relógios de prazo.
+ *
+ * A barra mostra o percentual consumido em tempo ÚTIL, e não em relógio de
+ * parede: um chamado aberto sexta às 17h com prazo de 4 horas vence terça de
+ * manhã. Mostrar o tempo corrido faria a barra encher no fim de semana e a
+ * coordenação correr atrás de um prazo que não estava correndo.
+ */
+function Sla({ relogios }: { relogios: SlaClock[] | null }) {
+  const ativos = (relogios ?? []).filter((r) => r.state !== 'cancelled');
+  if (ativos.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2">
+      {ativos.map((r) => {
+        const estourou = r.breached_at !== null;
+        const perto = !estourou && r.consumed_pct >= 80;
+        return (
+          <div key={r.id} className="flex items-center gap-3">
+            <span className="w-28 shrink-0 text-xs text-subtle">{ROTULO_SLA[r.kind] ?? r.kind}</span>
+            <Progress
+              value={Math.min(r.consumed_pct, 100)}
+              tone={estourou ? 'bad' : perto ? 'warn' : 'good'}
+              label={`${ROTULO_SLA[r.kind] ?? r.kind}: ${r.consumed_pct}% do prazo`}
+              className="flex-1"
+            />
+            <span
+              className={
+                'w-44 shrink-0 text-right text-xs tabular-nums ' +
+                (estourou ? 'text-bad-text' : perto ? 'text-warn-text' : 'text-muted')
+              }
+              data-numeric
+            >
+              {estourou
+                ? `estourou ${formatarDataRelativa(r.breached_at!)}`
+                : `vence ${new Date(r.due_at).toLocaleString('pt-BR')}`}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const ROTULO_SLA: Record<string, string> = {
+  response: 'Atendimento',
+  resolution: 'Solução',
+  first_response: 'Primeira resposta',
+};
+
+/* -------------------------------------------------------------------------- */
+/* Aba: resumo                                                                */
+/* -------------------------------------------------------------------------- */
+
+function AbaResumo({ os }: { os: WorkOrderDetail }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <div className="flex flex-col gap-4 lg:col-span-2">
+        <Card>
+          <CardHeader title="O que foi relatado" />
+          <div className="flex flex-col gap-4 p-4">
+            <p className="text-base whitespace-pre-wrap text-text">
+              {os.description || <span className="text-subtle">Sem descrição.</span>}
+            </p>
+            {os.reported_failure_label && (
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <Info rotulo="Sintoma relatado" valor={os.reported_failure_label} />
+              </dl>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Diagnóstico e solução"
+            description="Preenchidos pelas transições de conclusão — é o que vai para o relatório do cliente."
+          />
+          <div className="flex flex-col gap-4 p-4">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <Info rotulo="Causa" valor={os.cause_failure_label} vazio="Ainda não diagnosticada" />
+              <Info rotulo="Ação tomada" valor={os.action_label} vazio="Ainda não registrada" />
+            </dl>
+            <div>
+              <dt className="text-xs text-subtle">O que foi feito</dt>
+              <dd className="mt-1 text-base whitespace-pre-wrap text-text">
+                {os.resolution || (
+                  <span className="text-subtle">
+                    Ainda não descrito. É pedido na transição de conclusão.
+                  </span>
+                )}
+              </dd>
+            </div>
+            {os.rework_reason && (
+              <p className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+                Devolvida para retrabalho: {os.rework_reason}
+              </p>
+            )}
+            {os.cancellation_reason && (
+              <p className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
+                Cancelada: {os.cancellation_reason}
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader title="Identificação" />
+        <dl className="flex flex-col gap-3 p-4 text-sm">
+          <Info rotulo="Número" valor={os.number} />
+          <Info rotulo="Cliente" valor={os.customer_name} />
+          <Info rotulo="Patrimônio" valor={os.asset_serial_snapshot} />
+          <Info rotulo="Aberta por" valor={os.created_by_name} />
+          <Info rotulo="Aberta" valor={formatarDataRelativa(os.created_at)} />
+          <Info
+            rotulo="Veio da solicitação"
+            valor={os.service_request_number}
+            vazio="Aberta direto"
+          />
+          <Info
+            rotulo="Iniciada"
+            valor={os.started_at ? new Date(os.started_at).toLocaleString('pt-BR') : null}
+            vazio="Ainda não iniciada"
+          />
+          <Info
+            rotulo="Concluída"
+            valor={os.completed_at ? new Date(os.completed_at).toLocaleString('pt-BR') : null}
+            vazio="Ainda não concluída"
+          />
+        </dl>
+      </Card>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aba: execução — horas e peças                                              */
+/* -------------------------------------------------------------------------- */
+
+function AbaExecucao({ id }: { id: string }) {
+  const { data: horas, isLoading: carregandoHoras } = useApiQuery(workOrderTimeEntries, {
+    params: { id },
+  }) as {
+    data: { items: TimeEntry[]; total_minutes: number; open_entries: number } | undefined;
+    isLoading: boolean;
+  };
+  const { data: pecas, isLoading: carregandoPecas } = useApiQuery(workOrderParts, {
+    params: { id },
+  }) as { data: { items: WorkOrderPart[] } | undefined; isLoading: boolean };
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader
+          title="Horas"
+          actions={
+            horas && (
+              <span className="text-sm font-semibold text-text tabular-nums" data-numeric>
+                {formatarDuracao(horas.total_minutes)}
+              </span>
+            )
+          }
+        />
+        <div className="p-2">
+          {carregandoHoras ? (
+            <SkeletonList rows={3} label="horas apontadas" />
+          ) : !horas || horas.items.length === 0 ? (
+            <EmptyState
+              icon={<Clock className="size-5" />}
+              title="Nenhuma hora apontada"
+              description="O apontamento acontece no campo, pelo cronômetro ou pelo lançamento manual."
+              className="py-6"
+            />
+          ) : (
+            <>
+              {horas.open_entries > 0 && (
+                // O defeito operacional mais comum do apontamento: o
+                // cronômetro que ninguém parou. Dizer é melhor do que somar
+                // como se o total estivesse completo.
+                <p className="mx-2 mb-2 rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
+                  {horas.open_entries === 1
+                    ? 'Há um cronômetro ainda correndo; o total não inclui esse tempo.'
+                    : `Há ${horas.open_entries} cronômetros ainda correndo; o total não inclui esse tempo.`}
+                </p>
+              )}
+              <ul className="flex flex-col">
+                {horas.items.map((h, i) => (
+                  <li
+                    key={h.id}
+                    className={
+                      'flex items-baseline gap-3 px-2.5 py-2 ' +
+                      (i > 0 ? 'border-t border-border-subtle' : '')
+                    }
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-text">
+                        {h.person_name ?? 'Sem responsável'}
+                      </span>
+                      <span className="block text-xs text-muted" data-numeric>
+                        {new Date(h.started_at).toLocaleString('pt-BR')}
+                        {h.note ? ` · ${h.note}` : ''}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm text-text tabular-nums" data-numeric>
+                      {h.minutes === null ? (
+                        <span className="text-warn-text">em curso</span>
+                      ) : (
+                        formatarDuracao(h.minutes)
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Peças" description="Sai e volta são linhas diferentes." />
+        <div className="p-2">
+          {carregandoPecas ? (
+            <SkeletonList rows={3} label="peças" />
+          ) : !pecas || pecas.items.length === 0 ? (
+            <EmptyState
+              icon={<Package className="size-5" />}
+              title="Nenhuma peça movimentada"
+              className="py-6"
+            />
+          ) : (
+            <ul className="flex flex-col">
+              {pecas.items.map((p, i) => (
+                <li
+                  key={p.id}
+                  className={
+                    'flex items-baseline gap-3 px-2.5 py-2 ' +
+                    (i > 0 ? 'border-t border-border-subtle' : '')
+                  }
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-text">
+                      {p.item_name ?? 'Item removido do cadastro'}
+                    </span>
+                    <span className="block truncate text-xs text-muted" data-numeric>
+                      {p.item_sku ? `${p.item_sku} · ` : ''}
+                      {p.warehouse_name ?? 'sem almoxarifado'}
+                    </span>
+                  </span>
+                  <span
+                    className={
+                      'shrink-0 text-sm tabular-nums ' +
+                      (p.kind === 'return' ? 'text-muted' : 'text-text')
+                    }
+                    data-numeric
+                  >
+                    {p.kind === 'return' ? '−' : '+'}
+                    {p.qty}
+                    {p.unit ? ` ${p.unit}` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aba: anexos                                                                */
+/* -------------------------------------------------------------------------- */
+
+function AbaAnexos({ id }: { id: string }) {
+  const { data, isLoading } = useApiQuery(workOrderAttachments, { params: { id } }) as {
+    data: { items: Attachment[] } | undefined;
+    isLoading: boolean;
+  };
+
+  return (
+    <Card>
+      <CardHeader title="Anexos e fotos" />
+      <div className="p-2">
+        {isLoading ? (
+          <SkeletonList rows={3} label="anexos" />
+        ) : !data || data.items.length === 0 ? (
+          <EmptyState
+            icon={<Paperclip className="size-5" />}
+            title="Nenhum anexo"
+            description="As fotos de antes e depois entram pelo aplicativo de campo."
+            className="py-6"
+          />
+        ) : (
+          <ul className="flex flex-col">
+            {data.items.map((a, i) => (
+              <li
+                key={a.id}
+                className={
+                  'flex items-baseline gap-3 px-2.5 py-2 ' +
+                  (i > 0 ? 'border-t border-border-subtle' : '')
+                }
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-text">{a.file_name}</span>
+                  <span className="block truncate text-xs text-muted" data-numeric>
+                    {ROTULO_ANEXO[a.purpose] ?? a.purpose} · {formatarTamanho(a.byte_size)} ·{' '}
+                    {a.uploaded_by_name ?? 'autor desconhecido'}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted" data-numeric>
+                  {formatarDataRelativa(a.uploaded_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const ROTULO_ANEXO: Record<string, string> = {
+  before: 'Antes',
+  after: 'Depois',
+  evidence: 'Evidência',
+  document: 'Documento',
+  signature: 'Assinatura',
+  other: 'Outro',
+};
+
+/* -------------------------------------------------------------------------- */
+/* Aba: conversa                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Comentários e notas internas, no mesmo fio.
+ *
+ * NÃO são duas abas. Separá-las produziria exatamente o erro que a separação
+ * de coluna existe para evitar: alguém responde na aba errada porque estava
+ * lendo a outra. Aqui as duas conversas correm juntas, em ordem, e a nota
+ * interna é visualmente inconfundível — fundo diferente, cadeado, e o rótulo
+ * dizendo que o cliente não vê.
+ *
+ * Quem não pode ler nota interna simplesmente não recebe nenhuma do servidor,
+ * e o seletor de destino nem aparece.
+ */
+function AbaConversa({ id }: { id: string }) {
+  const toast = useToast();
+  const [texto, setTexto] = useState('');
+  const [interna, setInterna] = useState(true);
+
+  const { data, isLoading } = useApiQuery(workOrderComments, { params: { id } }) as {
+    data: { items: WorkOrderComment[]; can_write_internal: boolean } | undefined;
+    isLoading: boolean;
+  };
+
+  const escrever = useApiMutation(workOrderComment, {
+    invalidates: [workOrderComments],
+    onError: (e: ApiError) => toast.error('Não foi possível publicar', e.problem.message),
+  });
+
+  const podeInterna = data?.can_write_internal ?? false;
+  // Quem não pode escrever nota interna só tem um destino possível; deixar o
+  // estado em `true` mandaria uma nota interna que o servidor recusaria.
+  const destino = podeInterna && interna ? 'internal' : 'customer';
+
+  return (
+    <Card className="mx-auto max-w-3xl">
+      <CardHeader title="Conversa" description="O que o cliente lê e o que fica entre a equipe." />
+
+      <div className="p-2">
+        {isLoading ? (
+          <SkeletonList rows={3} label="comentários" />
+        ) : !data || data.items.length === 0 ? (
+          <EmptyState
+            icon={<MessageSquare className="size-5" />}
+            title="Nada dito ainda"
+            className="py-6"
+          />
+        ) : (
+          <ul className="flex flex-col gap-2 p-1">
+            {data.items.map((c) => (
+              <li
+                key={c.id}
+                className={
+                  'rounded-control px-3 py-2 ' +
+                  (c.visibility === 'internal'
+                    ? 'border border-border-subtle bg-surface-sunken'
+                    : 'bg-info-soft')
+                }
+              >
+                <p className="flex items-center gap-1.5 text-xs text-muted">
+                  {c.visibility === 'internal' && (
+                    <Lock aria-hidden="true" className="size-3 shrink-0" />
+                  )}
+                  <span className="font-medium text-text">{c.author_name ?? 'Alguém'}</span>
+                  <span>·</span>
+                  <span data-numeric>{formatarDataRelativa(c.created_at)}</span>
+                  <span>·</span>
+                  <span>{c.visibility === 'internal' ? 'o cliente não vê' : 'o cliente vê'}</span>
+                </p>
+                <p className="mt-1 text-sm whitespace-pre-wrap text-text">{c.body}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <form
+        className="flex flex-col gap-3 border-t border-border-subtle p-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (texto.trim().length === 0) return;
+          escrever.mutate(
+            { params: { id }, body: { body: texto.trim(), visibility: destino } },
+            { onSuccess: () => setTexto('') }
+          );
+        }}
+      >
+        <Field
+          label={destino === 'internal' ? 'Nota interna' : 'Mensagem para o cliente'}
+          hint={
+            destino === 'internal'
+              ? 'Fica entre a equipe. Não aparece no portal nem no relatório.'
+              : 'O cliente lê isto no portal. Escreva como se ele estivesse lendo — porque está.'
+          }
+        >
+          <Textarea
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            rows={3}
+            placeholder={
+              destino === 'internal'
+                ? 'Ex.: já é a terceira vez neste equipamento; avaliar substituição.'
+                : 'Ex.: peça encomendada, previsão de chegada na quinta-feira.'
+            }
+          />
+        </Field>
+
+        <div className="flex items-center justify-between gap-3">
+          {podeInterna ? (
+            <Select
+              value={destino}
+              aria-label="Quem vê este comentário"
+              onChange={(e) => setInterna(e.target.value === 'internal')}
+              className="w-56"
+            >
+              <option value="internal">Nota interna</option>
+              <option value="customer">Visível para o cliente</option>
+            </Select>
+          ) : (
+            <span className="text-xs text-muted">Este comentário é visível para o cliente.</span>
+          )}
+          <Button
+            type="submit"
+            variant="primary"
+            loading={escrever.isPending}
+            disabled={texto.trim().length === 0}
+          >
+            Publicar
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Aba: histórico                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A linha do tempo, com o tempo DENTRO de cada estado.
+ *
+ * "Mudou para Aguardando" não responde nada. "Ficou 6 dias em Aguardando"
+ * responde à única pergunta que se faz olhando um histórico: onde foi parar o
+ * tempo.
+ */
+function AbaHistorico({ historico }: { historico: WorkOrderHistoryEntry[] }) {
+  return (
+    <Card className="mx-auto max-w-3xl">
+      <CardHeader title="Histórico" description="Cada mudança, e quanto tempo levou." />
+      <ol className="flex flex-col gap-3 p-4">
+        {historico.length === 0 && <li className="text-sm text-subtle">Ainda sem movimentação.</li>}
+        {historico.map((h, i) => (
+          <li key={`${h.changed_at}-${i}`} className="flex gap-3 text-sm">
+            <span
+              aria-hidden="true"
+              className="mt-1.5 size-2 shrink-0 rounded-full bg-border-strong"
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-text">
+                {h.from_label ? `${h.from_label} → ` : ''}
+                {h.to_label}
+                {h.wait_reason_label && (
+                  <span className="text-muted"> ({h.wait_reason_label})</span>
+                )}
+              </span>
+              <span className="block text-xs text-muted" data-numeric>
+                {formatarDataRelativa(h.changed_at)}
+                {h.seconds_in_from !== null &&
+                  h.from_label &&
+                  ` · ${formatarDuracao(Math.round(h.seconds_in_from / 60))} em ${h.from_label}`}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Diálogo de transição                                                       */
+/* -------------------------------------------------------------------------- */
+
 function DialogoDeTransicao({
   transicao,
   onFechar,
@@ -248,7 +847,9 @@ function DialogoDeTransicao({
                 ...(valores.cause_failure_code_id
                   ? { cause_failure_code_id: valores.cause_failure_code_id }
                   : {}),
-                ...(valores.cancellation_reason ? { cancellation_reason: valores.cancellation_reason } : {}),
+                ...(valores.cancellation_reason
+                  ? { cancellation_reason: valores.cancellation_reason }
+                  : {}),
               });
             }}
           >
@@ -322,11 +923,14 @@ function DialogoDeTransicao({
 
         {/* Exigência que a tela ainda não sabe pedir: dito, e não escondido. */}
         {transicao.requires.some(
-          (c) => !['wait_reason_id', 'resolution', 'cause_failure_code_id', 'cancellation_reason'].includes(c)
+          (c) =>
+            !['wait_reason_id', 'resolution', 'cause_failure_code_id', 'cancellation_reason'].includes(
+              c
+            )
         ) && (
           <p className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-            Esta transição também exige: {transicao.requires.join(', ')}. Alguns desses campos ainda não têm
-            formulário nesta tela.
+            Esta transição também exige: {transicao.requires.join(', ')}. Alguns desses campos ainda
+            não têm formulário nesta tela.
           </p>
         )}
       </div>
@@ -334,11 +938,50 @@ function DialogoDeTransicao({
   );
 }
 
-function Info({ rotulo, valor }: { rotulo: string; valor: string | null | undefined }) {
+/* -------------------------------------------------------------------------- */
+
+function Info({
+  rotulo,
+  valor,
+  icone,
+  vazio,
+}: {
+  rotulo: string;
+  valor: string | null | undefined;
+  icone?: React.ReactNode;
+  vazio?: string;
+}) {
   return (
     <div>
-      <dt className="text-xs text-subtle">{rotulo}</dt>
-      <dd className="mt-0.5 text-sm text-text">{valor || <span className="text-subtle">—</span>}</dd>
+      <dt className="flex items-center gap-1 text-xs text-subtle">
+        {icone}
+        {rotulo}
+      </dt>
+      <dd className="mt-0.5 text-sm text-text">
+        {valor || <span className="text-subtle">{vazio ?? '—'}</span>}
+      </dd>
     </div>
   );
+}
+
+/** "1h30", e não "90 min" nem "1.5h". */
+function formatarDuracao(minutos: number): string {
+  if (minutos < 60) return `${minutos} min`;
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * O tamanho vem como texto porque a coluna é `bigint`.
+ *
+ * Converter para número na entrada perderia precisão em silêncio acima de
+ * 2^53 — e nada aqui precisa do valor numérico além de escolher a unidade.
+ */
+function formatarTamanho(bytes: string): string {
+  const n = Number(bytes);
+  if (!Number.isFinite(n)) return `${bytes} B`;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} kB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

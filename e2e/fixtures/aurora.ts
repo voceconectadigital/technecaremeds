@@ -23,6 +23,14 @@ export const E2E = {
   emailCoordB: 'coord.b@e2e.test',
   /** Uma pessoa, dois vínculos — a persona do seletor de organização (§05). */
   emailConsultora: 'consultora@e2e.test',
+  /**
+   * Enxerga a ordem de serviço e NÃO enxerga nota interna nem custo.
+   *
+   * Existe para provar o negativo. Todo teste de vazamento feito com quem pode
+   * ver tudo prova metade: confirma que a informação chega a quem deve, e não
+   * diz nada sobre quem não deve.
+   */
+  emailAuditora: 'auditora@e2e.test',
 } as const;
 
 export interface Sessao {

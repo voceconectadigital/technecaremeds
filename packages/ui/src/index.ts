@@ -62,6 +62,7 @@ export {
   Breadcrumbs,
   Avatar,
   Tabs,
+  tabIds,
   type BreadcrumbsProps,
   type Crumb,
   type AvatarProps,

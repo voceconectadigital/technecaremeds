@@ -126,6 +126,24 @@ export interface TabsProps {
   onChange: (id: string) => void;
   className?: string;
   'aria-label': string;
+  /**
+   * Prefixo para ligar cada aba ao seu painel.
+   *
+   * Quando informado, a aba ganha `id="<prefixo>-aba-<id>"` e
+   * `aria-controls="<prefixo>-painel-<id>"`, e o consumidor põe o
+   * `role="tabpanel"` correspondente. Sem essa ligação o leitor de tela
+   * anuncia "aba 2 de 5" e não sabe dizer o que ela abriu — a pessoa ouve o
+   * nome da aba e depois tem de sair caçando o conteúdo pela página.
+   *
+   * É opcional porque nem toda fileira de abas troca um painel: as da fila de
+   * triagem filtram uma lista que continua sendo a mesma lista.
+   */
+  idPrefix?: string;
+}
+
+/** Os identificadores que ligam uma aba ao seu painel. */
+export function tabIds(prefixo: string, id: string) {
+  return { aba: `${prefixo}-aba-${id}`, painel: `${prefixo}-painel-${id}` };
 }
 
 /**
@@ -134,7 +152,7 @@ export interface TabsProps {
  * Uma fileira de botões que troca conteúdo PARECE aba e não é: o leitor de
  * tela anuncia "botão" em vez de "aba 2 de 4", e as setas não fazem nada.
  */
-export function Tabs({ items, value, onChange, className, ...rest }: TabsProps) {
+export function Tabs({ items, value, onChange, className, idPrefix, ...rest }: TabsProps) {
   const indice = items.findIndex((t) => t.id === value);
 
   return (
@@ -159,6 +177,8 @@ export function Tabs({ items, value, onChange, className, ...rest }: TabsProps) 
             key={t.id}
             role="tab"
             type="button"
+            id={idPrefix ? tabIds(idPrefix, t.id).aba : undefined}
+            aria-controls={idPrefix ? tabIds(idPrefix, t.id).painel : undefined}
             aria-selected={ativo}
             // Só a aba ativa fica na tabulação: TAB entra e sai do grupo, as
             // setas andam dentro dele. É o padrão que o teclado espera.

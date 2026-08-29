@@ -49,12 +49,17 @@ export const E2E = {
   // Uma pessoa, dois vínculos: é ela que torna o seletor de organização
   // testável de verdade, e é o caso que a §05 existe para proteger.
   userConsultora: '0193d900-0001-7000-8000-00000000000c',
+  // A auditora existe para provar o NEGATIVO: ela enxerga a ordem de serviço
+  // e NÃO enxerga nota interna nem custo. Sem alguém assim na massa, todo
+  // teste de vazamento é feito com quem pode ver tudo — e prova metade.
+  userAuditora: '0193d900-0001-7000-8000-00000000000d',
 
   memCoordA: '0193d900-0002-7000-8000-00000000000a',
   memTecA: '0193d900-0002-7000-8000-00000000001a',
   memCoordB: '0193d900-0002-7000-8000-00000000000b',
   memConsultoraA: '0193d900-0002-7000-8000-00000000001c',
   memConsultoraB: '0193d900-0002-7000-8000-00000000002c',
+  memAuditoraA: '0193d900-0002-7000-8000-00000000001d',
 
   clienteA: '0193d900-0003-7000-8000-00000000000a',
   clienteB: '0193d900-0003-7000-8000-00000000000b',
@@ -63,6 +68,7 @@ export const E2E = {
   emailTecA: 'tec.a@e2e.test',
   emailCoordB: 'coord.b@e2e.test',
   emailConsultora: 'consultora@e2e.test',
+  emailAuditora: 'auditora@e2e.test',
 };
 
 const pool = new Pool({ connectionString: url, max: 4 });
@@ -104,6 +110,7 @@ async function main() {
     [E2E.userTecA, E2E.emailTecA, 'Rafael Técnico'],
     [E2E.userCoordB, E2E.emailCoordB, 'Bruno do Beta'],
     [E2E.userConsultora, E2E.emailConsultora, 'Carla Consultora'],
+    [E2E.userAuditora, E2E.emailAuditora, 'Denise Auditora'],
   ]) {
     await q(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [id, email, nome]);
   }
@@ -116,6 +123,7 @@ async function main() {
     [E2E.memCoordB, E2E.orgB, E2E.userCoordB, true],
     [E2E.memConsultoraA, E2E.orgA, E2E.userConsultora, false],
     [E2E.memConsultoraB, E2E.orgB, E2E.userConsultora, false],
+    [E2E.memAuditoraA, E2E.orgA, E2E.userAuditora, false],
   ]) {
     const c = await pool.connect();
     try {
@@ -184,7 +192,10 @@ async function main() {
     await withTenant(db, ctx, async (s) => {
       const papeis = await provisionFactoryRoles(s);
       await assignRole(s, mem, papeis.get(papel));
-      if (org === E2E.orgA) await assignRole(s, E2E.memTecA, papeis.get('technician'));
+      if (org === E2E.orgA) {
+        await assignRole(s, E2E.memTecA, papeis.get('technician'));
+        await assignRole(s, E2E.memAuditoraA, papeis.get('auditor'));
+      }
       // A consultora é coordenadora nas duas: mesmo papel, organizações
       // diferentes.
       await assignRole(
@@ -224,7 +235,14 @@ async function main() {
     });
   }
 
-  console.log('massa e2e criada: 2 organizações, 3 pessoas, 2 clientes, 2 ativos');
+  // Os números são contados, e não escritos à mão: a linha anterior dizia
+  // "3 pessoas" depois de a quarta ter entrado, e um resumo que mente sobre a
+  // própria massa é pior do que resumo nenhum.
+  const [{ pessoas }] = await q(`SELECT count(*)::int AS pessoas FROM aurora.users`);
+  const [{ vinculos }] = await q(`SELECT count(*)::int AS vinculos FROM aurora.memberships`);
+  console.log(
+    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, 2 clientes, 2 ativos`
+  );
 }
 
 main()
