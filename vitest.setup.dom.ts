@@ -42,6 +42,44 @@ if (typeof document !== 'undefined') {
     } as unknown as typeof ResizeObserver;
   }
 
+  /*
+   * localStorage utilizável.
+   *
+   * O Node 25 instala um `localStorage` global experimental que, sem caminho
+   * de arquivo configurado, não tem `setItem`. Ele SOMBREIA o do jsdom, e o
+   * resultado é código de sessão que falha em teste por um motivo que não tem
+   * nada a ver com o código. Aqui o ambiente ganha uma implementação em
+   * memória — que é o comportamento de uma aba nova, e é o que o teste quer.
+   */
+  const armazenamentoUsavel =
+    typeof globalThis.localStorage?.setItem === 'function' &&
+    (() => {
+      try {
+        globalThis.localStorage.setItem('__aurora_probe__', '1');
+        globalThis.localStorage.removeItem('__aurora_probe__');
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+  if (!armazenamentoUsavel) {
+    const memoria = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => memoria.get(k) ?? null,
+        setItem: (k: string, v: string) => void memoria.set(k, String(v)),
+        removeItem: (k: string) => void memoria.delete(k),
+        clear: () => memoria.clear(),
+        key: (i: number) => [...memoria.keys()][i] ?? null,
+        get length() {
+          return memoria.size;
+        },
+      },
+    });
+  }
+
   // E `scrollIntoView` ao mover o destaque numa lista.
   if (!Element.prototype.scrollIntoView) {
     Element.prototype.scrollIntoView = () => undefined;

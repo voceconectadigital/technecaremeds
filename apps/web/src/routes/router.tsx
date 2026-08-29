@@ -1,0 +1,140 @@
+/**
+ * Aurora — as rotas (SPEC v0.2 §34, §40).
+ *
+ * ROTAS EM CÓDIGO, e não geradas por arquivo. O gerador do TanStack cria um
+ * arquivo versionado que alguém edita à mão e ninguém regenera; aqui a árvore
+ * é uma expressão, o `tsc` a confere inteira, e não há passo de build entre
+ * escrever a rota e usá-la.
+ *
+ * A URL NÃO CARREGA A ORGANIZAÇÃO. Não existe `/org/:id/ordens/1042`: o
+ * endereço de uma OS é o mesmo para qualquer organização, e o que ele mostra
+ * depende do vínculo de quem abre. É o que impede o acidente de mandar um link
+ * para um colega de outra empresa e ele ver meia tela carregar antes do 403.
+ */
+import type { ReactElement } from 'react';
+import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
+import { EntrarPage } from './entrar';
+import { OrganizacoesPage } from './organizacoes';
+import { HojePage } from './hoje';
+import { SolicitacoesPage } from '../features/solicitacoes/lista';
+import { SolicitacaoPage } from '../features/solicitacoes/ficha';
+import { OrdensPage } from '../features/ordens/lista';
+import { OrdemPage } from '../features/ordens/ficha';
+import { AgendaPage } from '../features/agenda/pagina';
+import { MembrosPage } from '../features/configuracoes/membros';
+import { EmConstrucao } from './em-construcao';
+import { lerSessaoGuardada } from '../lib/session-guard';
+
+const raiz = createRootRoute({ component: Outlet });
+
+/**
+ * Guarda de entrada.
+ *
+ * NÃO é segurança — é conveniência: leva quem não tem credencial para a tela
+ * de entrada em vez de mostrar um esqueleto que vai falhar com 401. Quem
+ * ignorar isto e chamar a API direto continua recebendo 401 do servidor.
+ */
+function exigirSessao() {
+  const { token, organizationId } = lerSessaoGuardada();
+  if (!token) throw redirect({ to: '/entrar' });
+  if (!organizationId) throw redirect({ to: '/organizacoes' });
+}
+
+const entrar = createRoute({ getParentRoute: () => raiz, path: '/entrar', component: EntrarPage });
+
+const organizacoes = createRoute({
+  getParentRoute: () => raiz,
+  path: '/organizacoes',
+  component: OrganizacoesPage,
+  beforeLoad: () => {
+    if (!lerSessaoGuardada().token) throw redirect({ to: '/entrar' });
+  },
+});
+
+function rotaProtegida(path: string, component: () => ReactElement) {
+  return createRoute({ getParentRoute: () => raiz, path, component, beforeLoad: exigirSessao });
+}
+
+export const routeTree = raiz.addChildren([
+  entrar,
+  organizacoes,
+
+  rotaProtegida('/', HojePage),
+
+  rotaProtegida('/solicitacoes', SolicitacoesPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/solicitacoes/$id',
+    component: SolicitacaoPage,
+    beforeLoad: exigirSessao,
+  }),
+
+  rotaProtegida('/ordens', OrdensPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/ordens/$id',
+    component: OrdemPage,
+    beforeLoad: exigirSessao,
+  }),
+
+  rotaProtegida('/agenda', AgendaPage),
+
+  /*
+   * As telas ainda não construídas dizem que não foram construídas.
+   *
+   * A alternativa seria esconder o item do menu até a tela existir — e aí o
+   * produto pareceria menor do que é, já que a API já atende todas elas. Uma
+   * tela honesta sobre o que falta é melhor do que um 404 e melhor do que um
+   * menu que muda de tamanho a cada semana.
+   */
+  rotaProtegida('/ativos', () => (
+    <EmConstrucao
+      titulo="Ativos"
+      descricao="Árvore de locais, ficha do equipamento, histórico e etiquetas."
+      permissao="asset.read"
+    />
+  )),
+  rotaProtegida('/estoque', () => (
+    <EmConstrucao
+      titulo="Estoque"
+      descricao="Saldos por almoxarifado, requisições e movimentações."
+      permissao="inventory.read"
+    />
+  )),
+  rotaProtegida('/contratos', () => (
+    <EmConstrucao
+      titulo="Contratos"
+      descricao="Contratos, coberturas, medição por período e orçamentos."
+      permissao="contract.read"
+    />
+  )),
+  rotaProtegida('/indicadores', () => (
+    <EmConstrucao
+      titulo="Indicadores"
+      descricao="MTTR, MTBF, cumprimento de SLA e de plano preventivo, com definição e recorte."
+      permissao="insight.read"
+    />
+  )),
+  rotaProtegida('/notificacoes', () => (
+    <EmConstrucao titulo="Notificações" descricao="Caixa de avisos e preferências por canal." />
+  )),
+  rotaProtegida('/perfil', () => (
+    <EmConstrucao titulo="Meu perfil" descricao="Dados pessoais, fuso e preferências de aviso." />
+  )),
+
+  rotaProtegida('/configuracoes', MembrosPage),
+]);
+
+export const router = createRouter({
+  routeTree,
+  defaultPreload: 'intent',
+  // Rolagem restaurada ao voltar: perder o lugar numa lista de mil OS é uma
+  // das formas mais rápidas de irritar quem trabalha nela o dia inteiro.
+  scrollRestoration: true,
+});
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
+}

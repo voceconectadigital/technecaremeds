@@ -27,7 +27,8 @@
       "@aurora/db": ["packages/db/src"],
       "@aurora/config": ["packages/config/src"],
       "@aurora/contracts": ["packages/contracts/src"],
-      "@aurora/ui": ["packages/ui/src"]
+      "@aurora/ui": ["packages/ui/src"],
+      "@aurora/web": ["apps/web/src"]
     }
   },
   "exclude": ["node_modules", "dist"]

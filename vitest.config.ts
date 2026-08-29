@@ -12,6 +12,7 @@ export default defineConfig({
       '@aurora/config': resolve(__dirname, 'packages/config/src'),
       '@aurora/contracts': resolve(__dirname, 'packages/contracts/src'),
       '@aurora/ui': resolve(__dirname, 'packages/ui/src'),
+      '@aurora/web': resolve(__dirname, 'apps/web/src'),
     },
   },
   test: {

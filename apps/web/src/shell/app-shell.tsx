@@ -1,0 +1,135 @@
+/**
+ * Aurora — o esqueleto da aplicação (SPEC v0.2 §34, §40).
+ *
+ * O QUE O ESQUELETO GARANTE, EM TODA TELA
+ *
+ *   · um pulo para o conteúdo, primeira parada do teclado — sem ele, quem
+ *     navega por teclado atravessa oito itens de menu em cada página;
+ *   · marcos de página de verdade (`banner`, `navigation`, `main`), que são o
+ *     que permite ao leitor de tela saltar direto para o conteúdo;
+ *   · `<h1>` único por tela, vindo do título — a lista de cabeçalhos é o
+ *     índice que quem não vê a tela usa para se orientar;
+ *   · barra lateral que vira gaveta abaixo de 768px, com o foco preso dentro
+ *     dela enquanto estiver aberta;
+ *   · um lugar só onde o erro de carregamento aparece, com o caminho de volta.
+ */
+import { useEffect, useState, type ReactNode } from 'react';
+import { Menu as MenuIcon, X } from 'lucide-react';
+import { Button, Breadcrumbs, type Crumb, cn } from '@aurora/ui';
+import { Sidebar } from './sidebar';
+import { Topbar } from './topbar';
+
+export interface AppShellProps {
+  /** Título da página. Vira o `<h1>` e o título do documento. */
+  title: string;
+  /** Uma frase explicando a tela. Aparece sob o título. */
+  subtitle?: string;
+  breadcrumbs?: Crumb[];
+  /** Ações principais da tela: criar, exportar, filtrar. */
+  actions?: ReactNode;
+  children: ReactNode;
+  /** Tira o preenchimento do conteúdo — para quadro e agenda, que ocupam tudo. */
+  bleed?: boolean;
+}
+
+export function AppShell({ title, subtitle, breadcrumbs, actions, children, bleed = false }: AppShellProps) {
+  const [gavetaAberta, setGavetaAberta] = useState(false);
+
+  useEffect(() => {
+    // O título do documento é o que aparece na aba e no histórico. Sem ele,
+    // dez abas da Aurora ficam indistinguíveis.
+    document.title = `${title} · Aurora`;
+  }, [title]);
+
+  useEffect(() => {
+    if (!gavetaAberta) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setGavetaAberta(false);
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  }, [gavetaAberta]);
+
+  return (
+    <div className="flex h-dvh flex-col bg-bg">
+      {/* Primeira parada do teclado, invisível até receber foco. */}
+      <a href="#conteudo" className="aurora-skip-link">
+        Pular para o conteúdo
+      </a>
+
+      <div className="flex min-h-0 flex-1">
+        {/* -------------------------------------------------- barra lateral */}
+
+        {/* Acima de 768px ela é permanente. Abaixo, vira gaveta: encolher a
+            barra até virar uma coluna de ícones ilegíveis não é responsivo. */}
+        <div className="hidden md:block">
+          <Sidebar />
+        </div>
+
+        {gavetaAberta && (
+          <>
+            <div
+              className="fixed inset-0 z-40 md:hidden"
+              style={{ backgroundColor: 'rgb(13 18 17 / 0.45)' }}
+              onClick={() => setGavetaAberta(false)}
+              aria-hidden="true"
+            />
+            <div className="fixed inset-y-0 left-0 z-50 md:hidden">
+              <Sidebar
+                onNavigate={() => setGavetaAberta(false)}
+                header={
+                  <Button
+                    aria-label="Fechar menu"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGavetaAberta(false)}
+                    icon={<X className="size-4" />}
+                  />
+                }
+              />
+            </div>
+          </>
+        )}
+
+        {/* ------------------------------------------------------- conteúdo */}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar
+            onOpenMenu={() => setGavetaAberta(true)}
+            menuButton={
+              <Button
+                aria-label="Abrir menu"
+                variant="ghost"
+                size="sm"
+                className="md:hidden"
+                onClick={() => setGavetaAberta(true)}
+                icon={<MenuIcon className="size-5" />}
+              />
+            }
+          />
+
+          <div className="flex items-start justify-between gap-4 border-b border-border bg-surface px-4 py-3 md:px-6">
+            <div className="min-w-0">
+              {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-1" />}
+              {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
+                  não vê a tela. */}
+              <h1 className="truncate text-xl font-semibold text-text">{title}</h1>
+              {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
+            </div>
+            {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+          </div>
+
+          <main
+            id="conteudo"
+            // `tabIndex={-1}` para que o pulo do teclado consiga POUSAR aqui:
+            // sem isso o link move a rolagem e deixa o foco para trás.
+            tabIndex={-1}
+            className={cn('min-h-0 flex-1 overflow-auto outline-none', !bleed && 'p-4 md:p-6')}
+          >
+            {children}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}

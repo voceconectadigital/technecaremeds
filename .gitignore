@@ -29,3 +29,6 @@ Thumbs.db
 # supabase local
 supabase/.temp/
 supabase/.branches/
+
+# build da interface
+apps/web/dist/

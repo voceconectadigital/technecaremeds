@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `theme-color` acompanha o tema: sem isto, a barra do navegador no
+         celular fica clara com a página escura. -->
+    <meta name="theme-color" content="#f1f5f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1211" media="(prefers-color-scheme: dark)" />
+    <title>Aurora</title>
+    <script>
+      /*
+       * O tema é aplicado ANTES de o React montar.
+       *
+       * Sem isto a página pisca branca antes de escurecer — e quem trabalha à
+       * noite no hospital recebe um flash na cara a cada carregamento.
+       */
+      (function () {
+        try {
+          var escolhido = localStorage.getItem('aurora:tema');
+          var escuro =
+            escolhido === 'dark' ||
+            (escolhido !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+        } catch (e) {
+          /* modo privado sem localStorage: o padrão claro serve */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
