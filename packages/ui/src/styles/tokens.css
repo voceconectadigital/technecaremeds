@@ -1,0 +1,466 @@
+/**
+ * Aurora — os tokens do design system (SPEC v0.2 §34, §40).
+ *
+ * A IDENTIDADE, EM UMA FRASE
+ *
+ * Aurora é um instrumento de trabalho para quem mantém equipamento crítico
+ * funcionando. A tela precisa parecer o painel de um instrumento bem feito:
+ * calma, precisa, densa sem ser apertada. Não é um site de marketing e não
+ * deve se comportar como um — nada de gradiente de herói, nada de sombra
+ * decorativa, nada de cor que muda de significado entre duas telas.
+ *
+ * DE ONDE VEM A PALETA
+ *
+ * Do assunto. Vidro de instrumento, aço escovado, o verde-azulado dos
+ * mostradores: os neutros têm viés frio levemente esverdeado — nunca cinza
+ * puro, que é o cinza de quem não escolheu — e o destaque é um teal profundo,
+ * não o índigo/violeta que todo SaaS usa. As cores semânticas (bom, atenção,
+ * crítico) são SEPARADAS do destaque: se "crítico" e "botão principal" fossem
+ * a mesma cor, um alerta de SLA estourado ficaria indistinguível de um botão.
+ *
+ * A REGRA QUE VALE MAIS QUE TODAS
+ *
+ * Nenhum estado é compreensível SÓ pela cor (§40 e WCAG 2.2). Todo indicador
+ * carrega texto e forma além do tom. Oito por cento dos homens não distinguem
+ * vermelho de verde, e uma OS atrasada não pode depender disso.
+ *
+ * COMO USAR
+ *
+ * Este arquivo é a fonte. O Tailwind lê estes mesmos tokens pelo `@theme`, de
+ * modo que `bg-surface` e `var(--color-surface)` são sempre a mesma cor. Um
+ * valor literal escrito num componente é um valor que não existe no tema — e
+ * que não vai mudar quando o tema mudar.
+ */
+
+@layer theme {
+  :root {
+    /* ---------------------------------------------------------------- cor */
+
+    /*
+     * NEUTROS — viés frio esverdeado, do vidro de instrumento.
+     * A escala vai do papel (0) ao quase-preto (900) e é a MESMA em light e
+     * dark; o que muda é qual degrau cada papel semântico usa.
+     */
+    --aurora-neutral-0: #ffffff;
+    --aurora-neutral-25: #f8faf9;
+    --aurora-neutral-50: #f1f5f4;
+    --aurora-neutral-100: #e5ebea;
+    --aurora-neutral-200: #cfd8d7;
+    --aurora-neutral-300: #aeb9b8;
+    --aurora-neutral-400: #8a9695;
+    --aurora-neutral-500: #6b7877;
+    --aurora-neutral-600: #526060;
+    --aurora-neutral-700: #3c4a4a;
+    --aurora-neutral-800: #26312f;
+    --aurora-neutral-900: #161d1c;
+    --aurora-neutral-950: #0d1211;
+
+    /* DESTAQUE — teal profundo. Ação, seleção, foco. Nunca estado. */
+    --aurora-accent-50: #eafaf7;
+    --aurora-accent-100: #ccf2ec;
+    --aurora-accent-200: #99e4da;
+    --aurora-accent-300: #5ecfc2;
+    --aurora-accent-400: #2fb3a6;
+    --aurora-accent-500: #14958a;
+    --aurora-accent-600: #0c776f;
+    --aurora-accent-700: #0b5f59;
+    --aurora-accent-800: #0c4b47;
+    --aurora-accent-900: #0b3d3a;
+
+    /* SEMÂNTICAS — significado, nunca decoração. */
+    --aurora-good-100: #d7f2e0;
+    --aurora-good-500: #16915a;
+    --aurora-good-700: #0f6b42;
+    --aurora-warn-100: #fdeecb;
+    --aurora-warn-500: #b57d0a;
+    --aurora-warn-700: #8a5e05;
+    --aurora-bad-100: #fbdedc;
+    --aurora-bad-500: #c1362f;
+    --aurora-bad-700: #932621;
+    --aurora-info-100: #dbe8fb;
+    --aurora-info-500: #2f6bc4;
+    --aurora-info-700: #1f4e95;
+
+    /* ------------------------------------------------- papéis semânticos */
+
+    /* O fundo da janela e o das superfícies são DIFERENTES: é o degrau entre
+       os dois que faz um cartão parecer um cartão sem precisar de sombra. */
+    --aurora-bg: var(--aurora-neutral-50);
+    --aurora-surface: var(--aurora-neutral-0);
+    --aurora-surface-raised: var(--aurora-neutral-0);
+    --aurora-surface-sunken: var(--aurora-neutral-100);
+    --aurora-surface-hover: var(--aurora-neutral-50);
+    --aurora-surface-active: var(--aurora-neutral-100);
+
+    --aurora-border: var(--aurora-neutral-200);
+    --aurora-border-strong: var(--aurora-neutral-300);
+    --aurora-border-subtle: var(--aurora-neutral-100);
+
+    --aurora-text: var(--aurora-neutral-900);
+    --aurora-text-muted: var(--aurora-neutral-600);
+    --aurora-text-subtle: var(--aurora-neutral-500);
+    --aurora-text-on-accent: var(--aurora-neutral-0);
+    --aurora-text-inverse: var(--aurora-neutral-0);
+
+    --aurora-accent: var(--aurora-accent-600);
+    --aurora-accent-hover: var(--aurora-accent-700);
+    --aurora-accent-soft: var(--aurora-accent-50);
+    --aurora-accent-text: var(--aurora-accent-700);
+
+    --aurora-good: var(--aurora-good-500);
+    --aurora-good-soft: var(--aurora-good-100);
+    --aurora-good-text: var(--aurora-good-700);
+    --aurora-warn: var(--aurora-warn-500);
+    --aurora-warn-soft: var(--aurora-warn-100);
+    --aurora-warn-text: var(--aurora-warn-700);
+    --aurora-bad: var(--aurora-bad-500);
+    --aurora-bad-soft: var(--aurora-bad-100);
+    --aurora-bad-text: var(--aurora-bad-700);
+    --aurora-info: var(--aurora-info-500);
+    --aurora-info-soft: var(--aurora-info-100);
+    --aurora-info-text: var(--aurora-info-700);
+
+    /* --------------------------------------------------------- tipografia */
+
+    /*
+     * Pilha do sistema, e é uma DECISÃO, não uma omissão.
+     *
+     * A Aurora tem um aplicativo de campo que funciona sem rede (EPIC-014).
+     * Fonte baixada por rede é fonte que falta justamente no subsolo do
+     * hospital, onde o técnico está. A indireção existe: trocar por uma face
+     * hospedada conosco é mudar esta linha, e só ela.
+     */
+    --aurora-font-sans:
+      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+      sans-serif;
+    --aurora-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+
+    /* Escala de 1.2 (terça menor): densa o bastante para tabela operacional,
+       e ainda com hierarquia legível. Passos maiores brigariam com a densidade. */
+    --aurora-text-2xs: 0.6875rem; /* 11px — só rótulo em caixa alta */
+    --aurora-text-xs: 0.75rem; /* 12px — metadado, legenda */
+    --aurora-text-sm: 0.8125rem; /* 13px — corpo de tabela */
+    --aurora-text-base: 0.875rem; /* 14px — corpo da interface */
+    --aurora-text-md: 1rem; /* 16px — corpo de leitura, campo em mobile */
+    --aurora-text-lg: 1.125rem;
+    --aurora-text-xl: 1.375rem;
+    --aurora-text-2xl: 1.75rem;
+    --aurora-text-3xl: 2.125rem;
+
+    --aurora-leading-tight: 1.25;
+    --aurora-leading-normal: 1.5;
+    --aurora-leading-relaxed: 1.65;
+
+    --aurora-weight-normal: 400;
+    --aurora-weight-medium: 500;
+    --aurora-weight-semibold: 600;
+
+    /* Rótulo em caixa alta precisa de entreletra; texto normal, não. */
+    --aurora-tracking-label: 0.06em;
+    --aurora-tracking-tight: -0.011em;
+
+    /* -------------------------------------------------------- espaçamento */
+
+    /* Base 4px. A escala é fina no começo porque interface densa vive entre
+       4 e 12; e salta depois, porque acima de 24 a diferença de 4 não se vê. */
+    --aurora-space-0: 0px;
+    --aurora-space-1: 0.25rem;
+    --aurora-space-2: 0.5rem;
+    --aurora-space-3: 0.75rem;
+    --aurora-space-4: 1rem;
+    --aurora-space-5: 1.25rem;
+    --aurora-space-6: 1.5rem;
+    --aurora-space-8: 2rem;
+    --aurora-space-10: 2.5rem;
+    --aurora-space-12: 3rem;
+    --aurora-space-16: 4rem;
+
+    /* ------------------------------------------------------------- raio */
+
+    /* Três degraus com papéis distintos: controle, cartão, folha. Um raio só
+       para tudo é o que faz toda interface gerada parecer a mesma. */
+    --aurora-radius-control: 6px;
+    --aurora-radius-card: 10px;
+    --aurora-radius-sheet: 14px;
+    --aurora-radius-pill: 999px;
+
+    /* ---------------------------------------------------------- elevação */
+
+    /*
+     * Interface densa se afoga em sombra. A separação normal é a BORDA; a
+     * sombra fica para o que realmente flutua sobre o conteúdo — menu,
+     * diálogo, painel deslizante.
+     */
+    --aurora-shadow-none: none;
+    --aurora-shadow-raised: 0 1px 2px rgb(13 18 17 / 0.06);
+    --aurora-shadow-overlay: 0 4px 6px -2px rgb(13 18 17 / 0.06), 0 12px 24px -6px rgb(13 18 17 / 0.14);
+    --aurora-shadow-sheet: 0 8px 12px -4px rgb(13 18 17 / 0.08), 0 24px 48px -12px rgb(13 18 17 / 0.2);
+
+    /* ---------------------------------------------------------- movimento */
+
+    /*
+     * Rápido de propósito. Quem usa isto oito horas por dia não quer assistir
+     * a transições; quer que a tela acompanhe. Acima de 200ms a animação deixa
+     * de informar e passa a atrasar.
+     */
+    --aurora-duration-instant: 80ms;
+    --aurora-duration-fast: 130ms;
+    --aurora-duration-normal: 190ms;
+    --aurora-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --aurora-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    /* -------------------------------------------------------------- foco */
+
+    /*
+     * Anel de foco de 2px com 2px de deslocamento, SEMPRE visível. A WCAG 2.2
+     * exige que o foco seja perceptível e não fique escondido atrás de barra
+     * fixa — é por isso que ele tem deslocamento em vez de ficar colado.
+     */
+    --aurora-focus-ring: var(--aurora-accent-500);
+    --aurora-focus-ring-width: 2px;
+    --aurora-focus-ring-offset: 2px;
+
+    /* ------------------------------------------------------------- alvos */
+
+    /*
+     * Altura mínima de alvo. 44px no toque é o mínimo da WCAG 2.2 (2.5.8) e é
+     * o que o aplicativo de campo usa: o técnico está de luva.
+     */
+    --aurora-target-min: 44px;
+    --aurora-control-height-sm: 28px;
+    --aurora-control-height-md: 34px;
+    --aurora-control-height-lg: 44px;
+
+    /* -------------------------------------------------------------- z */
+
+    --aurora-z-sticky: 10;
+    --aurora-z-dropdown: 40;
+    --aurora-z-overlay: 50;
+    --aurora-z-toast: 60;
+  }
+
+  /*
+   * TEMA ESCURO
+   *
+   * Não é a inversão da paleta clara. Fundo quase-preto esverdeado, superfícies
+   * um degrau acima dele (e não abaixo, como no claro), e o destaque sobe para
+   * um degrau mais claro — teal 600 sobre fundo escuro não tem contraste
+   * suficiente para texto.
+   */
+  :root[data-theme='dark'] {
+    --aurora-bg: var(--aurora-neutral-950);
+    --aurora-surface: var(--aurora-neutral-900);
+    --aurora-surface-raised: var(--aurora-neutral-800);
+    --aurora-surface-sunken: #0a0f0e;
+    --aurora-surface-hover: var(--aurora-neutral-800);
+    --aurora-surface-active: var(--aurora-neutral-700);
+
+    --aurora-border: #2a3634;
+    --aurora-border-strong: #3d4b49;
+    --aurora-border-subtle: #1d2726;
+
+    --aurora-text: var(--aurora-neutral-50);
+    --aurora-text-muted: var(--aurora-neutral-300);
+    --aurora-text-subtle: var(--aurora-neutral-400);
+    --aurora-text-on-accent: var(--aurora-neutral-950);
+    --aurora-text-inverse: var(--aurora-neutral-950);
+
+    --aurora-accent: var(--aurora-accent-300);
+    --aurora-accent-hover: var(--aurora-accent-200);
+    --aurora-accent-soft: rgb(12 119 111 / 0.18);
+    --aurora-accent-text: var(--aurora-accent-200);
+
+    /* As semânticas ganham versão clara para o texto e versão translúcida
+       para o fundo: o tom 100 do tema claro sobre fundo escuro cega. */
+    --aurora-good: #4ecf8e;
+    --aurora-good-soft: rgb(22 145 90 / 0.2);
+    --aurora-good-text: #7fe0af;
+    --aurora-warn: #e2b055;
+    --aurora-warn-soft: rgb(181 125 10 / 0.22);
+    --aurora-warn-text: #f0cd8b;
+    --aurora-bad: #f0817a;
+    --aurora-bad-soft: rgb(193 54 47 / 0.22);
+    --aurora-bad-text: #f5a9a4;
+    --aurora-info: #79a8ee;
+    --aurora-info-soft: rgb(47 107 196 / 0.22);
+    --aurora-info-text: #a6c6f5;
+
+    --aurora-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
+    --aurora-shadow-overlay: 0 4px 6px -2px rgb(0 0 0 / 0.4), 0 12px 24px -6px rgb(0 0 0 / 0.6);
+    --aurora-shadow-sheet: 0 8px 12px -4px rgb(0 0 0 / 0.5), 0 24px 48px -12px rgb(0 0 0 / 0.7);
+
+    --aurora-focus-ring: var(--aurora-accent-300);
+  }
+}
+
+/**
+ * A ponte com o Tailwind.
+ *
+ * `@theme inline` faz `bg-surface`, `text-muted`, `rounded-card` e companhia
+ * saírem dos MESMOS tokens acima. Sem isto, haveria duas paletas: a do CSS e a
+ * das classes utilitárias — e elas divergiriam no primeiro ajuste.
+ */
+@theme inline {
+  --color-bg: var(--aurora-bg);
+  --color-surface: var(--aurora-surface);
+  --color-surface-raised: var(--aurora-surface-raised);
+  --color-surface-sunken: var(--aurora-surface-sunken);
+  --color-surface-hover: var(--aurora-surface-hover);
+  --color-surface-active: var(--aurora-surface-active);
+
+  --color-border: var(--aurora-border);
+  --color-border-strong: var(--aurora-border-strong);
+  --color-border-subtle: var(--aurora-border-subtle);
+
+  --color-text: var(--aurora-text);
+  --color-muted: var(--aurora-text-muted);
+  --color-subtle: var(--aurora-text-subtle);
+  --color-on-accent: var(--aurora-text-on-accent);
+
+  --color-accent: var(--aurora-accent);
+  --color-accent-hover: var(--aurora-accent-hover);
+  --color-accent-soft: var(--aurora-accent-soft);
+  --color-accent-text: var(--aurora-accent-text);
+
+  --color-good: var(--aurora-good);
+  --color-good-soft: var(--aurora-good-soft);
+  --color-good-text: var(--aurora-good-text);
+  --color-warn: var(--aurora-warn);
+  --color-warn-soft: var(--aurora-warn-soft);
+  --color-warn-text: var(--aurora-warn-text);
+  --color-bad: var(--aurora-bad);
+  --color-bad-soft: var(--aurora-bad-soft);
+  --color-bad-text: var(--aurora-bad-text);
+  --color-info: var(--aurora-info);
+  --color-info-soft: var(--aurora-info-soft);
+  --color-info-text: var(--aurora-info-text);
+
+  --font-sans: var(--aurora-font-sans);
+  --font-mono: var(--aurora-font-mono);
+
+  --text-2xs: var(--aurora-text-2xs);
+  --text-xs: var(--aurora-text-xs);
+  --text-sm: var(--aurora-text-sm);
+  --text-base: var(--aurora-text-base);
+  --text-md: var(--aurora-text-md);
+  --text-lg: var(--aurora-text-lg);
+  --text-xl: var(--aurora-text-xl);
+  --text-2xl: var(--aurora-text-2xl);
+  --text-3xl: var(--aurora-text-3xl);
+
+  --radius-control: var(--aurora-radius-control);
+  --radius-card: var(--aurora-radius-card);
+  --radius-sheet: var(--aurora-radius-sheet);
+  --radius-pill: var(--aurora-radius-pill);
+
+  --shadow-raised: var(--aurora-shadow-raised);
+  --shadow-overlay: var(--aurora-shadow-overlay);
+  --shadow-sheet: var(--aurora-shadow-sheet);
+
+  /* Pontos de quebra: o portal é mobile-first, o campo vive entre 360 e 430,
+     e a web é desktop com tablet funcional (§40). */
+  --breakpoint-xs: 26.875rem; /* 430px — o maior telefone que o campo atende */
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem; /* tablet: a partir daqui a web precisa funcionar */
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Base                                                                        */
+/* -------------------------------------------------------------------------- */
+
+@layer base {
+  * {
+    border-color: var(--aurora-border);
+  }
+
+  html {
+    /* Sem isto, um clique numa âncora salta a página inteira e a pessoa perde
+       o lugar. Respeitado o pedido de menos movimento, mais abaixo. */
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--aurora-bg);
+    color: var(--aurora-text);
+    font-family: var(--aurora-font-sans);
+    font-size: var(--aurora-text-base);
+    line-height: var(--aurora-leading-normal);
+    letter-spacing: var(--aurora-tracking-tight);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * O anel de foco, uma vez, para tudo.
+   *
+   * `:focus-visible` e não `:focus`: o anel aparece para quem navega por
+   * teclado e não pisca a cada clique de mouse. Um anel removido "porque é
+   * feio" é a forma mais rápida de tornar um sistema inoperável por teclado.
+   */
+  :focus-visible {
+    outline: var(--aurora-focus-ring-width) solid var(--aurora-focus-ring);
+    outline-offset: var(--aurora-focus-ring-offset);
+    border-radius: var(--aurora-radius-control);
+  }
+
+  /* Números que se alinham em coluna. Numa tabela de OS, sem isto, os
+     identificadores dançam e a leitura vertical se perde. */
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Quem pediu menos movimento recebe menos movimento — inclusive aqui. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Utilitário: conteúdo só para leitor de tela                                 */
+/* -------------------------------------------------------------------------- */
+
+@layer utilities {
+  .aurora-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* O pulo para o conteúdo: invisível até receber foco. Primeira parada do
+     teclado em toda página, e a única forma decente de escapar do menu. */
+  .aurora-skip-link {
+    position: absolute;
+    left: var(--aurora-space-2);
+    top: calc(var(--aurora-space-2) * -12);
+    z-index: var(--aurora-z-toast);
+    padding: var(--aurora-space-2) var(--aurora-space-4);
+    background-color: var(--aurora-surface);
+    color: var(--aurora-text);
+    border: 1px solid var(--aurora-border-strong);
+    border-radius: var(--aurora-radius-control);
+    box-shadow: var(--aurora-shadow-overlay);
+    transition: top var(--aurora-duration-fast) var(--aurora-ease-out);
+  }
+  .aurora-skip-link:focus {
+    top: var(--aurora-space-2);
+  }
+}
