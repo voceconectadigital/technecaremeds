@@ -302,3 +302,55 @@ describe('encerramento', () => {
     expect(r.body.contract).toBeNull();
   });
 });
+
+describe('o que NÃO sai do servidor', () => {
+  it('valor mensal e taxas saem da consulta para quem não tem permissão financeira', async () => {
+    /*
+     * A ficha do contrato fazia `SELECT *`.
+     *
+     * A tabela guarda valor mensal, taxa de excedente por chamado e por hora,
+     * percentual de glosa e teto de glosa. Existe `contract.read_financials`
+     * justamente porque nem todo mundo deve vê-los — o coordenador precisa
+     * saber o que o contrato COBRE; o que ele custa é conversa comercial.
+     */
+    const doFinanceiro = await http.get(`/v1/contracts/${contrato}`).set(auth(EMAIL_FIN));
+    expect(doFinanceiro.status).toBe(200);
+    expect(doFinanceiro.body.contract).toHaveProperty('monthly_value');
+
+    const doTecnico = await http.get(`/v1/contracts/${contrato}`).set(auth(EMAIL_TEC));
+    if (doTecnico.status === 200) {
+      expect(doTecnico.body.contract.monthly_value).toBeNull();
+      expect(doTecnico.body.contract.overage_hour_rate).toBeNull();
+      expect(doTecnico.body.contract.penalty_percent_per_breach).toBeNull();
+      // E a cobertura CONTINUA visível: é o que ele precisa para saber se o
+      // atendimento está no escopo.
+      expect(Array.isArray(doTecnico.body.coverages)).toBe(true);
+    } else {
+      // Se o papel nem lê contrato, a recusa é 403 — e é uma resposta
+      // legítima, desde que não seja 200 com o valor dentro.
+      expect(doTecnico.status).toBe(403);
+    }
+  });
+
+  it('a lista e o detalhe satisfazem o contrato', async () => {
+    const { contractsList, contractDetail } = await import('@aurora/contracts');
+
+    const lista = await http.get('/v1/contracts').set(auth(EMAIL_FIN));
+    const conferidaLista = contractsList.response.safeParse(lista.body);
+    if (!conferidaLista.success) {
+      throw new Error(
+        'lista de contratos:\n' +
+          conferidaLista.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+
+    const detalhe = await http.get(`/v1/contracts/${contrato}`).set(auth(EMAIL_FIN));
+    const conferido = contractDetail.response.safeParse(detalhe.body);
+    if (!conferido.success) {
+      throw new Error(
+        'detalhe do contrato:\n' +
+          conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+  });
+});

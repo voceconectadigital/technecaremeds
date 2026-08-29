@@ -27,6 +27,9 @@ import { EmConstrucao } from './em-construcao';
 import { AtivosPage } from '../features/ativos/lista';
 import { AtivoPage } from '../features/ativos/ficha';
 import { EstoquePage } from '../features/estoque/lista';
+import { OrcamentosPage } from '../features/comercial/orcamentos';
+import { OrcamentoPage } from '../features/comercial/orcamento';
+import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -103,13 +106,21 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/estoque', EstoquePage),
-  rotaProtegida('/contratos', () => (
-    <EmConstrucao
-      titulo="Contratos"
-      descricao="Contratos, coberturas, medição por período e orçamentos."
-      permissao="contract.read"
-    />
-  )),
+  rotaProtegida('/contratos', ContratosPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/contratos/$id',
+    component: ContratoPage,
+    beforeLoad: exigirSessao,
+  }),
+
+  rotaProtegida('/orcamentos', OrcamentosPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/orcamentos/$id',
+    component: OrcamentoPage,
+    beforeLoad: exigirSessao,
+  }),
   rotaProtegida('/indicadores', () => (
     <EmConstrucao
       titulo="Indicadores"

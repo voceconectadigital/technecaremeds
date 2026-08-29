@@ -182,6 +182,9 @@ async function main() {
     createAssetCategory,
     createAsset,
     createWarehouse,
+    createContract,
+    addCoverage,
+    createQuote,
     createItem,
     recordMovement,
     setMinimum,
@@ -327,6 +330,32 @@ async function main() {
         unitCost: 90,
       });
       await setMinimum(s, filtro, deposito, 10);
+
+      /*
+       * COMERCIAL: um contrato cobrindo a UTI, e um orçamento em rascunho.
+       *
+       * A cobertura é por LOCAL de propósito: é ela que prova que a expressão
+       * alcança o que está dentro do local, e não só o que está exatamente
+       * nele. Uma cobertura por ativo específico passaria no teste sem provar
+       * nada sobre a expressão.
+       */
+      const contrato = await createContract(s, {
+        customerId: clienteId,
+        kind: 'full_service',
+        title: 'Manutenção integral ' + (org === E2E.orgA ? 'Alfa' : 'Beta'),
+        startsOn: '2026-01-01',
+        endsOn: '2026-12-31',
+        autoRenew: true,
+        billingModel: 'fixed_monthly',
+        monthlyValue: 12000,
+        includedCalls: 20,
+      });
+      await addCoverage(s, { contractId: contrato, kind: 'location_subtree', locationId: local });
+
+      await createQuote(s, {
+        customerId: clienteId,
+        validUntil: '2026-12-31',
+      });
     });
   }
 
@@ -338,8 +367,9 @@ async function main() {
   const [{ locais }] = await q(`SELECT count(*)::int AS locais FROM aurora.locations`);
   const [{ ativos }] = await q(`SELECT count(*)::int AS ativos FROM aurora.assets`);
   const [{ saldos }] = await q(`SELECT count(*)::int AS saldos FROM aurora.stock_balances`);
+  const [{ contratos }] = await q(`SELECT count(*)::int AS contratos FROM aurora.contracts`);
   console.log(
-    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos, ${saldos} saldos`
+    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos, ${saldos} saldos, ${contratos} contratos`
   );
 }
 

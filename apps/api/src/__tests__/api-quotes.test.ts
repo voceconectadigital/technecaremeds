@@ -154,7 +154,7 @@ describe('montagem', () => {
   it('a rota de preço não colide com a rota de detalhe', async () => {
     const r = await http.get(`/v1/quotes/${orcamento}`).set(auth(EMAIL_FIN)).expect(200);
     expect(r.body.quote.id).toBe(orcamento);
-    expect(r.body.effectiveStatus).toBe('draft');
+    expect(r.body.effective_status).toBe('draft');
   });
 
   it('a borda recebe reais e o miolo guarda centavos', async () => {
@@ -282,5 +282,31 @@ describe('recusa registrada', () => {
 
     const r = await http.get(`/v1/quotes/${q.body.id}`).set(auth(EMAIL_FIN)).expect(200);
     expect(r.body.quote.status).toBe('rejected');
+  });
+});
+
+describe('a resposta e o contrato', () => {
+  it('a lista e o detalhe satisfazem o contrato', async () => {
+    const { quotesList, quoteDetail } = await import('@aurora/contracts');
+
+    const lista = await http.get('/v1/quotes').set(auth(EMAIL_COORD));
+    const conferidaLista = quotesList.response.safeParse(lista.body);
+    if (!conferidaLista.success) {
+      throw new Error(
+        'lista de orçamentos:\n' +
+          conferidaLista.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+
+    const primeiro = lista.body.items[0];
+    if (!primeiro) return;
+    const detalhe = await http.get(`/v1/quotes/${primeiro.id}`).set(auth(EMAIL_COORD));
+    const conferido = quoteDetail.response.safeParse(detalhe.body);
+    if (!conferido.success) {
+      throw new Error(
+        'detalhe do orçamento:\n' +
+          conferido.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
   });
 });

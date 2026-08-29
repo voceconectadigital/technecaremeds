@@ -182,7 +182,11 @@ export class QuotesController {
         // A situação efetiva vem separada da gravada de propósito: a interface
         // precisa mostrar "vencido" antes de a varredura rodar, e precisa saber
         // que a linha ainda diz outra coisa.
-        effectiveStatus: efetiva,
+        // `effective_status`, e não `effectiveStatus`: todo o resto desta
+        // resposta vem do SQL em snake_case, e um único campo em camelCase no
+        // meio é a espécie de inconsistência que faz a tela errar o nome e
+        // ler `undefined` — em silêncio, porque `undefined` não é erro.
+        effective_status: efetiva,
         items: await quoteItems(s, quoteId),
         transitions: allowedQuoteTransitions(efetiva).map((t) => ({
           to: t.to,

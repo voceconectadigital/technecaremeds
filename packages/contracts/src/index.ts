@@ -31,6 +31,7 @@ export * from './operations/work-order-detail';
 export * from './operations/assets';
 export * from './operations/roles';
 export * from './operations/inventory';
+export * from './operations/commercial';
 export * from './operations/directory';
 export * from './operations/search';
 export * from './operations/service-requests';

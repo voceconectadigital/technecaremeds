@@ -173,7 +173,37 @@ export class ContractsController {
     const ctx = req.auroraContext!;
     const contractId = uuidParam(id, 'id');
     return withTenant(this.db, ctx, async (s) => {
-      const [contrato] = await s.query(`SELECT * FROM aurora.contracts WHERE id = $1`, [contractId]);
+      // COLUNAS NOMEADAS, e os valores comerciais saem por permissão.
+      //
+      // Era `SELECT *`. A tabela guarda valor mensal, taxa de excedente por
+      // chamado e por hora, percentual de glosa e teto de glosa — e existe
+      // `contract.read_financials` justamente porque nem todo mundo deve
+      // vê-los. O coordenador precisa saber O QUE o contrato cobre; o que ele
+      // custa é conversa comercial.
+      //
+      // O filtro é na CONSULTA. Escondido na tela, o valor do contrato já
+      // teria trafegado até o navegador de quem não pode vê-lo.
+      const podeVerValores = ctx.permissions.has('contract.read_financials');
+      const [contrato] = await s.query(
+        `SELECT id, number, title, customer_id, kind::text AS kind, status::text AS status,
+                starts_on::text AS starts_on, ends_on::text AS ends_on,
+                auto_renew, renewal_notice_days, adjustment_index,
+                sla_policy_id, price_list_id,
+                billing_model::text AS billing_model,
+                included_calls, included_hours::text AS included_hours,
+                sla_target_percent::text AS sla_target_percent,
+                plan_target_percent::text AS plan_target_percent,
+                notes, archived_at, created_at, updated_at,
+                CASE WHEN $2::boolean THEN monthly_value::text END AS monthly_value,
+                CASE WHEN $2::boolean THEN currency END AS currency,
+                CASE WHEN $2::boolean THEN overage_call_rate::text END AS overage_call_rate,
+                CASE WHEN $2::boolean THEN overage_hour_rate::text END AS overage_hour_rate,
+                CASE WHEN $2::boolean THEN penalty_percent_per_breach::text END
+                  AS penalty_percent_per_breach,
+                CASE WHEN $2::boolean THEN penalty_cap_percent::text END AS penalty_cap_percent
+           FROM aurora.contracts WHERE id = $1`,
+        [contractId, podeVerValores]
+      );
       if (!contrato) throw new ValidationError('contrato não encontrado', { field: 'id' });
       const coberturas = await s.query(
         `SELECT id, kind, asset_id, location_id, asset_category_id, specificity

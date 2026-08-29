@@ -22,6 +22,8 @@ const TELAS = [
   '/ordens?vista=lista',
   '/ativos',
   '/estoque',
+  '/contratos',
+  '/orcamentos',
   '/agenda',
   '/configuracoes',
 ];

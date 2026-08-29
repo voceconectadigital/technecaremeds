@@ -93,6 +93,8 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
   },
   {
     to: '/contratos',
+    // O rótulo nomeia o item principal, e a tela traz o alternador para o
+    // vizinho. Um nono item no menu custaria mais do que ganha.
     label: 'Contratos',
     icon: FileText,
     permissions: ['contract.read', 'quote.read'],
