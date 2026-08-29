@@ -12,30 +12,118 @@
  * para um colega de outra empresa e ele ver meia tela carregar antes do 403.
  */
 import type { ReactElement } from 'react';
+import { lazy, Suspense } from 'react';
 import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
 import { EntrarPage } from './entrar';
 import { OrganizacoesPage } from './organizacoes';
 import { HojePage } from './hoje';
-import { SolicitacoesPage } from '../features/solicitacoes/lista';
-import { SolicitacaoPage } from '../features/solicitacoes/ficha';
-import { NovaSolicitacaoPage } from '../features/solicitacoes/nova';
-import { OrdensPage } from '../features/ordens/lista';
-import { OrdemPage } from '../features/ordens/ficha';
-import { AgendaPage } from '../features/agenda/pagina';
-import { MembrosPage } from '../features/configuracoes/membros';
 import { EmConstrucao } from './em-construcao';
-import { AtivosPage } from '../features/ativos/lista';
-import { AtivoPage } from '../features/ativos/ficha';
-import { EstoquePage } from '../features/estoque/lista';
-import { OrcamentosPage } from '../features/comercial/orcamentos';
-import { OrcamentoPage } from '../features/comercial/orcamento';
-import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
-import { PlanosPage, PlanoPage } from '../features/planos/lista';
-import { IndicadoresPage } from '../features/indicadores/painel';
-import { NotificacoesPage } from '../features/notificacoes/caixa';
-import { DocumentosPage } from '../features/documentos/lista';
-import { AutomacoesPage } from '../features/automacoes/lista';
 import { lerSessaoGuardada } from '../lib/session-guard';
+
+
+/* -------------------------------------------------------------------------- */
+
+/*
+ * CADA TELA VIRA UM PEDAÇO PRÓPRIO.
+ *
+ * O pacote era um arquivo só de 713 kB: abrir a tela de login baixava o painel
+ * de indicadores, o quadro Kanban, a árvore do parque e as dezesseis telas que
+ * a pessoa talvez nunca abra. Numa conexão de campo — que é onde este produto
+ * vai rodar — isso é a diferença entre a tela aparecer e a pessoa desistir.
+ *
+ * TRÊS TELAS FICAM ANSIOSAS: entrar, escolher organização, e o Hoje. São as
+ * três que TODA sessão abre, em sequência, e adiá-las trocaria um download
+ * grande por três esperas encadeadas — pior, e não melhor.
+ *
+ * O ESQUELETO DA ESPERA NÃO É UM GIRADOR NO MEIO DA TELA. É a mesma moldura
+ * que a tela terá: cabeçalho e um bloco de conteúdo. Um girador centralizado
+ * faz o layout saltar quando o conteúdo chega, e o salto é o que faz a pessoa
+ * clicar no lugar errado.
+ */
+function preguicosa(carregar: () => Promise<{ default: () => ReactElement }>) {
+  const Tela = lazy(carregar);
+  return function TelaPreguicosa() {
+    return (
+      <Suspense fallback={<EsqueletoDeTela />}>
+        <Tela />
+      </Suspense>
+    );
+  };
+}
+
+function EsqueletoDeTela() {
+  return (
+    <div aria-busy="true" aria-live="polite" className="flex flex-col gap-4 p-4 md:p-6">
+      {/* `aria-busy` é o que os testes de acessibilidade e de largura esperam
+          para saber que a tela ainda não terminou — e é o que um leitor de
+          tela anuncia como "ocupado" em vez de ler uma página vazia. */}
+      <span className="sr-only">Carregando a tela</span>
+      <div className="h-8 w-64 animate-pulse rounded-control bg-surface-sunken" />
+      <div className="h-64 w-full animate-pulse rounded-card bg-surface-sunken" />
+    </div>
+  );
+}
+
+const SolicitacoesPage = preguicosa(() =>
+  import('../features/solicitacoes/lista').then((m) => ({ default: m.SolicitacoesPage }))
+);
+const SolicitacaoPage = preguicosa(() =>
+  import('../features/solicitacoes/ficha').then((m) => ({ default: m.SolicitacaoPage }))
+);
+const NovaSolicitacaoPage = preguicosa(() =>
+  import('../features/solicitacoes/nova').then((m) => ({ default: m.NovaSolicitacaoPage }))
+);
+const OrdensPage = preguicosa(() =>
+  import('../features/ordens/lista').then((m) => ({ default: m.OrdensPage }))
+);
+const OrdemPage = preguicosa(() =>
+  import('../features/ordens/ficha').then((m) => ({ default: m.OrdemPage }))
+);
+const AgendaPage = preguicosa(() =>
+  import('../features/agenda/pagina').then((m) => ({ default: m.AgendaPage }))
+);
+const MembrosPage = preguicosa(() =>
+  import('../features/configuracoes/membros').then((m) => ({ default: m.MembrosPage }))
+);
+const AtivosPage = preguicosa(() =>
+  import('../features/ativos/lista').then((m) => ({ default: m.AtivosPage }))
+);
+const AtivoPage = preguicosa(() =>
+  import('../features/ativos/ficha').then((m) => ({ default: m.AtivoPage }))
+);
+const EstoquePage = preguicosa(() =>
+  import('../features/estoque/lista').then((m) => ({ default: m.EstoquePage }))
+);
+const OrcamentosPage = preguicosa(() =>
+  import('../features/comercial/orcamentos').then((m) => ({ default: m.OrcamentosPage }))
+);
+const OrcamentoPage = preguicosa(() =>
+  import('../features/comercial/orcamento').then((m) => ({ default: m.OrcamentoPage }))
+);
+const ContratosPage = preguicosa(() =>
+  import('../features/comercial/contratos').then((m) => ({ default: m.ContratosPage }))
+);
+const ContratoPage = preguicosa(() =>
+  import('../features/comercial/contratos').then((m) => ({ default: m.ContratoPage }))
+);
+const PlanosPage = preguicosa(() =>
+  import('../features/planos/lista').then((m) => ({ default: m.PlanosPage }))
+);
+const PlanoPage = preguicosa(() =>
+  import('../features/planos/lista').then((m) => ({ default: m.PlanoPage }))
+);
+const IndicadoresPage = preguicosa(() =>
+  import('../features/indicadores/painel').then((m) => ({ default: m.IndicadoresPage }))
+);
+const NotificacoesPage = preguicosa(() =>
+  import('../features/notificacoes/caixa').then((m) => ({ default: m.NotificacoesPage }))
+);
+const DocumentosPage = preguicosa(() =>
+  import('../features/documentos/lista').then((m) => ({ default: m.DocumentosPage }))
+);
+const AutomacoesPage = preguicosa(() =>
+  import('../features/automacoes/lista').then((m) => ({ default: m.AutomacoesPage }))
+);
 
 const raiz = createRootRoute({ component: Outlet });
 
