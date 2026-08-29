@@ -22,6 +22,8 @@ import {
   type Database,
 } from '@aurora/db';
 import {
+  STATUS_CATEGORIES,
+  type StatusCategory,
   isUuid,
   ValidationError,
   NotFoundError,
@@ -108,6 +110,26 @@ export class WorkOrdersController {
     return { columns };
   }
 
+  /**
+   * A lista de ordens de serviço.
+   *
+   * O FILTRO AUSENTE NÃO VIRA `IS NULL OR`.
+   *
+   * A primeira versão desta rota usava o padrão `($1 IS NULL OR coluna = $1)`
+   * para todos os filtros. É cômodo — uma consulta só serve a todas as
+   * combinações — e é caro de um jeito que só aparece com volume: o planejador
+   * não consegue estimar a seletividade através do `OR`, erra a contagem por
+   * duas ordens de grandeza e escolhe um plano que varre o índice inteiro
+   * filtrando linha a linha.
+   *
+   * A medição com 100 mil OS (`tools/bench/run.mjs`) mostrou p50 de 55 ms e
+   * p95 de 1.086 ms nessa forma — a mediana escondia uma cauda de mais de um
+   * segundo, e a cauda é o que a pessoa sente.
+   *
+   * Aqui as condições são montadas a partir de uma lista FECHADA de fragmentos
+   * escritos no código. Só os VALORES são parametrizados; nada vindo do
+   * cliente entra no texto da consulta.
+   */
   @Get()
   @RequirePermissions('work_order.read')
   async list(
@@ -119,6 +141,34 @@ export class WorkOrdersController {
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const max = Math.min(Number.parseInt(limit ?? '100', 10) || 100, 500);
+
+    const condicoes: string[] = [];
+    const params: unknown[] = [];
+
+    if (customer !== undefined) {
+      params.push(uuidParam(customer, 'customer'));
+      condicoes.push(`w.customer_id = $${params.length}`);
+    }
+    if (category !== undefined) {
+      // Comparação no PRÓPRIO tipo, e não `status_category::text = $n`: a
+      // conversão para texto torna o índice inútil e cega as estatísticas.
+      if (!(STATUS_CATEGORIES as readonly string[]).includes(category)) {
+        throw new ValidationError('category inválida', {
+          field: 'category',
+          allowed: STATUS_CATEGORIES,
+        });
+      }
+      params.push(category as StatusCategory);
+      condicoes.push(`w.status_category = $${params.length}::aurora.status_category`);
+    }
+    if (assignee !== undefined) {
+      params.push(uuidParam(assignee, 'assignee'));
+      condicoes.push(`w.assignee_membership_id = $${params.length}`);
+    }
+
+    params.push(max);
+    const limite = `$${params.length}`;
+
     const items = await withTenant(this.db, ctx, (s) =>
       s.query(
         `SELECT w.id, w.number, w.title, w.status_category::text AS category, w.priority::text AS priority,
@@ -129,17 +179,10 @@ export class WorkOrdersController {
            FROM aurora.work_orders w
            JOIN aurora.work_order_statuses st ON st.id = w.status_id
            LEFT JOIN aurora.wait_reasons wr   ON wr.id = w.wait_reason_id
-          WHERE ($1::uuid IS NULL OR w.customer_id = $1)
-            AND ($2::text IS NULL OR w.status_category::text = $2)
-            AND ($3::uuid IS NULL OR w.assignee_membership_id = $3)
+          ${condicoes.length > 0 ? 'WHERE ' + condicoes.join(' AND ') : ''}
           ORDER BY w.created_at DESC
-          LIMIT $4`,
-        [
-          customer === undefined ? null : uuidParam(customer, 'customer'),
-          category ?? null,
-          assignee === undefined ? null : uuidParam(assignee, 'assignee'),
-          max,
-        ]
+          LIMIT ${limite}`,
+        params
       )
     );
     return { items };

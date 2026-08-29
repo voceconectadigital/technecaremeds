@@ -10,10 +10,10 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F7 — plataforma transversal**                                                               |
+| Fase                             | **F9 — interface**                                                                            |
 | Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria) |
 | Épico seguinte                   | EPIC-009 (interface de OS), EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal)   |
-| Testes                           | **1319** (66 arquivos) em PGlite + **29** só contra PostgreSQL real, todos verdes |
+| Testes                           | **1364** (68 arquivos) + **29** só contra PostgreSQL real, todos verdes |
 | Migrations                       | 42 (`0000` a `0041`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
@@ -664,6 +664,7 @@ O que faltava era o que este épico entrega: **como ler**. Uma trilha que ningu�
 | 46  | **Escrita de notificação guardada por permissão de LEITURA**               | Conferência automática de contratos: "escrita guardada por permissão de leitura"                              | `POST /notifications/outbox/:id/sent` e `/failed` exigiam `audit.read` — chave que o papel Auditor tem e sobre o qual a §21 diz "somente leitura em tudo. Nenhuma escrita". Um auditor podia marcar como enviada uma notificação que nunca saiu, e um "enviado" falso some da fila sem deixar rastro. Passou a exigir `notification.deliver`, que fica fora de todo papel de fábrica exceto Proprietário e Administrador |
 | 47  | **Gravar a medição do contrato exigia só ver valores**                     | Mesma conferência                                                                                             | `POST /contracts/:id/periods/:period` GRAVA a medição e exigia apenas `contract.read_financials`. O papel Financeiro, descrito como leitura de valores, escrevia a medição do mês. Passou a exigir também `contract.update` |
 | 48  | **O contrato do convite perdia as regras de escopo pelo caminho**          | Teste do próprio contrato                                                                                     | `InviteInput` espalhava `...MembershipScopeInput.shape` para reaproveitar os campos de escopo. Espalhar a FORMA de um esquema refinado copia os campos e deixa as REGRAS para trás, em silêncio: o convite passou a aceitar escopo "listed" com lista vazia enquanto o ajuste de escopo recusava. As duas regras viraram função aplicável aos dois esquemas |
+| 49  | **A lista de OS usava o padrão "pega-tudo" e cegava o planejador**         | Medição com 100 mil OS                                                                                        | `WHERE ($1 IS NULL OR coluna = $1)` serve a todas as combinações de filtro com uma consulta só, e é caro de um jeito que só aparece com volume: o planejador não estima a seletividade através do `OR`, erra a contagem por duas ordens de grandeza e varre o índice filtrando linha a linha. Pior, `status_category::text = $2` converte a coluna para texto e torna o índice inútil. As condições passaram a ser montadas a partir de uma lista FECHADA de fragmentos escritos no código, com comparação no próprio tipo do enumerado — 15% mais rápido no p95, medido lado a lado com a forma antiga na mesma sessão |
 
 ---
 
@@ -677,6 +678,117 @@ O que faltava era o que este épico entrega: **como ler**. Uma trilha que ningu�
 - **P18 · dois eventos de contrato**: o §17 pede alerta de vencimento e trata encerramento como fato de negócio, mas o catálogo declarava só `contract.activated`, `contract.expiring` e `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu" seriam o mesmo evento; sem `contract.terminated`, o encerramento por decisão humana só existiria na trilha de auditoria, invisível a qualquer automação. A SPEC foi corrigida pelo mesmo pipeline reproduzível dos demais patches.
 - **P19 · ausências pelo nome certo**: o dicionário de dados descrevia `kind(absence|training|meeting|other)` e vínculo com usuário ou equipe; o que existe desde a 0008 é `vacation|leave|training|other` preso ao vínculo. A SPEC foi corrigida para descrever o esquema real, com a regra de bloqueio dita pelos tipos que existem.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
+
+---
+
+## Interface
+
+Três pacotes novos, na ordem em que um depende do outro:
+
+**`packages/contracts`** — a fonte compartilhada. Um campo é decidido uma vez,
+em Zod, e três coisas passam a concordar por construção: a validação do
+controller, o OpenAPI e o cliente tipado. O frontend NÃO redeclara DTO nenhum.
+
+**`packages/ui`** — o design system, próprio e tirado do assunto: um
+instrumento de trabalho para quem mantém equipamento crítico funcionando.
+Neutros com viés frio esverdeado (vidro de instrumento), destaque em teal
+profundo em vez do índigo de todo SaaS, semânticas separadas do destaque. A
+leitura completa está em `packages/ui/src/styles/tokens.css`.
+
+**`apps/web`** — o esqueleto e o primeiro fluxo vertical.
+
+### O fluxo que já funciona ponta a ponta
+
+SOLICITAÇÃO → TRIAGEM → CRIAÇÃO DE OS → QUADRO → TRANSIÇÃO → AGENDA, contra a
+API de verdade. Não é painel ornamental: é o caminho que prova que backend,
+contratos, RBAC, máquina de estados e agenda funcionam JUNTOS.
+
+### As quatro decisões que mais importam nessas telas
+
+- **arrastar no Kanban nunca muda o estado só na tela.** Arrasta → pede →
+  espera → move. Recusado, o cartão volta com a explicação; faltando campo, o
+  aviso diz QUAL. Mover e desfazer depois parece mais rápido e mente: a pessoa
+  vê a OS em "concluída", vira para o lado, e quando olha ela voltou.
+- **a agenda confere antes de salvar**, enquanto a pessoa escolhe. Ausência
+  BLOQUEIA — não existe "marcar assim mesmo" para férias. Sobrecarga AVISA, e a
+  carga do responsável aparece junto.
+- **as ações possíveis vêm do servidor**, com os campos que exigem. A tela não
+  deduz o grafo de estados; deduzir criaria um segundo grafo, e os dois
+  divergiriam na primeira mudança.
+- **filtro mora na URL.** Filtro escondido em modal é filtro que a pessoa
+  esquece que aplicou e depois jura que o sistema perdeu registros.
+
+### O que a interface AINDA NÃO tem, dito por extenso
+
+- **telas de ativos, estoque, contratos, indicadores, notificações e perfil.**
+  A API atende todas; o que falta é a tela. Cada uma responde com uma página que
+  DIZ isso, em vez de sumir do menu — um menu que muda de tamanho a cada semana
+  faz a pessoa perder a referência de onde as coisas ficam.
+- **`apps/portal` e `apps/field`** não existem ainda.
+- **teste de ponta a ponta com navegador** (Playwright) não existe. O que há é
+  teste de componente e de esqueleto em jsdom, e teste de HTTP no backend.
+- **auditoria de acessibilidade com ferramenta** não foi rodada. As regras da
+  WCAG 2.2 estão implementadas e testadas uma a uma (foco visível, alvo de
+  44px, estado nunca só por cor, erro que não evapora, foco que volta), mas
+  isso não substitui uma varredura.
+
+---
+
+## Desempenho, medido
+
+`tools/bench/seed.mjs` gera **100 mil ordens de serviço** em duas organizações
+(85 mil e 15 mil), com 4 mil ativos, 768 locais em árvore de três níveis e
+distribuição TORTA — 20% dos ativos concentram a maior parte das OS, porque
+dados uniformes fazem qualquer índice parecer bom. `tools/bench/run.mjs` mede
+sob `aurora_app`, com contexto de tenant, como a API roda.
+
+**Resultado (PostgreSQL 16.14, contêiner local, 30 repetições, 5 de
+aquecimento descartadas):**
+
+| Cenário | p50 | p95 | meta |
+| --- | ---: | ---: | ---: |
+| lista de OS, filtrada por situação (filtro montado) | 42,7 ms | 114,5 ms | 400 ms |
+| lista de OS, filtrada por situação (catch-all, forma antiga) | 58,4 ms | 131,9 ms | 400 ms |
+| lista de OS, filtrada por cliente e situação | 6,7 ms | 9,0 ms | 400 ms |
+| lista de OS, página 50 (rolagem profunda, OFFSET 5000) | 59,8 ms | 146,5 ms | 400 ms |
+| busca por patrimônio exato | 1,2 ms | 1,7 ms | 300 ms |
+| busca textual por título | 67,0 ms | 103,9 ms | 400 ms |
+| quadro por estado, com quebra de motivo | 41,8 ms | 94,6 ms | 400 ms |
+| agenda da semana | 0,6 ms | 0,9 ms | 400 ms |
+| ficha de OS com histórico | 1,1 ms | 1,4 ms | 200 ms |
+| indicador: OS abertas por mês (12 meses) | 9,5 ms | 10,4 ms | 1000 ms |
+
+**A meta da §41 — lista filtrada em menos de 400 ms com 100 mil OS — é
+cumprida**, com folga de três vezes no p95.
+
+### O que a medição ensinou, e que eu quase reportei errado
+
+A PRIMEIRA execução, imediatamente após a carga em massa, deu p95 de **1.086
+ms** na lista filtrada e **665 ms** na rolagem profunda — as duas acima da
+meta. Corrigi a consulta e o número caiu para 186 ms, e a conclusão fácil era
+"a correção resolveu".
+
+Não foi. Medindo as DUAS formas lado a lado, na mesma sessão e com o mesmo
+aquecimento, a diferença entre elas é de **15% no p95** — real, consistente, e
+muito menor que 10×. O que explicava o 1.086 ms era **cache frio logo após a
+carga**, não a forma da consulta.
+
+A correção continua certa: o plano é melhor, as estimativas do planejador
+deixam de errar por duas ordens de grandeza, e o padrão pega-tudo é o mesmo
+que produziu o defeito nº 40. Mas atribuir a ela uma melhora de dez vezes
+seria mentira — e é o tipo de mentira que ninguém confere, porque o número
+final está bonito.
+
+### Limites desta medição
+
+- **contêiner local**, não infraestrutura de produção. Serve para comparar
+  decisões e pegar regressão; não prevê a latência de um servidor gerenciado
+  com disco de rede.
+- **mede o BANCO**, não a rota inteira. Falta o custo de HTTP, serialização e
+  resolução de contexto — que a suíte de API cobre em correção, e não em
+  tempo.
+- **um cliente por vez.** Não há medição sob concorrência de dezenas de
+  sessões, que é onde o pool e os bloqueios aparecem.
 
 ---
 

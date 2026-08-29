@@ -24,7 +24,9 @@
     "db:seed": "node tools/db/run.mjs seed",
     "db:status": "node tools/db/run.mjs status",
     "openapi": "node tools/openapi/generate.mjs",
-    "openapi:check": "node tools/openapi/generate.mjs --check"
+    "openapi:check": "node tools/openapi/generate.mjs --check",
+    "bench:seed": "node tools/bench/seed.mjs",
+    "bench": "node tools/bench/run.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
