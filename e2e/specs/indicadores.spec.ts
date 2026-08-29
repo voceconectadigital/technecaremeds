@@ -15,9 +15,14 @@ test.describe('EPIC-021 · indicadores', () => {
     // Os três agrupamentos existem, e separam volume de tempo de prevenção:
     // somar "abertas" com "MTTR" não significa nada, e a separação é o que
     // impede a leitura errada.
-    await expect(page.getByRole('heading', { name: 'Volume' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: 'Tempo' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Prevenção' })).toBeVisible();
+    // `exact`: "Tempo" também é começo de "Tempo de primeira resposta" e de
+    // "MTTR — tempo médio de reparo", e o Playwright recusa localizador
+    // ambíguo — corretamente.
+    for (const grupo of ['Volume', 'Tempo', 'Prevenção']) {
+      await expect(page.getByRole('heading', { name: grupo, exact: true })).toBeVisible({
+        timeout: 15_000,
+      });
+    }
 
     await page.getByRole('button', { name: /Como .* é calculado/ }).first().click();
 
@@ -84,7 +89,9 @@ test.describe('EPIC-021 · a resposta e o contrato', () => {
     await page.goto('/indicadores');
 
     // Espera os nove terminarem de carregar antes de julgar.
-    await expect(page.getByRole('heading', { name: 'Prevenção' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'Prevenção', exact: true })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
 
     await expect(page.getByText('não pôde ser calculado agora')).toHaveCount(0);

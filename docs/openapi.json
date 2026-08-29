@@ -13706,21 +13706,74 @@
     },
     "/v1/notifications/preferences": {
       "post": {
-        "operationId": "NotificationsController.preference",
-        "summary": "(sem contrato) NotificationsController.preference",
+        "operationId": "notifications.preference",
+        "summary": "Liga ou desliga um tipo num canal",
+        "description": "A preferência é por (tipo, canal): querer o SLA por push e o resumo semanal por e-mail é o caso comum, e uma chave por canal só obrigaria a escolher entre tudo e nada.",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "typeKey": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "in_app",
+                      "email",
+                      "push",
+                      "whatsapp"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "digest": {
+                    "type": "string",
+                    "enum": [
+                      "immediate",
+                      "daily",
+                      "weekly"
+                    ]
+                  }
+                },
+                "required": [
+                  "typeKey",
+                  "channel",
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "saved"
+                  ]
+                }
               }
             }
           },
@@ -13770,21 +13823,82 @@
     },
     "/v1/notifications/quiet-hours": {
       "post": {
-        "operationId": "NotificationsController.quietHours",
-        "summary": "(sem contrato) NotificationsController.quietHours",
+        "operationId": "notifications.quietHours",
+        "summary": "Define o horário de silêncio de quem está pedindo",
+        "description": "Em MINUTOS desde a meia-noite, e não em texto de hora: 22:30 é 1350, e a janela que atravessa a meia-noite (1350 → 360) é representável sem caso especial.",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "startMinute": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1439
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "endMinute": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1439
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fullDays": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 6
+                    }
+                  }
+                },
+                "required": [
+                  "startMinute",
+                  "endMinute"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "saved": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "saved"
+                  ]
+                }
               }
             }
           },
@@ -13834,21 +13948,33 @@
     },
     "/v1/notifications/read-all": {
       "post": {
-        "operationId": "NotificationsController.readAll",
-        "summary": "(sem contrato) NotificationsController.readAll",
+        "operationId": "notifications.readAll",
+        "summary": "Marca tudo como lido",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "marked": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "marked"
+                  ]
+                }
               }
             }
           },
@@ -13898,21 +14024,59 @@
     },
     "/v1/notifications/read": {
       "post": {
-        "operationId": "NotificationsController.read",
-        "summary": "(sem contrato) NotificationsController.read",
+        "operationId": "notifications.read",
+        "summary": "Marca avisos como lidos",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "ids": {
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  }
+                },
+                "required": [
+                  "ids"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "marked": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "marked"
+                  ]
+                }
               }
             }
           },
@@ -13962,21 +14126,67 @@
     },
     "/v1/notifications/types": {
       "get": {
-        "operationId": "NotificationsController.types",
-        "summary": "(sem contrato) NotificationsController.types",
+        "operationId": "notifications.types",
+        "summary": "O catálogo de tipos, para a tela de preferências",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
         "responses": {
           "200": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "channels": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "in_app",
+                                "email",
+                                "push",
+                                "whatsapp"
+                              ]
+                            }
+                          },
+                          "phase": {
+                            "type": "string"
+                          },
+                          "bypassesQuietHours": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "channels",
+                          "phase",
+                          "bypassesQuietHours"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
               }
             }
           },
@@ -14026,21 +14236,147 @@
     },
     "/v1/notifications": {
       "get": {
-        "operationId": "NotificationsController.list",
-        "summary": "(sem contrato) NotificationsController.list",
+        "operationId": "notifications.list",
+        "summary": "A caixa de quem está perguntando",
+        "description": "A contagem de não lidas vem JUNTO: o sino da interface precisa dela em toda carga, e uma segunda requisição só para exibir um número é a que sempre atrasa.",
         "tags": [
           "Notifications"
         ],
         "x-aurora-public": true,
         "x-aurora-source": "apps/api/src/notifications/notifications.controller.ts",
-        "x-aurora-contract": "ausente",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "unread",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 200
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "type_key": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "link": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "aggregate_type": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "aggregate_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "read_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type_key",
+                          "title",
+                          "body",
+                          "link",
+                          "aggregate_type",
+                          "aggregate_id",
+                          "created_at",
+                          "read_at"
+                        ]
+                      }
+                    },
+                    "unread": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "unread"
+                  ]
+                }
               }
             }
           },

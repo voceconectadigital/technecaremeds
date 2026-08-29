@@ -32,6 +32,7 @@ import { OrcamentoPage } from '../features/comercial/orcamento';
 import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
 import { PlanosPage, PlanoPage } from '../features/planos/lista';
 import { IndicadoresPage } from '../features/indicadores/painel';
+import { NotificacoesPage } from '../features/notificacoes/caixa';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -132,9 +133,7 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/indicadores', IndicadoresPage),
-  rotaProtegida('/notificacoes', () => (
-    <EmConstrucao titulo="Notificações" descricao="Caixa de avisos e preferências por canal." />
-  )),
+  rotaProtegida('/notificacoes', NotificacoesPage),
   rotaProtegida('/perfil', () => (
     <EmConstrucao titulo="Meu perfil" descricao="Dados pessoais, fuso e preferências de aviso." />
   )),

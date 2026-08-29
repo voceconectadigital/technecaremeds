@@ -314,3 +314,54 @@ describe('fila de saída', () => {
       .expect(201);
   });
 });
+
+describe('a resposta e o contrato', () => {
+  it('a caixa e o catálogo de tipos satisfazem o contrato', async () => {
+    const { notificationsInbox, notificationTypes } = await import('@aurora/contracts');
+
+    const caixa = await http.get('/v1/notifications').set(auth(EMAIL_GESTOR));
+    const conferidaCaixa = notificationsInbox.response.safeParse(caixa.body);
+    if (!conferidaCaixa.success) {
+      throw new Error(
+        'caixa:\n' +
+          conferidaCaixa.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+
+    const tipos = await http.get('/v1/notifications/types').set(auth(EMAIL_GESTOR));
+    const conferidos = notificationTypes.response.safeParse(tipos.body);
+    if (!conferidos.success) {
+      throw new Error(
+        'tipos:\n' +
+          conferidos.error.issues.map((i) => `  · ${i.path.join('.')}: ${i.message}`).join('\n')
+      );
+    }
+  });
+
+  it('todo tipo declara os canais em que ele existe', async () => {
+    // A tela de preferências só oferece o canal que o TIPO suporta: oferecer
+    // "WhatsApp" num aviso que não tem forma de WhatsApp é prometer o que não
+    // vai acontecer.
+    const r = await http.get('/v1/notifications/types').set(auth(EMAIL_GESTOR));
+    for (const t of r.body.items) {
+      expect(Array.isArray(t.channels), t.key).toBe(true);
+      expect(t.channels.length, t.key).toBeGreaterThan(0);
+    }
+  });
+
+  it('há tipos que ATRAVESSAM o horário de silêncio, e a marca é por tipo', async () => {
+    /*
+     * Silêncio absoluto seria pior do que silêncio nenhum: a equipe desliga o
+     * silêncio para não perder o que importa, e aí nada é silenciado.
+     *
+     * Um SLA estourando às 3h num hospital precisa acordar alguém; "orçamento
+     * visto pelo cliente" não. A distinção é por tipo, e não numa chave
+     * global.
+     */
+    const r = await http.get('/v1/notifications/types').set(auth(EMAIL_GESTOR));
+    const atravessam = r.body.items.filter((t: { bypassesQuietHours: boolean }) => t.bypassesQuietHours);
+    const nao = r.body.items.filter((t: { bypassesQuietHours: boolean }) => !t.bypassesQuietHours);
+    expect(atravessam.length).toBeGreaterThan(0);
+    expect(nao.length).toBeGreaterThan(0);
+  });
+});
