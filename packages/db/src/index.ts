@@ -26,3 +26,4 @@ export * from './search';
 export * from './audit';
 export * from './memberships';
 export * from './work-order-detail';
+export * from './roles';

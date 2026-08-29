@@ -28,10 +28,12 @@ import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { Can, usePermissions } from '../../lib/permissions';
+import { GavetaDeAcesso } from './acesso';
 
 export function MembrosPage() {
   const [convidando, setConvidando] = useState(false);
   const [suspendendo, setSuspendendo] = useState<Member | null>(null);
+  const [vendoAcesso, setVendoAcesso] = useState<Member | null>(null);
   const { can } = usePermissions();
 
   const { data, isLoading, isError, error } = useApiQuery(membersList) as {
@@ -130,6 +132,14 @@ export function MembrosPage() {
                     }
                     items={[
                       {
+                        // A primeira ação é VER, e não mudar: a pergunta que
+                        // traz alguém a este menu é "por que essa pessoa não
+                        // consegue?", e responder antes de mexer é o que evita
+                        // o papel a mais concedido "para destravar".
+                        label: 'Ver acesso e permissões',
+                        onSelect: () => setVendoAcesso(m),
+                      },
+                      {
                         label: 'Suspender acesso',
                         destructive: true,
                         onSelect: () => setSuspendendo(m),
@@ -146,6 +156,9 @@ export function MembrosPage() {
         )}
       </Card>
 
+      {vendoAcesso && (
+        <GavetaDeAcesso membro={vendoAcesso} onFechar={() => setVendoAcesso(null)} />
+      )}
       <DialogoConvite open={convidando} onOpenChange={setConvidando} />
       {suspendendo && <DialogoSuspensao membro={suspendendo} onFechar={() => setSuspendendo(null)} />}
     </AppShell>
