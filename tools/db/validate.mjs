@@ -15,6 +15,10 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
+// O migrador é TypeScript e é a fonte dos checksums esperados: sem registrar o
+// carregador, este script compara o banco com nada.
+require('tsx/cjs');
+
 const url = process.env.DATABASE_URL;
 if (!url) {
   console.error('DATABASE_URL não definido.');

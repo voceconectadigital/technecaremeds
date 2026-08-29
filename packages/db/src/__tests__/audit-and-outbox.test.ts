@@ -53,13 +53,18 @@ afterAll(async () => {
 
 describe('trilha de auditoria (§22)', () => {
   it('registra criação com ator, IP, agente, request_id e origem', async () => {
-    await withTenant(t.db, ctx, (s) =>
-      s.query(
+    await withTenant(t.db, ctx, async (s) => {
+      await s.query(
         `INSERT INTO aurora.memberships (id, organization_id, user_id, status, job_title)
          VALUES ($1,$2,$3,'active','Técnico')`,
         [MEM2, ORG, USER2]
-      )
-    );
+      );
+      // Escopo junto: desde a 0039 o vínculo cego não sobrevive ao COMMIT.
+      await s.query(
+        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1,$2)`,
+        [MEM2, ORG]
+      );
+    });
 
     const rows = await t.raw(
       `SELECT actor_user_id, actor_kind, entity_type, action, client_ip, user_agent, request_id, source, entity_label

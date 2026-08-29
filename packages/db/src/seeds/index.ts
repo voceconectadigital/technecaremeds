@@ -134,11 +134,16 @@ export async function seed(adminDb: Database): Promise<SeedResult> {
     }
 
     // -- escopos --------------------------------------------------------------
+    // TODO vínculo criado acima aparece aqui. A consultora ficava de fora — os
+    // dois vínculos dela nasciam cegos, e a persona que existe justamente para
+    // exercitar o seletor de organização entrava numa tela vazia nas duas. Quem
+    // apontou foi o gatilho da 0039; até então, ninguém.
+    //
     // O técnico só enxerga o que está atribuído a ele ou à sua equipe.
     await c.query(
       `INSERT INTO aurora.membership_scopes (membership_id, organization_id, assignment_scope)
-       VALUES ($1, $6, 'all'), ($2, $6, 'all'), ($3, $6, 'own'), ($4, $6, 'all'),
-              ($5, $7, 'all')
+       VALUES ($1, $8, 'all'), ($2, $8, 'all'), ($3, $8, 'own'), ($4, $8, 'all'),
+              ($5, $9, 'all'), ($6, $8, 'all'), ($7, $9, 'all')
        ON CONFLICT (membership_id) DO NOTHING`,
       [
         SEED_IDS.memAdmin,
@@ -146,6 +151,8 @@ export async function seed(adminDb: Database): Promise<SeedResult> {
         SEED_IDS.memTecnico,
         SEED_IDS.memSolicitante,
         SEED_IDS.memNorte,
+        SEED_IDS.memConsultorAcme,
+        SEED_IDS.memConsultorNorte,
         SEED_IDS.orgAcme,
         SEED_IDS.orgNorte,
       ]

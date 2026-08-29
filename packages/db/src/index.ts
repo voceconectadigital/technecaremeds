@@ -24,3 +24,4 @@ export * from './notifications';
 export * from './automations';
 export * from './search';
 export * from './audit';
+export * from './memberships';

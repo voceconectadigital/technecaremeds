@@ -82,15 +82,20 @@ export async function seedOrganization(
     opts.email,
     opts.userName,
   ]);
-  await t.raw(
-    `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
-     VALUES ($1, $2, $3, 'active', 'staff', true)`,
-    [ids.membershipId, ids.organizationId, ids.userId]
-  );
-  await t.raw(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
-    ids.membershipId,
-    ids.organizationId,
-  ]);
+  // Vínculo e escopo na MESMA transação: o gatilho diferido da 0039 recusa o
+  // vínculo cego no COMMIT, e o auxiliar de teste tem de exercitar o mesmo
+  // caminho que a aplicação — senão ele testa um mundo que não existe.
+  await t.admin.transaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+       VALUES ($1, $2, $3, 'active', 'staff', true)`,
+      [ids.membershipId, ids.organizationId, ids.userId]
+    );
+    await tx.query(
+      `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
+      [ids.membershipId, ids.organizationId]
+    );
+  });
   return ids;
 }
 
@@ -98,11 +103,13 @@ export async function seedOrganization(
  * Acrescenta uma segunda pessoa a uma organização já semeada, opcionalmente com
  * escopo restrito a uma lista de locais.
  *
- * Existe porque `aurora.users` é tabela de plataforma e o papel da aplicação
- * não escreve nela — corretamente: criar usuário é ato de convite, não de
- * requisição comum. Um teste que precisasse disso e não tivesse este auxiliar
- * acabaria contornando o papel da aplicação para montar o cenário, e passaria a
- * testar um mundo que não existe em produção.
+ * Existe para ARRANJO de cenário, e só para isso: monta a segunda pessoa de uma
+ * organização em duas linhas, sem o ritual do convite.
+ *
+ * O caminho de produção é `inviteMember`, que desde a 0040 escreve em
+ * `aurora.users` sob o papel da aplicação — o vínculo entra primeiro e a
+ * política de `users` o encontra. Quem quiser testar o CONVITE deve chamar
+ * `inviteMember`; quem só precisa de mais um técnico no cenário usa isto.
  */
 export async function seedMember(
   t: TestDatabase,
@@ -114,15 +121,17 @@ export async function seedMember(
     opts.email,
     opts.userName,
   ]);
-  await t.raw(
-    `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
-     VALUES ($1, $2, $3, 'active', 'staff', false)`,
-    [ids.membershipId, ids.organizationId, ids.userId]
-  );
   const restrito = opts.locationIds && opts.locationIds.length > 0;
-  await t.raw(
-    `INSERT INTO aurora.membership_scopes (membership_id, organization_id, location_scope, location_ids)
-     VALUES ($1, $2, $3::aurora.scope_mode, $4)`,
-    [ids.membershipId, ids.organizationId, restrito ? 'listed' : 'all', opts.locationIds ?? []]
-  );
+  await t.admin.transaction(async (tx) => {
+    await tx.query(
+      `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+       VALUES ($1, $2, $3, 'active', 'staff', false)`,
+      [ids.membershipId, ids.organizationId, ids.userId]
+    );
+    await tx.query(
+      `INSERT INTO aurora.membership_scopes (membership_id, organization_id, location_scope, location_ids)
+       VALUES ($1, $2, $3::aurora.scope_mode, $4)`,
+      [ids.membershipId, ids.organizationId, restrito ? 'listed' : 'all', opts.locationIds ?? []]
+    );
+  });
 }

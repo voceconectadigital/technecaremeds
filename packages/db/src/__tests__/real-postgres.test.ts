@@ -29,6 +29,7 @@ import { createAssetCategory, createAsset } from '../assets';
 import { provisionWorkOrderStates, createWorkOrder, transitionWorkOrder } from '../work-orders';
 import { createWarehouse, createItem, recordMovement, reserve, balances } from '../inventory';
 import { createServiceRequest } from '../service-requests';
+import { inviteMember } from '../memberships';
 import type { Database } from '../client';
 
 const URL = process.env.AURORA_TEST_PG_URL;
@@ -76,15 +77,28 @@ async function seedOrg(org: string, userId: string, membershipId: string, slug: 
     `${slug}@pg.test`,
     slug,
   ]);
-  await admin.query(
-    `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
-     VALUES ($1, $2, $3, 'active', 'staff', true)`,
-    [membershipId, org, userId]
-  );
-  await admin.query(`INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`, [
-    membershipId,
-    org,
-  ]);
+  // Vínculo e escopo na mesma transação: aqui, num servidor de verdade, o
+  // gatilho diferido da 0039 dispara no COMMIT de UMA conexão física — o que o
+  // PGlite não consegue distinguir de autocommit.
+  const c = await admin.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(
+      `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+       VALUES ($1, $2, $3, 'active', 'staff', true)`,
+      [membershipId, org, userId]
+    );
+    await c.query(
+      `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
+      [membershipId, org]
+    );
+    await c.query('COMMIT');
+  } catch (e) {
+    await c.query('ROLLBACK');
+    throw e;
+  } finally {
+    c.release();
+  }
 }
 
 beforeAll(async () => {
@@ -559,5 +573,131 @@ describe.skipIf(!rodar)('isolamento adversarial com conexões físicas distintas
 
     const deB = await withTenant(db, ctxB, (s) => s.query(`SELECT id FROM aurora.service_requests`));
     expect(deB).toEqual([]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(!rodar)('convite sob o papel de aplicação real', () => {
+  /*
+   * Este bloco existe porque o convite era, até a 0040, uma operação que só
+   * funcionava em teste. A RLS de `users` exige vínculo prévio; o vínculo exige
+   * usuário. Com uma conexão só, o PGlite mostra o mesmo erro — mas é aqui, com
+   * `SET LOCAL ROLE aurora_app` num servidor de verdade, que se prova que o
+   * caminho novo passa pelos privilégios de produção e não por um atalho.
+   */
+
+  it('convida alguém que ainda não existe na plataforma', async () => {
+    const email = `novato-${Date.now()}@pg.test`;
+    const r = await withTenant(db, ctxA, (s) =>
+      inviteMember(s, { email, name: 'Novato da Silva' })
+    );
+
+    expect(r.reusedUser).toBe(false);
+
+    const [linha] = await admin.query(
+      `SELECT u.email, m.status::text AS status, s.customer_scope::text AS escopo
+         FROM aurora.memberships m
+         JOIN aurora.users u ON u.id = m.user_id
+         JOIN aurora.membership_scopes s ON s.membership_id = m.id
+        WHERE m.id = $1`,
+      [r.membershipId]
+    ).then((x) => x.rows);
+
+    expect(linha).toMatchObject({ email, status: 'active', escopo: 'all' });
+  });
+
+  it('a mesma pessoa entra na segunda organização sem virar dois cadastros', async () => {
+    const email = `consultor-${Date.now()}@pg.test`;
+
+    const naA = await withTenant(db, ctxA, (s) =>
+      inviteMember(s, { email, name: 'Carla Consultora' })
+    );
+    const naB = await withTenant(db, ctxB, (s) =>
+      inviteMember(s, { email, name: 'Carla Consultora' })
+    );
+
+    expect(naA.reusedUser).toBe(false);
+    expect(naB.reusedUser).toBe(true);
+    expect(naB.userId).toBe(naA.userId);
+
+    const { rows } = await admin.query(
+      `SELECT count(*)::int AS total FROM aurora.users WHERE lower(email) = $1`,
+      [email]
+    );
+    expect(rows[0].total).toBe(1);
+  });
+
+  it('B não enxerga a pessoa convidada por A, mesmo depois de ela existir', async () => {
+    const email = `sodea-${Date.now()}@pg.test`;
+    await withTenant(db, ctxA, (s) => inviteMember(s, { email, name: 'Só de A' }));
+
+    const visto = await withTenant(db, ctxB, (s) =>
+      s.query(`SELECT id FROM aurora.users WHERE lower(email) = $1`, [email])
+    );
+    // A resolução por e-mail (0040) diria que o endereço existe — é o que
+    // permite o convite cruzado. Ler a LINHA continua proibido.
+    expect(visto).toEqual([]);
+  });
+
+  it('a chave estrangeira diferida ainda pega vínculo para usuário inexistente', async () => {
+    await expect(
+      withTenant(db, ctxA, async (s) => {
+        const mem = newId();
+        await s.query(
+          `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+           VALUES ($1, $2, $3, 'active', 'staff', false)`,
+          [mem, ORG_A, newId()]
+        );
+        await s.query(
+          `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
+          [mem, ORG_A]
+        );
+      })
+      // Diferida não é ausente: o erro chega no COMMIT, e chega.
+    ).rejects.toThrow(/memberships_user_id_fkey/);
+  });
+
+  it('dois convites simultâneos do mesmo e-mail: um entra, o outro é recusado', async () => {
+    const email = `corrida-${Date.now()}@pg.test`;
+
+    const [um, dois] = await Promise.allSettled([
+      withTenant(db, ctxA, (s) => inviteMember(s, { email, name: 'Corrida Um' })),
+      withTenant(db, ctxA, (s) => inviteMember(s, { email, name: 'Corrida Dois' })),
+    ]);
+
+    const ok = [um, dois].filter((r) => r.status === 'fulfilled');
+    const falhou = [um, dois].filter((r) => r.status === 'rejected');
+
+    /*
+     * As duas transações leem "não existe" antes de qualquer uma escrever: a
+     * verificação em SQL não protege nada sozinha. Quem protege é o índice
+     * único de e-mail — e é ele que precisa estar lá, não a checagem prévia.
+     */
+    expect(ok).toHaveLength(1);
+    expect(falhou).toHaveLength(1);
+
+    const { rows } = await admin.query(
+      `SELECT count(*)::int AS total FROM aurora.memberships m
+         JOIN aurora.users u ON u.id = m.user_id
+        WHERE lower(u.email) = $1`,
+      [email]
+    );
+    expect(rows[0].total).toBe(1);
+  });
+
+  it('vínculo sem escopo é recusado no COMMIT, sob o papel de aplicação', async () => {
+    const { rows } = await admin.query(`SELECT id FROM aurora.users WHERE id = $1`, [USER_A]);
+    expect(rows).toHaveLength(1);
+
+    await expect(
+      withTenant(db, ctxA, (s) =>
+        s.query(
+          `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+           VALUES ($1, $2, $3, 'active', 'staff', false)`,
+          [newId(), ORG_A, USER_A]
+        )
+      )
+    ).rejects.toThrow();
   });
 });

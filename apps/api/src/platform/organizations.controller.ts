@@ -54,22 +54,4 @@ export class OrganizationsController {
       return { ...org, seats_used: seats?.used ?? 0 };
     });
   }
-
-  /** Membros da organização corrente. */
-  @Get('current/members')
-  @RequirePermissions('organization.read', 'organization.manage_members')
-  async members(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
-    const ctx = req.auroraContext!;
-    const items = await withTenant(this.db, ctx, (s) =>
-      s.query(
-        `SELECT m.id, m.seat_type::text, m.status::text, m.job_title, m.is_owner,
-                u.name, u.email
-           FROM aurora.memberships m
-           JOIN aurora.users u ON u.id = m.user_id
-          WHERE m.deleted_at IS NULL
-          ORDER BY u.name`
-      )
-    );
-    return { items };
-  }
 }

@@ -9,6 +9,7 @@ import type { Database } from '@aurora/db';
 import type { AuroraEnv } from '@aurora/config';
 import { HealthController } from './health/health.controller';
 import { OrganizationsController } from './platform/organizations.controller';
+import { MembersController } from './platform/members.controller';
 import { MeController } from './platform/me.controller';
 import { LocationsController } from './directory/locations.controller';
 import { CustomersController } from './directory/customers.controller';
@@ -54,6 +55,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       HealthController,
       MeController,
       OrganizationsController,
+      MembersController,
       CustomersController,
       LocationsController,
       TeamsController,
