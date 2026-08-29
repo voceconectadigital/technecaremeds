@@ -10,14 +10,14 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F9 — interface** (fechando `apps/web`)                                                       |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria), **EPIC-009 (interface de OS)** |
-| Épico seguinte                   | EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal); em `apps/web` faltam estoque, orçamentos, contratos, planos, documentos, indicadores, notificações, automações |
-| Testes                           | **1435** unitários e de HTTP (71 arquivos) + **43** de ponta a ponta no navegador (Playwright), todos verdes |
-| Estado do Git                    | HEAD `b781269` · **53 commits** · branch `main` · árvore limpa · **sem push** (não há autorização inequívoca) |
-| Rotas e contratos                | 149 rotas, **44 com contrato** (30%) globalmente e **100% das rotas que a web usa** — a cobertura sobe por consumidor real, não por contrato vazio |
+| Fase                             | **F9 — interface**: `apps/web` FECHADA (nenhuma tela em construção); portal com API e provas de não vazamento |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria), EPIC-009 (interface de OS) |
+| Épico seguinte                   | EPIC-014 (PWA de campo), EPIC-019 (metrologia); do EPIC-020 falta a aplicação do portal — a API e as provas estão prontas |
+| Testes                           | **1486** unitários e de HTTP (74 arquivos) + **128** de ponta a ponta no navegador (Playwright), todos verdes |
+| Estado do Git                    | HEAD `8953415` · **65 commits** · branch `main` · árvore limpa · **sem push** (não há autorização inequívoca) |
+| Rotas e contratos                | 174 rotas, **93 com contrato** (53%) globalmente e **100% das rotas que a web usa** — a cobertura sobe por consumidor real, não por contrato vazio |
 | Vulnerabilidades (`npm audit`)   | **0** |
-| Migrations                       | 42 (`0000` a `0041`), idempotentes, reprodutíveis do zero                       |
+| Migrations                       | 43 (`0000` a `0042`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
 
