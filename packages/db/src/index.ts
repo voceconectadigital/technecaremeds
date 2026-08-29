@@ -18,3 +18,4 @@ export * from './inventory';
 export * from './contracts';
 export * from './quotes';
 export * from './schedule';
+export * from './documents';

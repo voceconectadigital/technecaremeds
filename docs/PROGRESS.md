@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F6 — comercial e programação**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda) |
-| Épico seguinte                   | EPIC-018 — Documentos, ou EPIC-021 — Analytics                                         |
-| Testes                           | **927**, todos verdes                                                           |
-| Migrations                       | 34 (`0000` a `0033`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F6 — comercial, programação e documentos**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos) |
+| Épico seguinte                   | EPIC-021 — Analytics, ou EPIC-020 — Portal do cliente                                  |
+| Testes                           | **1000**, todos verdes                                                           |
+| Migrations                       | 35 (`0000` a `0034`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -415,6 +415,34 @@ Na referência auditada há **2.950 serviços não agendados**. A agenda existe 
 
 ---
 
+## EPIC-018 — Motor único de documentos · **concluído**
+
+A referência tem **seis módulos documentais separados** — calibração, rascunho de calibração, certificado de padrão, TSE, laudo de obsolescência, qualificação térmica — com estrutura 90 % comum. Cada um com a sua tela, a sua numeração, a sua assinatura e o seu jeito de expirar; as diferenças entre eles são acidentais, nasceram de terem sido escritos em épocas diferentes. Um motor com tipos elimina cinco implementações e torna o sétimo tipo uma linha de configuração.
+
+**Número emitido nunca é reaproveitado.** Documento cancelado mantém o número **queimado**, com o motivo (mínimo de 10 caracteres, porque alguém vai perguntar por quê). É requisito de auditoria: uma série com buraco explicado é auditável; uma série sem buracos porque os números voltaram a circular não é — ninguém consegue provar depois qual documento tinha aquele número. O índice único cobre inclusive os cancelados, e o gatilho recusa alterar número já emitido.
+
+**Documento assinado não se edita — por caminho nenhum.** O gatilho do banco recusa a alteração de payload ou veredito quando existe assinatura, e a assinatura em si não se altera nem se apaga. A verificação `verifyDocumentSignatures` confere o conteúdo de hoje contra o que foi assinado, apesar de o banco já impedir: o impedimento vale para o futuro, a verificação vale para o presente — se algum caminho escapar, aparece ali em vez de nunca.
+
+**O hash é canônico, e o conteúdo canônico é ordenado.** `JSON.stringify` preserva a ordem de inserção das chaves, o que faria o MESMO documento montado por dois caminhos produzir dois hashes — e a assinatura de um pareceria inválida para o outro. A canonicalização ordena as chaves em toda profundidade, preserva a ordem das listas (lista é sequência), distingue "não informado" de "explicitamente vazio", e recusa número não finito em vez de deixá-lo virar `null` calado.
+
+**Sobre assinatura, o que o sistema NÃO afirma.** Cada método exige a sua prova de origem — desenhada precisa da imagem, por código precisa do e-mail, pelo portal precisa do usuário autenticado —, e o endereço vem do soquete, nunca de cabeçalho que o próprio interessado escreve. `icp_brasil` tem os campos modelados e é **recusado**: aceitar uma assinatura por certificado digital sem validar a cadeia seria afirmar uma validade que o sistema não apurou. Em nenhum lugar o produto afirma valor jurídico de assinatura.
+
+**Outras decisões**
+
+- **Os seis tipos são provisionados, o payload especializado de nenhum.** Ter o tipo cadastrado sem uso custa uma linha; descobrir na Fase 2 que o motor não o comporta custaria o épico de novo. Mas os campos de cada um dependem de norma técnica que a auditoria não confirmou, e inventar os pontos de medição de um certificado escreveria no sistema uma exigência metrológica que ninguém verificou.
+- **A alocação de número usa trava de aconselhamento por série**, serializando a mesma série sem bloquear as outras. Sem ela, duas transações leriam o próximo valor antes de qualquer uma escrever, e o mesmo número sairia em dois laudos.
+- **A série tem PADRÃO**, e por isso é tabela própria e não o contador do EPIC-007: número de documento vai impresso em laudo e o formato às vezes é acordado por escrito com o cliente.
+- **Cancelar e substituir são coisas diferentes**, e o grafo mostra isso: cancelar diz que o documento não deveria ter existido, substituir diz que existiu e foi trocado. Só o segundo sai de "vencido" — cancelar um documento vencido reescreveria o passado.
+- **O veredito é obrigatório na emissão, ainda que seja "não se aplica".** Um documento emitido sem veredito é um documento que não conclui nada.
+
+### Adiado deliberadamente
+
+- **Geração do PDF**: `pdf_key` existe na tabela. A composição do PDF (e a geração assíncrona que a qualificação térmica exige, porque na referência leva até uma hora) entra com o serviço de renderização.
+- **Payload especializado dos cinco tipos de Fase 2/3**, pela razão dita acima. Entram com a norma na mão.
+- **Bloqueio de emissão por padrão vencido** (o certificado de calibração não deve ser emitido se algum padrão estava com certificado vencido na data da medição): depende do payload de `standard_certificate`, que é Fase 2.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -451,6 +479,7 @@ Na referência auditada há **2.950 serviços não agendados**. A agenda existe 
 | 30  | **O PROGRESS afirmava uma coluna gerada que não existe**                   | Consulta de reserva do orçamento quebrou em `column "available" does not exist`                               | O registro do EPIC-015 dizia que `available` era coluna gerada em `stock_balances`; na verdade o disponível é calculado na consulta de saldo. O texto foi corrigido: documento que descreve o que não existe é pior que documento ausente, porque o próximo leitor confia nele |
 | 31  | **O balde "Reagendar" mostrava o quê sem o porquê**                        | Teste de borda leu a linha do painel e recebeu `window_invalidated_reason` indefinido                          | A consulta dos baldes trazia o carimbo da invalidação mas não o motivo. Mostrar que algo precisa ser remarcado sem dizer por que manda o coordenador para outra tela — e cada tela a mais é um passo na direção do telefonema que este épico existe para evitar |
 | 32  | **A SPEC descrevia um tipo de ausência que o banco não tem**               | Encontrado ao implementar o bloqueio do §13                                                                   | O §13 e o dicionário falam em bloco de tipo `absence`; o enumerado criado no EPIC-003 é `vacation \| leave \| training \| other`. Em vez de inventar um valor novo, a SPEC foi corrigida (patch P19) para descrever o que existe, e a regra de bloqueio passou a ser dita pelos tipos reais. O vínculo também foi corrigido: o bloco aponta para `membership_id`, não para o usuário — a mesma pessoa pode ter vínculo em duas organizações |
+| 33  | **Tipo que exige assinatura jamais poderia ser emitido**                   | Teste do certificado de calibração: exigia assinatura para emitir, e assinar exigia o hash, que só nascia na emissão | Impasse fechado, e do tipo que só aparece quando alguém percorre o fluxo inteiro. O hash passou a ser congelado na entrada em REVISÃO — "em revisão" significa candidato congelado —, e a emissão apenas CONFERE que o conteúdo não mudou. O número saiu do resumo (só existe na emissão) e a identidade passou a vir do `id`, que é estável desde a criação. Voltar para rascunho descongela, e é recusado se alguém já tiver assinado |
 
 ---
 

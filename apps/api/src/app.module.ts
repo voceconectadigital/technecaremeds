@@ -22,6 +22,7 @@ import { ExecutionController, ExecutionResourcesController } from './work-orders
 import { ContractsController, AssetContractController } from './contracts/contracts.controller';
 import { QuotesController } from './quotes/quotes.controller';
 import { ScheduleController } from './schedule/schedule.controller';
+import { DocumentsController } from './documents/documents.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -62,6 +63,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       AssetContractController,
       QuotesController,
       ScheduleController,
+      DocumentsController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },
