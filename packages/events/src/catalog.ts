@@ -120,7 +120,11 @@ export const EVENT_TYPES = [
   'quote.revised',
   'quote.invoiced',
   'contract.activated',
+  // "vai vencer" e "venceu" são fatos diferentes: quem assina notificação
+  // precisa distinguir o aviso da consequência.
   'contract.expiring',
+  'contract.expired',
+  'contract.terminated',
   'contract.period_closed',
 
   // --- documents (EPIC-018) -----------------------------------------------

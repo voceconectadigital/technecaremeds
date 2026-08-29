@@ -1604,7 +1604,7 @@ Um único barramento alimenta auditoria, notificação, automação, webhooks e 
 | **SLA** | `sla.started` · `sla.paused` · `sla.resumed` · `sla.warning` · `sla.breached` · `sla.met` |
 | **Planning** | `plan.activated` · `plan.cycle_started` · `plan.cycle_closed` · `plan.item_generated` · `plan.item_skipped` · `plan.item_overdue` · `plan.finished` · `checklist.completed` · `checklist.item_failed` · `procedure.published` |
 | **Inventory** | `stock.received` · `stock.reserved` · `stock.consumed` · `stock.returned` · `stock.adjusted` · `stock.transferred` · `stock.below_minimum` · `stock.negative_balance` · `stock.count_closed` |
-| **Commerce** | `quote.created` · `quote.sent` · `quote.viewed` · `quote.approved` · `quote.rejected` · `quote.expired` · `quote.revised` · `quote.invoiced` · `contract.activated` · `contract.expiring` · `contract.period_closed` |
+| **Commerce** | `quote.created` · `quote.sent` · `quote.viewed` · `quote.approved` · `quote.rejected` · `quote.expired` · `quote.revised` · `quote.invoiced` · `contract.activated` · `contract.expiring` · `contract.expired` · `contract.terminated` · `contract.period_closed` |
 | **Documents** | `document.issued` · `document.signed` · `document.released` · `document.expiring` · `document.expired` · `document.cancelled` · `document.superseded` · `document.printed` |
 | **Platform** | `member.invited` · `member.joined` · `member.role_changed` · `member.scope_changed` · `member.removed` · `support_access.granted` · `support_access.expired` · `api_key.created` · `api_key.revoked` · `automation.rule_fired` · `export.completed` |
 

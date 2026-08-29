@@ -526,6 +526,24 @@ patch(
 );
 
 /* ============================================================
+   P18 — dois eventos de contrato que faltavam no catálogo
+
+   Encontrado ao implementar o EPIC-017. O §17 pede alerta de vencimento e
+   trata encerramento como fato de negócio, mas o catálogo de eventos só
+   declarava `contract.activated`, `contract.expiring` e
+   `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu"
+   seriam o mesmo evento — e quem assina notificação não teria como distinguir
+   o aviso da consequência. Sem `contract.terminated`, o encerramento por
+   decisão humana só existiria na trilha de auditoria, invisível a qualquer
+   automação.
+   ============================================================ */
+patch(
+  'P18-eventos-contrato',
+  '`contract.activated` · `contract.expiring` · `contract.period_closed`',
+  '`contract.activated` · `contract.expiring` · `contract.expired` · `contract.terminated` · `contract.period_closed`'
+);
+
+/* ============================================================
    cabeçalho de versão
    ============================================================ */
 patch(

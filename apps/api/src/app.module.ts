@@ -19,6 +19,7 @@ import { QrController } from './assets/qr.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
 import { ExecutionController, ExecutionResourcesController } from './work-orders/execution.controller';
+import { ContractsController, AssetContractController } from './contracts/contracts.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -55,6 +56,8 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       WorkOrdersController,
       ExecutionController,
       ExecutionResourcesController,
+      ContractsController,
+      AssetContractController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },
