@@ -610,3 +610,35 @@ export async function waitTimeByReason(
     [from.toISOString(), to.toISOString()]
   );
 }
+
+/**
+ * Os motivos de espera desta organização.
+ *
+ * Existe porque a tela de transição PRECISA deles: quando um estado exige
+ * motivo de parada, a pessoa tem de escolher entre os motivos que a
+ * organização definiu — não digitar texto livre, que é como o mesmo motivo
+ * vira sete grafias diferentes e o indicador de tempo perdido deixa de somar.
+ *
+ * `pauses_sla` vem junto porque muda o significado da escolha: parar por peça
+ * do fabricante não conta contra o SLA; parar por falta de técnico conta. Quem
+ * escolhe precisa ver isso ANTES de escolher.
+ */
+export async function listWaitReasons(session: TenantSession): Promise<WaitReasonRow[]> {
+  return session.query<WaitReasonRow>(
+    `SELECT id, key, label, pauses_sla, responsible::text AS responsible,
+            requires_note, position
+       FROM aurora.wait_reasons
+      WHERE archived_at IS NULL
+      ORDER BY position, label`
+  );
+}
+
+export interface WaitReasonRow {
+  id: string;
+  key: string;
+  label: string;
+  pauses_sla: boolean;
+  responsible: string | null;
+  requires_note: boolean;
+  position: number;
+}

@@ -44,14 +44,61 @@ export async function entrarComo(page: Page, sessao: Sessao): Promise<void> {
   }, sessao);
 }
 
+/**
+ * Ruído de console REPROVA o teste, em todo teste.
+ *
+ * Havia uma spec só para isso, visitando telas em jejum. Ela deu sete telas
+ * limpas no mesmo dia em que a agenda emitia "chave duplicada" a cada
+ * renderização — porque a agenda vazia não tem lista para duplicar chave. O
+ * defeito só aparece com dado dentro, e quem tem dado dentro são os testes de
+ * fluxo.
+ *
+ * Então a vigilância deixa de ser uma spec e passa a ser condição de todo
+ * teste: quem monta o cenário mais rico é quem melhor observa.
+ *
+ * Não há isenção por padrão: o teste que provoca uma reclamação de propósito
+ * declara qual, com `tolera()`.
+ */
+const tolerado = new WeakMap<Page, RegExp[]>();
+
+/**
+ * Declara que ESTE teste provoca de propósito uma reclamação do navegador.
+ *
+ * A tolerância é por teste, e nomeada, porque a versão preguiçosa disto — um
+ * filtro global ignorando toda resposta 4xx — teria engolido calada as duas
+ * falhas que a vigilância achou no primeiro dia: um 422 na lente de recursos
+ * e um 422 no catálogo de sintomas. Quem tolera, tolera uma coisa só, e
+ * escreve qual.
+ */
+export function tolera(page: Page, ...padroes: RegExp[]): void {
+  tolerado.set(page, [...(tolerado.get(page) ?? []), ...padroes]);
+}
+
+async function comConsoleVigiado(page: Page, use: (p: Page) => Promise<void>): Promise<void> {
+  const erros: string[] = [];
+
+  page.on('console', (m) => {
+    if (m.type() !== 'error') return;
+    erros.push(m.text());
+  });
+  // Exceção não capturada é sempre defeito: nenhum teste "espera" um throw
+  // que escapou até o topo.
+  page.on('pageerror', (e) => erros.push(`exceção não capturada: ${e.message}`));
+
+  await use(page);
+
+  const padroes = tolerado.get(page) ?? [];
+  const sobrou = erros.filter((t) => !padroes.some((r) => r.test(t)));
+  expect(sobrou, 'o navegador reclamou durante este teste').toEqual([]);
+}
 export const test = base.extend<{ comoCoordenadorA: Page; comoCoordenadorB: Page }>({
   comoCoordenadorA: async ({ page }, use) => {
     await entrarComo(page, { email: E2E.emailCoordA, organizationId: E2E.orgA });
-    await use(page);
+    await comConsoleVigiado(page, use);
   },
   comoCoordenadorB: async ({ page }, use) => {
     await entrarComo(page, { email: E2E.emailCoordB, organizationId: E2E.orgB });
-    await use(page);
+    await comConsoleVigiado(page, use);
   },
 });
 

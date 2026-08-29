@@ -18,6 +18,7 @@ import { OrganizacoesPage } from './organizacoes';
 import { HojePage } from './hoje';
 import { SolicitacoesPage } from '../features/solicitacoes/lista';
 import { SolicitacaoPage } from '../features/solicitacoes/ficha';
+import { NovaSolicitacaoPage } from '../features/solicitacoes/nova';
 import { OrdensPage } from '../features/ordens/lista';
 import { OrdemPage } from '../features/ordens/ficha';
 import { AgendaPage } from '../features/agenda/pagina';
@@ -62,6 +63,10 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/', HojePage),
 
   rotaProtegida('/solicitacoes', SolicitacoesPage),
+  // Antes de `/solicitacoes/$id`: 'nova' casaria com o parâmetro, e a
+  // conferência de rotas do `npm run openapi` cobre o lado do servidor —
+  // aqui a ordem é a mesma regra.
+  rotaProtegida('/solicitacoes/nova', NovaSolicitacaoPage),
   createRoute({
     getParentRoute: () => raiz,
     path: '/solicitacoes/$id',

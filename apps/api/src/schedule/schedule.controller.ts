@@ -149,8 +149,16 @@ export class ScheduleController {
     @Query('teamId') teamId?: string
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
+    // `day` ausente significa HOJE, e não erro.
+    //
+    // Estava chamando `instant(undefined)`, que exige string e recusa: a
+    // lente de recursos devolvia 422 para exatamente a chamada que a tela faz
+    // ao abrir o diálogo de programação. O seletor de responsável aparecia
+    // vazio e nada dizia por quê — a mesma silenciosidade de lista-que-falhou
+    // se parecendo com lista-vazia.
+    const dia = day === undefined || day === '' ? new Date() : instant(day, 'day');
     const items = await withTenant(this.db, ctx, (s) =>
-      resourceBoard(s, instant(day, 'day'), teamId ? uuidParam(teamId, 'teamId') : null)
+      resourceBoard(s, dia, teamId ? uuidParam(teamId, 'teamId') : null)
     );
     return { items };
   }

@@ -27,6 +27,9 @@ const WEB_PORT = 5311;
 
 export default defineConfig({
   testDir: './e2e/specs',
+  // Estado conhecido antes de tudo: sem isto, registros de uma execução
+  // sobrevivem para a seguinte e o teste passa a olhar dado de ontem.
+  globalSetup: './e2e/fixtures/global-setup.mts',
   // Um teste de ponta a ponta que passa às vezes é pior que nenhum: ele
   // ensina a equipe a reexecutar em vez de investigar.
   fullyParallel: false,

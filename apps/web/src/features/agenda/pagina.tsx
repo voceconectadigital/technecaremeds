@@ -43,19 +43,22 @@ import {
   workOrdersBoard,
   workOrdersList,
   type ScheduleConflict,
+  type ResourceLoad,
+  type AgendaBucketItem,
 } from '@aurora/contracts';
 import { ApiError, useApi, useApiMutation, useApiQuery } from '../../lib/api';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 
-interface Balde {
-  id: string;
-  bucket: string;
-  number: string | null;
-  title: string;
-  scheduled_start?: string | null;
-  [k: string]: unknown;
-}
+/**
+ * O item vem do contrato, e não de uma interface escrita à mão aqui.
+ *
+ * A que existia antes tinha `id: string` e `[k: string]: unknown`. A assinatura
+ * de índice fazia QUALQUER campo compilar, e o `id` afirmava um campo que a
+ * consulta nunca devolveu — então `os.id` era `undefined` em silêncio: chave
+ * duplicada na lista, e `workOrderId: undefined` na hora de gravar.
+ */
+type Balde = AgendaBucketItem;
 
 export function AgendaPage() {
   const [programando, setProgramando] = useState<Balde | null>(null);
@@ -100,7 +103,7 @@ export function AgendaPage() {
                   ) : (
                     <ul className="flex flex-col gap-1">
                       {itens.map((os) => (
-                        <li key={os.id}>
+                        <li key={os.work_order_id}>
                           <button
                             type="button"
                             onClick={() => setProgramando(os)}
@@ -132,15 +135,6 @@ export function AgendaPage() {
 
 /* -------------------------------------------------------------------------- */
 
-interface Recurso {
-  membership_id?: string;
-  membershipId?: string;
-  name?: string;
-  assigned_minutes?: number;
-  capacity_minutes?: number;
-  [k: string]: unknown;
-}
-
 function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => void }) {
   const api = useApi();
   const toast = useToast();
@@ -152,7 +146,7 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
   const [conferindo, setConferindo] = useState(false);
 
   const { data: recursos } = useApiQuery(scheduleResources, { query: {} }) as {
-    data: { items: Recurso[] } | undefined;
+    data: { items: ResourceLoad[] } | undefined;
   };
 
   const fim = useMemo(
@@ -175,7 +169,7 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
       void api
         .call(scheduleCheck, {
           body: {
-            workOrderId: ordem.id,
+            workOrderId: ordem.work_order_id,
             startsAt: new Date(inicio).toISOString(),
             endsAt: fim,
             assigneeMembershipId: responsavel || null,
@@ -196,7 +190,7 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
       vivo = false;
       clearTimeout(t);
     };
-  }, [api, ordem.id, inicio, fim, responsavel]);
+  }, [api, ordem.work_order_id, inicio, fim, responsavel]);
 
   const gravar = useApiMutation(scheduleSet, {
     invalidates: [scheduleBuckets, workOrdersList, workOrdersBoard],
@@ -225,7 +219,7 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
               gravar.mutate(
                 {
                   body: {
-                    workOrderId: ordem.id,
+                    workOrderId: ordem.work_order_id,
                     startsAt: new Date(inicio).toISOString(),
                     endsAt: fim,
                     assigneeMembershipId: responsavel || null,
@@ -259,17 +253,16 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
         <Field label="Responsável" hint="A carga do dia aparece ao lado de cada pessoa.">
           <Select value={responsavel} onChange={(e) => setResponsavel(e.target.value)}>
             <option value="">Sem responsável definido</option>
-            {(recursos?.items ?? []).map((r) => {
-              const id = String(r.membership_id ?? r.membershipId ?? '');
-              return (
-                <option key={id} value={id}>
-                  {String(r.name ?? 'sem nome')}
-                  {r.capacity_minutes
-                    ? ` — ${Math.round((r.assigned_minutes ?? 0) / 60)} de ${Math.round(r.capacity_minutes / 60)} h ocupadas`
-                    : ''}
-                </option>
-              );
-            })}
+            {(recursos?.items ?? []).map((r) => (
+              <option key={r.membershipId} value={r.membershipId}>
+                {r.name ?? 'sem nome'}
+                {r.absent
+                  ? ' — ausente neste dia'
+                  : r.load.capacityMinutes
+                    ? ` — ${horas(r.load.bookedMinutes)} de ${horas(r.load.capacityMinutes)} ocupadas`
+                    : ' — jornada não cadastrada'}
+              </option>
+            ))}
           </Select>
         </Field>
 
@@ -324,19 +317,46 @@ function DialogoProgramar({ ordem, onFechar }: { ordem: Balde; onFechar: () => v
   );
 }
 
-function CargaDoResponsavel({ recursos, membershipId }: { recursos: Recurso[]; membershipId: string }) {
+function CargaDoResponsavel({ recursos, membershipId }: { recursos: ResourceLoad[]; membershipId: string }) {
   if (!membershipId) return null;
-  const r = recursos.find((x) => String(x.membership_id ?? x.membershipId) === membershipId);
-  if (!r?.capacity_minutes) return null;
+  const r = recursos.find((x) => x.membershipId === membershipId);
+  if (!r) return null;
+
+  // Ausente NÃO é dia livre, e por isso não vira barra de carga vazia — que é
+  // exatamente o que convidaria a colocar trabalho em cima das férias.
+  if (r.absent) {
+    return (
+      <p className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
+        {r.name ?? 'Esta pessoa'} está ausente neste dia.
+      </p>
+    );
+  }
+
+  // Sem jornada cadastrada a ocupação é DESCONHECIDA, e não zero: mostrar 0%
+  // seria dizer a coisa errada com confiança.
+  if (r.load.capacityMinutes === null) {
+    return (
+      <p className="text-xs text-muted">
+        {r.name ?? 'Esta pessoa'} não tem jornada cadastrada, então a ocupação do dia não é calculável. Já tem{' '}
+        {horas(r.load.bookedMinutes)} agendadas.
+      </p>
+    );
+  }
 
   return (
     <Progress
-      label={`Carga de ${String(r.name ?? 'responsável')} no dia`}
-      value={r.assigned_minutes ?? 0}
-      max={r.capacity_minutes}
-      tone={(r.assigned_minutes ?? 0) > r.capacity_minutes ? 'bad' : 'accent'}
+      label={`Carga de ${r.name ?? 'responsável'} no dia`}
+      value={r.load.bookedMinutes}
+      max={r.load.capacityMinutes}
+      tone={r.load.over ? 'bad' : 'accent'}
     />
   );
+}
+
+/** Minutos em horas, para leitura humana. */
+function horas(minutos: number): string {
+  const h = minutos / 60;
+  return `${h.toFixed(h % 1 === 0 ? 0 : 1).replace('.', ',')} h`;
 }
 
 /** O próximo horário cheio, no formato que `datetime-local` entende. */

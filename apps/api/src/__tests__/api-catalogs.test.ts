@@ -215,3 +215,23 @@ describe('campos personalizados pela HTTP', () => {
     expect(campo.max).toBe(20);
   });
 });
+
+/**
+ * A mesma lista mora em dois lugares, e isso é uma decisão — não um descuido.
+ *
+ * `@aurora/contracts` não depende de nenhum outro pacote da Aurora: é ele que o
+ * navegador carrega, e arrastar as regras de negócio junto engordaria o pacote
+ * do cliente com código que ele nunca executa. O preço dessa independência é a
+ * duplicação da lista de catálogos; este teste é quem cobra o preço.
+ *
+ * Sem ele, alguém acrescenta um catálogo no domínio, o contrato não sabe, e a
+ * união literal passa a REJEITAR uma chave válida — o erro exatamente inverso
+ * do que a união foi criada para impedir.
+ */
+describe('catálogos: contrato e domínio dizem a mesma coisa', () => {
+  it('as chaves do contrato são exatamente as do domínio', async () => {
+    const contratos = await import('@aurora/contracts');
+    const dominio = await import('@aurora/domain');
+    expect([...contratos.CATALOG_KEYS].sort()).toEqual([...dominio.CATALOG_KEYS].sort());
+  });
+});

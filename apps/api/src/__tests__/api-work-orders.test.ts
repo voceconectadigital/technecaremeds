@@ -159,9 +159,36 @@ describe('situações e quadro', () => {
     expect(pausada.requires_wait_reason).toBe(false);
   });
 
+  it('os motivos de espera dizem quais pausam o prazo', async () => {
+    // Sem `pauses_sla` na resposta, a tela pede uma escolha cujo efeito ela
+    // não sabe explicar — e "aguardando peça" e "aguardando técnico" viram a
+    // mesma coisa aos olhos de quem escolhe, apesar de uma custar SLA e a
+    // outra não.
+    const r = await http.get('/v1/work-orders/wait-reasons').set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    expect(r.body.items.length).toBeGreaterThan(0);
+    for (const m of r.body.items) {
+      expect(typeof m.pauses_sla).toBe('boolean');
+      expect(typeof m.label).toBe('string');
+    }
+    // Vêm ordenados: a lista aparece num seletor, e ordem instável entre
+    // aberturas do diálogo faz a pessoa clicar no item errado por memória
+    // muscular.
+    const posicoes = r.body.items.map((m: { position: number }) => m.position);
+    expect([...posicoes].sort((a: number, b: number) => a - b)).toEqual(posicoes);
+  });
+
+  it('a rota /wait-reasons não é engolida pela rota /:id', async () => {
+    const r = await http.get('/v1/work-orders/wait-reasons').set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    expect(r.body).toHaveProperty('items');
+  });
+
   it('a rota /board não é engolida pela rota /:id', async () => {
-    // O parâmetro é restrito ao formato de uuid na própria rota, então a
-    // resolução não depende da ordem em que os métodos foram declarados.
+    // Desde o Express 5 a rota não carrega mais a regex de uuid — o
+    // path-to-regexp 8 a rejeita — e por isso a resolução PASSOU a depender da
+    // ordem de declaração. Quem garante a ordem hoje é a checagem de
+    // sombreamento do gerador de OpenAPI; este teste é a prova pela borda.
     const r = await http.get('/v1/work-orders/board').set(auth(EMAIL_COORD));
     expect(r.status).toBe(200);
     expect(Array.isArray(r.body.columns)).toBe(true);

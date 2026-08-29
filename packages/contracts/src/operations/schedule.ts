@@ -101,6 +101,35 @@ export const scheduleCalendar = defineOperation({
   response: z.object({ items: z.array(z.record(z.string(), z.unknown())) }),
 });
 
+/**
+ * A carga de uma pessoa num dia.
+ *
+ * `capacityMinutes` pode ser `null`, e aí `percent` também é — e isso NÃO é
+ * zero. Um técnico sem jornada cadastrada não está com o dia livre: está com o
+ * cadastro incompleto. Mostrar 0% seria dizer a coisa errada com confiança.
+ */
+export const LoadSummary = z.object({
+  bookedMinutes: z.number().int(),
+  capacityMinutes: z.number().int().nullable(),
+  percent: z.number().nullable(),
+  over: z.boolean(),
+});
+
+export const ResourceLoad = z.object({
+  membershipId: Uuid,
+  name: z.string().nullable(),
+  load: LoadSummary,
+  /**
+   * Ausente entra como AUSENTE, e não como "sem trabalho".
+   *
+   * São a mesma linha vazia na tela e coisas opostas na cabeça de quem
+   * programa: um dia livre convida a colocar trabalho; férias não.
+   */
+  absent: z.boolean(),
+  entries: z.array(z.record(z.string(), z.unknown())),
+});
+export type ResourceLoad = z.infer<typeof ResourceLoad>;
+
 export const scheduleResources = defineOperation({
   operationId: 'schedule.resources',
   method: 'GET',
@@ -111,10 +140,53 @@ export const scheduleResources = defineOperation({
     'chamados no dia e o colega com dois.',
   permissions: ['work_order.read'],
   query: z.object({ day: z.string().optional(), teamId: Uuid.optional() }),
-  response: z.object({ items: z.array(z.record(z.string(), z.unknown())) }),
+  response: z.object({ items: z.array(ResourceLoad) }),
 });
 
-/** Os três baldes do painel lateral: sem data, atrasadas, para hoje (§13). */
+/**
+ * Um item de um dos três baldes da agenda.
+ *
+ * Estava escrito `z.record(z.string(), z.unknown())` — "um objeto, sei lá com
+ * o quê dentro". O custo apareceu duas vezes na mesma tela: a lista usava
+ * `os.id`, campo que nunca existiu (a consulta devolve `work_order_id`), e
+ * como toda chave do React virava `undefined`, dois itens no mesmo balde
+ * colidiam; e o mesmo `undefined` ia como `workOrderId` na hora de gravar a
+ * programação. Nenhuma das duas coisas o compilador podia ver, porque o
+ * contrato não afirmava nada.
+ *
+ * A regra que fica: contrato de leitura descreve os campos. `unknown` só onde
+ * a forma é genuinamente aberta.
+ */
+export const AgendaBucketItem = z.object({
+  /** É a OS. Não existe `id` aqui — é este o campo. */
+  work_order_id: Uuid,
+  number: z.string().nullable(),
+  title: z.string(),
+  status_category: z.string(),
+  priority: z.string(),
+  scheduled_start: Timestamp.nullable(),
+  scheduled_end: Timestamp.nullable(),
+  started_at: Timestamp.nullable(),
+  due_at: Timestamp.nullable(),
+  assignee_membership_id: Uuid.nullable(),
+  assignee_name: z.string().nullable(),
+  customer_name: z.string().nullable(),
+  location_name: z.string().nullable(),
+  /**
+   * Quantas vezes a janela já foi remarcada, e se a atual foi invalidada.
+   *
+   * Vem para a lista porque é sinal de problema: uma OS remarcada quatro vezes
+   * não é um item comum do balde, é um caso que a coordenação precisa ver.
+   */
+  reschedule_count: z.number().int(),
+  window_invalidated_at: Timestamp.nullable(),
+  window_invalidated_reason: z.string().nullable(),
+  bucket: z.enum(['unscheduled', 'overdue', 'today']),
+  /** Duração da janela marcada, quando existe janela. */
+  minutes: z.number().int().nullable(),
+});
+export type AgendaBucketItem = z.infer<typeof AgendaBucketItem>;
+
 export const scheduleBuckets = defineOperation({
   operationId: 'schedule.buckets',
   method: 'GET',
@@ -127,7 +199,7 @@ export const scheduleBuckets = defineOperation({
   response: z.object({
     labels: z.record(z.string(), z.string()),
     counts: z.record(z.string(), z.number()),
-    items: z.array(z.record(z.string(), z.unknown())),
+    items: z.array(AgendaBucketItem),
   }),
 });
 

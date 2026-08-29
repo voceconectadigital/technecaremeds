@@ -211,6 +211,16 @@ describe('as três lentes', () => {
     expect(r.body.message).toMatch(/62 dias/);
   });
 
+  it('sem "day" na consulta, a lente de recursos responde por HOJE', async () => {
+    // O contrato declara `day` opcional; o controller chamava `instant(undefined)`,
+    // que exige string, e devolvia 422 — justamente na chamada que a tela faz ao
+    // abrir o diálogo de programação. Todo teste daqui passava `day`, então
+    // ninguém exercitava o caminho que a interface de verdade usa.
+    const r = await http.get('/v1/schedule/resources').set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.items)).toBe(true);
+  });
+
   it('a lente de recursos traz carga e capacidade', async () => {
     const r = await http
       .get(`/v1/schedule/resources?day=${em('2025-03-10T00:00:00Z')}`)

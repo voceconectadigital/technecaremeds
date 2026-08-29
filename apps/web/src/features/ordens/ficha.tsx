@@ -36,7 +36,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
-import { useCatalogo } from '../../lib/catalogos';
+import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
 
 export function OrdemPage() {
   const { id } = useParams({ strict: false }) as { id: string };
@@ -217,8 +217,8 @@ function DialogoDeTransicao({
   onConfirmar: (campos: Record<string, unknown>) => void;
   ocupado: boolean;
 }) {
-  const motivos = useCatalogo('wait_reason');
-  const causas = useCatalogo('failure_code');
+  const motivos = useMotivosDeEspera();
+  const causas = useCatalogo('failure_cause');
   const [valores, setValores] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
 
@@ -273,6 +273,7 @@ function DialogoDeTransicao({
               {motivos.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
+                  {m.pauses_sla ? ' (pausa o prazo)' : ''}
                 </option>
               ))}
             </Select>

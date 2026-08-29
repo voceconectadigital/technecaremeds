@@ -225,6 +225,38 @@ export const workOrdersFromRequest = defineOperation({
   errors: ['not_found', 'conflict'],
 });
 
+export const WaitReason = z.object({
+  id: Uuid,
+  key: z.string(),
+  label: z.string(),
+  /**
+   * Se este motivo PAUSA o relógio do SLA.
+   *
+   * Muda o significado da escolha, e por isso vem junto: parar por peça do
+   * fabricante não conta contra o SLA; parar por falta de técnico conta. Quem
+   * escolhe precisa ver isso ANTES de escolher.
+   */
+  pauses_sla: z.boolean(),
+  responsible: z.string().nullable(),
+  /** Alguns motivos exigem explicação: "aguardando cliente" sem o quê? */
+  requires_note: z.boolean(),
+  position: z.number().int(),
+});
+export type WaitReason = z.infer<typeof WaitReason>;
+
+export const workOrderWaitReasons = defineOperation({
+  operationId: 'workOrders.waitReasons',
+  method: 'GET',
+  path: '/work-orders/wait-reasons',
+  summary: 'Motivos de espera desta organização',
+  description:
+    'Rota própria, e não parte de /catalogs: motivo de espera carrega `pauses_sla` e ' +
+    '`requires_note`, que o catálogo genérico não tem — e são justamente as duas coisas que a ' +
+    'tela precisa saber para pedir a informação certa.',
+  permissions: ['work_order.read'],
+  response: z.object({ items: z.array(WaitReason) }),
+});
+
 export const workOrderStatuses = defineOperation({
   operationId: 'workOrders.statuses',
   method: 'GET',

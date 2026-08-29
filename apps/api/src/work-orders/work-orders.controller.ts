@@ -11,6 +11,7 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
+  listWaitReasons,
   createWorkOrder,
   transitionWorkOrder,
   acceptServiceRequest,
@@ -41,6 +42,22 @@ export class WorkOrdersController {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   /** As situações da organização, com categoria — o que o Kanban usa como colunas. */
+  /**
+   * Motivos de espera.
+   *
+   * Rota própria e não parte de `/catalogs`: motivo de espera não é item de
+   * catálogo genérico — ele carrega `pauses_sla`, que decide se o relógio do
+   * SLA continua correndo, e `requires_note`, que decide se a tela pede
+   * explicação. Empurrá-lo para o catálogo genérico perderia as duas coisas.
+   */
+  @Get('wait-reasons')
+  @RequirePermissions('work_order.read')
+  async waitReasons(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const items = await withTenant(this.db, ctx, (s) => listWaitReasons(s));
+    return { items };
+  }
+
   @Get('statuses')
   @RequirePermissions('work_order.read')
   async statuses(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {

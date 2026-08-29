@@ -10,16 +10,17 @@
  * — e um estado que não está na URL não pode ser compartilhado nem sobrevive
  * ao recarregamento.
  */
-import { Link } from '@tanstack/react-router';
-import { Inbox } from 'lucide-react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { Inbox, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Card, EmptyState, SkeletonList, StatusChip, Tabs, cn } from '@aurora/ui';
+import { Button, Card, EmptyState, SkeletonList, StatusChip, Tabs, cn } from '@aurora/ui';
 import { requestsQueue, type ServiceRequestRow, type RequestStatus } from '@aurora/contracts';
 import { useApiQuery } from '../../lib/api';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { useUrlState } from '../../lib/url-state';
+import { Can } from '../../lib/permissions';
 
 const ABAS = [
   { id: 'todas', label: 'Todas' },
@@ -29,6 +30,7 @@ const ABAS = [
 ] as const;
 
 export function SolicitacoesPage() {
+  const navigate = useNavigate();
   const [situacao, setSituacao] = useUrlState<string>('situacao', 'todas');
   const [busca, setBusca] = useState('');
 
@@ -60,7 +62,21 @@ export function SolicitacoesPage() {
   if (isError) return <ErrorScreen error={error} />;
 
   return (
-    <AppShell title="Solicitações" subtitle="O que os clientes pediram e ainda aguarda decisão.">
+    <AppShell
+      title="Solicitações"
+      subtitle="O que os clientes pediram e ainda aguarda decisão."
+      actions={
+        <Can permission="service_request.create">
+          <Button
+            variant="primary"
+            icon={<Plus className="size-4" />}
+            onClick={() => void navigate({ to: '/solicitacoes/nova' })}
+          >
+            Abrir solicitação
+          </Button>
+        </Can>
+      }
+    >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Tabs aria-label="Situação" items={abas} value={situacao} onChange={setSituacao} />
