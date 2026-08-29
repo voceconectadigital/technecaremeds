@@ -29,6 +29,7 @@ import {
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery } from '../../lib/api';
 import { AppShell } from '../../shell/app-shell';
+import { AlternadorDeTrabalho } from '../planos/alternador';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { useUrlState } from '../../lib/url-state';
@@ -42,25 +43,35 @@ export function OrdensPage() {
       subtitle="O que está em andamento, e onde está parado."
       bleed={vista === 'quadro'}
       actions={
-        <div className="flex items-center gap-1 rounded-control border border-border p-0.5">
-          <Button
-            size="sm"
-            variant={vista === 'quadro' ? 'secondary' : 'ghost'}
-            icon={<LayoutGrid className="size-4" />}
-            onClick={() => setVista('quadro')}
-            aria-pressed={vista === 'quadro'}
-          >
-            Quadro
-          </Button>
-          <Button
-            size="sm"
-            variant={vista === 'lista' ? 'secondary' : 'ghost'}
-            icon={<List className="size-4" />}
-            onClick={() => setVista('lista')}
-            aria-pressed={vista === 'lista'}
-          >
-            Lista
-          </Button>
+        <div className="flex items-center gap-3">
+          {/*
+            O alternador é NAVEGAÇÃO entre telas; o par Quadro/Lista é modo de
+            visualização DESTA tela. São coisas diferentes, e por isso ficam
+            visualmente separadas — juntá-las num grupo só ensinaria que
+            "Planos" é uma terceira forma de ver as ordens, que não é.
+          */}
+          <AlternadorDeTrabalho />
+          <span aria-hidden="true" className="h-5 w-px bg-border" />
+          <div className="flex items-center gap-1 rounded-control border border-border p-0.5">
+            <Button
+              size="sm"
+              variant={vista === 'quadro' ? 'secondary' : 'ghost'}
+              icon={<LayoutGrid className="size-4" />}
+              onClick={() => setVista('quadro')}
+              aria-pressed={vista === 'quadro'}
+            >
+              Quadro
+            </Button>
+            <Button
+              size="sm"
+              variant={vista === 'lista' ? 'secondary' : 'ghost'}
+              icon={<List className="size-4" />}
+              onClick={() => setVista('lista')}
+              aria-pressed={vista === 'lista'}
+            >
+              Lista
+            </Button>
+          </div>
         </div>
       }
     >

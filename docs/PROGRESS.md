@@ -21,6 +21,22 @@ Fonte de verdade de código: este repositório e o Git.
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022; PostgreSQL 16.14 em Docker para pool, concorrência e RLS sob papel real |
 
+
+### Lacuna conhecida — ciclo de plano nunca é fechado
+
+`aurora.plan_cycles.status` tem três valores (`planned`, `open`, `closed`) e **nada no
+sistema escreve `closed`**. Um ciclo aberto permanece aberto para sempre.
+
+Consequência medida: qualquer consulta que junte por `status = 'open'` devolve N linhas por
+tarefa a partir do segundo ciclo — a tarefa aparece duplicada, e um indicador construído sobre
+ela contaria cada equipamento duas vezes. As consultas de `/maintenance-plans` foram escritas
+para pegar o ciclo de **maior `seq`**, que é o corrente por construção, e há teste guardando
+essa propriedade.
+
+**Não inventei a regra de fechamento.** Fechar no fim da janela, no primeiro item concluído, ou
+na abertura do seguinte são três políticas diferentes, com efeitos diferentes sobre o indicador
+de cumprimento — e nenhuma delas está decidida na SPEC. Fica registrado como **A VALIDAR**.
+
 Portão de qualidade (`npm run verify`): auditoria da SPEC → typecheck → lint → conferência de contratos → testes.
 No CI acrescentam-se `format:check` e varredura de segredos.
 

@@ -30,6 +30,7 @@ import { EstoquePage } from '../features/estoque/lista';
 import { OrcamentosPage } from '../features/comercial/orcamentos';
 import { OrcamentoPage } from '../features/comercial/orcamento';
 import { ContratosPage, ContratoPage } from '../features/comercial/contratos';
+import { PlanosPage, PlanoPage } from '../features/planos/lista';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 const raiz = createRootRoute({ component: Outlet });
@@ -89,6 +90,14 @@ export const routeTree = raiz.addChildren([
   }),
 
   rotaProtegida('/agenda', AgendaPage),
+
+  rotaProtegida('/planos', PlanosPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/planos/$id',
+    component: PlanoPage,
+    beforeLoad: exigirSessao,
+  }),
 
   /*
    * As telas ainda não construídas dizem que não foram construídas.

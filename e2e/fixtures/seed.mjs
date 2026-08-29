@@ -182,6 +182,9 @@ async function main() {
     createAssetCategory,
     createAsset,
     createWarehouse,
+    createPlan,
+    addPlanTask,
+    generateCycle,
     createContract,
     addCoverage,
     createQuote,
@@ -356,6 +359,39 @@ async function main() {
         customerId: clienteId,
         validUntil: '2026-12-31',
       });
+
+      /*
+       * PLANO PREVENTIVO com uma tarefa cuja expressão alcança a SUBÁRVORE.
+       *
+       * O ciclo é gerado aqui de propósito: um plano sem ciclo aberto faria a
+       * tela de cumprimento não ter o que mostrar, e o teste passaria contra
+       * uma tela vazia — o mesmo erro da spec de console que dava sete telas
+       * limpas visitando telas sem dado dentro.
+       */
+      const plano = await createPlan(s, {
+        name: 'Preventiva trimestral ' + (org === E2E.orgA ? 'Alfa' : 'Beta'),
+        customerId: clienteId,
+        description: 'Inspeção e troca de filtros.',
+        autoGenerate: false,
+        anchorDate: new Date('2026-01-01T00:00:00Z'),
+      });
+      const naturezaId = await s.query(
+        `SELECT id FROM aurora.catalog_items WHERE catalog_key = 'work_order_type' LIMIT 1`
+      );
+      const tarefa = await addPlanTask(s, {
+        planId: plano,
+        name: 'Troca de filtro',
+        targetKind: 'location_subtree',
+        targetLocationId: local,
+        workOrderTypeId: naturezaId[0].id,
+        frequencyUnit: 'quarter',
+        frequencyInterval: 1,
+        leadTimeDays: 3650,
+        toleranceDays: 5,
+      });
+      // Antecedência enorme para o ciclo abrir agora, e não daqui a meses: a
+      // massa precisa do ciclo EXISTINDO para a tela ter o que mostrar.
+      await generateCycle(s, tarefa);
     });
   }
 
@@ -368,8 +404,9 @@ async function main() {
   const [{ ativos }] = await q(`SELECT count(*)::int AS ativos FROM aurora.assets`);
   const [{ saldos }] = await q(`SELECT count(*)::int AS saldos FROM aurora.stock_balances`);
   const [{ contratos }] = await q(`SELECT count(*)::int AS contratos FROM aurora.contracts`);
+  const [{ ciclos }] = await q(`SELECT count(*)::int AS ciclos FROM aurora.plan_cycles`);
   console.log(
-    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos, ${saldos} saldos, ${contratos} contratos`
+    `massa e2e criada: 2 organizações, ${pessoas} pessoas em ${vinculos} vínculos, ${locais} locais, ${ativos} ativos, ${saldos} saldos, ${contratos} contratos, ${ciclos} ciclos`
   );
 }
 
