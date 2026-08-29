@@ -17,7 +17,6 @@ import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@t
 import { EntrarPage } from './entrar';
 import { OrganizacoesPage } from './organizacoes';
 import { HojePage } from './hoje';
-import { EmConstrucao } from './em-construcao';
 import { lerSessaoGuardada } from '../lib/session-guard';
 
 
@@ -120,6 +119,9 @@ const NotificacoesPage = preguicosa(() =>
 );
 const DocumentosPage = preguicosa(() =>
   import('../features/documentos/lista').then((m) => ({ default: m.DocumentosPage }))
+);
+const PerfilPage = preguicosa(() =>
+  import('../features/perfil/pagina').then((m) => ({ default: m.PerfilPage }))
 );
 const AutomacoesPage = preguicosa(() =>
   import('../features/automacoes/lista').then((m) => ({ default: m.AutomacoesPage }))
@@ -226,9 +228,7 @@ export const routeTree = raiz.addChildren([
   }),
   rotaProtegida('/indicadores', IndicadoresPage),
   rotaProtegida('/notificacoes', NotificacoesPage),
-  rotaProtegida('/perfil', () => (
-    <EmConstrucao titulo="Meu perfil" descricao="Dados pessoais, fuso e preferências de aviso." />
-  )),
+  rotaProtegida('/perfil', PerfilPage),
 
   rotaProtegida('/configuracoes', MembrosPage),
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),

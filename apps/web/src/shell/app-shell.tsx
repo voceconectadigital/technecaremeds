@@ -163,9 +163,25 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
 
           <main
             id="conteudo"
-            // `tabIndex={-1}` para que o pulo do teclado consiga POUSAR aqui:
-            // sem isso o link move a rolagem e deixa o foco para trás.
-            tabIndex={-1}
+            /*
+              `tabIndex={0}`, e não `-1`.
+              
+              O `-1` já servia ao pulo do teclado: sem ele o link "pular para o
+              conteúdo" move a rolagem e deixa o foco para trás. O `0` faz
+              tudo isso E resolve o que a auditoria acusou: `<main>` ROLA, e
+              uma região que rola sem nada focável dentro é uma região que só o
+              mouse alcança.
+              
+              A tela de perfil é onde isso apareceu, porque é a única sem
+              nenhum botão ou link no conteúdo — nas outras, os elementos
+              focáveis de dentro davam ao teclado um caminho para rolar. Uma
+              tela só de leitura não tem esse caminho, e o conteúdo abaixo da
+              dobra ficava inalcançável.
+              
+              O preço é uma parada a mais na tabulação, que é exatamente o que
+              se quer numa região rolável.
+            */
+            tabIndex={0}
             className={cn('min-h-0 flex-1 overflow-auto outline-none', !bleed && 'p-4 md:p-6')}
           >
             {children}
