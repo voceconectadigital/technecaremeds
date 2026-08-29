@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F3 — Trabalho**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço) |
-| Épico seguinte                   | EPIC-011 — Execução: checklists, horas, peças e assinatura                                            |
-| Testes                           | **545**, todos verdes                                                           |
-| Migrations                       | 24 (`0000` a `0023`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F4 — Execução**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução) |
+| Épico seguinte                   | EPIC-010 — SLA, ou EPIC-012 — Planos de manutenção                                            |
+| Testes                           | **623**, todos verdes                                                           |
+| Migrations                       | 27 (`0000` a `0026`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 

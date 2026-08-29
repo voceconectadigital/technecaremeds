@@ -12,6 +12,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  PreconditionFailedError,
   eventForTransition,
   type StatusCategory,
   type TransitionDefinition,
@@ -21,6 +22,7 @@ import type { EventType } from '@aurora/events';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { transitionRequest } from './service-requests';
+import { completionCheck, completionRequirementsFor } from './execution';
 
 export interface StatusRow {
   id: string;
@@ -339,6 +341,33 @@ export async function transitionWorkOrder(
   });
   if (!avaliacao.allowed) {
     throw new InvalidTransitionError(atual.status_label, destino.label, avaliacao.allowedTargets);
+  }
+
+  // O BLOCO DE CONCLUSÃO (SPEC §10).
+  //
+  // Roda aqui, e não numa rota, porque concluir é uma transição — e uma
+  // transição vale igual pela API, pelo Kanban e pelo aplicativo de campo. Os
+  // requisitos vêm da NATUREZA da OS: uma preventiva exige checklist e foto,
+  // uma corretiva de urgência exige a resolução e mais nada.
+  //
+  // A recusa devolve a lista do que falta, item a item, com o detalhe. Nunca
+  // "Erro!" — quem lê isso está de pé, ao lado do equipamento.
+  if (destino.category === 'review') {
+    const requisitos = await completionRequirementsFor(session, workOrderId);
+    if (requisitos.length > 0) {
+      // A resolução informada nesta chamada ainda não está gravada; passa junto
+      // para não exigir duas idas ao banco nem recusar o que a pessoa acabou de
+      // escrever.
+      const check = await completionCheck(session, workOrderId, requisitos, {
+        resolution: input.resolution ?? atual.resolution,
+      });
+      if (!check.ok) {
+        throw new PreconditionFailedError(
+          `faltam requisitos para concluir: ${check.missing.map((m) => m.label).join('; ')}`,
+          { missing: check.missing }
+        );
+      }
+    }
   }
 
   const rows = await session.query<{ status_category: StatusCategory; version: number }>(

@@ -8,3 +8,4 @@ export * from './custom-fields';
 export * from './assets';
 export * from './service-requests';
 export * from './work-orders';
+export * from './checklists';
