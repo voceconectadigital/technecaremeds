@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F5 — SLA, planos e estoque**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque) |
-| Épico seguinte                   | EPIC-016 — Orçamentos, ou EPIC-017 — Contratos                                            |
-| Testes                           | **726**, todos verdes                                                           |
-| Migrations                       | 31 (`0000` a `0030`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F5 — SLA, planos, estoque e contratos**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos) |
+| Épico seguinte                   | EPIC-016 — Orçamentos, ou EPIC-013 — Agenda                                            |
+| Testes                           | **806**, todos verdes                                                           |
+| Migrations                       | 32 (`0000` a `0031`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -325,6 +325,36 @@ Falta de peça é a maior causa de OS travada: **789 registros de "aguardando pe
 
 ---
 
+## EPIC-017 — Contratos · **concluído**
+
+Na referência auditada, contrato é cadastro documental: nome, apelido, contratante, datas. Aqui é o instrumento que governa SLA, escopo, preço e medição — e é o que sustenta a conversa de renovação. A diferença prática aparece quando o cliente pergunta "o que eu paguei e o que eu recebi neste mês": lá a resposta é montada à mão numa planilha, com números que ninguém reproduz três meses depois.
+
+**A cobertura é expressão, não lista.** "Todos os ativos da categoria Ventilador na subárvore UTI" continua valendo para o ventilador que chegar amanhã — e há teste que cadastra um ativo depois do contrato e confere que ele entra sozinho. Uma lista marcada a mão envelhece no dia seguinte, e o ativo que ficou de fora é justamente o que gera a discussão sobre quem paga o conserto.
+
+**O preço dessa escolha, dito por extenso.** Dois contratos podem passar a disputar o mesmo ativo sem ninguém ter feito nada: basta o ativo novo casar com as duas expressões. A validação na escrita pega o conflito entre os ativos que existem hoje — e lista quais, com o número do outro contrato, porque "conflito" sem o onde faz o operador desistir e cadastrar o escopo errado. O conflito que nasce depois é resolvido por **especificidade**: vence quem nomeia mais de perto, com a profundidade da subárvore no desempate. Devolver os dois e deixar a aplicação escolher faria a política de SLA de uma OS depender da ordem de leitura do banco — pior que uma regra discutível, porque seria uma regra invisível.
+
+**O degrau que faltava na cascata de SLA.** A migration 0027 tinha deixado o `COALESCE` escrito para receber o contrato entre o ativo e o cliente; a 0031 cumpre isso sem mexer em quem já dependia da ordem, e o refinamento por criticidade entra DENTRO do degrau do contrato, por ser refinamento do mesmo acordo. A OS nasce carimbada com o contrato **por gatilho**, e não pela aplicação: OS nasce por três caminhos — manual, a partir de solicitação e gerada por plano — e carimbar num só lugar da aplicação seria descobrir meses depois que as preventivas não tinham contrato.
+
+**A medição sai dos fatos e depois congela.** Todos os números vêm das linhas que operaram o mês — OS, apontamentos, movimentos de estoque, relógios, itens de ciclo. Nenhum é digitado, e é isso que permite ao cliente conferir qualquer total descendo até a OS que o gerou. Enquanto o período está aberto ele se recalcula; fechado, o gatilho recusa escrita e exclusão. Sem isso, reabrir uma OS de março mudaria a fatura de março que o cliente já pagou, e existiriam dois relatórios do mesmo mês, ambos emitidos por nós.
+
+**Sobre a glosa: não há fórmula padrão, e isso é deliberado.** A auditoria não confirmou nenhuma regra de glosa na referência. Inventar uma escreveria no sistema uma cláusula que não está em contrato nenhum — o tipo de número que vira discussão jurídica com o cliente. Sem `penalty_percent_per_breach` configurado, o cálculo devolve **nulo**, não zero, e a medição mostra os SLA violados sem atribuir valor a eles. E `applied` é `false` no TIPO, não no valor: desconto em fatura de cliente é ato comercial, alguém assina embaixo.
+
+**Outras decisões**
+
+- **Contrato sem cobertura não se ativa.** Ativá-lo produziria o pior estado possível: a interface diz "vigente", o cliente acredita que está coberto, e a cascata não encontra nada.
+- **Expirar é derivado da data, não da varredura.** Um contrato que só expira quando o cron roda continua cobrindo ativo depois de vencido toda vez que o cron falha.
+- **Três respostas para cobertura de serviço**, não duas: incluído, incluído mas faturado à parte, e fora do escopo. Colapsar as duas últimas perderia de vista o serviço que o contrato prevê e cobra — que é o que entra na fatura como excedente.
+- **`GET` de período mede sem gravar**; fechar é rota própria com permissão própria (`contract.close_period`). A varredura de alertas é `POST` porque muda estado — um `GET` que expira contrato é armadilha para qualquer pré-carregamento de link.
+- **O alerta de renovação diz se a janela de aviso já fechou.** Num contrato com renovação automática e 60 dias de aviso prévio, faltando 45 dias a decisão já foi tomada por omissão. Avisar "vence em 30 dias" sem dizer isso convida o coordenador a uma negociação que ele já perdeu.
+
+### Adiado deliberadamente
+
+- **Tabela de preço do contrato** (a cascata `customer_item_alias` → `price_list` → catálogo): o primeiro degrau existe desde o EPIC-015; a tabela de preço nasce com o EPIC-016, que é quem a consome.
+- **Reajuste por índice**: `adjustment_index` guarda qual índice, mas aplicar o reajuste exige série histórica de índice econômico, que não existe no sistema e não se inventa.
+- **Franquia por natureza de OS**: hoje a franquia é de chamados e de horas, como a SPEC descreve. Franquia por natureza entra quando algum contrato real pedir.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -355,6 +385,8 @@ Falta de peça é a maior causa de OS travada: **789 registros de "aguardando pe
 | 24  | **"Violado" tratado como estado terminal do relógio**                     | Restrição `sla_clocks_stopped_has_elapsed` recusou a varredura                                                | Estourar o prazo não encerra nada: o trabalho continua e o tempo real só se sabe na conclusão. `breached_at` virou carimbo, não estado — sem isso o relatório perderia a diferença entre "estourou e resolveu em três dias" e "estourou" |
 | 25  | **Restrição de reserva quebrava no almoxarifado que aceita negativo**      | Teste do consignado com saldo abaixo de zero                                                                  | `reserved <= on_hand` recusava até a reserva zero quando o físico era negativo — travando a tabela inteira por causa de um saldo que a organização autorizou explicitamente. Passou a `reserved <= GREATEST(on_hand, 0)` |
 | 26  | **Consumo baixava o físico antes da reserva**                             | Autoauditoria da ordem das escritas em `consume`                                                              | Por um instante `reserved` ficaria maior que `on_hand` e a restrição recusaria a operação inteira. A ordem inversa nunca produz estado inválido: reserva menor que o físico é sempre legítima |
+| 27  | **O aviso de renovação anunciava sempre o marco mais distante**            | Teste de `renewalAlert` com 56 dias restantes                                                                  | `find` numa lista descendente devolvia 90 em vez de 60. Como a varredura só emite marco mais próximo que o último emitido, o contrato avisaria uma vez aos 90 dias e nunca mais — o aviso dos 30, que é o que faz alguém agir, jamais sairia |
+| 28  | **Renovar calava o contrato para sempre**                                 | Autoauditoria da idempotência da varredura                                                                    | O último marco avisado era lido sem recorte de vigência: um contrato que avisou aos 30 dias e depois foi renovado por mais um ano carregaria esse 30 adiante, e nenhum aviso da vigência nova passaria pela comparação — ficaria silencioso justamente por ter sido bem administrado da primeira vez. O recorte passou a ser pela data de término, e há teste que renova e exige o aviso novo |
 
 ---
 
@@ -365,6 +397,7 @@ Falta de peça é a maior causa de OS travada: **789 registros de "aguardando pe
 - **ADR-026 · sem `ltree`**: a extensão não existe no PGlite e não é garantida em PostgreSQL gerenciado. A árvore usa caminho materializado em `text` com índice `text_pattern_ops`. A SPEC foi corrigida em todas as seções afetadas.
 - **ADR-027 · sem `pg_trgm`**: mesma razão. Busca no núcleo com `tsvector` nativo e forma normalizada indexada; trigrama vira otimização opcional. A degradação é de qualidade de resultado, não de funcionalidade.
 - **ADR-028 · catálogos planos em `catalog_items`**: onde a SPEC v0.1 nomeia `work_order_types`, `failure_codes` e `rejection_reasons`, leia-se `catalog_items` com o `catalog_key` correspondente.
+- **P18 · dois eventos de contrato**: o §17 pede alerta de vencimento e trata encerramento como fato de negócio, mas o catálogo declarava só `contract.activated`, `contract.expiring` e `contract.period_closed`. Sem `contract.expired`, "vai vencer" e "venceu" seriam o mesmo evento; sem `contract.terminated`, o encerramento por decisão humana só existiria na trilha de auditoria, invisível a qualquer automação. A SPEC foi corrigida pelo mesmo pipeline reproduzível dos demais patches.
 - **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
 
 ---
