@@ -11,9 +11,9 @@ Fonte de verdade de código: este repositório e o Git.
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F7 — plataforma transversal**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações), EPIC-023 (busca global) |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações), EPIC-023 (busca global), EPIC-022 (auditoria) |
 | Épico seguinte                   | EPIC-020 — Portal, EPIC-014 — PWA de campo (exigem novas aplicações)                   |
-| Testes                           | **1216**, todos verdes                                                           |
+| Testes                           | **1242**, todos verdes                                                           |
 | Migrations                       | 38 (`0000` a `0037`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
@@ -561,6 +561,33 @@ A ausência de busca global é uma das lacunas mais custosas da referência: par
 - **Busca por similaridade** (erro de digitação em série e patrimônio): o §27 previa `pg_trgm`, que o ADR-027 já removeu por não existir no ambiente. A degradação é de qualidade de resultado, não de funcionalidade — "7737" continua achando "7737".
 - **Recência por interação do usuário**: o desempate usa `updated_at` do registro, e não o histórico de quem abriu o quê. A tabela de interações entra quando houver superfície que a alimente.
 - **Busca no cache local do PWA** (§27, offline): é do EPIC-014, junto com o aplicativo de campo.
+
+---
+
+## EPIC-022 — Auditoria · **concluído**
+
+A trilha com diff campo a campo é o melhor acerto do sistema de referência, e ela existe aqui desde a **migration 0002**: gatilho em toda tabela de negócio, IP e agente propagados por variável de sessão, campos sensíveis gravados como `[redacted]`, e append-only garantido por permissão de banco.
+
+O que faltava era o que este épico entrega: **como ler**. Uma trilha que ninguém consegue consultar tem exatamente o mesmo valor prático de trilha nenhuma na hora em que alguém pergunta "quem mexeu nisso?" — e é sempre nessa hora que se descobre.
+
+**A linha do tempo junta as duas camadas.** O §22 explica por que elas existem separadas: um evento não captura a edição de um campo qualquer, e um diff não sabe que "a OS foi concluída" é diferente de "o campo `status_id` mudou". Mas quem lê quer **a história do registro**, não duas listas para conciliar de cabeça — então a linha do tempo mistura mudança e fato em ordem cronológica, preservando o que cada um traz: o diff de um lado, o conteúdo do fato do outro, sem confundir os dois.
+
+**Duas permissões, porque são dois usos.** A história do próprio ativo ou da própria OS exige a permissão de LER AQUELE REGISTRO, resolvida por lista fechada de entidades — é o que permite embutir a linha do tempo na tela sem exigir perícia de quem opera o equipamento ("o usuário não deve precisar sair da tela para ver o histórico dela"). Já vasculhar a trilha inteira da organização atrás de quem fez o quê exige `audit.read`.
+
+**O identificador da requisição amarra a chamada inteira.** É a consulta que transforma "salvei e sumiram três campos" numa lista concreta em vez de uma investigação — e ela só funciona porque o `request_id` atravessa a aplicação e chega à trilha pela variável de sessão do PostgreSQL, desde o EPIC-001.
+
+**Outras decisões**
+
+- **O append-only é verificado, não assumido.** Há teste que PERGUNTA ao banco se o usuário da aplicação pode alterar ou apagar a trilha, além dos que tentam e recebem recusa. A garantia é de permissão, e permissão se perde numa migration distraída sem que nada mais quebre: a aplicação continuaria funcionando, e só um perito descobriria anos depois que a trilha podia ter sido editada.
+- **O corte da linha do tempo acontece DEPOIS da fusão.** Cortar antes traria as cem mudanças mais recentes e nenhum evento — ou o contrário —, e a história ficaria com um buraco que não se anuncia.
+- **A lista de entidades com linha do tempo é fechada**, e não o nome da tabela vindo da URL: aceitar qualquer nome transformaria a rota num leitor genérico da trilha de qualquer tabela, e a permissão de ler a OS passaria a servir para ler a trilha de `users`.
+- **O nome do ator vem resolvido na consulta.** "Quem mexeu nisso?" respondido com um uuid não é resposta.
+- **Falta de permissão na linha do tempo é 403, não 422.** O pedido está bem formado; quem pede é que não pode. Devolver "dado inválido" mandaria a pessoa corrigir o que está certo.
+
+### Adiado deliberadamente
+
+- **Arquivamento frio e purga por rotina** (§22: 24 meses on-line, mínimo de 5 anos para reguladas): depende de política de retenção contratada e de destino de arquivo, e a rotina que apaga trilha é a última coisa que se escreve sem o destino definido.
+- **Exportação da trilha** para perícia externa: entra com o motor de exportação, junto com o relatório do painel.
 
 ---
 
