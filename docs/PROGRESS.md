@@ -11,10 +11,10 @@ Fonte de verdade de código: este repositório e o Git.
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F2 — Ativos**                                                                 |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos) |
-| Épico seguinte                   | EPIC-006 — QR Code e etiquetas                                                  |
-| Testes                           | **373**, todos verdes                                                           |
-| Migrations                       | 17 (`0000` a `0016`), idempotentes, reprodutíveis do zero                       |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code) |
+| Épico seguinte                   | EPIC-007 — Solicitações e triagem                                               |
+| Testes                           | **386**, todos verdes                                                           |
+| Migrations                       | 18 (`0000` a `0017`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -147,6 +147,24 @@ Cadeia fabricante → modelo → ativo. Na referência, fabricante e modelo são
 
 ---
 
+## EPIC-006 — QR Code e etiquetas · **concluído**
+
+`/q/{token}` é a **única rota do sistema que responde sem sessão**, e por isso a suíte inteira é escrita do ponto de vista de quem tenta abusar dela.
+
+**Três decisões que a moldam**
+
+1. **Fora do prefixo `/v1`.** O endereço vai impresso numa etiqueta que ficará colada num equipamento por anos; versão de API numa etiqueta física é uma promessa que não temos como cumprir.
+2. **Resposta idêntica para token inexistente e para organização que não autorizou acesso anônimo.** Distinguir os dois faria da rota um oráculo: quem tivesse uma lista de tokens saberia quais existem. Um teste compara as duas respostas byte a byte.
+3. **A consulta vai por função `SECURITY DEFINER`** de argumento fixo (migration 0017), pelo mesmo padrão da resolução de identidade — sem contexto de tenant, a RLS nega tudo, corretamente.
+
+**O que a rota devolve, e o que não devolve.** Quem escaneia está fisicamente diante do equipamento, então nome e categoria não revelam nada que a pessoa não esteja vendo. Não saem daqui: número de série, patrimônio, caminho da árvore de locais, valores, observações internas, nem o id do ativo. Há teste que procura cada um deles no corpo da resposta.
+
+**`allow_anonymous_requests` tem padrão falso.** Uma etiqueta fotografada e repassada não deve virar canal de descoberta de inventário alheio.
+
+**Troca de token** (`rotate-qr`): invalida a etiqueta antiga na hora e devolve o token anterior, para quem operou identificar a etiqueta a recolher.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -167,6 +185,8 @@ Cadeia fabricante → modelo → ativo. Na referência, fabricante e modelo são
 | 14  | **Garantia expirava à meia-noite do último dia**                          | Teste de `isUnderWarranty`                                                                                    | `warranty_until` é DATA, não instante; comparar `Date` com `Date` acabava a cobertura de madrugada do próprio dia de vencimento                                                                                                                                              |
 | 15  | **`2025-02-30` passava na validação de importação**                       | Teste de `validateImportRow`                                                                                  | `Date.parse` rola para 2 de março em silêncio. A verificação passou a ser de ida e volta                                                                                                                                                                                     |
 | 16  | **Lote grande de importação respondia 500**                               | Teste de lote acima do limite                                                                                 | O limite padrão de corpo do Express é 100 kB e o erro nasce no middleware, antes de qualquer validação nossa. Limite explícito de 12 MB, documentado                                                                                                                         |
+| 17  | **Rota de etiquetas em lote respondia 431**                               | Teste de lote acima de 500                                                                                    | Quinhentos uuid numa query string dão 18 mil caracteres e o Node recusa antes de qualquer código nosso. A lista passou para o corpo, em `POST` — a alternativa era estreitar o produto para caber numa URL                                                                    |
+| 18  | **Limitador chaveado num cabeçalho que o cliente escreve**                | Autoauditoria da rota pública                                                                                 | `x-forwarded-for` é escrito pelo chamador: bastava trocá-lo a cada requisição. Passou a usar o endereço do soquete, e há teste que rotaciona o cabeçalho para provar que não escapa                                                                                           |
 
 ---
 

@@ -15,6 +15,7 @@ import { CustomersController } from './directory/customers.controller';
 import { TeamsController } from './directory/teams.controller';
 import { CatalogsController } from './catalogs/catalogs.controller';
 import { AssetsController } from './assets/assets.controller';
+import { QrController } from './assets/qr.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -46,6 +47,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       TeamsController,
       CatalogsController,
       AssetsController,
+      QrController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },

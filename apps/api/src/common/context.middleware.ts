@@ -28,8 +28,12 @@ type Next = (err?: unknown) => void;
  *  · me/*   — responde ANTES de existir organização no contexto; é a rota que
  *             o seletor de organização usa. Faz a própria verificação de
  *             credencial.
+ *  · q/*    — resolução pública de QR Code (§07). Não tem sessão por desenho;
+ *             a consulta vai por função SECURITY DEFINER de argumento fixo, e
+ *             a rota devolve a mesma resposta para token inexistente e para
+ *             organização que não permite acesso anônimo.
  */
-const PUBLIC_PATH = /(^|\/)(health|me)(\/|$)/;
+const PUBLIC_PATH = /(^|\/)(health|me|q)(\/|$)/;
 
 export function createContextMiddleware(resolver: ContextResolver, logger: StructuredLogger) {
   return async function contextMiddleware(req: AuroraRequest, _res: unknown, next: Next): Promise<void> {

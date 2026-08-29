@@ -21,6 +21,9 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   app.use(urlencoded({ extended: false, limit: '1mb' }));
   app.useGlobalFilters(new DomainErrorFilter(logger));
   app.useGlobalGuards(new PermissionsGuard(app.get(Reflector)));
-  app.setGlobalPrefix('v1');
+  // A rota do QR fica fora de `/v1`: o endereço vai impresso numa etiqueta que
+  // ficará colada num equipamento por anos, e versão de API numa etiqueta
+  // física é uma promessa que não temos como cumprir.
+  app.setGlobalPrefix('v1', { exclude: ['q/:token'] });
   return app;
 }
