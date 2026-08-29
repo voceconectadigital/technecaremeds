@@ -14,3 +14,4 @@ export * from './work-orders';
 export * from './execution';
 export * from './sla';
 export * from './maintenance-plans';
+export * from './inventory';

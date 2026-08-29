@@ -24,6 +24,7 @@ import { emitEvent } from './outbox';
 import { transitionRequest } from './service-requests';
 import { completionCheck, completionRequirementsFor } from './execution';
 import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
+import { releaseReservations } from './inventory';
 
 export interface StatusRow {
   id: string;
@@ -449,6 +450,10 @@ export async function transitionWorkOrder(
     // Cancelou: o prazo é descartado, não estourado. Contar como violação
     // puniria a organização por não executar o que o cliente desistiu de pedir.
     await cancelSlaClocks(session, 'work_order', workOrderId);
+    // E a peça reservada volta a ficar disponível. Sem isto, cancelar uma OS
+    // deixaria peça reservada para sempre, e o disponível iria minguando sem
+    // que o físico mudasse — até alguém descobrir que "tem, mas não pode usar".
+    await releaseReservations(session, workOrderId);
   }
 
   // Reabrir abre um relógio de RESOLUÇÃO novo; o anterior fica para o

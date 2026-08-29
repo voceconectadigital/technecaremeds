@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F5 — SLA e agenda**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos) |
-| Épico seguinte                   | EPIC-015 — Estoque, ou EPIC-021 — Analytics                                            |
-| Testes                           | **702**, todos verdes                                                           |
-| Migrations                       | 30 (`0000` a `0029`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F5 — SLA, planos e estoque**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque) |
+| Épico seguinte                   | EPIC-016 — Orçamentos, ou EPIC-017 — Contratos                                            |
+| Testes                           | **726**, todos verdes                                                           |
+| Migrations                       | 31 (`0000` a `0030`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -300,6 +300,31 @@ O modelo da referência é bom — ciclos, janela, progresso, conformidade, gera
 
 ---
 
+## EPIC-015 — Estoque · **concluído**
+
+Falta de peça é a maior causa de OS travada: **789 registros de "aguardando peça"** na referência auditada. O estoque não é módulo acessório aqui — é o desbloqueador do fluxo principal, e três decisões estruturais sustentam isso.
+
+**1 — O movimento é um livro-razão imutável.** Não se apaga nem se edita um movimento; há gatilho que recusa `UPDATE` e `DELETE` na tabela. Correção é sempre um movimento inverso com elo para o original. Um estoque cujo histórico pode ser reescrito não explica a diferença que o inventário encontrou — e diferença inexplicada é o que faz o almoxarife parar de confiar no sistema e voltar para a planilha.
+
+**2 — O saldo é projeção; a proibição de negativo é restrição, não leitura prévia.** `stock_balances` é mantido por gatilho a partir do razão, e saldo negativo é recusado por `CHECK`. Duas baixas simultâneas do último item passariam as duas por uma verificação prévia; nenhuma passa por um `CHECK`. O erro devolvido diz **quanto há**, porque "saldo insuficiente" sem o número obriga a uma segunda consulta.
+
+**3 — Reserva reduz o disponível, não o físico.** Reservar peça para uma OS não tira nada da prateleira. É a diferença entre "tem" e "posso usar", e é ela que impede duas OS de contarem com a mesma peça — o defeito que trava as duas em vez de uma. `available = on_hand − reserved` é coluna gerada; ninguém precisa lembrar da subtração.
+
+**Outras decisões**
+
+- **Custo médio móvel só se move na entrada.** Recalcular na saída faria o custo derivar a cada baixa, e o valor do acervo passaria a depender do ritmo de consumo. Há teste que fixa isso.
+- **Almoxarifado que aceita negativo ainda exige justificativa** em cada movimento que a gere (consignado, por exemplo). Liberar o negativo é decisão da organização; deixar de dizer por quê, não.
+- **Cancelar OS libera as reservas.** Sem isso a peça fica presa a um trabalho que não vai acontecer, e o próximo técnico recebe "não tem" de um item que está na prateleira.
+- **Peça pendente entra no bloco de conclusão** (`partsPending`): não se conclui OS com reserva aberta sem consumo nem devolução, porque dali em diante o saldo mentiria.
+- **O carro do técnico é um almoxarifado com dono** (`kind = 'van'` exige `owner_membership_id`), não um lugar sem contabilidade.
+
+### Adiado deliberadamente
+
+- **Lotes e números de série** (`item_tracking = lot | serial`): as tabelas e a coluna existem, e `stock_lots` já é escrita; exigir o rastreio na baixa entra com o épico de rastreabilidade, que é onde isso tem consumidor.
+- **Requisição de compra a partir do mínimo**: `setMinimum` e `checkMinimum` já sinalizam a ruptura; a compra em si é o EPIC-016 (orçamentos e suprimento).
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -328,6 +353,8 @@ O modelo da referência é bom — ciclos, janela, progresso, conformidade, gera
 | 22  | **Rotas de recurso sob o prefixo errado**                                 | 404 no teste de execução                                                                                      | `checklist-responses` e `time-entries` são recursos próprios e estavam sob `@Controller('work-orders')`, virando `/work-orders/checklist-responses/...`. Controlador separado                                                        |
 | 23  | **O guarda de OS fechada bloqueava a própria reabertura**                 | Teste de SLA que reabre para conferir o relógio novo                                                          | O guarda recusava qualquer update em OS fechada, inclusive a transição `closed → in_progress` que a SPEC descreve em detalhe. Passou a bloquear só edição de CAMPO; mudar de situação segue sendo assunto do grafo                        |
 | 24  | **"Violado" tratado como estado terminal do relógio**                     | Restrição `sla_clocks_stopped_has_elapsed` recusou a varredura                                                | Estourar o prazo não encerra nada: o trabalho continua e o tempo real só se sabe na conclusão. `breached_at` virou carimbo, não estado — sem isso o relatório perderia a diferença entre "estourou e resolveu em três dias" e "estourou" |
+| 25  | **Restrição de reserva quebrava no almoxarifado que aceita negativo**      | Teste do consignado com saldo abaixo de zero                                                                  | `reserved <= on_hand` recusava até a reserva zero quando o físico era negativo — travando a tabela inteira por causa de um saldo que a organização autorizou explicitamente. Passou a `reserved <= GREATEST(on_hand, 0)` |
+| 26  | **Consumo baixava o físico antes da reserva**                             | Autoauditoria da ordem das escritas em `consume`                                                              | Por um instante `reserved` ficaria maior que `on_hand` e a restrição recusaria a operação inteira. A ordem inversa nunca produz estado inválido: reserva menor que o físico é sempre legítima |
 
 ---
 

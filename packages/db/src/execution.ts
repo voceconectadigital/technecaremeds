@@ -17,6 +17,7 @@ import {
   type CompletionFacts,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
+import { pendingPartsCount } from './inventory';
 
 /* -------------------------------------------------------------------------- */
 /* templates                                                                   */
@@ -656,8 +657,7 @@ export async function completionCheck(
     photosBefore: Number(fatos.photos_before ?? 0),
     photosAfter: Number(fatos.photos_after ?? 0),
     hasCustomerSignature: Boolean(fatos.has_customer_signature),
-    // Peças entram no EPIC-015; até lá não há pendência de consumo a verificar.
-    partsPending: 0,
+    partsPending: await pendingPartsCount(session, workOrderId),
   };
 
   const resultado = checkCompletion(required, facts);
