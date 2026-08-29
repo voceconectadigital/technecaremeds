@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F4 — Execução**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução) |
-| Épico seguinte                   | EPIC-010 — SLA, ou EPIC-012 — Planos de manutenção                                            |
-| Testes                           | **623**, todos verdes                                                           |
-| Migrations                       | 27 (`0000` a `0026`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F5 — SLA e agenda**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA) |
+| Épico seguinte                   | EPIC-012 — Planos de manutenção preventiva                                            |
+| Testes                           | **679**, todos verdes                                                           |
+| Migrations                       | 29 (`0000` a `0028`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -232,6 +232,51 @@ O registro central do produto. A referência tinha **42 estados** porque codific
 
 ---
 
+## EPIC-011 — Execução: checklists, horas e assinatura · **concluído**
+
+**ADR-012 — o checklist é relacional e versionado.** A referência o guarda como array JSON numa coluna: simples de escrever, impossível de versionar, consultar ou agregar. "Quantos ventiladores reprovaram no teste de pressão no último trimestre?" não tem resposta a partir de um JSON solto.
+
+Publicar uma versão a torna **imutável por gatilho** — template, seções e itens. Mudar exige criar a próxima versão, e as respostas antigas continuam apontando para a que foi de fato usada. Um teste muda a faixa na v2 e confere que a resposta da v1 não se mexe.
+
+**O motor vive no domínio**, testado sem banco: veredito automático, visibilidade condicional e completude precisam valer igual na web, no aplicativo de campo e no servidor. Item oculto por condição não é obrigatório e não entra na completude — sem isso, um checklist condicional nunca fecharia.
+
+**O veredito é do servidor, nunca do cliente.** Aceitar `verdict` no corpo permitiria marcar como aprovado um valor fora da faixa; há teste que envia `verdict: pass` com valor fora da faixa e confere que volta `fail`.
+
+**Três decisões de execução**
+
+1. **Custo/hora congelado no apontamento.** Reajustar a tabela não pode reescrever o custo de uma OS fechada mês passado.
+2. **Um cronômetro aberto por pessoa**, e apontamentos que não se sobrepõem. Duas OS em execução pela mesma pessoa no mesmo minuto é impossível no mundo físico e, se aceito, dobra a hora faturada.
+3. **A assinatura guarda o hash do que foi assinado.** O produto não impede alterar uma OS assinada — impede fingir que a assinatura ainda cobre o texto novo.
+
+**O bloco de conclusão passou a valer.** Roda dentro da transição para "Concluída", com os requisitos configurados por natureza, e devolve **412 com a lista do que falta, item a item, com o detalhe**. Natureza sem requisitos não impõe burocracia nenhuma.
+
+---
+
+## EPIC-010 — SLA · **concluído**
+
+A referência põe `tempo_atendimento` e `tempo_fechamento` em minutos **no equipamento** e mede "% de chamados cumpridos dentro do prazo". É um começo correto e não suporta contrato, horário comercial nem feriado.
+
+**O cálculo de tempo útil é a peça mais fácil de errar do produto**, e o erro é silencioso: um SLA que diz "cumprido" quando estourou não avisa ninguém. Por isso o motor é puro, percorre dia a dia no fuso do calendário, e tem 33 testes com fusos e feriados reais — incluindo a semana da virada do horário de verão em Nova York e o caso da SPEC: uma prestadora de Belo Horizonte atendendo uma base em **Manaus**, que não tem horário de verão.
+
+**Sem dependência de biblioteca de fuso**: `Intl.DateTimeFormat` com `timeZone` já resolve, e vem no Node.
+
+**Três decisões estruturais**
+
+1. **A política resolvida é congelada no relógio** — alvo em minutos e calendário inteiro. Trocar o contrato amanhã não reescreve se o atendimento de ontem cumpriu o prazo.
+2. **Os dois tempos são gravados sempre**: corridos e úteis. Guardar só o segundo obrigaria a recalcular o histórico ao mudar um calendário, e histórico recalculado deixa de ser histórico.
+3. **Reabrir cria um relógio novo**; o anterior permanece. Reincidência se mede exatamente por isso.
+
+**O ADR-004 provado de ponta a ponta**: falta de peça **não** pausa o relógio (o atraso é da organização); espera por aprovação de orçamento pausa. A retomada empurra o prazo pelo tempo **útil** perdido — uma pausa de sexta 18 h a segunda 8 h não consome prazo nenhum.
+
+**Cascata de resolução** (§11): ativo → cliente → organização, com o degrau do contrato deixado pronto para o EPIC-017. Sem calendário configurado, o padrão é 24×7: SLA que funciona, não SLA que explode.
+
+### Adiado deliberadamente
+
+- **Degrau do contrato** na cascata: depende do EPIC-017. O `COALESCE` já está escrito para receber a coluna sem mudar a ordem.
+- **A varredura roda sob demanda**, não em cron: o agendador durável depende de PostgreSQL real (pendência do EPIC-001). A função está pronta e testada; falta quem a chame de minuto em minuto.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -257,6 +302,9 @@ O registro central do produto. A referência tinha **42 estados** porque codific
 | 19  | **Situação que exige motivo confundida com categoria**                    | O grafo permitia pausar, mas a restrição de tabela exigia motivo                                              | "Pausada" e "Aguardando" compartilham a categoria `waiting`; só a segunda tem dependência externa a nomear. Exigir motivo virou propriedade da SITUAÇÃO. Exigir em pausar obrigaria a inventar motivo, e motivo inventado envenena o relatório que o ADR-004 produz |
 | 20  | **Histórico embaralhado dentro de uma transação**                         | Teste do EPIC-008 leu quatro transições feitas no mesmo COMMIT e recebeu as linhas fora de ordem              | Dentro de uma transação `now()` é constante: `changed_at` ficava idêntico e o desempate caía no uuid, que é aleatório. Sequência monotônica + `clock_timestamp()`; migration 0023 aplica o mesmo ao histórico de solicitações |
 | 21  | **Rota resolvida por ordem de declaração**                                | Autoauditoria, aplicando ao EPIC-008 o princípio enunciado no EPIC-006                                         | `/work-orders/board` casaria com `:id`. O parâmetro passou a ser restrito ao formato de uuid no próprio caminho, onde a decisão fica visível |
+| 22  | **Rotas de recurso sob o prefixo errado**                                 | 404 no teste de execução                                                                                      | `checklist-responses` e `time-entries` são recursos próprios e estavam sob `@Controller('work-orders')`, virando `/work-orders/checklist-responses/...`. Controlador separado                                                        |
+| 23  | **O guarda de OS fechada bloqueava a própria reabertura**                 | Teste de SLA que reabre para conferir o relógio novo                                                          | O guarda recusava qualquer update em OS fechada, inclusive a transição `closed → in_progress` que a SPEC descreve em detalhe. Passou a bloquear só edição de CAMPO; mudar de situação segue sendo assunto do grafo                        |
+| 24  | **"Violado" tratado como estado terminal do relógio**                     | Restrição `sla_clocks_stopped_has_elapsed` recusou a varredura                                                | Estourar o prazo não encerra nada: o trabalho continua e o tempo real só se sabe na conclusão. `breached_at` virou carimbo, não estado — sem isso o relatório perderia a diferença entre "estourou e resolveu em três dias" e "estourou" |
 
 ---
 

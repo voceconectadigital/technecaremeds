@@ -23,6 +23,7 @@ import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { transitionRequest } from './service-requests';
 import { completionCheck, completionRequirementsFor } from './execution';
+import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
 
 export interface StatusRow {
   id: string;
@@ -242,6 +243,23 @@ export async function createWorkOrder(
       aggregateId: id,
       payload: { number: numero, customer_id: input.customerId, asset_id: input.assetId ?? null },
     });
+
+    // Os relógios de ATENDIMENTO e RESOLUÇÃO nascem com a OS publicada (§11).
+    // O de RESPOSTA não nasce aqui: ele vive na solicitação, e mede o tempo até
+    // alguém olhar — coisa diferente de tempo até consertar. Manter os dois no
+    // mesmo relógio é o que a referência fazia, e é o que impede saber se o
+    // gargalo está na triagem ou na oficina.
+    for (const kind of ['onsite', 'resolution'] as const) {
+      await startSlaClock(session, {
+        documentType: 'work_order',
+        documentId: id,
+        kind,
+        priority: input.priority ?? 'none',
+        assetId: input.assetId ?? null,
+        customerId: input.customerId,
+        locationId: input.locationId ?? null,
+      });
+    }
   }
   return { id, number: numero };
 }
@@ -404,6 +422,60 @@ export async function transitionWorkOrder(
       session.context.actorId,
     ]
   );
+
+  // OS RELÓGIOS DE SLA SEGUEM A CATEGORIA (§11).
+  //
+  // Ligado aqui, e não numa rota, pela mesma razão do bloco de conclusão: é uma
+  // consequência da transição, e transição é uma só para toda a aplicação.
+  //
+  // A pausa só acontece quando o MOTIVO determina pausa. Falta de peça, por
+  // padrão, não pausa: o atraso é da organização, e um relógio que para aí
+  // perdoaria o próprio atraso (ADR-004).
+  if (destino.category === 'in_progress') {
+    await resumeSlaClocks(session, 'work_order', workOrderId);
+    await stopSlaClock(session, 'work_order', workOrderId, 'onsite');
+  } else if (destino.category === 'waiting' && input.waitReasonId) {
+    const [motivo] = await session.query<{ pauses_sla: boolean }>(
+      `SELECT pauses_sla FROM aurora.wait_reasons WHERE id = $1`,
+      [input.waitReasonId]
+    );
+    if (motivo?.pauses_sla) {
+      await pauseSlaClocks(session, 'work_order', workOrderId, input.waitReasonId);
+    }
+  } else if (destino.category === 'review') {
+    await resumeSlaClocks(session, 'work_order', workOrderId);
+    await stopSlaClock(session, 'work_order', workOrderId, 'resolution');
+  } else if (destino.category === 'cancelled') {
+    // Cancelou: o prazo é descartado, não estourado. Contar como violação
+    // puniria a organização por não executar o que o cliente desistiu de pedir.
+    await cancelSlaClocks(session, 'work_order', workOrderId);
+  }
+
+  // Reabrir abre um relógio de RESOLUÇÃO novo; o anterior fica para o
+  // histórico. É assim que reincidência se mede (§11).
+  if (destino.category === 'in_progress' && atual.category === 'closed') {
+    const [dados] = await session.query<{
+      customer_id: string;
+      asset_id: string | null;
+      location_id: string | null;
+      priority: RequestPriority;
+    }>(
+      `SELECT customer_id, asset_id, location_id, priority::text AS priority
+         FROM aurora.work_orders WHERE id = $1`,
+      [workOrderId]
+    );
+    if (dados) {
+      await startSlaClock(session, {
+        documentType: 'work_order',
+        documentId: workOrderId,
+        kind: 'resolution',
+        priority: dados.priority,
+        assetId: dados.asset_id,
+        customerId: dados.customer_id,
+        locationId: dados.location_id,
+      });
+    }
+  }
 
   const evento = eventForTransition(
     { key: atual.status_key, label: atual.status_label, category: atual.category },

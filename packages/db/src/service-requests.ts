@@ -20,6 +20,7 @@ import {
 import type { EventType } from '@aurora/events';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
+import { startSlaClock, stopSlaClock, cancelSlaClocks } from './sla';
 
 export interface ServiceRequestInput {
   customerId: string;
@@ -107,6 +108,19 @@ export async function createServiceRequest(
       type: 'service_request.created',
       aggregateId: id,
       payload: { number: numero, customer_id: input.customerId, asset_id: input.assetId ?? null },
+    });
+
+    // O relógio de RESPOSTA — tempo até alguém olhar — vive aqui, e não na OS.
+    // É a separação do ADR-002 aparecendo no SLA: demanda e trabalho têm prazos
+    // diferentes porque são coisas diferentes.
+    await startSlaClock(session, {
+      documentType: 'service_request',
+      documentId: id,
+      kind: 'response',
+      priority: input.requestedPriority ?? 'none',
+      assetId: input.assetId ?? null,
+      customerId: input.customerId,
+      locationId: input.locationId ?? null,
     });
   }
   return { id, number: numero };
@@ -249,6 +263,15 @@ export async function transitionRequest(
       session.context.actorId,
     ]
   );
+
+  // O relógio de resposta encerra na TRIAGEM: o compromisso é olhar, não
+  // resolver. Encerrá-lo no aceite mediria outra coisa e esconderia o tempo que
+  // a solicitação passou parada esperando decisão.
+  if (to === 'triage') {
+    await stopSlaClock(session, 'service_request', requestId, 'response');
+  } else if (to === 'rejected' || to === 'duplicate' || to === 'cancelled') {
+    await cancelSlaClocks(session, 'service_request', requestId);
+  }
 
   const evento = EVENT_BY_STATUS[to];
   if (evento) {

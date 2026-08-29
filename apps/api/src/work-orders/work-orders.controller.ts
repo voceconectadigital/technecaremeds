@@ -18,6 +18,7 @@ import {
   loadTransitionGraph,
   workOrderHistory,
   waitTimeByReason,
+  slaStatus,
   type Database,
 } from '@aurora/db';
 import {
@@ -212,7 +213,15 @@ export class WorkOrdersController {
         })
         .filter((x) => x.allowed);
 
-      return { ...row, history: await workOrderHistory(s, woId), available_transitions: disponiveis };
+      return {
+        ...row,
+        history: await workOrderHistory(s, woId),
+        // O SLA vem na ficha porque é o que decide a ordem do dia de quem
+        // atende. Numa consulta à parte, a informação chegaria depois da
+        // decisão que ela deveria orientar.
+        sla: await slaStatus(s, 'work_order', woId),
+        available_transitions: disponiveis,
+      };
     });
   }
 

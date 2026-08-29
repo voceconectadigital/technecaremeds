@@ -12,3 +12,4 @@ export * from './assets';
 export * from './service-requests';
 export * from './work-orders';
 export * from './execution';
+export * from './sla';
