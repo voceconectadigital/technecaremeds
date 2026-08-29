@@ -1,5 +1,5 @@
 /**
- * Aurora — notificações (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — notificações (SPEC v0.2 §23 · EPIC-023).
  *
  * O inimigo declarado deste épico é o excesso, e é ele que estes testes
  * protegem: silêncio que atravessa a meia-noite, duplicata na janela, e-mail

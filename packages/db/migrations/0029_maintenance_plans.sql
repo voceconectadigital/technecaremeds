@@ -1,5 +1,5 @@
 -- =============================================================================
--- Aurora — 0029 planos de manutenção preventiva (SPEC v0.2 §12) · EPIC-012
+-- Aurora — 0029 planos de manutenção preventiva (SPEC v0.2 §12) · EPIC-013
 --
 -- DUAS CORREÇÕES ESTRUTURAIS SOBRE O MODELO DA REFERÊNCIA
 --

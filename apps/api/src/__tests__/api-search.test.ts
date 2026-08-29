@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global pela HTTP (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global pela HTTP (SPEC v0.2 §27 · EPIC-025).
  *
  * O critério do épico na borda: uma tecla acha o registro sem saber a lista, e
  * o que está fora do escopo de quem procura não aparece — nem no contador.

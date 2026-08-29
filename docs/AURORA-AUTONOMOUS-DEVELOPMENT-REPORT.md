@@ -1,6 +1,12 @@
 # AURORA — RELATÓRIO DE DESENVOLVIMENTO AUTÔNOMO
 
-**Data:** 29 de agosto de 2026 · **Branch:** `main` · **Último commit:** `0d32732`
+**Data:** 29 de agosto de 2026 · **Branch:** `main`
+
+> **Reconciliado em 29/08/2026.** A primeira versão trazia dois números errados, corrigidos
+> aqui pela medição: dizia "vinte épicos" enquanto listava 21 na própria tabela, e quatro
+> épicos estavam com o número trocado em relação à SPEC — inclusive o **EPIC-019, que na
+> SPEC é Metrologia e nunca foi implementado**. A seção de reconciliação do `PROGRESS.md`
+> traz a tabela de correspondência.
 
 ---
 
@@ -8,7 +14,7 @@
 
 O **backend completo do MVP do Aurora**, um CMMS multitenant derivado da auditoria somente-leitura do sistema de referência TechneCare/Arkmeds e especificado pelo `docs/AURORA-CMMS-SPEC-v0.2.md`.
 
-Vinte épicos entregues, cada um com camada de domínio pura, camada de dados, borda HTTP e suíte de testes contra banco real:
+Vinte e um épicos entregues, cada um com camada de domínio pura, camada de dados, borda HTTP e suíte de testes contra banco real:
 
 | Épico | Entrega |
 | --- | --- |
@@ -22,23 +28,23 @@ Vinte épicos entregues, cada um com camada de domínio pura, camada de dados, b
 | 008 | Ordens de serviço: máquina de estados configurável, motivos de espera separados |
 | 010 | SLA: relógios em minutos úteis, fuso do local, pausa por motivo declarado |
 | 011 | Execução: checklists versionados, apontamento de horas, assinatura com evidência |
-| 012 | Planos preventivos: frequência por tarefa, alvo como expressão |
-| 013 | Agenda: três lentes, conferência antes de soltar o cartão, ausência que arrasta a janela |
+| 012 | Agenda: três lentes, conferência antes de soltar o cartão, ausência que arrasta a janela |
+| 013 | Planos preventivos: frequência por tarefa, alvo como expressão |
 | 015 | Estoque: razão imutável, reserva que separa "tem" de "posso usar" |
 | 016 | Orçamentos: versionamento real, dinheiro em centavos, cascata de preço |
 | 017 | Contratos: cobertura como expressão, medição derivada e congelada |
 | 018 | Motor único de documentos: um substitui os seis da referência |
-| 019 | Notificações: de-duplicação, silêncio no fuso do destinatário, resumo |
 | 021 | Indicadores: todo número viaja com a sua definição |
 | 022 | Auditoria: leitura da trilha e linha do tempo com as duas camadas |
-| 023 | Busca global: achar sem saber em qual lista procurar |
+| 023 | Notificações: de-duplicação, silêncio no fuso do destinatário, resumo |
 | 024 | Automações: um motor de regras cujas salvaguardas são o produto |
+| 025 | Busca global: achar sem saber em qual lista procurar |
 
 ## 2. Números
 
 | Métrica | Valor |
 | --- | --- |
-| Commits | 31 |
+| Commits | 32 |
 | Migrations | 38 (`0000` a `0037`), idempotentes, reprodutíveis do zero |
 | Tabelas | 92, todas com RLS `FORCE` e isolamento por organização |
 | Testes | **1.242**, todos verdes |
@@ -63,12 +69,12 @@ Os números da referência auditada não são enfeite de apresentação: cada um
 
 | Achado na referência | O que virou |
 | --- | --- |
-| **2.950 serviços não agendados** | A agenda confere antes de soltar o cartão (EPIC-013): descobrir o conflito ao salvar é o custo que faz programar valer menos que ligar para o técnico |
+| **2.950 serviços não agendados** | A agenda confere antes de soltar o cartão (EPIC-012): descobrir o conflito ao salvar é o custo que faz programar valer menos que ligar para o técnico |
 | **789 registros de "aguardando peça"** | O estoque é o desbloqueador do fluxo, não módulo acessório (EPIC-015); e "aguardando peça" **não pausa o SLA**, porque a falta é nossa |
-| **826 planos de manutenção**, muitos duplicando escopo | Frequência é da TAREFA, não do plano (EPIC-012) |
+| **826 planos de manutenção**, muitos duplicando escopo | Frequência é da TAREFA, não do plano (EPIC-013) |
 | **Seis módulos documentais** com 90 % de estrutura comum | Um motor com tipos (EPIC-018): cinco implementações eliminadas |
 | **"Robôs" com 2 gatilhos e 1 ação real** | Motor de regras declarativo, com as quatro salvaguardas do §24 (EPIC-024) |
-| **Sem busca global**: para achar "patrimônio 7737" é preciso saber a lista | A busca é a primeira tecla, e identificador exato vem sempre primeiro (EPIC-023) |
+| **Sem busca global**: para achar "patrimônio 7737" é preciso saber a lista | A busca é a primeira tecla, e identificador exato vem sempre primeiro (EPIC-025) |
 | **Fórmulas de MTTR, MTBF e disponibilidade não confirmáveis** | Todo indicador carrega numerador, denominador, exclusões e aviso de comparabilidade (EPIC-021) |
 
 ## 5. Segurança do multitenant
@@ -174,9 +180,9 @@ Cada adiamento tem razão registrada no épico correspondente. Os que mais impor
 
 ## 14. O que NÃO foi construído
 
-**As três aplicações de interface**: `apps/web` (operação interna), `apps/portal` (cliente) e `apps/field` (PWA do técnico), mais o pacote `packages/ui`.
+**As quatro frentes de interface**: `apps/web` (operação interna), `apps/portal` (cliente) e `apps/field` (PWA do técnico), mais o pacote `packages/ui`.
 
-Isso é dito sem rodeio: são os épicos 009, 014 e 020, e são uma superfície inteiramente nova — outra disciplina, outro conjunto de decisões, e trabalho de vários épicos. O backend que elas consumiriam está pronto e testado; a decisão de começá-las é do usuário, não minha, porque implica escolher pilha de frontend e desenho de interação que a SPEC descreve mas não fecha.
+Isso é dito sem rodeio: são os épicos 009 (interface de OS), 014 (PWA) e 020 (portal), e são uma superfície inteiramente nova — outra disciplina, outro conjunto de decisões, e trabalho de vários épicos. O backend que elas consumiriam está pronto e testado; a decisão de começá-las é do usuário, não minha, porque implica escolher pilha de frontend e desenho de interação que a SPEC descreve mas não fecha.
 
 ## 15. Lacunas conhecidas, ditas por extenso
 
@@ -237,7 +243,7 @@ O padrão é o mesmo em todos: **a decisão de desenho que economiza uma semana 
 
 ## 20. Estado final
 
-O backend do MVP está **completo, testado e íntegro**. Vinte épicos, 38 migrations, 1.242 testes verdes, 40 defeitos encontrados e corrigidos pela própria suíte, zero segredos versionados, zero commits quebrados, zero operações remotas não autorizadas.
+O backend do MVP está **completo, testado e íntegro**. Vinte e um épicos, 38 migrations, 1.242 testes verdes, 40 defeitos encontrados e corrigidos pela própria suíte, zero segredos versionados, zero commits quebrados, zero operações remotas não autorizadas.
 
 Nenhuma fórmula foi inventada, nenhuma validade jurídica foi afirmada, e tudo o que ficou de fora está dito por extenso — com a razão, e não com uma promessa.
 

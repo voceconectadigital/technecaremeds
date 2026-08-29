@@ -1,5 +1,5 @@
 /**
- * Aurora — notificações pela HTTP (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — notificações pela HTTP (SPEC v0.2 §23 · EPIC-023).
  *
  * A caixa de entrada é sempre a de QUEM PEDE. Não existe rota para ler a caixa
  * de outra pessoa, e o vínculo vem do contexto autenticado, nunca do corpo ou

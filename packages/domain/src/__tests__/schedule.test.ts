@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda: conflitos, carga e baldes (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda: conflitos, carga e baldes (SPEC v0.2 §13 · EPIC-012).
  *
  * O que estes testes fixam é a decisão de produto do §13: ausência bloqueia,
  * sobreposição avisa. Trocar isso de lado, nos dois sentidos, é o que faz uma

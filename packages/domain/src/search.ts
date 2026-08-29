@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global (SPEC v0.2 §27 · EPIC-025).
  *
  * A ausência de busca global é uma das lacunas mais custosas da referência:
  * para achar "patrimônio 7737" é preciso saber em qual lista procurar. O

@@ -1,5 +1,5 @@
 /**
- * Aurora — planos de manutenção contra o banco (SPEC v0.2 §12 · EPIC-012).
+ * Aurora — planos de manutenção contra o banco (SPEC v0.2 §12 · EPIC-013).
  *
  * As duas correções estruturais sobre a referência são o que esta suíte prova:
  * um plano com ritmos diferentes por tarefa, e um alvo que continua valendo

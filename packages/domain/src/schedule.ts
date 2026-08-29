@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda (SPEC v0.2 §13 · EPIC-012).
  *
  * Na referência auditada há **2.950 serviços não agendados**. A agenda existe e
  * não é usada, e o diagnóstico é ergonômico: programar custa mais do que ligar

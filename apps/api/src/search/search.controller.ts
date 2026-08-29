@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global pela HTTP (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global pela HTTP (SPEC v0.2 §27 · EPIC-025).
  *
  * Uma rota só, e nenhuma permissão no decorador: o corte é POR ESCOPO, dentro
  * da consulta. Um decorador exigiria uma permissão única para buscar, e quem

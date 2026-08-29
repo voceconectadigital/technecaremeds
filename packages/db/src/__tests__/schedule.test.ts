@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda contra o banco (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda contra o banco (SPEC v0.2 §13 · EPIC-012).
  *
  * A referência tem 2.950 serviços não agendados. O que esta suíte prova é que
  * programar aqui custa menos: a conferência acontece antes de soltar o cartão,

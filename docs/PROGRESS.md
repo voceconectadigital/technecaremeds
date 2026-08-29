@@ -11,15 +11,36 @@ Fonte de verdade de código: este repositório e o Git.
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F7 — plataforma transversal**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-019 (notificações), EPIC-024 (automações), EPIC-023 (busca global), EPIC-022 (auditoria) |
-| Épico seguinte                   | EPIC-020 — Portal, EPIC-014 — PWA de campo (exigem novas aplicações)                   |
-| Testes                           | **1242**, todos verdes                                                           |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-013 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-012 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores), EPIC-023 (notificações), EPIC-024 (automações), EPIC-025 (busca global), EPIC-022 (auditoria) |
+| Épico seguinte                   | EPIC-009 (interface de OS), EPIC-014 (PWA), EPIC-019 (metrologia), EPIC-020 (portal)   |
+| Testes                           | **1242** (62 arquivos), todos verdes                                                           |
 | Migrations                       | 38 (`0000` a `0037`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
 Portão de qualidade (`npm run verify`): auditoria da SPEC → typecheck → lint → testes.
 No CI acrescentam-se `format:check` e varredura de segredos.
+
+### Reconciliação de 29/08/2026 — a numeração estava errada
+
+Uma conferência entre o Git, este documento e a SPEC encontrou **quatro épicos rotulados com o número errado**, e um número usado por engano. A SPEC (§39 e §43) é a fonte de verdade da numeração, e ela diz:
+
+| Implementado como | É, na SPEC | Módulo |
+| --- | --- | --- |
+| EPIC-012 | **EPIC-013** | Planos de manutenção preventiva |
+| EPIC-013 | **EPIC-012** | Agenda |
+| EPIC-019 | **EPIC-023** | Notificações |
+| EPIC-023 | **EPIC-025** | Busca global |
+
+Nada de comportamento muda — o que muda é o rótulo. Mas rótulo errado num sistema de 27 épicos é o que faz alguém procurar a metrologia dentro do módulo de notificações: **o EPIC-019 da SPEC é "Metrologia: calibração, padrões e segurança elétrica", e nunca foi implementado**. O relatório anterior o dava como concluído por causa dessa troca.
+
+Corrigido em 24 arquivos de implementação (comentários de cabeçalho, migrations e testes). A SPEC não foi tocada.
+
+**Sobre o EPIC-009.** Ele não é um épico separado: a SPEC o agrupa como "EPIC-008 · EPIC-009 — Ordens de serviço e máquina de estados", e a parte que leva o número 009 é a **interface** — lista virtualizada com filtros em chips, visões salvas, Kanban com validação de transição no *drop*, PDF da OS. O motor está pronto (EPIC-008); a interface não. Está aberto, e é o primeiro alvo do trabalho de frontend.
+
+**Contagem real:** 21 épicos concluídos por identificador da SPEC. O relatório anterior dizia "vinte" no texto e listava 21 na própria tabela.
+
+
 
 ---
 
@@ -277,7 +298,7 @@ A referência põe `tempo_atendimento` e `tempo_fechamento` em minutos **no equi
 
 ---
 
-## EPIC-012 — Planos de manutenção preventiva · **concluído**
+## EPIC-013 — Planos de manutenção preventiva · **concluído**
 
 O modelo da referência é bom — ciclos, janela, progresso, conformidade, geração automática. Duas limitações reais foram corrigidas.
 
@@ -385,7 +406,7 @@ Este épico fecha um elo aberto desde o EPIC-008: o motivo de espera "aguardando
 
 ---
 
-## EPIC-013 — Agenda · **concluído**
+## EPIC-012 — Agenda · **concluído**
 
 Na referência auditada há **2.950 serviços não agendados**. A agenda existe e não é usada, e o diagnóstico é ergonômico: programar custa mais do que ligar para o técnico. Tudo neste épico serve a uma meta só — inverter essa conta.
 
@@ -477,7 +498,7 @@ O preço é o custo por escrita, que num CMMS é ordens de grandeza menor que o 
 
 ---
 
-## EPIC-019 — Notificações · **concluído**
+## EPIC-023 — Notificações · **concluído**
 
 Este épico tem um inimigo declarado, e não é a falta de aviso: é o **excesso**. Um canal que manda dez e-mails por hora sobre a mesma OS é um canal que o destinatário filtra para uma pasta — e o aviso que importava se perde junto com os nove que não importavam. Por isso os três controles do §23 não são refinamento posterior: são a condição para o canal continuar existindo.
 
@@ -538,7 +559,7 @@ Os "Robôs" da referência têm 2 modelos, 2 gatilhos e **1 ação real**. O pro
 
 ---
 
-## EPIC-023 — Busca global · **concluído**
+## EPIC-025 — Busca global · **concluído**
 
 A ausência de busca global é uma das lacunas mais custosas da referência: para achar "patrimônio 7737" é preciso saber em qual lista procurar. O técnico com o equipamento na frente sabe o número que está na etiqueta e **não sabe se aquilo é TAG, patrimônio ou série** — e não deveria precisar saber.
 

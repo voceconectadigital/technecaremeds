@@ -1,5 +1,5 @@
 -- =============================================================================
--- Aurora — 0036 notificações (SPEC v0.2 §23) · EPIC-019
+-- Aurora — 0036 notificações (SPEC v0.2 §23) · EPIC-023
 --
 -- O roteador consome os eventos que os quinze épicos anteriores já emitem. Nada
 -- aqui inventa um segundo barramento: o `domain_events` é a fonte, e é por isso

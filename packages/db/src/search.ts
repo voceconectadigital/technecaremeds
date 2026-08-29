@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global na camada de dados (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global na camada de dados (SPEC v0.2 §27 · EPIC-025).
  *
  * NÃO HÁ ÍNDICE PRÓPRIO, E ISSO É DECISÃO
  *   A busca consulta as tabelas de origem, uma por escopo, com os índices que

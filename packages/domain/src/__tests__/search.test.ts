@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global (SPEC v0.2 §27 · EPIC-025).
  *
  * O teste que carrega o épico é o do ranqueamento: quem digita "7737" está com
  * a etiqueta na mão, e o ativo de patrimônio 7737 tem de vir antes da OS cujo

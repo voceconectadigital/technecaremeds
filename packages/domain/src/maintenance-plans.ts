@@ -1,5 +1,5 @@
 /**
- * Aurora — planos de manutenção preventiva (SPEC v0.2 §12 · EPIC-012).
+ * Aurora — planos de manutenção preventiva (SPEC v0.2 §12 · EPIC-013).
  *
  * O modelo da referência é bom — ciclos, janela, progresso, conformidade,
  * geração automática. Duas limitações reais são corrigidas aqui, e as duas

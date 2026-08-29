@@ -1,5 +1,5 @@
 /**
- * Aurora — notificações pela HTTP (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — notificações pela HTTP (SPEC v0.2 §23 · EPIC-023).
  *
  * O que a borda precisa provar acima de tudo: a caixa é sempre a de quem pede.
  * Não existe parâmetro que faça uma pessoa ler as notificações de outra.

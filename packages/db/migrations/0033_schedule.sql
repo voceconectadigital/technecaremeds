@@ -1,5 +1,5 @@
 -- =============================================================================
--- Aurora — 0033 agenda (SPEC v0.2 §13) · EPIC-013
+-- Aurora — 0033 agenda (SPEC v0.2 §13) · EPIC-012
 --
 -- Esta migration é pequena de propósito. A programação já vive na OS
 -- (`scheduled_start`, `scheduled_end`, responsável, equipe) desde a 0021, e a

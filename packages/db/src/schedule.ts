@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda na camada de dados (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda na camada de dados (SPEC v0.2 §13 · EPIC-012).
  *
  * A agenda é uma projeção da OS (ADR-011). Este módulo não cria entidade
  * nenhuma para representá-la: ele lê a OS por três recortes — calendário,

@@ -1,5 +1,5 @@
 /**
- * Aurora — planos de manutenção na camada de dados (SPEC v0.2 §12 · EPIC-012).
+ * Aurora — planos de manutenção na camada de dados (SPEC v0.2 §12 · EPIC-013).
  */
 import {
   newId,

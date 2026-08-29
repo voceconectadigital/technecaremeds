@@ -1,5 +1,5 @@
 /**
- * Aurora — roteador de notificações (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — roteador de notificações (SPEC v0.2 §23 · EPIC-023).
  *
  * O caminho é sempre o mesmo: evento → destinatários → preferências → entrega.
  * A parte difícil não é nenhuma das quatro isoladamente; é não deixar o

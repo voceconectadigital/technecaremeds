@@ -1,5 +1,5 @@
 /**
- * Aurora — roteador de notificações contra o banco (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — roteador de notificações contra o banco (SPEC v0.2 §23 · EPIC-023).
  *
  * O que esta suíte prova é o combate ao excesso: duplicata silenciada, silêncio
  * respeitado no fuso do destinatário, e-mail não verificado suprimido — e o

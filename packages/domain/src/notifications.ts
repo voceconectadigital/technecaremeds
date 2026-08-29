@@ -1,5 +1,5 @@
 /**
- * Aurora — notificações (SPEC v0.2 §23 · EPIC-019).
+ * Aurora — notificações (SPEC v0.2 §23 · EPIC-023).
  *
  * Este épico tem um inimigo declarado, e não é a falta de aviso: é o EXCESSO.
  * Um canal que manda dez e-mails por hora sobre a mesma OS é um canal que o

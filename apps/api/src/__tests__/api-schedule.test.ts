@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda pela HTTP (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda pela HTTP (SPEC v0.2 §13 · EPIC-012).
  *
  * O critério do épico na borda: conferir custa uma requisição e não muda nada,
  * o aviso volta com o motivo escrito, e o bloqueio é só o que precisa ser.

@@ -1,5 +1,5 @@
 /**
- * Aurora — busca global contra o banco (SPEC v0.2 §27 · EPIC-023).
+ * Aurora — busca global contra o banco (SPEC v0.2 §27 · EPIC-025).
  *
  * O caso que define o épico: o técnico com o equipamento na frente digita o
  * número da etiqueta e não sabe se aquilo é TAG, patrimônio ou série. Aqui ele

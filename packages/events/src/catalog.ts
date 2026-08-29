@@ -87,7 +87,7 @@ export const EVENT_TYPES = [
   'sla.breached',
   'sla.met',
 
-  // --- planning (EPIC-013) ------------------------------------------------
+  // --- planning (EPIC-013 · planos) ------------------------------------------------
   'plan.activated',
   'plan.cycle_started',
   'plan.cycle_closed',

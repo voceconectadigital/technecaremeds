@@ -1,5 +1,5 @@
 /**
- * Aurora — agenda pela HTTP (SPEC v0.2 §13 · EPIC-013).
+ * Aurora — agenda pela HTTP (SPEC v0.2 §13 · EPIC-012).
  *
  * A rota que carrega o épico é `POST /schedule/check`: ela confere sem gravar,
  * para a tela mostrar os avisos ENQUANTO a pessoa arrasta o cartão. Descobrir o
