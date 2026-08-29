@@ -5,3 +5,4 @@ export * from './permissions';
 export * from './directory';
 export * from './catalogs';
 export * from './custom-fields';
+export * from './assets';

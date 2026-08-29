@@ -65,6 +65,11 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   // --- ativos ---------------------------------------------------------------
   p('asset', 'read', 'Ver ativos'),
   p('asset', 'create', 'Cadastrar ativos'),
+  // Separada de `create` porque são atos diferentes com riscos diferentes: o
+  // técnico cadastra o ativo que achou em campo, e isso é bom. Importar uma
+  // planilha cria milhares de registros de uma vez, cria fabricante e modelo
+  // sob demanda e é o caminho mais rápido para duplicar um acervo inteiro.
+  p('asset', 'import', 'Importar ativos em massa por planilha'),
   p('asset', 'update', 'Editar ativos'),
   p('asset', 'delete', 'Arquivar ativos'),
   p('asset', 'transfer', 'Transferir e emprestar ativos'),
@@ -234,6 +239,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'supplier.update',
       'team.manage',
       'asset.create',
+      'asset.import',
       'asset.update',
       'asset.transfer',
       'asset.decommission',
