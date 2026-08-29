@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F1 — Acesso e diretório**                                                     |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos e campos personalizados) |
-| Épico seguinte                   | EPIC-005 — ativos e classificação                                               |
-| Testes                           | **306**, todos verdes                                                           |
-| Migrations                       | 13 (`0000` a `0012`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F2 — Ativos**                                                                 |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos) |
+| Épico seguinte                   | EPIC-006 — QR Code e etiquetas                                                  |
+| Testes                           | **373**, todos verdes                                                           |
+| Migrations                       | 17 (`0000` a `0016`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -60,7 +60,7 @@ No CI acrescentam-se `format:check` e varredura de segredos.
 
 ## EPIC-002 — Papéis e permissões · **concluído**
 
-- Catálogo de **106 permissões** como fonte única em código (`packages/domain/src/permissions.ts`); o banco é espelho e um teste garante que não divergem
+- Catálogo de **107 permissões** como fonte única em código (`packages/domain/src/permissions.ts`); o banco é espelho e um teste garante que não divergem
 - **11 papéis de fábrica**, `is_system` e não editáveis: customizar é duplicar
 - `deny` individual vence qualquer concessão de papel; revogação exige justificativa e aceita expiração
 - `escalationCheck`: ninguém concede o que não tem
@@ -119,6 +119,34 @@ O problema, medido pela auditoria: 651 tipos de equipamento, 360 problemas, 344 
 
 ---
 
+## EPIC-005 — Ativos e classificação · **concluído**
+
+Cadeia fabricante → modelo → ativo. Na referência, fabricante e modelo são texto livre, o que impede responder "quantos BeneHeart R3 temos e qual a taxa de falha desse modelo?" — a pergunta que justifica trocar de fornecedor.
+
+**Duas regras da SPEC que viraram estrutura, e não convenção**
+
+1. **Unicidade configurável.** A organização escolhe quais de {tag, série, patrimônio} não repetem, e em que escopo. Um gatilho que lesse a configuração e consultasse antes de inserir teria corrida entre a leitura e a escrita — duas importações simultâneas passariam as duas. Aqui a unicidade é um **índice único de verdade** sobre a projeção `asset_identifiers`: o gatilho decide quais linhas existem, o índice decide se elas coexistem. Configurabilidade na projeção, garantia no índice.
+2. **Transferência é operação, não edição.** Um gatilho recusa qualquer `UPDATE` que mexa em `location_id` ou `customer_id` fora de uma transferência declarada. A marca é uma configuração local de transação: morre no COMMIT e não pode ficar ligada por engano. A API não poderia oferecer o atalho nem se quisesse.
+
+**Critérios de aceite, verificados**
+
+- **Relatório de erro por linha** na importação: cada linha vai num `SAVEPOINT`, a que falha volta sozinha e as demais seguem. Medido: 3.000 ativos em 9,5 s no PGlite — 3,2 ms por linha, o que projeta ~85 s para as 27 mil do critério, cujo alvo é 10 minutos.
+- Duplicidade em campo configurado bloqueada na importação **e** no formulário, pelo mesmo índice.
+- Transferir não reescreve o passado: a movimentação é uma linha nova em `asset_transfers`.
+
+**Casos de borda cobertos:** ativo sem modelo cadastrado; empréstimo para outro cliente (exige data de devolução); descomissionar conjunto com componente em operação; fabricante grafado de várias formas na planilha ("Mindray"/"MINDRAY" viram um, "Líder" vai para curadoria); horímetro que regride.
+
+**Token do QR** — 26 caracteres, 130 bits, alfabeto sem `0/O` e `1/I/L`, porque a etiqueta vai ser lida por pessoa quando o leitor falhar.
+
+**`asset.import` separada de `asset.create`** — o técnico cadastra o ativo que achou em campo, e isso é bom; importar planilha cria milhares de registros de uma vez e é o caminho mais rápido para duplicar um acervo inteiro.
+
+### Adiado deliberadamente
+
+- **Indicadores da ficha 360°** (MTTR, MTBF, disponibilidade): dependem de ordens de serviço — EPIC-021. A rota já devolve dados, specs resolvidas, garantia, idade e histórico de transferências.
+- **Medidores**: o modelo e a invariante de regressão entram agora para não travar manutenção por condição; uso efetivo é da Fase 4.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -135,6 +163,10 @@ O problema, medido pela auditoria: 651 tipos de equipamento, 360 problemas, 344 
 | 10  | **Mover subárvore reatribuía o cliente em silêncio**                      | Encontrado na autoauditoria, não por teste vermelho                              | Passou a recusar explicitamente: transferir local entre clientes é operação de negócio própria            |
 | 11  | **Sugestão de mesclagem que nunca acharia nada**                          | Teste vermelho ao tentar criar o par "Empréstimo"/"Emprestimo" para exercitar a sugestão | O índice único sobre o rótulo normalizado impede esse par de existir — logo, sugerir por igualdade normalizada era código que parecia resolver e não resolvia. Reescrita para semelhança: contenção por tokens e distância de edição, com o motivo à vista |
 | 12  | **`minScore` que não era mínimo**                                         | O par "Ventilador"/"Ventliador" passava com score 0,80 sob um mínimo declarado de 0,82 | O teto arredondado era usado como filtro; agora serve só ao corte antecipado do cálculo e quem filtra é o score |
+| 13  | **Mudar a unicidade não reprojetava o acervo**                            | O teste "mudar a configuração passa a valer" passou quando deveria falhar                                     | A projeção nascia na gravação, com a configuração daquele momento. Ligar "patrimônio é único" valia só para o que viesse depois, e a interface dizia que a regra estava ativa. Migration 0016 reprojeta na mesma transação e recusa listando os conflitos                     |
+| 14  | **Garantia expirava à meia-noite do último dia**                          | Teste de `isUnderWarranty`                                                                                    | `warranty_until` é DATA, não instante; comparar `Date` com `Date` acabava a cobertura de madrugada do próprio dia de vencimento                                                                                                                                              |
+| 15  | **`2025-02-30` passava na validação de importação**                       | Teste de `validateImportRow`                                                                                  | `Date.parse` rola para 2 de março em silêncio. A verificação passou a ser de ida e volta                                                                                                                                                                                     |
+| 16  | **Lote grande de importação respondia 500**                               | Teste de lote acima do limite                                                                                 | O limite padrão de corpo do Express é 100 kB e o erro nasce no middleware, antes de qualquer validação nossa. Limite explícito de 12 MB, documentado                                                                                                                         |
 
 ---
 
