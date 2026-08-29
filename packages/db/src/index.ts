@@ -9,3 +9,4 @@ export * from './directory';
 export * from './pg-errors';
 export * from './catalogs';
 export * from './assets';
+export * from './service-requests';

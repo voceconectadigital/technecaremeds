@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F2 — Ativos**                                                                 |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code) |
-| Épico seguinte                   | EPIC-007 — Solicitações e triagem                                               |
-| Testes                           | **386**, todos verdes                                                           |
-| Migrations                       | 18 (`0000` a `0017`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F3 — Trabalho**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações) |
+| Épico seguinte                   | EPIC-008 — Ordens de serviço e máquina de estados                                            |
+| Testes                           | **455**, todos verdes                                                           |
+| Migrations                       | 20 (`0000` a `0019`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -162,6 +162,38 @@ Cadeia fabricante → modelo → ativo. Na referência, fabricante e modelo são
 **`allow_anonymous_requests` tem padrão falso.** Uma etiqueta fotografada e repassada não deve virar canal de descoberta de inventário alheio.
 
 **Troca de token** (`rotate-qr`): invalida a etiqueta antiga na hora e devolve o token anterior, para quem operou identificar a etiqueta a recolher.
+
+---
+
+## EPIC-007 — Solicitações e triagem · **concluído**
+
+ADR-002 é a decisão mais consequente da SPEC: `service_request` é entidade própria, distinta de `work_order`. O que a separação compra, concretamente:
+
+- solicitação recusada **não** vira "OS cancelada" poluindo o denominador de todo indicador de ordem de serviço;
+- duplicata é **preservada** apontando para a original, não destruída;
+- o relato do cliente é **imutável**; o diagnóstico do técnico vive na OS;
+- o portal escreve em **uma** tabela, por duas rotas — abrir e cancelar.
+
+**A máquina de estados vive em código puro, e não em tabela configurável** — ao contrário da máquina de ordens de serviço, que é configurável por organização (ADR-003). Não é inconsistência: o ciclo da solicitação é o contrato com o cliente, e contrato que cada organização redesenha deixa de ser contrato.
+
+**Três invariantes estruturais**
+
+1. **Numeração sem colisão.** `SR-{ano}-{sequência}`, série própria por organização e ano, saindo de um contador com bloqueio de linha — não de `max(number) + 1`, que sob concorrência gera dois números iguais. Teste: cem criações seguidas, cem números distintos.
+2. **Estado terminal carrega o que o terminal significa.** `rejected` sem motivo e `duplicate` sem original são estados que mentem. Restrição de tabela, não validação de formulário.
+3. **O relato é imutável depois do envio.** Gatilho recusa a edição de `summary`/`description`. Na referência, a descrição do solicitante era sobrescrita pelo técnico, e com ela sumia a única evidência do que o cliente pediu.
+
+**Concorrência otimista** por `version`: dois coordenadores triando a mesma solicitação não sobrescrevem a decisão um do outro em silêncio.
+
+**Detecção de duplicidade avisa, não bloqueia** (§08). Os avisos vêm na resposta da criação, e não numa consulta anterior — entre "consultar" e "enviar" alguém pode ter aberto a mesma.
+
+**Uma rota para todas as transições** (`POST /:id/transitions`), e não `/accept`, `/reject`, `/merge` separadas: o grafo é a fonte de verdade, e uma rota por transição criaria um segundo lugar onde elas estão listadas.
+
+**O mapa estado → evento é explícito**, não derivado do nome: o estado é `duplicate` e o evento é `merged`; o estado é `info_needed` e o evento é `info_requested`. Derivar emitiria tipos que o catálogo recusa, e a recusa só apareceria em produção.
+
+### Adiado deliberadamente
+
+- **`accepted` → criação de 1..N ordens de serviço.** O critério de aceite "uma solicitação com 3 ativos gera 3 OS vinculadas em uma operação" depende de `work_orders`, que é o EPIC-008 — a SPEC declara EPIC-007 antes, mas o critério atravessa os dois. A transição para `accepted` já funciona e emite o evento; o efeito colateral entra junto com a OS, e o critério é verificado lá.
+- **Avaliação 1–5 e conversão automática opcional**: colunas existem (`rating`, `rating_comment`), fluxo entra com o portal (EPIC-020).
 
 ---
 
