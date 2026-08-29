@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": [
-      "ES2023"
-    ],
+    "lib": ["ES2023"],
     "module": "commonjs",
     "moduleResolution": "node",
     "strict": true,
@@ -24,22 +22,11 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "paths": {
-      "@aurora/domain": [
-        "packages/domain/src"
-      ],
-      "@aurora/events": [
-        "packages/events/src"
-      ],
-      "@aurora/db": [
-        "packages/db/src"
-      ],
-      "@aurora/config": [
-        "packages/config/src"
-      ]
+      "@aurora/domain": ["packages/domain/src"],
+      "@aurora/events": ["packages/events/src"],
+      "@aurora/db": ["packages/db/src"],
+      "@aurora/config": ["packages/config/src"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "exclude": ["node_modules", "dist"]
 }

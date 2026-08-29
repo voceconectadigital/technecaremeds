@@ -7,21 +7,26 @@ Fonte de verdade de código: este repositório e o Git.
 
 ## Estado atual
 
-| Item | Situação |
-|---|---|
-| SPEC | **v0.2**, auditada automaticamente (0 erros, 0 avisos) |
-| Fase | **F0 — Fundação** |
-| Épico corrente | **EPIC-001 — Fundação multitenant** |
-| Supabase remoto | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16) |
-| Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022 |
+| Item                             | Situação                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------ |
+| SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 27 ADRs      |
+| Fase                             | **F1 — Acesso e diretório**                                                     |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório)                      |
+| Épico seguinte                   | EPIC-004 — catálogos e campos personalizados                                    |
+| Testes                           | **219**, todos verdes                                                           |
+| Migrations                       | 11 (`0000` a `0010`), idempotentes, reprodutíveis do zero                       |
+| Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
+| Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
+
+Portão de qualidade (`npm run verify`): auditoria da SPEC → typecheck → lint → testes.
+No CI acrescentam-se `format:check` e varredura de segredos.
 
 ---
 
-## EPIC-001 — Fundação multitenant
-
-### Concluído
+## EPIC-001 — Fundação multitenant · **concluído**
 
 **Monorepo e tooling**
+
 - npm workspaces (ADR-021), lockfile versionado
 - TypeScript `strict` + `noUncheckedIndexedAccess`, project references, `tsc -b` limpo
 - ESLint 9 + typescript-eslint, Prettier
@@ -30,53 +35,79 @@ Fonte de verdade de código: este repositório e o Git.
 - `.env.example` sem nenhum valor real; `tools/ci/check-secrets.mjs` bloqueia segredo versionado
 
 **Banco**
-- 4 migrations versionadas, idempotentes, reprodutíveis do zero
-- Papéis separados: `aurora_owner`, `aurora_migrator`, `aurora_app`, `aurora_readonly`, `aurora_publisher`
+
+- Papéis separados: `aurora_owner`, `aurora_migrator`, `aurora_app`, `aurora_readonly`, `aurora_publisher`, `aurora_identity`
 - `ENABLE` + **`FORCE ROW LEVEL SECURITY`** em 100 % das tabelas tenant-scoped
 - `aurora.current_organization_id()` e demais funções de contexto, com **falha fechada**
-- Tabelas: `organizations`, `users`, `memberships`, `membership_scopes`, `audit_logs`, `domain_events`
 - Migrator com checksum: detecta migration alterada depois de aplicada
+- Trilha de auditoria com diff por campo, redação de colunas sensíveis, somente-inserção
+- Outbox transacional (`domain_events`) + publicador sob `aurora_publisher`
 
-**Plataforma**
-- `RequestContext` imutável, resolvido no servidor (§05)
-- `withTenant` como **único** caminho para tabela tenant-scoped; contexto sempre `set_config(..., is_local => true)`
-- `unsafeCrossTenant` como escotilha explícita, exigindo justificativa e barrada por lint
-- Trilha de auditoria por trigger, com diff campo a campo, ator, tipo de ator, IP, user agent, `request_id`, origem e redação de campos sensíveis
-- Outbox transacional de eventos de domínio + catálogo com 100 tipos
-- Publicador com papel próprio (`aurora_publisher`): lê todas as organizações, não altera dado de negócio
-- Fábrica única de UUID v7 (ADR-024), com monotonicidade testada
-- Validação de configuração que falha alto no boot, sem vazar segredo em diagnóstico
+**Plataforma e API**
 
-**Testes — 65, todos verdes**
-
-| Suíte | Testes | Cobre |
-|---|---|---|
-| `domain/id` | 9 | formato, versão, variante, monotonicidade, colisão em 50 mil ids, relógio para trás |
-| `domain/context` | 6 | imutabilidade, exigência de tenant e `request_id`, permissões |
-| `domain/errors` | 6 | taxonomia, 404 em vez de 403, mensagem que ensina |
-| `config/env` | 7 | falha alto, dependências condicionais, injeção em `SET ROLE`, diagnóstico sem segredo |
-| `db/tenant-isolation` | 18 | A/B nos dois sentidos, `WITH CHECK`, reuso de conexão, falha fechada, papéis, `FORCE RLS` |
-| `db/audit-and-outbox` | 14 | diff, redação, soft delete, append-only, outbox transacional, publicador |
-| `db/migrations` | 5 | do zero, idempotência, detecção de alteração, schema esperado |
+- `withTenant` como caminho único para tabela de tenant; contexto sempre transaction-local
+- UUID v7 gerado na aplicação, monotônico dentro do milissegundo, sem regressão em relógio para trás
+- NestJS com DI por token explícito (sem `emitDecoratorMetadata`), middleware funcional
+- Erros RFC 9457, sem stack trace no corpo; logs estruturados com redação
+- `organization_id` **nunca** aceito do cliente como autorização
 
 ### Pendente do EPIC-001
 
-- `apps/api` (NestJS): controllers finos, middleware de contexto, filtro de erro RFC 9457, health, OpenAPI
-- Adaptador `AuthProvider` com implementação local
-- pg-boss (fila) — modelo já previsto, integração ainda não feita
-- Logs estruturados correlacionados por `request_id`
-- Seeds determinísticos com 2+ organizações
+- Geração de OpenAPI a partir dos controllers
+- pg-boss como agendador durável — adiado com motivo: exige PostgreSQL real, indisponível enquanto o remoto estiver bloqueado. O `IntervalScheduler` atual cobre o publicador do outbox e não sobrepõe execuções.
+
+---
+
+## EPIC-002 — Papéis e permissões · **concluído**
+
+- Catálogo de **105 permissões** como fonte única em código (`packages/domain/src/permissions.ts`); o banco é espelho e um teste garante que não divergem
+- **11 papéis de fábrica**, `is_system` e não editáveis: customizar é duplicar
+- `deny` individual vence qualquer concessão de papel; revogação exige justificativa e aceita expiração
+- `escalationCheck`: ninguém concede o que não tem
+- `isOverPermissive`: sinaliza papel com mais de 70 % das permissões — o defeito que a auditoria encontrou no grupo "Técnico" da referência
+- `PermissionsGuard` global + `@RequirePermissions`; **403 nomeia a permissão que falta**, na API e não só na interface
+
+---
+
+## EPIC-003 — Diretório · **concluído**
+
+Clientes, contatos, tipos de local, árvore de locais, fornecedores, equipes, calendários e bloqueios de disponibilidade.
+
+**A decisão que organiza o épico:** a aplicação escreve intenção, o banco mantém a estrutura.
+`path` e `depth` nunca aparecem em um `INSERT` ou `UPDATE` do código de aplicação — são derivados por gatilho (`0009`). Criar um local é dizer quem é o pai; mover é dizer quem passa a ser o pai. Cascata, ausência de ciclo, limite de 8 níveis e regra de aninhamento ficam por conta do PostgreSQL, e continuam valendo para importação, correção manual e migração futura.
+
+**Critérios de aceite do épico, verificados**
+
+- Mover uma subárvore de **500 locais** atualiza todos os caminhos e profundidades em uma transação (~0,6 s no PGlite)
+- Tipo inválido para o pai é recusado com mensagem que **nomeia os tipos permitidos**
+- Arquivar local com estrutura ativa abaixo é recusado com a **lista de pendências**
+
+**Casos de borda cobertos:** ciclo ao mover; profundidade acima do limite, na criação e no movimento; clínica com um único local raiz; local móvel sem endereço; nome de fornecedor repetido ignorando caixa e acento; janelas de calendário encostadas versus sobrepostas.
+
+**Escopo por local** (`aurora.accessible_location_ids`): consulta por prefixo de caminho, indexada, sem CTE recursiva por requisição. Testado na borda HTTP: um vínculo restrito não vê a árvore inteira **nem pedindo `?root=` de um ramo fora do escopo**.
+
+### Adiado deliberadamente
+
+- **Rotas de escrita de equipe e fornecedor.** Só a leitura foi exposta. Escrita entra com as telas que a usam — superfície pública sem consumidor é superfície sem teste de uso real.
+- **Bloqueio de arquivamento por ativo alocado.** A função `archiveLocation` hoje protege a árvore, não o inventário; a verificação de ativos entra no EPIC-005, junto com a tabela `assets`. Está documentado no próprio código, não implícito.
+- **Importação de árvore por planilha** (parte de BL-014): depende do motor de importação do EPIC-005.
 
 ---
 
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
-| # | Bug | Como apareceu | Correção |
-|---|---|---|---|
-| 1 | Trigger de auditoria bloqueado pelo próprio `FORCE RLS` | Suíte de isolamento falhou no arranjo | Policy `audit_logs_trigger_insert` restrita a `aurora_owner`; a aplicação segue só com `SELECT` |
-| 2 | Trigger assumia PK chamada `id` | `membership_scopes` tem PK `membership_id` | Coluna de PK como argumento do trigger, com erro explícito se não existir |
-| 3 | Auditor da SPEC com 3 falsos positivos | Contagem de colunas ignorava `\|` escapado; `****` e "lorem ipsum" em citação legítima | Auditor corrigido |
-| 4 | `EPIC-009` sem definição detectável | Cabeçalho combinado `EPIC-008 · EPIC-009` | Auditor passou a ler todos os IDs do cabeçalho |
+| #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
+| --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1   | Trigger de auditoria bloqueado pelo próprio `FORCE RLS`                   | Suíte de isolamento falhou no arranjo                                            | Policy `audit_logs_trigger_insert` restrita a `aurora_owner`                                            |
+| 2   | Trigger assumia PK chamada `id`                                           | `membership_scopes` tem PK `membership_id`                                       | Coluna de PK como argumento do trigger, com erro explícito se não existir                               |
+| 3   | Auditor da SPEC com 3 falsos positivos                                    | Contagem de colunas ignorava `\|` escapado                                       | Auditor corrigido                                                                                       |
+| 4   | `EPIC-009` sem definição detectável                                       | Cabeçalho combinado `EPIC-008 · EPIC-009`                                        | Auditor passou a ler todos os IDs do cabeçalho                                                          |
+| 5   | **Resolução de identidade quebraria em produção**                         | Consulta direta a `memberships` sob `aurora_app` devolve zero linhas (falha fechada) — todo login viraria 403 | Função `SECURITY DEFINER` de `aurora_identity` (0004/0005). O teste não pegava porque `unsafeCrossTenant` não aplicava `SET LOCAL ROLE`; passou a aplicar, e 4 testes ficaram vermelhos antes da correção |
+| 6   | **Referência cruzada entre tenants**                                      | Teste "A não consegue atribuir papel de B" passava quando deveria falhar         | Verificação de FK roda como dono da tabela e **ignora RLS**. Corrigido com FK compostas incluindo `organization_id` (0007) — o estado inválido deixou de ser representável |
+| 7   | Teste infalsificável                                                      | "`aurora_app` não pode `SET ROLE aurora_identity`" passava sempre                | Trocado por asserção sobre `pg_auth_members`, independente do ambiente                                   |
+| 8   | **Mensagem inalcançável no limite de profundidade**                       | `RAISE` vinha depois do `UPDATE`; o `CHECK` disparava antes, com texto genérico   | Verificação movida para antes da cascata (0009)                                                          |
+| 9   | **Violação de integridade virava 500**                                    | Aninhamento inválido respondia "erro interno" em vez de explicar a regra          | `translatePostgresError`: só a classe 23 do SQLSTATE vira 4xx; o resto continua 500, porque é bug nosso   |
+| 10  | **Mover subárvore reatribuía o cliente em silêncio**                      | Encontrado na autoauditoria, não por teste vermelho                              | Passou a recusar explicitamente: transferir local entre clientes é operação de negócio própria            |
 
 ---
 
@@ -84,10 +115,20 @@ Fonte de verdade de código: este repositório e o Git.
 
 - **Package manager**: npm workspaces (ADR-021) — `pnpm`/`corepack` ausentes no ambiente
 - **Banco de teste**: PGlite (ADR-022) — Docker indisponível e remoto bloqueado
-- **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar
+- **ADR-026 · sem `ltree`**: a extensão não existe no PGlite e não é garantida em PostgreSQL gerenciado. A árvore usa caminho materializado em `text` com índice `text_pattern_ops`. A SPEC foi corrigida em todas as seções afetadas.
+- **ADR-027 · sem `pg_trgm`**: mesma razão. Busca no núcleo com `tsvector` nativo e forma normalizada indexada; trigrama vira otimização opcional. A degradação é de qualidade de resultado, não de funcionalidade.
+- **Módulos**: CommonJS no backend por ora; o frontend consumirá os pacotes via bundler. Revisar quando `apps/web` entrar.
+
+---
+
+## Lacunas conhecidas, ditas por extenso
+
+- **Vínculo sem linha em `membership_scopes` não enxerga nenhum local.** É falha fechada, e está correto como comportamento — mas o fluxo de convite precisa criar a linha de escopo junto com o vínculo. Hoje só os auxiliares de teste garantem isso. Entra no fluxo de convite (EPIC-002 estendido) ou no primeiro épico que criar vínculo por interface.
+- **`aurora.fn_calendar_window_no_overlap` usa advisory lock** porque `EXCLUDE` exigiria `btree_gist` (extensão). Corretude sob concorrência depende desse lock; está comentado na migration.
+- **Sem PostgreSQL real ainda.** Tudo passa em PGlite, que é PostgreSQL 16.4 de verdade compilado para WASM, com uma conexão só. Isso é mais severo para vazamento de contexto e mais fraco para concorrência: nada aqui exercita pool, `SKIP LOCKED` sob disputa real ou advisory lock disputado.
 
 ---
 
 ## Bloqueio externo ativo
 
-**Supabase remoto.** O CLI está autenticado e lista 28 projetos em ~15 organizações; nenhum identificável como Aurora e nenhum vinculado. Conforme a regra vigente, nenhuma operação remota foi executada. Para desbloquear é preciso o **project ref** do projeto correto (OQ-16). Nada no código depende disso: as migrations rodam em qualquer PostgreSQL 16+.
+**Supabase remoto.** O CLI está autenticado e lista 28 projetos em ~15 organizações; nenhum identificável como Aurora e nenhum vinculado. Conforme a regra vigente, nenhuma operação remota foi executada. Para desbloquear é preciso o **project ref** do projeto correto (OQ-16). Nada no código depende disso: as migrations rodam em qualquer PostgreSQL 16+, e a escolha do ADR-026/027 removeu até a dependência de extensão.

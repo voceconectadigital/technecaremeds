@@ -315,7 +315,7 @@ AUTOMATION          a reação                raiz: automation_rule
 | 0 | **platform** | O Aurora. Toda a instalação. Existe apenas como conceito operacional (nossa equipe, nossos jobs, nosso suporte). | Uma tabela de negócio. | — |
 | 1 | **organization** | A conta que assina. Fronteira de isolamento, faturamento, configuração, catálogos e assentos. **É o tenant.** | Um cliente atendido. | `organization_id` em toda tabela de negócio + RLS |
 | 2 | **customer** | Quem a organização atende. | Um local. Um fornecedor. | `customer_id` + escopo de membership |
-| 3 | **location** | Nó da árvore física do cliente. | Uma pessoa jurídica. | `location_path` (ltree) + escopo |
+| 3 | **location** | Nó da árvore física do cliente. | Uma pessoa jurídica. | `location_path` (caminho materializado) + escopo |
 | 4 | **user** | Identidade global, única por e-mail na plataforma. | Um papel. Uma permissão. | Sem dado de negócio próprio |
 
 > **DECISÃO ADR-001**
@@ -421,7 +421,7 @@ O escopo é **materializado** em `membership_accessible_locations` a cada mudan�
 | `customer_id` | uuid | Obrigatório. Toda localização pertence a um cliente |
 | `parent_id` | uuid | Nulo para raízes. Ciclo é impedido por constraint |
 | `location_type_id` | uuid | Deve ser permitido pelo tipo do pai |
-| `path` | ltree | **Materializado**. Recalculado em cascata ao mover subárvore |
+| `path` | text | **Materializado**. Recalculado em cascata ao mover subárvore |
 | `depth` | int | Derivado; usado para limitar e para indentação de UI |
 | `name` · `code` | text | `code` único por cliente quando presente |
 | `address` · `geo` | jsonb · point | Endereço herdado do ancestral mais próximo quando vazio |
@@ -1650,7 +1650,7 @@ Convenções obrigatórias, aplicadas sem exceção: chave primária `uuid v7` g
 | `customers` | Quem é atendido | name, trade_name, code, tax_id, is_internal, status, segment, billing_*, default_sla_policy_id, logo_key, custom | 1:N locations, contracts, service_requests | Máx. 1 `is_internal` por org; nome único por org | T S H |
 | `customer_contacts` | Pessoas do cliente | name, role, email, phone, receives_reports, user_id | N:1 customer | — | T S H |
 | `location_types` | Níveis da árvore | key, name, icon, allowed_parent_type_ids[], allows_assets, position | 1:N locations | Catálogo por org | T S H |
-| `locations` | Árvore física | parent_id, location_type_id, name, code, path ltree, depth, address jsonb, geo, timezone, calendar_id, manager_user_id, is_mobile, status, custom | N:1 customer, self-FK, 1:N assets | Sem ciclo; tipo válido para o pai; `depth` ≤ 8; `code` único por cliente | T S H |
+| `locations` | Árvore física | parent_id, location_type_id, name, code, path text, depth, address jsonb, geo, timezone, calendar_id, manager_user_id, is_mobile, status, custom | N:1 customer, self-FK, 1:N assets | Sem ciclo; tipo válido para o pai; `depth` ≤ 8; `code` único por cliente | T S H |
 | `suppliers` | Terceiros | name, tax_id, categories[], is_authorized_service, contacts, payment_terms, rating | 1:N stock_lots, work_orders | — | T S H |
 | `teams` | Equipes | name, code, calendar_id, default_warehouse_id, coverage jsonb, lead_user_id | N:N users | — | T S H |
 | `team_members` | Composição | role_in_team, skills[] | N:N | — | T — H |
@@ -1754,7 +1754,7 @@ PLATFORM
   organizations ─1:N─ TUDO ABAIXO   (organization_id obrigatório)
 
 DIRECTORY
-  customers ─1:N─ locations (self-FK, ltree path)
+  customers ─1:N─ locations (self-FK, caminho materializado)
       │              └─1:N─ assets
       ├─1:N─ customer_contacts
       ├─1:N─ contracts
@@ -1850,8 +1850,8 @@ AUTOMATION & INSIGHT
 | Alvo | Índice / estratégia | Motivo |
 | --- | --- | --- |
 | Lista de OS | Composto `(organization_id, status_category, opened_at DESC)` + parcial `WHERE deleted_at IS NULL` | A consulta mais frequente do produto |
-| Escopo por local | GiST em `locations.path` + tabela materializada de locais acessíveis | Evita CTE recursiva por requisição |
-| Busca | `tsvector` gerado + GIN; `pg_trgm` em série, TAG e patrimônio | Erro de digitação em número de série é a regra, não a exceção |
+| Escopo por local | B-tree `text_pattern_ops` em `locations.path` (subárvore por prefixo) + tabela materializada de locais acessíveis | Evita CTE recursiva por requisição |
+| Busca | `tsvector` gerado + GIN; forma normalizada indexada em série, TAG e patrimônio (`pg_trgm` opcional, ADR-027) | Erro de digitação em número de série é a regra, não a exceção |
 | Campos personalizados | GIN em `custom` + índices de expressão sob demanda | Filtro por campo personalizado sem varredura |
 | Histórico de situação | `(work_order_id, changed_at)`; particionamento por mês quando passar de ~50 M linhas | Base da métrica de tempo por situação |
 | Eventos e auditoria | Particionamento mensal por `occurred_at` | Retenção e purga baratas |
@@ -1970,7 +1970,7 @@ Modal dentro de modal · Combo com 651 opções sem busca · Filtro que some ao 
 
 | Necessidade | Exigência que ela impõe | Implicação |
 | --- | --- | --- |
-| Multitenancy com escopo hierárquico | Filtro por subárvore em toda consulta, com desempenho | Postgres com `ltree` + escopo materializado; RLS como segunda barreira, não como única |
+| Multitenancy com escopo hierárquico | Filtro por subárvore em toda consulta, com desempenho | Postgres com caminho materializado + escopo materializado (ADR-026); RLS como segunda barreira, não como única |
 | Máquina de estados com guardas e efeitos | Transação com validação, emissão de evento e efeitos colaterais | Lógica em serviço próprio, não em política de banco nem em função de borda |
 | Numeração transacional | Sequência sem buraco e sem colisão sob concorrência | *Advisory lock* no Postgres dentro da mesma transação |
 | Jobs (ciclos, PDF, exportação, webhooks, digest) | Fila durável, com retentativa, agendamento e visibilidade | Fila baseada em Postgres para enfileirar na mesma transação do dado |
@@ -1992,7 +1992,7 @@ Modal dentro de modal · Combo com 651 opções sem busca · Filtro que some ao 
 | **Portal do cliente** | Mesma base, rotas e layout próprios, *bundle* separado | Reaproveita componentes sem herdar a densidade interna | Aplicação separada — recusado no MVP |
 | **PWA do técnico** | Mesma base; Service Worker; IndexedDB (Dexie); fila de saída própria | Uma base de código; instalável; sem loja de aplicativos | React Native — reconsiderar se push confiável e leitura de NFC virarem requisito |
 | **Backend** | NestJS (TypeScript), monólito modular com um módulo por domínio da §04; Drizzle ORM; REST com OpenAPI gerado | Fronteiras explícitas, tipos compartilhados com o front, caminho de extração futura sem reescrita | Microsserviços — prematuro; Python/Django — perde o compartilhamento de tipos |
-| **Banco** | PostgreSQL 16+ com `ltree`, `pg_trgm`, `uuid v7`, particionamento em eventos e histórico; réplica de leitura para analytics | Um banco resolve relacional, árvore, JSON, busca e fila | ClickHouse para analytics — só quando o volume exigir |
+| **Banco** | PostgreSQL 16+ sem dependência de extensão (ADR-026, ADR-027), `uuid v7` gerado na aplicação, particionamento em eventos e histórico; réplica de leitura para analytics | Um banco resolve relacional, árvore, JSON, busca e fila | ClickHouse para analytics — só quando o volume exigir |
 | **Autenticação** | Provedor gerenciado (Supabase Auth ou equivalente): senha, *magic link* para o portal, MFA; OIDC/SAML na Fase 3 | Identidade é problema resolvido; não construir | Auth próprio — recusado |
 | **Armazenamento** | S3-compatível, prefixo por organização, URLs assinadas curtas, versionamento | Isolamento e custo | Blob no banco — recusado |
 | **Filas e jobs** | pg-boss (fila no próprio Postgres): enfileiramento transacional, cron, retentativa, prioridade | Zero infra extra e garantia de que o job só existe se a transação existiu | Redis/SQS — quando o volume justificar |
@@ -2930,7 +2930,7 @@ Complexidade: **S** ≤ 2 dias · **M** ≤ 1 semana · **L** ≤ 3 semanas · *
 | BL-011 | 002 | Editor granular de papel customizado | PLT-004 | **P1** | F1 | BL-009 | M |
 | BL-012 | 002 | Acesso de suporte com prazo e banner | PLT-006 | **P1** | F1 | BL-009 | S |
 | BL-013 | 003 | Clientes, contatos e modo single-customer | DIR-001 | **P0** | F1 | BL-010 | M |
-| BL-014 | 003 | Tipos de local e árvore com ltree | DIR-002 | **P0** | F1 | BL-013 | L |
+| BL-014 | 003 | Tipos de local e árvore com caminho materializado | DIR-002 | **P0** | F1 | BL-013 | L |
 | BL-015 | 003 | Mover subárvore com recálculo de escopo | DIR-003 | **P0** | F1 | BL-014 | M |
 | BL-016 | 003 | Fornecedores | DIR-004 | **P2** | F1 | BL-013 | S |
 | BL-017 | 003 | Equipes, membros e cobertura | DIR-005 | **P0** | F1 | BL-010 | M |
@@ -3045,7 +3045,7 @@ Regra: nada entra no Core Operacional por ser "importante". Entra por ser **indi
 | ADR-002 | Chamado × OS | (a) mesma entidade com visão; (b) `service_request` separado | **(b)** | Recusa, duplicidade, 1→N, SLA de resposta separado, superfície de escrita mínima no portal e denominadores limpos. O custo (dupla escrituração) é anulado pela conversão de um clique e pela conversão automática opcional |
 | ADR-003 | Situação × motivo de espera | (a) estados livres como na referência; (b) estados fixos; (c) categoria fixa + situação configurável + motivo separado | **(c)** | Colapsa 42 rótulos em 9 situações e 14 motivos; habilita pausa de SLA por motivo e a métrica "tempo por motivo"; mantém flexibilidade sem perder analytics |
 | ADR-004 | Cliente sempre presente | (a) local direto na organização no modo interno; (b) sempre um `customer`, com `is_internal` | **(b)** | Um único caminho de código em escopo, consulta, RLS e relatório. O custo é um registro no onboarding e uma interface que esconde a camada |
-| ADR-005 | Hierarquia de locais | (a) níveis fixos; (b) árvore livre; (c) árvore com tipos configuráveis e regras de aninhamento | **(c)** com `ltree` | Serve saúde hoje e outros mercados depois, sem árvore anárquica |
+| ADR-005 | Hierarquia de locais | (a) níveis fixos; (b) árvore livre; (c) árvore com tipos configuráveis e regras de aninhamento | **(c)** com caminho materializado (ADR-026) | Serve saúde hoje e outros mercados depois, sem árvore anárquica |
 | ADR-006 | Asset × Equipment | (a) duas entidades; (b) `asset` universal com rótulo configurável | **(b)** | "Equipamento" é vocabulário de vertical, não conceito de domínio |
 | ADR-007 | RBAC | (a) papéis fixos; (b) só granular; (c) papéis de fábrica + granular + escopo separado | **(c)** | A referência prova que só granular leva a "Técnico com 101 permissões". Papéis prontos definem o caminho feliz; granular resolve a exceção |
 | ADR-008 | Analytics | (a) BI externo; (b) consulta direta no transacional; (c) tabelas de fato nativas | **(c)** | BI externo sai do RBAC e da identidade do produto; consulta direta produz as telas de 30 s observadas na referência |
@@ -3060,6 +3060,8 @@ Regra: nada entra no Core Operacional por ser "importante". Entra por ser **indi
 | ADR-017 | Fila de jobs | (a) Redis/SQS; (b) fila no Postgres | **(b)** no início | Enfileiramento na mesma transação do dado elimina toda uma classe de inconsistência; sem infra adicional |
 | ADR-018 | Mobile | (a) app nativo; (b) PWA | **(b)** | Uma base de código, distribuição sem loja, atualização imediata. Reavaliar se push confiável ou NFC virarem requisito |
 | ADR-019 | Exclusão | (a) exclusão física; (b) soft delete + arquivamento | **(b)** | Histórico regulado de 10 anos; a referência já usa "ocultar" e acerta |
+| ADR-026 | Representação da árvore de locais | (a) `ltree`; (b) caminho materializado em `text`; (c) tabela de fechamento | **(b)** | `ltree` é extensão, e extensão nem sempre está disponível: não existe no PGlite (ADR-022) e vários PostgreSQL gerenciados restringem quais podem ser criadas. Um caminho materializado `/uuid/uuid/` com índice `text_pattern_ops` responde consulta de subárvore por prefixo usando índice, funciona em qualquer PostgreSQL sem extensão e tem a mesma complexidade de leitura. O custo é reescrever prefixos ao mover subárvore — operação rara, já transacional, e que o modelo previa. Tabela de fechamento foi recusada por multiplicar linhas sem ganho na profundidade máxima de 8. **Consequência:** onde a v0.1 diz `ltree`, leia-se caminho materializado em `text` |
+| ADR-027 | Busca textual | (a) `pg_trgm` + `tsvector`; (b) só `tsvector` nativo; (c) motor dedicado | **(b)** no núcleo, **(a)** como otimização opcional | Mesma razão do ADR-026: `pg_trgm` é extensão e não é garantida; `tsvector`/`to_tsquery` são nativos. A tolerância a erro de digitação em série e patrimônio (§27) passa a ser obtida por normalização na indexação — o índice guarda a forma sem pontuação, sem acento e em caixa baixa — e o trigrama entra como aceleração onde o ambiente permitir. A degradação é de qualidade de resultado, não de funcionalidade |
 | ADR-021 | Gerenciador de pacotes | (a) pnpm; (b) yarn; (c) npm workspaces | **(c)** | `pnpm` e `corepack` não estão disponíveis no ambiente de desenvolvimento atual e instalar um gerenciador global adiciona uma dependência de máquina que o CI teria de replicar. `npm workspaces` é nativo do Node 25, suficiente para este monorepo e mantém um único `package-lock.json` versionado. Reversível: migrar para pnpm depois é troca de lockfile, não de arquitetura |
 | ADR-022 | Banco para testes automatizados | (a) Postgres em Docker; (b) Postgres remoto; (c) PGlite (Postgres em WASM, em processo) | **(c)** como padrão, **(a)** opcional via `AURORA_TEST_PG_URL` | O daemon do Docker não está disponível no ambiente atual e o banco remoto está bloqueado (ADR-025). PGlite é PostgreSQL real, roda em processo, suporta RLS, papéis e `set_config`, e torna o teste de vazamento de contexto **mais** adversarial: como há uma única conexão persistente, qualquer contexto que vazasse apareceria imediatamente. O teste de pool com várias conexões físicas roda quando um Postgres real é apontado por variável de ambiente |
 | ADR-023 | Isolamento no banco | (a) só filtro na aplicação; (b) RLS com owner; (c) RLS + `FORCE` + papel não-owner sem `BYPASSRLS` | **(c)** | O owner ignora RLS por padrão; sem `FORCE` e sem separação de papéis, a política é decorativa. Detalhes em §37 |

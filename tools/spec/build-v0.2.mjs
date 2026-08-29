@@ -466,6 +466,53 @@ patch(
 }
 
 /* ============================================================
+   P15 — ADR-026/027: sem dependência de extensão do PostgreSQL
+
+   Descoberto na implementação do EPIC-003: `ltree` e `pg_trgm` não existem
+   no PGlite (banco dos testes, ADR-022) e não são garantidos em PostgreSQL
+   gerenciado. A v0.1 assumia as duas extensões. Corrigido aqui, com ADR.
+   ============================================================ */
+patch(
+  'P15-adr026',
+  '| ADR-021 | Gerenciador de pacotes |',
+  '| ADR-026 | Representação da árvore de locais | (a) `ltree`; (b) caminho materializado em `text`; (c) tabela de fechamento | **(b)** | `ltree` é extensão, e extensão nem sempre está disponível: não existe no PGlite (ADR-022) e vários PostgreSQL gerenciados restringem quais podem ser criadas. Um caminho materializado `/uuid/uuid/` com índice `text_pattern_ops` responde consulta de subárvore por prefixo usando índice, funciona em qualquer PostgreSQL sem extensão e tem a mesma complexidade de leitura. O custo é reescrever prefixos ao mover subárvore — operação rara, já transacional, e que o modelo previa. Tabela de fechamento foi recusada por multiplicar linhas sem ganho na profundidade máxima de 8. **Consequência:** onde a v0.1 diz `ltree`, leia-se caminho materializado em `text` |\n' +
+    '| ADR-027 | Busca textual | (a) `pg_trgm` + `tsvector`; (b) só `tsvector` nativo; (c) motor dedicado | **(b)** no núcleo, **(a)** como otimização opcional | Mesma razão do ADR-026: `pg_trgm` é extensão e não é garantida; `tsvector`/`to_tsquery` são nativos. A tolerância a erro de digitação em série e patrimônio (§27) passa a ser obtida por normalização na indexação — o índice guarda a forma sem pontuação, sem acento e em caixa baixa — e o trigrama entra como aceleração onde o ambiente permitir. A degradação é de qualidade de resultado, não de funcionalidade |\n' +
+    '| ADR-021 | Gerenciador de pacotes |'
+);
+
+/* coerência das seções afetadas pelo ADR-026/027 */
+patch('P15a', '| `path` | ltree | **Materializado**', '| `path` | text | **Materializado**');
+patch('P15b', '`location_path` (ltree) + escopo', '`location_path` (caminho materializado) + escopo');
+patch('P15c', 'path ltree, depth', 'path text, depth');
+patch(
+  'P15d',
+  'customers ─1:N─ locations (self-FK, ltree path)',
+  'customers ─1:N─ locations (self-FK, caminho materializado)'
+);
+patch(
+  'P15e',
+  'Postgres com `ltree` + escopo materializado',
+  'Postgres com caminho materializado + escopo materializado (ADR-026)'
+);
+patch('P15f', 'Tipos de local e árvore com ltree', 'Tipos de local e árvore com caminho materializado');
+patch('P15g', '**(c)** com `ltree`', '**(c)** com caminho materializado (ADR-026)');
+patch(
+  'P15h',
+  'PostgreSQL 16+ com `ltree`, `pg_trgm`, `uuid v7`',
+  'PostgreSQL 16+ sem dependência de extensão (ADR-026, ADR-027), `uuid v7` gerado na aplicação'
+);
+patch(
+  'P15i',
+  'GiST em `locations.path` + tabela materializada de locais acessíveis',
+  'B-tree `text_pattern_ops` em `locations.path` (subárvore por prefixo) + tabela materializada de locais acessíveis'
+);
+patch(
+  'P15j',
+  '`tsvector` gerado + GIN; `pg_trgm` em série, TAG e patrimônio',
+  '`tsvector` gerado + GIN; forma normalizada indexada em série, TAG e patrimônio (`pg_trgm` opcional, ADR-027)'
+);
+
+/* ============================================================
    cabeçalho de versão
    ============================================================ */
 patch(

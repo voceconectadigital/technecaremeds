@@ -91,3 +91,36 @@ export async function seedOrganization(
   ]);
   return ids;
 }
+
+/**
+ * Acrescenta uma segunda pessoa a uma organização já semeada, opcionalmente com
+ * escopo restrito a uma lista de locais.
+ *
+ * Existe porque `aurora.users` é tabela de plataforma e o papel da aplicação
+ * não escreve nela — corretamente: criar usuário é ato de convite, não de
+ * requisição comum. Um teste que precisasse disso e não tivesse este auxiliar
+ * acabaria contornando o papel da aplicação para montar o cenário, e passaria a
+ * testar um mundo que não existe em produção.
+ */
+export async function seedMember(
+  t: TestDatabase,
+  ids: { organizationId: string; userId: string; membershipId: string },
+  opts: { email: string; userName: string; locationIds?: readonly string[] }
+): Promise<void> {
+  await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
+    ids.userId,
+    opts.email,
+    opts.userName,
+  ]);
+  await t.raw(
+    `INSERT INTO aurora.memberships (id, organization_id, user_id, status, seat_type, is_owner)
+     VALUES ($1, $2, $3, 'active', 'staff', false)`,
+    [ids.membershipId, ids.organizationId, ids.userId]
+  );
+  const restrito = opts.locationIds && opts.locationIds.length > 0;
+  await t.raw(
+    `INSERT INTO aurora.membership_scopes (membership_id, organization_id, location_scope, location_ids)
+     VALUES ($1, $2, $3::aurora.scope_mode, $4)`,
+    [ids.membershipId, ids.organizationId, restrito ? 'listed' : 'all', opts.locationIds ?? []]
+  );
+}

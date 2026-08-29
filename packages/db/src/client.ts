@@ -17,6 +17,7 @@
  *     privilegiado (ambiente de teste, migrations, console administrativo).
  */
 import type { RequestContext } from '@aurora/domain';
+import { withTranslatedErrors } from './pg-errors';
 import { TenantContextMissingError } from '@aurora/domain';
 
 /** Executor mínimo de SQL — implementado por PGlite e por node-postgres. */
@@ -50,38 +51,40 @@ export async function withTenant<T>(
     throw new TenantContextMissingError('withTenant');
   }
 
-  return db.transaction(async (tx) => {
-    // O papel de aplicação primeiro: tudo que vier depois é avaliado sob RLS.
-    if (db.appRole) {
-      await tx.query(`SET LOCAL ROLE ${quoteIdent(db.appRole)}`);
-    }
+  return withTranslatedErrors(() =>
+    db.transaction(async (tx) => {
+      // O papel de aplicação primeiro: tudo que vier depois é avaliado sob RLS.
+      if (db.appRole) {
+        await tx.query(`SET LOCAL ROLE ${quoteIdent(db.appRole)}`);
+      }
 
-    // is_local = true em todos: o contexto morre no fim da transação.
-    await tx.query(
-      `SELECT set_config('aurora.organization_id', $1, true),
+      // is_local = true em todos: o contexto morre no fim da transação.
+      await tx.query(
+        `SELECT set_config('aurora.organization_id', $1, true),
               set_config('aurora.actor_id',        $2, true),
               set_config('aurora.actor_kind',      $3, true),
               set_config('aurora.request_id',      $4, true),
               set_config('aurora.client_ip',       $5, true),
               set_config('aurora.user_agent',      $6, true),
               set_config('aurora.source',          $7, true)`,
-      [
-        ctx.organizationId,
-        ctx.actorId ?? '',
-        ctx.actorKind,
-        ctx.requestId,
-        ctx.clientIp ?? '',
-        ctx.userAgent ?? '',
-        ctx.source,
-      ]
-    );
+        [
+          ctx.organizationId,
+          ctx.actorId ?? '',
+          ctx.actorKind,
+          ctx.requestId,
+          ctx.clientIp ?? '',
+          ctx.userAgent ?? '',
+          ctx.source,
+        ]
+      );
 
-    const session: TenantSession = {
-      context: ctx,
-      query: (sql, params) => tx.query(sql, params),
-    };
-    return fn(session);
-  });
+      const session: TenantSession = {
+        context: ctx,
+        query: (sql, params) => tx.query(sql, params),
+      };
+      return fn(session);
+    })
+  );
 }
 
 /**

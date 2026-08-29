@@ -54,7 +54,15 @@ describe('migrations (EPIC-001)', () => {
     // lista explícita: mudança de schema tem de ser deliberada, nunca silenciosa
     expect(rows.map((r) => r.table_name)).toEqual([
       'audit_logs',
+      'availability_blocks',
+      'calendar_exceptions',
+      'calendar_windows',
+      'calendars',
+      'customer_contacts',
+      'customers',
       'domain_events',
+      'location_types',
+      'locations',
       'membership_permission_overrides',
       'membership_roles',
       'membership_scopes',
@@ -64,6 +72,9 @@ describe('migrations (EPIC-001)', () => {
       'role_permissions',
       'roles',
       'schema_migrations',
+      'suppliers',
+      'team_members',
+      'teams',
       'users',
     ]);
     await pg.close();

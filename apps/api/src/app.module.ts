@@ -10,6 +10,9 @@ import type { AuroraEnv } from '@aurora/config';
 import { HealthController } from './health/health.controller';
 import { OrganizationsController } from './platform/organizations.controller';
 import { MeController } from './platform/me.controller';
+import { LocationsController } from './directory/locations.controller';
+import { CustomersController } from './directory/customers.controller';
+import { TeamsController } from './directory/teams.controller';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
@@ -32,7 +35,14 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
   const contextMiddleware = createContextMiddleware(resolver, logger);
 
   @Module({
-    controllers: [HealthController, MeController, OrganizationsController],
+    controllers: [
+      HealthController,
+      MeController,
+      OrganizationsController,
+      CustomersController,
+      LocationsController,
+      TeamsController,
+    ],
     providers: [
       { provide: DATABASE, useValue: deps.db },
       { provide: ENV, useValue: deps.env },

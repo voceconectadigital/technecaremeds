@@ -213,7 +213,7 @@ describe('isolamento do RBAC entre organizações', () => {
       s.query<{ id: string }>(`SELECT id FROM aurora.roles WHERE key = 'owner'`)
     );
     await expect(withTenant(t.db, ctxA, (s) => assignRole(s, MEM_A, roleB!.id))).rejects.toThrow(
-      /foreign key|row-level security/i
+      /_org_fk|fora do seu acesso|row-level security/i
     );
   });
 

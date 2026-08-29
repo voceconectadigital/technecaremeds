@@ -8,11 +8,11 @@ manutenção hospitalar e, adiante, outros mercados de gestão de ativos.
 
 ## Documentação
 
-| Documento | O que é |
-|---|---|
-| [`docs/AURORA-CMMS-SPEC-v0.2.md`](docs/AURORA-CMMS-SPEC-v0.2.md) | **Source of truth** de negócio e arquitetura — 49 seções |
-| [`docs/01-AUDITORIA-TECHNECARE.md`](docs/01-AUDITORIA-TECHNECARE.md) | Auditoria funcional do sistema de referência |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | Estado do desenvolvimento, bugs corrigidos, bloqueios |
+| Documento                                                            | O que é                                                  |
+| -------------------------------------------------------------------- | -------------------------------------------------------- |
+| [`docs/AURORA-CMMS-SPEC-v0.2.md`](docs/AURORA-CMMS-SPEC-v0.2.md)     | **Source of truth** de negócio e arquitetura — 49 seções |
+| [`docs/01-AUDITORIA-TECHNECARE.md`](docs/01-AUDITORIA-TECHNECARE.md) | Auditoria funcional do sistema de referência             |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md)                               | Estado do desenvolvimento, bugs corrigidos, bloqueios    |
 
 ## Estrutura
 
