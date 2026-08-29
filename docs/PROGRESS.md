@@ -11,10 +11,10 @@ Fonte de verdade de código: este repositório e o Git.
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
 | Fase                             | **F5 — SLA e agenda**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA) |
-| Épico seguinte                   | EPIC-012 — Planos de manutenção preventiva                                            |
-| Testes                           | **679**, todos verdes                                                           |
-| Migrations                       | 29 (`0000` a `0028`), idempotentes, reprodutíveis do zero                       |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos) |
+| Épico seguinte                   | EPIC-015 — Estoque, ou EPIC-021 — Analytics                                            |
+| Testes                           | **702**, todos verdes                                                           |
+| Migrations                       | 30 (`0000` a `0029`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -274,6 +274,29 @@ A referência põe `tempo_atendimento` e `tempo_fechamento` em minutos **no equi
 
 - **Degrau do contrato** na cascata: depende do EPIC-017. O `COALESCE` já está escrito para receber a coluna sem mudar a ordem.
 - **A varredura roda sob demanda**, não em cron: o agendador durável depende de PostgreSQL real (pendência do EPIC-001). A função está pronta e testada; falta quem a chame de minuto em minuto.
+
+---
+
+## EPIC-012 — Planos de manutenção preventiva · **concluído**
+
+O modelo da referência é bom — ciclos, janela, progresso, conformidade, geração automática. Duas limitações reais foram corrigidas.
+
+**Correção 1 — a frequência é da tarefa, não do plano.** Lá, ter preventiva semestral e calibração anual no mesmo equipamento exige dois planos; o tenant auditado tem **826 planos**, muitos deles duplicatas do mesmo escopo com ritmos diferentes — e cada duplicata é um lugar a mais onde alguém pode esquecer de incluir o equipamento novo.
+
+**Correção 2 — o alvo é uma expressão, não uma lista de caixas marcadas.** "Todos os ativos da categoria Ventilador pulmonar na subárvore UTI" continua valendo para o ventilador que chegar amanhã. Há teste que cria um ativo depois do plano e confere que ele entra sozinho no escopo.
+
+**Detalhes que decidem se o indicador é levado a sério**
+
+- **Tolerância**: uma preventiva executada um dia depois do previsto não é não conformidade. Contá-la como tal faz as pessoas ignorarem o relatório em vez de agir sobre ele.
+- **O denominador exclui as dispensadas**: um ativo emprestado a outro hospital não podia receber a preventiva. Mas dispensar **exige justificativa de 10 caracteres**, registrada com autor e data — é isso que impede a dispensa de virar a saída fácil para melhorar o número.
+- **A âncora do ciclo é o fim do anterior, nunca "hoje"**: ancorar em hoje faria a data escorregar a cada geração atrasada, e em dois anos a preventiva de janeiro estaria acontecendo em março.
+- **31 de janeiro + 1 mês = 28 de fevereiro**, não 3 de março. Somar ingenuamente faria a preventiva de fim de mês escorregar até sair do mês.
+- **O item acompanha a OS por gatilho**: fechar a OS marca o item como concluído. Sem isso, a conformidade mediria a disciplina de marcar, não a de executar. Cancelar a OS devolve o item para pendente — deixá-lo como "gerado" o faria parecer resolvido.
+
+### Adiado deliberadamente
+
+- **Gatilho por uso e por condição** (`trigger = meter | condition`): Fase 4 na SPEC. As colunas existem e a varredura já filtra por `trigger = calendar`.
+- **`include_late_assets`**: a coluna existe e o comportamento padrão (entrar só no ciclo seguinte) é o implementado; a inclusão tardia entra quando houver tela que a configure.
 
 ---
 

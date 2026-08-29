@@ -10,3 +10,4 @@ export * from './service-requests';
 export * from './work-orders';
 export * from './checklists';
 export * from './business-time';
+export * from './maintenance-plans';
