@@ -197,6 +197,41 @@ ADR-002 é a decisão mais consequente da SPEC: `service_request` é entidade pr
 
 ---
 
+## EPIC-008 — Ordens de serviço e máquina de estados · **concluído**
+
+O registro central do produto. A referência tinha **42 estados** porque codificou o motivo dentro do estado: "Aguardando peças", "Aguardando aprovação do orçamento", "Aguardando liberação da unidade", "Aguardando empresa externa". Cada combinação de situação e causa virou um estado, e a lista explodiu combinatoriamente.
+
+**Três eixos independentes (ADR-003, ADR-004)**
+
+| Eixo | Quem controla | Para que serve |
+| --- | --- | --- |
+| **Categoria** | Fixa na plataforma, nunca editável | É o que o software sabe interpretar: se conta como ativo, se o relógio corre, se o equipamento está parado. É por isso que o produto continua funcionando quando a organização cria uma situação que ninguém previu. |
+| **Situação** | Configurável, declarando uma categoria | É o vocabulário do cliente. Renomear é livre; mudar a categoria de uma situação de sistema não é, porque reinterpretaria toda OS já registrada nela. |
+| **Motivo de espera** | Configurável, com `pauses_sla` e responsável | "Quanto tempo perdemos esperando peça" vira uma consulta indexada. |
+
+**Falta de peça NÃO pausa o SLA por padrão.** É responsabilidade da organização, não do cliente, e um relógio que pausa aí perdoaria o próprio atraso. A coluna é configurável — mas o padrão de fábrica não perdoa.
+
+**A tabela É a regra.** O grafo vive em `work_order_status_transitions`. Não existe `if` em código que decida se uma transição vale: o motor lê as linhas. E um gatilho recusa qualquer mudança de situação não declarada — o motor em TypeScript dá a mensagem boa, com a lista de saídas possíveis; o banco garante que ninguém pule o motor.
+
+**Snapshot do ativo e do local**, tirado uma vez na abertura e não editável. Transferir um ativo de setor não reescreve onde o serviço aconteceu. A referência avisava que "OS existentes não poderão ser editadas caso altere o proprietário" — sintoma de que lá a mudança de dono corrompia o histórico.
+
+**Critérios de aceite, verificados**
+
+- Transição não declarada é recusada na API **e** no banco, com mensagem que nomeia as possíveis
+- Ir para uma situação que exige motivo, sem motivo, é impossível — no domínio e por restrição de tabela
+- Toda transição grava histórico com duração no estado anterior e emite o evento certo
+- O quadro Kanban traz a **quebra por motivo** dentro da coluna de espera, agrupada no banco
+
+**Fecha também o critério do EPIC-007**: uma solicitação com 3 ativos gera 3 OS vinculadas numa operação — e se a transição da solicitação não valer, nenhuma OS é criada.
+
+### Adiado deliberadamente
+
+- **Bloco de conclusão ligado aos fatos reais.** O motor (`checkCompletion`) está escrito e testado com todos os oito requisitos; o que falta é a fonte dos fatos — checklist, horas apontadas, fotos, assinatura — que é o EPIC-011. Hoje a transição para "Concluída" exige `resolution`, e os demais requisitos entram quando houver o que verificar.
+- **Meta de 400 ms com 100 mil OS**: os índices estão desenhados para ela (`wo_customer_status_idx`), mas medir exige PostgreSQL real com volume — não PGlite em WASM. Registrado como pendência de infraestrutura, não de código.
+- **PDF da OS** e **visões salvas**: dependem da camada de apresentação.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -219,6 +254,9 @@ ADR-002 é a decisão mais consequente da SPEC: `service_request` é entidade pr
 | 16  | **Lote grande de importação respondia 500**                               | Teste de lote acima do limite                                                                                 | O limite padrão de corpo do Express é 100 kB e o erro nasce no middleware, antes de qualquer validação nossa. Limite explícito de 12 MB, documentado                                                                                                                         |
 | 17  | **Rota de etiquetas em lote respondia 431**                               | Teste de lote acima de 500                                                                                    | Quinhentos uuid numa query string dão 18 mil caracteres e o Node recusa antes de qualquer código nosso. A lista passou para o corpo, em `POST` — a alternativa era estreitar o produto para caber numa URL                                                                    |
 | 18  | **Limitador chaveado num cabeçalho que o cliente escreve**                | Autoauditoria da rota pública                                                                                 | `x-forwarded-for` é escrito pelo chamador: bastava trocá-lo a cada requisição. Passou a usar o endereço do soquete, e há teste que rotaciona o cabeçalho para provar que não escapa                                                                                           |
+| 19  | **Situação que exige motivo confundida com categoria**                    | O grafo permitia pausar, mas a restrição de tabela exigia motivo                                              | "Pausada" e "Aguardando" compartilham a categoria `waiting`; só a segunda tem dependência externa a nomear. Exigir motivo virou propriedade da SITUAÇÃO. Exigir em pausar obrigaria a inventar motivo, e motivo inventado envenena o relatório que o ADR-004 produz |
+| 20  | **Histórico embaralhado dentro de uma transação**                         | Teste do EPIC-008 leu quatro transições feitas no mesmo COMMIT e recebeu as linhas fora de ordem              | Dentro de uma transação `now()` é constante: `changed_at` ficava idêntico e o desempate caía no uuid, que é aleatório. Sequência monotônica + `clock_timestamp()`; migration 0023 aplica o mesmo ao histórico de solicitações |
+| 21  | **Rota resolvida por ordem de declaração**                                | Autoauditoria, aplicando ao EPIC-008 o princípio enunciado no EPIC-006                                         | `/work-orders/board` casaria com `:id`. O parâmetro passou a ser restrito ao formato de uuid no próprio caminho, onde a decisão fica visível |
 
 ---
 
