@@ -88,6 +88,7 @@ describe('migrations (EPIC-001)', () => {
       'document_types',
       'documents',
       'domain_events',
+      'fact_work_order',
       'inventory_items',
       'location_types',
       'locations',

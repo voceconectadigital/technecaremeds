@@ -10,11 +10,11 @@ Fonte de verdade de código: este repositório e o Git.
 | Item                             | Situação                                                                       |
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | SPEC                             | **v0.2**, auditada automaticamente (0 erros, 0 avisos), 49 seções, 28 ADRs      |
-| Fase                             | **F6 — comercial, programação e documentos**                                                               |
-| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos) |
-| Épico seguinte                   | EPIC-021 — Analytics, ou EPIC-020 — Portal do cliente                                  |
-| Testes                           | **1000**, todos verdes                                                           |
-| Migrations                       | 35 (`0000` a `0034`), idempotentes, reprodutíveis do zero                       |
+| Fase                             | **F7 — indicadores sobre o que já existe**                                                               |
+| Épicos concluídos                | EPIC-001 (fundação), EPIC-002 (RBAC), EPIC-003 (diretório), EPIC-004 (catálogos), EPIC-005 (ativos), EPIC-006 (QR Code), EPIC-007 (solicitações), EPIC-008 (ordens de serviço), EPIC-011 (execução), EPIC-010 (SLA), EPIC-012 (planos preventivos), EPIC-015 (estoque), EPIC-017 (contratos), EPIC-016 (orçamentos), EPIC-013 (agenda), EPIC-018 (documentos), EPIC-021 (indicadores) |
+| Épico seguinte                   | EPIC-020 — Portal do cliente, ou EPIC-019 — Notificações                               |
+| Testes                           | **1054**, todos verdes                                                           |
+| Migrations                       | 36 (`0000` a `0035`), idempotentes, reprodutíveis do zero                       |
 | Supabase remoto                  | **BLOQUEADO** — projeto do Aurora não identificado (ADR-025, OQ-16)             |
 | Banco de desenvolvimento e teste | PGlite (PostgreSQL 16.4 em processo) — ADR-022                                  |
 
@@ -443,6 +443,40 @@ A referência tem **seis módulos documentais separados** — calibração, rasc
 
 ---
 
+## EPIC-021 — Indicadores · **concluído**
+
+A auditoria **não conseguiu confirmar** as fórmulas do sistema de referência para disponibilidade, MTTR, MTBF e "TMAC": a interface não exibe definição e os botões de ajuda não retornam conteúdo. Esse fato governou o épico inteiro.
+
+**Todo número viaja com a sua definição.** Numerador, denominador, exclusões, período, filtros e cobertura vêm no mesmo objeto que o valor — não como enfeite de interface, mas como contrato: nenhum cliente da API consegue exibir o número sem ter recebido como ele foi calculado. A primeira pergunta diante de um número ruim é "como isso foi feito", e sem resposta o gestor para de usar o relatório, que é o estado em que a referência está.
+
+**As fórmulas aqui são nossa decisão, e dizem isso.** Cada métrica carrega um campo de comparabilidade; as quatro que a auditoria não conseguiu confirmar avisam por extenso que comparar com o sistema antigo exige obter a fórmula com o fornecedor primeiro. **"TMAC" não existe**: a sigla só pôde ser inferida pelo formato de duração, e no lugar dela há tempo de primeira resposta e MTTR, ambos definidos.
+
+**Denominador honesto, em todo lugar.** OS sem política não entram no SLA e a cobertura diz quantas ficaram de fora. Ativo com uma única corretiva não produz intervalo e sai do MTBF — tratar a única falha como intervalo zero faria o equipamento que falhou uma vez em cinco anos aparecer como o menos confiável do parque. Mês sem corretiva concluída devolve MTTR **nulo**, não zero: zero afirmaria uma excelência que não aconteceu.
+
+**A regra de ouro do §25, cumprida por gatilho.** "O domínio transacional nunca é consultado diretamente por um painel de 12 meses — foi esse acoplamento que produziu telas de 30 segundos na referência." A SPEC descreve as tabelas de fato como populadas a partir dos eventos, com latência de minutos; aqui `fact_work_order` é mantida por **gatilho**, e a diferença é deliberada:
+
+- o publicador de eventos depende de agendador durável, que depende de PostgreSQL real — ainda em aberto (ADR-022);
+- manter por gatilho não tem latência nenhuma: o fato nasce na mesma transação do dado, e não existe janela em que o painel discorde da lista;
+- é o mesmo desenho de `stock_balances` desde o EPIC-015, então não é um segundo jeito de fazer a mesma coisa dentro do sistema.
+
+O preço é o custo por escrita, que num CMMS é ordens de grandeza menor que o de leitura: uma OS é escrita algumas dezenas de vezes na vida e lida em todo painel, todo dia. E há **caminho de volta**: `rebuild_fact_work_order` reconstrói a projeção inteira, com teste que compara o resultado da reconstrução com o do gatilho — porque quando alguém desconfia do número, e alguém sempre desconfia, a resposta não pode ser "confie".
+
+**Outras decisões**
+
+- **Rascunho não é demanda aberta.** `opened_at` é a saída do rascunho, não a criação — e uma OS publicada e depois devolvida a rascunho continua tendo sido demanda naquele dia, então a data não se apaga.
+- **As horas do fato são recalculadas por soma, não incrementadas.** Apontamento se corrige, se apaga e se reabre; um contador incremental erraria em cada um desses casos sem ninguém perceber.
+- **Uma rota por indicador, não uma rota genérica com `?metric=`.** Cada um tem filtros próprios, e a permissão financeira precisa cair sobre alguns e não sobre outros — impossível numa rota só.
+- **Há rota só de definições**, sem consultar nada, para a tela de configuração do painel exibir a ajuda antes de existir período escolhido.
+- **O período de um indicador é limitado a 400 dias.** Acima disso é exportação, não painel.
+
+### Adiado deliberadamente
+
+- **Agregados materializados mensais** (a terceira camada do §25): a tabela de fato já responde os recortes do painel; a camada de agregado entra quando houver volume que a justifique, e medir isso exige PostgreSQL real.
+- **Disponibilidade, tempo de parada, custo e CSAT**: marcados como Comercial ou Fase 2/3 na própria SPEC. Disponibilidade em particular depende de decidir quais situações caracterizam parada — decisão de produto que a auditoria não confirmou e que não se inventa.
+- **Reincidência e taxa de utilização**: Fase 2 na SPEC; os dados já existem, falta a definição acordada.
+
+---
+
 ## Bugs reais encontrados e corrigidos pela própria suíte
 
 | #   | Bug                                                                      | Como apareceu                                                                    | Correção                                                                                              |
@@ -480,6 +514,7 @@ A referência tem **seis módulos documentais separados** — calibração, rasc
 | 31  | **O balde "Reagendar" mostrava o quê sem o porquê**                        | Teste de borda leu a linha do painel e recebeu `window_invalidated_reason` indefinido                          | A consulta dos baldes trazia o carimbo da invalidação mas não o motivo. Mostrar que algo precisa ser remarcado sem dizer por que manda o coordenador para outra tela — e cada tela a mais é um passo na direção do telefonema que este épico existe para evitar |
 | 32  | **A SPEC descrevia um tipo de ausência que o banco não tem**               | Encontrado ao implementar o bloqueio do §13                                                                   | O §13 e o dicionário falam em bloco de tipo `absence`; o enumerado criado no EPIC-003 é `vacation \| leave \| training \| other`. Em vez de inventar um valor novo, a SPEC foi corrigida (patch P19) para descrever o que existe, e a regra de bloqueio passou a ser dita pelos tipos reais. O vínculo também foi corrigido: o bloco aponta para `membership_id`, não para o usuário — a mesma pessoa pode ter vínculo em duas organizações |
 | 33  | **Tipo que exige assinatura jamais poderia ser emitido**                   | Teste do certificado de calibração: exigia assinatura para emitir, e assinar exigia o hash, que só nascia na emissão | Impasse fechado, e do tipo que só aparece quando alguém percorre o fluxo inteiro. O hash passou a ser congelado na entrada em REVISÃO — "em revisão" significa candidato congelado —, e a emissão apenas CONFERE que o conteúdo não mudou. O número saiu do resumo (só existe na emissão) e a identidade passou a vir do `id`, que é estável desde a criação. Voltar para rascunho descongela, e é recusado se alguém já tiver assinado |
+| 34  | **Dois jeitos de calcular o mesmo tempo**                                  | Teste do tempo por motivo de espera não encontrou o motivo "peça"                                              | As consultas de tempo por situação e por motivo recalculavam a duração por janela (`lead` sobre o histórico), enquanto o gatilho do EPIC-008 já grava `seconds_in_from` na linha que fecha cada permanência — e grava o motivo do estado que TERMINA, não do que começa. Duas maneiras de obter o mesmo número divergem no primeiro caso de borda, e o painel passaria a discordar do detalhe da OS sem ninguém perceber. Passou a ler a duração já gravada |
 
 ---
 
