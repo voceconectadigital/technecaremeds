@@ -1,7 +1,6 @@
 {
   "$sobre": "Os ÚNICOS bancos que um comando do Aurora pode tocar. Lista fechada: o que não está aqui é recusado. Ver packages/config/src/destino.ts e docs/AUDITORIA-CONTAMINACAO-SUPABASE-2026-08-30.md.",
   "$porque": "Em 2026-08-30 um projeto Supabase criado para o Aurora recebeu, por acidente, o schema inteiro de outro produto. O comando que fez isso não era do Aurora — mas os comandos do Aurora aceitavam qualquer DATABASE_URL sem conferir para onde iam. Esta lista fecha esse buraco do nosso lado.",
-
   "ambientes": {
     "desenvolvimento": {
       "descricao": "A máquina de quem escreve o código.",
@@ -12,8 +11,9 @@
     "teste": {
       "descricao": "A suíte automatizada, local e na integração contínua.",
       "hosts": ["localhost", "127.0.0.1", "::1"],
-      "bancos": ["aurora_e2e", "aurora_test", "test", "postgres"],
-      "ref": null
+      "bancos": ["aurora_e2e", "aurora_test", "aurora_ci", "test", "postgres"],
+      "ref": null,
+      "$nota": "aurora_ci é o banco do serviço PostgreSQL da integração contínua (.github/workflows/ci.yml). Ele entrou aqui porque o guard o recusou na primeira execução — que é o fluxo desejado: destino novo entra na lista por decisão, nunca por acidente."
     },
     "homologacao": {
       "descricao": "O cliente avaliando.",
@@ -30,7 +30,6 @@
       "situacao": "BLOQUEADO. Produção não está autorizada."
     }
   },
-
   "bloqueados": {
     "egoajboqzhnvkpenrszw": "Projeto 'Aurora CMMS' CONTAMINADO em 2026-08-30 pelo E-commerce Template: 49 tabelas, 23 migrações e 9 jobs de cron que não são do Aurora. Nunca aplicar Aurora aqui sem recuperação. Ver docs/AUDITORIA-CONTAMINACAO-SUPABASE-2026-08-30.md.",
     "ikzpateoicbjxkapdtsd": "Projeto de terceiro. Um `supabase link` a partir do diretório do Aurora deixou um vínculo órfão apontando para cá, corrigido em 2026-08-30. Não é nosso.",
