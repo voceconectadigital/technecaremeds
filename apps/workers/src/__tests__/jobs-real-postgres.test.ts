@@ -98,8 +98,8 @@ describe.skipIf(!rodar)('trabalhos periódicos em PostgreSQL real', () => {
   it('dois workers em conexões distintas: cada job é entregue a UM só', async () => {
     const fila = 'aurora.plans.sweep';
 
-    // Estado limpo para esta fila.
-    for (const j of await boss.fetch(fila, { batchSize: 100 })) await boss.complete(fila, j.id);
+    // Estado limpo para esta fila — e limpo de verdade: ver `esvaziar`.
+    await esvaziar(fila);
     await runtime.fanOutNow(fila);
 
     const bossA = new PgBoss({ connectionString: URL, schema: ESQUEMA, supervise: false, schedule: false });
@@ -131,15 +131,32 @@ describe.skipIf(!rodar)('trabalhos periódicos em PostgreSQL real', () => {
 
   it('duas dispersões simultâneas não enfileiram a mesma organização duas vezes', async () => {
     const fila = 'aurora.quotes.expire';
-    for (const j of await boss.fetch(fila, { batchSize: 100 })) await boss.complete(fila, j.id);
+    await esvaziar(fila);
 
     // Dois processos disparando o mesmo cron no mesmo segundo — o caso que
     // acontece de verdade quando há duas instâncias do worker.
     const [x, y] = await Promise.all([runtime.fanOutNow(fila), runtime.fanOutNow(fila)]);
 
-    const jobs = await boss.fetch(fila, { batchSize: 100 });
+    /*
+     * O LOTE ACOMPANHA O QUE FOI ENFILEIRADO, e não um número escolhido a dedo.
+     *
+     * A primeira versão buscava `batchSize: 100`. Num banco com mais de cem
+     * organizações — o que acontece numa base de desenvolvimento de longa vida,
+     * e acontecerá na integração contínua quando a suíte crescer —, a busca
+     * devolvia cem e a asserção comparava "quantos enfileiramos" com "quantos
+     * couberam no lote". Ela falhava com 108 contra 100, apontando para uma
+     * duplicata que não existia: a asserção do conjunto, que é a que prova a
+     * exclusão mútua, passava.
+     *
+     * Um teto fixo dentro de um teste é sempre isto: ele transforma uma
+     * pergunta sobre o produto numa pergunta sobre o próprio teste.
+     */
+    const jobs = await boss.fetch(fila, { batchSize: x + y });
     const orgs = jobs.map((j) => (j.data as { organizationId: string }).organizationId);
+
+    // A garantia que importa: nenhuma organização enfileirada duas vezes.
     expect(new Set(orgs).size).toBe(orgs.length);
+    // E as duas dispersões, somadas, produziram exatamente esses jobs.
     expect(x + y).toBe(orgs.length);
 
     for (const j of jobs) await boss.complete(fila, j.id);
@@ -150,3 +167,22 @@ describe.skipIf(!rodar)('trabalhos periódicos em PostgreSQL real', () => {
     expect(r).toEqual({ warned: 0, breached: 0 });
   });
 });
+
+/**
+ * Esvazia uma fila até ela estar VAZIA, e não até um lote.
+ *
+ * `boss.fetch` sempre tem um teto. Drenar com um número fixo deixa resto quando
+ * há mais jobs do que o número — e o resto aparece no caso seguinte como um job
+ * que ninguém enfileirou, num teste que não tem nada a ver com o anterior.
+ *
+ * O laço tem limite de voltas por segurança: uma fila que se realimenta faria
+ * a suíte rodar para sempre, e travar é pior do que falhar.
+ */
+async function esvaziar(fila: string): Promise<void> {
+  for (let volta = 0; volta < 50; volta++) {
+    const lote = await boss.fetch(fila, { batchSize: 500 });
+    if (lote.length === 0) return;
+    for (const j of lote) await boss.complete(fila, j.id);
+  }
+  throw new Error(`a fila ${fila} não esvaziou em 50 voltas — algo a está realimentando`);
+}

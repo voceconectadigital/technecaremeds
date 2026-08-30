@@ -54,8 +54,12 @@ captures/
 
 # Keystore files
 # Uncomment the following lines if you do not want to check your keystore files in.
-#*.jks
-#*.keystore
+# Aurora: DESCOMENTADO de propósito. A keystore de release assina o pacote
+# publicado, e perdê-la ou vazá-la é irreversível — a Play Store recusa um
+# pacote assinado com outra chave, e o aplicativo publicado deixa de poder ser
+# atualizado para sempre. Ela mora FORA do repositório (ver AURORA-FIELD-LOJAS).
+*.jks
+*.keystore
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
