@@ -41,6 +41,13 @@ import {
   createServiceRequest,
   transitionRequest,
   addComment,
+  provisionDocumentTypes,
+  createDocument,
+  transitionDocument,
+  createQuote,
+  addQuoteItem,
+  transitionQuote,
+  scheduleWorkOrder,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
 import { createApp } from '../bootstrap';
@@ -236,6 +243,84 @@ beforeAll(async () => {
   await withTenant(t.db, ctxCoord, async (s) => {
     await addComment(s, { workOrderId: osDoA, body: NOTA_INTERNA, visibility: 'internal' });
     await addComment(s, { workOrderId: osDoA, body: NOTA_PARA_O_CLIENTE, visibility: 'customer' });
+  });
+
+  /*
+   * DOCUMENTO LIBERADO, ORÇAMENTO ENVIADO, VISITA AGENDADA.
+   *
+   * Sem os três, `/portal/documents`, `/portal/quotes` e `/portal/schedule`
+   * respondem lista vazia — e uma lista vazia não tem campo proibido dentro.
+   * As provas PORTAL-007, 008 e 009 passavam contra o nada, e a varredura da
+   * PORTAL-011 passaria também: sete telas limpas porque não havia nada nelas.
+   *
+   * A massa entra pelo CAMINHO REAL de cada módulo — rascunho, revisão,
+   * emissão, liberação —, e não por escrita direta na tabela. Um documento
+   * "liberado" por `UPDATE` teria estado que a aplicação não sabe produzir, e
+   * a prova passaria contra um mundo que não existe.
+   */
+  await withTenant(t.db, sysCtx, async (s) => {
+    const tipos = await provisionDocumentTypes(s);
+    const doc = await createDocument(s, {
+      documentTypeId: tipos.get('work_order_report')!,
+      title: 'Relatório de atendimento — ventilador do Alfa',
+      assetId: ativoA,
+      customerId: clienteA,
+      workOrderId: osDoA,
+      verdict: 'conforming',
+    });
+    await transitionDocument(s, doc, 'under_review');
+    await transitionDocument(s, doc, 'issued');
+    await transitionDocument(s, doc, 'released');
+
+    /*
+     * O ORÇAMENTO PRECISA DE ITEM, e o item é o que carrega custo.
+     *
+     * Um orçamento sem linha nenhuma passaria em qualquer varredura de custo:
+     * o custo mora na composição, e sem composição não há o que vazar. É
+     * exatamente o caso que a prova precisa exercitar.
+     */
+    /*
+     * O CONTATO QUE APROVA É EXIGIDO PARA ENVIAR, e com razão: um orçamento
+     * enviado a ninguém é um orçamento que ninguém aprova, e o produto recusa
+     * criar esse estado. A massa cria o contato em vez de contornar a regra.
+     */
+    const contato = newId();
+    await s.query(
+      `INSERT INTO aurora.customer_contacts (id, organization_id, customer_id, name, email)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [contato, ORG, clienteA, 'Contato do Alfa', 'contato@alfa.test']
+    );
+    const orcamento = await createQuote(s, {
+      customerId: clienteA,
+      approverContactId: contato,
+      validUntil: '2030-12-31',
+    });
+    await addQuoteItem(s, {
+      quoteId: orcamento,
+      /*
+       * `service`, e não `part`: a linha de peça exige um item de estoque
+       * cadastrado (`quote_items_part_has_item`), e a massa do portal não
+       * precisa de um para provar o que precisa provar.
+       */
+      kind: 'service',
+      description: 'Substituição da válvula de exalação',
+      quantity: 2,
+      unitPriceCents: 32000,
+    });
+    await transitionQuote(s, orcamento, 'sent');
+
+    /*
+     * A VISITA É AGENDADA NO FUTURO: a consulta do portal corta o que começou
+     * há mais de um dia, e uma visita no passado não apareceria.
+     */
+    const amanha = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const fim = new Date(amanha.getTime() + 2 * 60 * 60 * 1000);
+    await scheduleWorkOrder(s, {
+      workOrderId: osDoA,
+      membershipId: COORD_MEM,
+      startsAt: amanha,
+      endsAt: fim,
+    });
   });
 }, 180_000);
 
@@ -454,5 +539,175 @@ describe('PORTAL-010 · a escrita é mínima, e não aceita o cliente do corpo',
     const r = await http.post('/v1/portal/requests').set(auth(EMAIL_PORTAL)).send({ summary: '  ' });
     expect(r.status).toBe(422);
     expect(r.body.message).toContain('acontecendo');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* PORTAL-011 · a varredura                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * As chaves que NÃO PODEM sair pelo portal, em nenhuma rota, em nenhuma
+ * profundidade.
+ *
+ * Cada uma delas é uma coisa da prestadora, e não do cliente:
+ *
+ *  · `cost`, `margin`, `unit_cost`, `markup` — o cliente vê PREÇO, e o preço é
+ *    um número acordado. A composição dele é o que a prestadora negocia com o
+ *    fornecedor, e revelá-la é entregar a margem numa tela de acompanhamento;
+ *  · `supplier`, `vendor` — de quem a prestadora compra é dela;
+ *  · `internal_note`, `internal_comment` — a nota interna existe justamente
+ *    para dizer o que não se diz ao cliente;
+ *  · `assignee`, `technician`, `team` — quem vai é decisão de escala, e o
+ *    cliente que a enxerga passa a cobrar pessoa, não serviço;
+ *  · `purchase`, `acquisition_value` — o que o equipamento custou.
+ */
+const PROIBIDAS = [
+  'cost',
+  'unit_cost',
+  'total_cost',
+  'margin',
+  'markup',
+  'supplier',
+  'supplier_id',
+  'supplier_name',
+  'vendor',
+  'internal_note',
+  'internal_notes',
+  'internal_comment',
+  'assignee',
+  'assignee_id',
+  'assignee_membership_id',
+  'assignee_name',
+  'technician_name',
+  'team_name',
+  'purchase_value',
+  'acquisition_value',
+];
+
+/** Toda chave que aparece na resposta, em qualquer profundidade. */
+function chavesDe(valor: unknown, achadas = new Set<string>()): Set<string> {
+  if (Array.isArray(valor)) {
+    for (const v of valor) chavesDe(v, achadas);
+    return achadas;
+  }
+  if (valor && typeof valor === 'object') {
+    for (const [k, v] of Object.entries(valor)) {
+      achadas.add(k);
+      chavesDe(v, achadas);
+    }
+  }
+  return achadas;
+}
+
+describe('PORTAL-011 · a varredura: nenhuma rota do portal devolve chave da prestadora', () => {
+  /*
+   * POR QUE ESTA PROVA EXISTE, TENDO AS DEZ ANTERIORES.
+   *
+   * As dez de cima conferem CAMPOS QUE ALGUÉM PENSOU EM CONFERIR. Esta confere
+   * a forma inteira da resposta — e é a única que continua valendo quando
+   * alguém acrescentar um campo novo a uma consulta do portal daqui a seis
+   * meses, sem lembrar desta conversa.
+   *
+   * O modo de falhar do portal não é alguém decidir vazar: é uma consulta que
+   * ganha uma coluna a mais num `SELECT *` bem-intencionado. Uma lista de
+   * chaves proibidas, varrida em toda profundidade, pega isso no dia em que
+   * acontece.
+   *
+   * E as rotas são listadas à mão de propósito: uma varredura que descobre as
+   * rotas sozinha passaria despercebida no dia em que uma rota nova entrasse
+   * sem ninguém acrescentá-la aqui — falhando exatamente onde não deveria
+   * falhar em silêncio.
+   */
+  const ROTAS = [
+    '/v1/portal/home',
+    '/v1/portal/requests',
+    '/v1/portal/work-orders',
+    '/v1/portal/assets',
+    '/v1/portal/documents',
+    '/v1/portal/quotes',
+    '/v1/portal/schedule',
+  ];
+
+  for (const rota of ROTAS) {
+    it(`${rota} não traz nenhuma chave proibida`, async () => {
+      const r = await http.get(rota).set(auth(EMAIL_PORTAL));
+      expect(r.status, corpoInteiro(r)).toBe(200);
+
+      const chaves = [...chavesDe(r.body)];
+
+      /*
+       * A VARREDURA PRECISA TER OLHADO ALGUMA COISA.
+       *
+       * Uma lista vazia não tem chave proibida, e passaria — provando nada. É
+       * o mesmo erro de uma verificação de tela que visita uma página sem dado
+       * dentro e declara a tela limpa. O piso mínimo faz a prova falhar quando
+       * a massa deixa de alimentar a rota, em vez de aprovar o silêncio.
+       */
+      expect(chaves.length, `${rota} respondeu praticamente vazio`).toBeGreaterThan(3);
+
+      const vazadas = chaves.filter((k) => PROIBIDAS.includes(k));
+      expect(vazadas, `${rota} devolveu ${vazadas.join(', ')}`).toEqual([]);
+    });
+  }
+
+  it('a rota de um chamado específico também', async () => {
+    const lista = await http.get('/v1/portal/requests').set(auth(EMAIL_PORTAL));
+    const primeiro = lista.body.items[0];
+    expect(primeiro, 'a massa precisa de pelo menos um chamado do cliente').toBeTruthy();
+
+    const r = await http.get(`/v1/portal/requests/${primeiro.id}`).set(auth(EMAIL_PORTAL));
+    expect(r.status).toBe(200);
+    const vazadas = [...chavesDe(r.body)].filter((k) => PROIBIDAS.includes(k));
+    expect(vazadas).toEqual([]);
+  });
+
+  it('e os comentários de uma OS', async () => {
+    const r = await http.get(`/v1/portal/work-orders/${osDoA}/comments`).set(auth(EMAIL_PORTAL));
+    expect(r.status).toBe(200);
+    const vazadas = [...chavesDe(r.body)].filter((k) => PROIBIDAS.includes(k));
+    expect(vazadas).toEqual([]);
+
+    /*
+     * E a varredura por CHAVE não basta sozinha: uma nota interna poderia sair
+     * dentro de um campo de texto com nome inocente. O conteúdo dela é
+     * procurado no corpo inteiro, como texto.
+     */
+    expect(corpoInteiro(r)).not.toContain(NOTA_INTERNA);
+  });
+
+  it('CONTROLE POSITIVO: a mesma varredura ACUSA na rota interna', async () => {
+    /*
+     * UMA VARREDURA QUE NUNCA ACUSA NÃO É UMA VARREDURA.
+     *
+     * Se as chaves proibidas estivessem escritas com nome errado — `assignee`
+     * onde o produto usa `assigned_to` —, todos os casos acima passariam para
+     * sempre, provando exatamente nada. Este caso aponta a MESMA lista e a
+     * MESMA função para a rota interna da mesma OS, e exige que ela acuse.
+     *
+     * É o que mantém a prova honesta: a lista de proibidas é conferida contra
+     * a forma real da resposta interna, e não contra a memória de quem a
+     * escreveu.
+     */
+    const r = await http.get(`/v1/work-orders/${osDoA}`).set(auth(EMAIL_COORD));
+    expect(r.status).toBe(200);
+
+    const achadas = [...chavesDe(r.body)].filter((k) => PROIBIDAS.includes(k));
+    expect(
+      achadas.length,
+      'a rota interna precisa trazer alguma das chaves proibidas — se não traz, a lista está com nome errado e as provas acima são vazias'
+    ).toBeGreaterThan(0);
+  });
+
+  it('a varredura vale também para a lista completa, e não só para a primeira página', async () => {
+    /*
+     * Uma resposta paginada esconde metade do problema: se a segunda página
+     * carregar um campo que a primeira não carrega — porque a consulta muda
+     * com o filtro —, a varredura da primeira passa e o vazamento fica.
+     */
+    const r = await http.get('/v1/portal/work-orders?limit=100').set(auth(EMAIL_PORTAL));
+    expect(r.status).toBe(200);
+    const vazadas = [...chavesDe(r.body)].filter((k) => PROIBIDAS.includes(k));
+    expect(vazadas).toEqual([]);
   });
 });

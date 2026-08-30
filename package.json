@@ -35,7 +35,8 @@
     "e2e:portal": "vite --config apps/portal/vite.config.ts --port 5312 --strictPort",
     "e2e:field": "vite build --config apps/field/vite.config.ts && vite preview --config apps/field/vite.config.ts --port 5313 --strictPort",
     "marca": "node tools/marca/aplicar.mjs",
-    "marca:check": "node tools/marca/aplicar.mjs --check"
+    "marca:check": "node tools/marca/aplicar.mjs --check",
+    "homolog:semear": "node tools/homologacao/semear.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
