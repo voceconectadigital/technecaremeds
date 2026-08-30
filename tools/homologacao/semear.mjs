@@ -193,6 +193,15 @@ const PESSOAS = [
   },
 ];
 
+/*
+ * O DESTINO É CONFERIDO ANTES DE QUALQUER COISA.
+ *
+ * Esta massa cria organizações, pessoas e ordens. Escrevê-la no banco errado é
+ * o acidente de 2026-08-30 outra vez, com o nosso nome nele.
+ */
+const { conferirOuSair } = await import('../db/destino.mjs');
+conferirOuSair(url);
+
 const pool = new Pool({ connectionString: url, max: 4 });
 const q = async (sql, params) => (await pool.query(sql, params)).rows;
 

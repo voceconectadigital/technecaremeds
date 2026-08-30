@@ -37,7 +37,8 @@
     "marca": "node tools/marca/aplicar.mjs",
     "marca:check": "node tools/marca/aplicar.mjs --check",
     "homolog:semear": "node tools/homologacao/semear.mjs",
-    "smoke:homolog": "node tools/smoke/homologacao.mjs"
+    "smoke:homolog": "node tools/smoke/homologacao.mjs",
+    "db:destino": "node tools/db/destino.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

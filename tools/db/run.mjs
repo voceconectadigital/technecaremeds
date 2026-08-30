@@ -19,18 +19,20 @@ const require = createRequire(import.meta.url);
 // package.json que ninguém executa é um script que não existe.
 require('tsx/cjs');
 
+/*
+ * O DESTINO É CONFERIDO ANTES DE ABRIR CONEXÃO.
+ *
+ * A versão anterior deste guard conferia se `AURORA_CONFIRM_REMOTE` estava
+ * DEFINIDA — não o valor. `AURORA_CONFIRM_REMOTE=sim` liberava qualquer projeto
+ * do mundo, e quem exportasse ficaria com a sensação de ter confirmado alguma
+ * coisa. Era pior do que nenhuma proteção, porque parecia proteção.
+ *
+ * Agora a URL é lida, o ref é extraído (do host E do usuário do pooler) e
+ * confrontado com `aurora.destinos.json`. Recusa encerra com 1 lá dentro.
+ */
+const { conferirOuSair } = await import('./destino.mjs');
 const url = process.env.DATABASE_URL;
-if (!url) {
-  console.error('DATABASE_URL não definido. Consulte .env.example.');
-  process.exit(1);
-}
-if (/supabase\.co/.test(url) && !process.env.AURORA_CONFIRM_REMOTE) {
-  console.error(
-    'Destino remoto detectado. Defina AURORA_CONFIRM_REMOTE=<project-ref> para confirmar\n' +
-      'que este é o projeto correto do Aurora. Ver ADR-025.'
-  );
-  process.exit(1);
-}
+conferirOuSair(url);
 
 const { Pool } = require('pg');
 const { pgPoolAdapter, migrate } = require('../../packages/db/src/index.ts');
