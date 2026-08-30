@@ -18,6 +18,20 @@
  * A SENHA é de desenvolvimento local, num contêiner que só existe nesta
  * máquina, e vem do ambiente — nunca fica no repositório.
  *
+ * ATENÇÃO — O PAPEL É DO CLUSTER, E NÃO DO BANCO.
+ *
+ * No PostgreSQL, papel é objeto do CLUSTER: rodar isto apontando para o banco de
+ * desenvolvimento com uma senha diferente TROCA a senha que o ambiente de testes
+ * usa, e a suíte inteira passa a falhar com "password authentication failed" —
+ * num banco em que ninguém mexeu.
+ *
+ * Aconteceu exatamente assim, ao provisionar o papel para uma implantação de
+ * homologação local. O sintoma aponta para o lugar errado: parece defeito da
+ * suíte, e é o papel compartilhado.
+ *
+ * Se você precisa de dois ambientes na mesma instância, ou usam a MESMA senha,
+ * ou usam papéis com nomes diferentes.
+ *
  * Uso: DATABASE_URL=<superusuário> AURORA_E2E_DB_PASSWORD=... node tools/e2e/provision-role.mjs
  */
 import { createRequire } from 'node:module';
