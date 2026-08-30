@@ -14,7 +14,7 @@
  * outras.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { baseEmMemoria, type BaseLocal } from '../armazenamento';
+import { armazenamentoEmMemoria, type ArmazenamentoOffline } from '../armazenamento';
 import {
   FilaDeSaida,
   esperaApos,
@@ -69,14 +69,14 @@ function rede() {
   };
 }
 
-let base: BaseLocal;
+let base: ArmazenamentoOffline;
 let fila: FilaDeSaida;
 let t: ReturnType<typeof relogio>;
 let net: ReturnType<typeof rede>;
 let contador: number;
 
 beforeEach(() => {
-  base = baseEmMemoria();
+  base = armazenamentoEmMemoria();
   t = relogio();
   net = rede();
   contador = 0;

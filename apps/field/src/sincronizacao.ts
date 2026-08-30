@@ -15,7 +15,7 @@
  * pena tentar produziria um aparelho que não sincroniza estando conectado. Aqui
  * ele serve só para a TELA dizer o que provavelmente está acontecendo.
  */
-import type { BaseLocal } from './armazenamento';
+import type { ArmazenamentoOffline } from './armazenamento';
 import type { FilaDeSaida } from './fila';
 
 /** O que o servidor devolve em `/field/sync`. Só o que esta camada usa. */
@@ -108,7 +108,7 @@ export interface DependenciasDaSincronizacao {
 
 export class Sincronizacao {
   constructor(
-    private readonly base: BaseLocal,
+    private readonly base: ArmazenamentoOffline,
     private readonly fila: FilaDeSaida,
     private readonly deps: DependenciasDaSincronizacao
   ) {}

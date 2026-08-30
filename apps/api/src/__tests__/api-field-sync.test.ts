@@ -767,3 +767,86 @@ describe('CAMPO-008 · o pacote satisfaz o contrato', () => {
     }
   });
 });
+
+describe('CAMPO-009 · a marca do dia carrega milissegundos', () => {
+  it('`synced_at` não é arredondado para o segundo', async () => {
+    /*
+     * O DEFEITO QUE ESTA PROVA FECHA ERA INVISÍVEL.
+     *
+     * A marca era montada em JavaScript a partir de um timestamp cujo tipo
+     * depende do driver. Quando ele devolvia um `Date`, a concatenação produzia
+     * o `toString` dele — sem milissegundos —, e o instante saía arredondado
+     * para baixo.
+     *
+     * A consequência: toda OS alterada nos milissegundos seguintes voltava em
+     * TODA sincronização incremental, para sempre. O pacote "do que mudou"
+     * trazia o que não mudou, e ninguém teria motivo para desconfiar — o
+     * sintoma é um pacote grande demais, que se confunde com um dia cheio.
+     */
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+
+    expect(r.body.synced_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(r.body.synced_at).not.toMatch(/\.000Z$/);
+  });
+
+  it('a marca devolvida exclui de verdade o que já veio', async () => {
+    /*
+     * A prova de comportamento, e não de formato: sincronizar duas vezes
+     * seguidas, sem nada acontecer no meio, precisa devolver um pacote sem
+     * ordens na segunda. Era exatamente isto que o arredondamento quebrava.
+     */
+    const primeiro = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    const segundo = await http
+      .get(`/v1/field/sync?since=${encodeURIComponent(primeiro.body.synced_at)}`)
+      .set(auth(EMAIL_TEC))
+      .expect(200);
+
+    expect(segundo.body.work_orders).toEqual([]);
+  });
+});
+
+describe('CAMPO-010 · os equipamentos do corredor, e não só os das ordens', () => {
+  it('o ativo sem ordem hoje desce no pacote, para o leitor de etiqueta achá-lo', async () => {
+    /*
+     * A SPEC §20 pede "ativos referenciados por essas OS + ATIVOS DOS LOCAIS DO
+     * DIA", e a segunda metade faltava.
+     *
+     * A razão dela ficou óbvia quando a tela de leitura de etiqueta existiu: o
+     * técnico aponta a câmera para um equipamento que NÃO tem ordem hoje,
+     * justamente porque acabou de encontrar um problema nele. Sem o segundo
+     * conjunto, o leitor responde "não encontrei" para todo equipamento do
+     * corredor que ele está atravessando.
+     */
+    const semOrdem = await withTenant(t.db, sysCtx, async (s) => {
+      const cat = await createAssetCategory(s, { name: 'Bomba de infusão' });
+      return createAsset(s, {
+        name: 'Bomba sem ordem hoje',
+        customerId: cliente,
+        assetCategoryId: cat,
+        locationId: local,
+        assetNumber: 'PAT-SEM-ORDEM',
+      });
+    });
+
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    const ids = r.body.assets.map((a: { id: string }) => a.id);
+
+    expect(ids).toContain(semOrdem);
+    // E o número de patrimônio veio junto: é por ele que a etiqueta é resolvida
+    // quando o aparelho não tem leitor de código.
+    const achado = r.body.assets.find((a: { id: string }) => a.id === semOrdem);
+    expect(achado.asset_number).toBe('PAT-SEM-ORDEM');
+  });
+
+  it('o ativo de um local FORA do escopo não desce', async () => {
+    /*
+     * O recorte continua sendo o escopo de locais do vínculo — a mesma função
+     * que limita toda consulta deste sistema. Trazer "os ativos dos locais do
+     * dia" não pode virar "trazer o cadastro inteiro": uma prestadora com dez
+     * mil equipamentos não cabe num celular.
+     */
+    const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+    const nomes = r.body.assets.map((a: { name: string }) => a.name).join(' ');
+    expect(nomes).not.toContain('Beta');
+  });
+});

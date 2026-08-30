@@ -1,5 +1,6 @@
 /**
- * Aurora — o contexto de campo: base local, fila e sincronização (EPIC-014).
+ * Aurora — o contexto de campo: base local, fila, sincronização e aparelho
+ * (EPIC-014 · ADR-029).
  *
  * TUDO QUE A TELA MOSTRA VEM DA BASE LOCAL, E NUNCA DA REDE.
  *
@@ -10,6 +11,13 @@
  *
  * Lendo só do local, a tela tem UM modo. O que muda com a rede é apenas quão
  * recente é o dado, e isso a tela DIZ, com a hora da última sincronização.
+ *
+ * E É AQUI QUE A PLATAFORMA É ESCOLHIDA, uma vez só.
+ *
+ * Armazenamento, arquivos, câmera, leitor de código e rede são resolvidos no
+ * arranque e entregues às telas por porta. Nenhuma tela sabe se está num
+ * navegador, num Android ou num iPhone — e é isso que permite as três
+ * distribuições saírem da mesma base.
  */
 import {
   createContext,
@@ -21,7 +29,22 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { baseIndexedDb, type BaseLocal } from './armazenamento';
+import type { ArmazenamentoOffline, Colecao } from './armazenamento';
+import {
+  enviarAnexosPendentes,
+  estadoDosAnexos,
+  type AdaptadorDeArquivos,
+  type AnexoPendente,
+  type EstadoDosAnexos,
+} from './arquivos';
+import { capturarEvidencia, registrarChaveDoServidor } from './anexos';
+import {
+  pluginDeArquivosDoAparelho,
+  resolverArmazenamento,
+  resolverArquivos,
+  resolverDispositivo,
+  type Dispositivo,
+} from './dispositivo';
 import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao, type EstadoDaFila } from './fila';
 import { Sincronizacao, type PacoteDoDia, type ResultadoDaSincronizacao } from './sincronizacao';
 
@@ -30,9 +53,9 @@ const API = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://loca
 /**
  * O identificador da operação, gerado no APARELHO.
  *
- * `crypto.randomUUID` existe em todo navegador que suporta service worker, que
- * é o piso deste aplicativo. O ramo alternativo existe para contextos não
- * seguros (http sem TLS numa rede interna), onde a API não é exposta — e ali
+ * `crypto.randomUUID` existe em todo contexto seguro, que é o único em que este
+ * aplicativo roda — o service worker e o IndexedDB também exigem. O ramo
+ * alternativo cobre um `http://` de rede interna, onde a API não é exposta: ali
  * um identificador com menos entropia é melhor do que nenhum, porque a
  * alternativa seria não ter idempotência.
  */
@@ -65,10 +88,21 @@ function cabecalhos(extra: Record<string, string> = {}): Record<string, string> 
 }
 
 export interface Campo {
-  base: BaseLocal;
+  base: ArmazenamentoOffline;
   fila: FilaDeSaida;
   sincronizacao: Sincronizacao;
   estado: EstadoDaFila;
+  /**
+   * Os recursos do aparelho, atrás das portas.
+   *
+   * A tela pede "uma foto" e recebe uma foto. Se isso vem de um seletor de
+   * arquivo do navegador ou da câmera nativa é decisão do adaptador, tomada uma
+   * vez no arranque — e nenhuma tela precisa saber.
+   */
+  dispositivo: Dispositivo;
+  arquivos: AdaptadorDeArquivos | null;
+  anexos: Colecao<AnexoPendente>;
+  anexosEstado: EstadoDosAnexos;
   /** Quando o pacote do dia chegou. `null` = nunca sincronizou neste aparelho. */
   ultimaSincronizacao: string | null;
   sincronizando: boolean;
@@ -83,6 +117,8 @@ export interface Campo {
     corpo: unknown;
     rotulo: string;
   }): Promise<string>;
+  /** Captura uma evidência. `null` quando a pessoa desiste. */
+  capturarFoto(workOrderId: string, finalidade: string): Promise<AnexoPendente | null>;
   resolverAtencao(id: string, opcoes: { desbloquear: boolean }): Promise<void>;
   descartar(id: string): Promise<void>;
   atualizarEstado(): Promise<void>;
@@ -96,9 +132,15 @@ export function useCampo(): Campo {
   return c;
 }
 
-/** Só para a suíte: injeta a base pronta em vez de abrir o IndexedDB. */
-export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; baseDeTeste?: BaseLocal }) {
-  const [base, setBase] = useState<BaseLocal | null>(baseDeTeste ?? null);
+export function CampoProvider({
+  children,
+  baseDeTeste,
+}: {
+  children: ReactNode;
+  /** Só para a suíte: injeta a base pronta em vez de abrir a do aparelho. */
+  baseDeTeste?: ArmazenamentoOffline;
+}) {
+  const [base, setBase] = useState<ArmazenamentoOffline | null>(baseDeTeste ?? null);
   const [erroAoAbrir, setErroAoAbrir] = useState<string | null>(null);
   const [estado, setEstado] = useState<EstadoDaFila>({
     pendentes: 0,
@@ -106,23 +148,55 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     atencao: 0,
     maisAntigoEm: null,
   });
+  const [anexosEstado, setAnexosEstado] = useState<EstadoDosAnexos>({
+    pendentes: 0,
+    falhados: 0,
+    bytesPendentes: 0,
+    progresso: null,
+  });
   const [ultimaSincronizacao, setUltima] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [ultimoResultado, setUltimoResultado] = useState<ResultadoDaSincronizacao | null>(null);
   /*
    * O INDICADOR NASCE COM UM PALPITE E É CORRIGIDO PELA TENTATIVA.
    *
-   *  entra como chute inicial — acerta o caso comum e não
+   * O que o sistema acha entra como chute inicial — acerta o caso comum e não
    * custa nada. Quem decide de verdade é a primeira sincronização: se ela
    * falhou por rede, estamos sem rede; se passou, estamos com rede. É a única
    * forma de o indicador não mentir num wi-fi que conecta e não roteia.
    */
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
 
+  /*
+   * O dispositivo é resolvido UMA VEZ. `useMemo` sem dependências: a plataforma
+   * não muda no meio da sessão, e recriar os adaptadores a cada render trocaria
+   * o ouvinte de rede a cada atualização de tela.
+   */
+  const dispositivo = useMemo(() => resolverDispositivo(), []);
+  const [arquivos, setArquivos] = useState<AdaptadorDeArquivos | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    void pluginDeArquivosDoAparelho()
+      .then((plugin) => vivo && setArquivos(resolverArquivos(plugin)))
+      .catch(() => vivo && setArquivos(resolverArquivos()));
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (baseDeTeste) return;
     let vivo = true;
-    baseIndexedDb()
+    /*
+     * O ARMAZENAMENTO É ESCOLHIDO PELA PLATAFORMA, num lugar só.
+     *
+     * Hoje as três distribuições usam IndexedDB — o WebView do Android e do iOS
+     * tem, e funciona. A troca para SQLite nativo é uma linha em
+     * `resolverArmazenamento`, sem tocar em fila, sincronização ou tela: é
+     * exatamente para isso que a porta existe.
+     */
+    resolverArmazenamento()
       .then((b) => vivo && setBase(b))
       .catch((e: unknown) =>
         setErroAoAbrir(e instanceof Error ? e.message : 'não foi possível abrir a base local')
@@ -131,6 +205,10 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
       vivo = false;
     };
   }, [baseDeTeste]);
+
+  const anexos = useMemo(() => base?.colecao<AnexoPendente>('anexos') ?? null, [base]);
+  const anexosRef = useRef(anexos);
+  anexosRef.current = anexos;
 
   const fila = useMemo(() => {
     if (!base) return null;
@@ -159,6 +237,16 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
         }
         return { status: r.status, corpo };
       },
+      /*
+       * O registro de anexo devolve a chave de armazenamento, e é ela que
+       * libera o envio dos bytes. A fila não conhece anexo — ela avisa que o
+       * comando passou, e quem conhece faz o resto.
+       */
+      async aoConcluir(c, corpo) {
+        if (!anexosRef.current) return;
+        if (!c.caminho.endsWith('/attachments')) return;
+        await registrarChaveDoServidor(anexosRef.current, c.id, corpo);
+      },
     });
   }, [base]);
 
@@ -180,7 +268,8 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     if (!fila || !sincronizacao) return;
     setEstado(await fila.estado());
     setUltima(await sincronizacao.ultimaMarca());
-  }, [fila, sincronizacao]);
+    if (anexos) setAnexosEstado(await estadoDosAnexos(anexos));
+  }, [fila, sincronizacao, anexos]);
 
   useEffect(() => {
     void atualizarEstado();
@@ -192,22 +281,49 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     try {
       const r = await sincronizacao.rodar();
       setUltimoResultado(r);
-      // O que a tentativa descobriu vale mais do que o palpite do navegador.
+      // O que a tentativa descobriu vale mais do que o palpite do sistema.
       setOnline(!r.semRede);
+
+      /*
+       * AS FOTOS SOBEM DEPOIS DOS COMANDOS, e não junto.
+       *
+       * O comando é que cria o registro do anexo no servidor e devolve a chave;
+       * sem ele, os bytes não têm para onde ir. Tentar os dois em paralelo faria
+       * toda foto recém-capturada falhar uma vez antes de dar certo — barulho na
+       * tela, tentativa contada, e nada ganho.
+       */
+      if (anexos && arquivos && !r.semRede) {
+        await enviarAnexosPendentes(anexos, arquivos, {
+          agora: () => new Date(),
+          async enviarFatia({ anexo, offset, pedaco, ultima }) {
+            const resposta = await fetch(`${API}/field/attachments/${anexo.id}/bytes`, {
+              method: 'PUT',
+              headers: cabecalhos({
+                'content-type': 'application/octet-stream',
+                'x-aurora-offset': String(offset),
+                'x-aurora-sha256': anexo.sha256,
+                'x-aurora-storage-key': anexo.chaveNoServidor ?? '',
+                'x-aurora-final': ultima ? '1' : '0',
+              }),
+              body: pedaco as unknown as BodyInit,
+            });
+            let recebidos: number | undefined;
+            try {
+              const corpo = (await resposta.json()) as { received?: number };
+              recebidos = corpo.received;
+            } catch {
+              /* resposta sem corpo: o status decide, e o deslocamento local segue. */
+            }
+            return { status: resposta.status, recebidos };
+          },
+        });
+      }
     } finally {
       setSincronizando(false);
       await atualizarEstado();
     }
-  }, [sincronizacao, atualizarEstado]);
+  }, [sincronizacao, atualizarEstado, anexos, arquivos]);
 
-  /*
-   * O SINAL VOLTOU: tenta escoar na hora.
-   *
-   * `navigator.onLine` mente nos dois sentidos — diz `true` num wi-fi que não
-   * roteia nada. Por isso ele NÃO decide se vale a pena tentar: ele é só um
-   * gatilho a mais, e a tentativa é que descobre. O relógio periódico continua
-   * rodando de qualquer forma.
-   */
   const sincronizarRef = useRef(sincronizar);
   sincronizarRef.current = sincronizar;
   const filaRef = useRef(fila);
@@ -217,13 +333,9 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
    * A PRIMEIRA SINCRONIZAÇÃO ACONTECE SOZINHA, ao abrir.
    *
    * Sem ela, o aparelho recém-instalado ficava em "nunca sincronizou" até
-   * alguém tocar no botão ou até o relógio de um minuto disparar — e o técnico
-   * que abre o aplicativo às 7h55 e desce para o subsolo às 7h56 desceria com
-   * a base vazia. Foi assim que o teste de ponta a ponta encontrou isto: a
-   * tela abriu com "Nenhuma ordem no aparelho" tendo duas.
-   *
-   * Roda UMA vez, quando a base fica pronta. As tentativas seguintes vêm do
-   * relógio e do evento de rede.
+   * alguém tocar no botão ou até o relógio disparar — e o técnico que abre o
+   * aplicativo às 7h55 e desce para o subsolo às 7h56 desceria com a base
+   * vazia. Foi assim que o teste de ponta a ponta encontrou isto.
    */
   const jaAbriu = useRef(false);
   useEffect(() => {
@@ -232,46 +344,37 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     void sincronizarRef.current();
   }, [sincronizacao]);
 
+  /*
+   * O AVISO DE REDE VEM DA PORTA, e não de `window`.
+   *
+   * No navegador o adaptador escuta `online`/`offline`; no aparelho, o plugin
+   * de rede, que sabe mais — inclusive o tipo de conexão. Este arquivo e as
+   * telas não mudam por causa disso, e é esse o ponto.
+   *
+   * O que ele NÃO faz é decidir se vale tentar: continua sendo um gatilho, e a
+   * fila é que sabe, porque tentou.
+   */
   useEffect(() => {
-    const subiu = () => {
-      setOnline(true);
-      /*
-       * A espera é zerada ANTES de tentar.
-       *
-       * Sem isto, o evento de rede chega e a fila responde "ainda não é hora" —
-       * porque a última falha empurrou a próxima tentativa para daqui a meio
-       * minuto. O técnico ficaria com o indicador cheio no estacionamento, com
-       * sinal, esperando um relógio interno que ele não vê. Foi assim que este
-       * defeito apareceu no teste de modo avião.
-       */
+    return dispositivo.rede.aoMudar((e) => {
+      setOnline(e.conectado);
+      if (!e.conectado) return;
       void filaRef.current?.aRedeVoltou().then(() => sincronizarRef.current());
-    };
-    const caiu = () => setOnline(false);
-    window.addEventListener('online', subiu);
-    window.addEventListener('offline', caiu);
-    return () => {
-      window.removeEventListener('online', subiu);
-      window.removeEventListener('offline', caiu);
-    };
-  }, []);
+    });
+  }, [dispositivo]);
 
   /*
-   * O RELÓGIO É A REDE DE SEGURANÇA, e a cadência dele segue o que está preso.
+   * O RELÓGIO É A REDE DE SEGURANÇA, e a cadência segue o que está preso.
    *
-   * O evento `online` do navegador é um gatilho, não uma garantia: ele não
-   * chega em toda transição de rede, e depender dele deixaria a fila parada
-   * indefinidamente com sinal cheio. Foi o que aconteceu no teste de modo
-   * avião — o aparelho voltou a ter rede e o indicador seguiu marcando uma
-   * operação pendente.
+   * O aviso de rede é um gatilho, não uma garantia: ele não chega em toda
+   * transição, e depender dele deixaria a fila parada com sinal cheio — foi o
+   * que aconteceu no teste de modo avião.
    *
-   * COM COISA NA FILA, dez segundos: é trabalho de alguém esperando, e o
-   * técnico está olhando o indicador. SEM NADA, um minuto: não há o que enviar,
-   * e a consulta só serve para trazer o que a coordenação mudou.
-   *
-   * A alternativa — um intervalo curto fixo — gastaria bateria o dia inteiro
-   * para cobrir os poucos minutos em que a fila não está vazia.
+   * COM COISA NA FILA, dez segundos: é trabalho de alguém esperando. SEM NADA,
+   * um minuto: não há o que enviar, e a consulta só traz o que a coordenação
+   * mudou. Um intervalo curto fixo gastaria bateria o dia inteiro para cobrir
+   * os poucos minutos em que a fila não está vazia.
    */
-  const temPendencia = estado.pendentes > 0;
+  const temPendencia = estado.pendentes > 0 || anexosEstado.pendentes > 0;
   useEffect(() => {
     const intervalo = window.setInterval(
       () => {
@@ -293,6 +396,26 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
       return id;
     },
     [fila, atualizarEstado]
+  );
+
+  const capturarFoto = useCallback<Campo['capturarFoto']>(
+    async (workOrderId, finalidade) => {
+      if (!fila || !arquivos || !anexos) return null;
+      const anexo = await capturarEvidencia({
+        workOrderId,
+        finalidade,
+        camera: dispositivo.camera,
+        arquivos,
+        anexos,
+        novoId,
+        agora: () => new Date(),
+        enfileirar: (e) => fila.enfileirar(e),
+      });
+      await atualizarEstado();
+      void sincronizarRef.current();
+      return anexo;
+    },
+    [fila, arquivos, anexos, dispositivo, atualizarEstado]
   );
 
   const resolverAtencao = useCallback<Campo['resolverAtencao']>(
@@ -332,7 +455,7 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     );
   }
 
-  if (!base || !fila || !sincronizacao) {
+  if (!base || !fila || !sincronizacao || !anexos) {
     return (
       <main className="mx-auto flex min-h-dvh max-w-md items-center justify-center p-6">
         <p className="text-sm text-muted" role="status">
@@ -347,12 +470,17 @@ export function CampoProvider({ children, baseDeTeste }: { children: ReactNode; 
     fila,
     sincronizacao,
     estado,
+    dispositivo,
+    arquivos,
+    anexos,
+    anexosEstado,
     ultimaSincronizacao,
     sincronizando,
     ultimoResultado,
     online,
     sincronizar,
     enfileirar,
+    capturarFoto,
     resolverAtencao,
     descartar,
     atualizarEstado,

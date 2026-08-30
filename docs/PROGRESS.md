@@ -1132,6 +1132,158 @@ sob a rota-casca derrubava a tela inteira no limite de erro do roteador.
 
 ---
 
+## Aurora Field = PWA **e** aplicativo de loja (ADR-029 · ADR-030)
+
+**Requisito confirmado pelo cliente em 29/08/2026**, não hipótese: o aplicativo
+de campo precisa ser publicado na Google Play e na App Store **sem** deixar de
+ser um PWA instalável pelo navegador.
+
+O ADR-018 escolhia PWA com a justificativa "uma base de código, distribuição sem
+loja, atualização imediata". A primeira razão continua valendo e é justamente ela
+que torna esta mudança barata; a segunda deixou de valer. O ADR-029 registra a
+correção sem apagar a decisão anterior — apagá-la esconderia que ela mudou.
+
+### Uma base, três distribuições
+
+```
+apps/field
+   ├── Web/PWA        · vite build → dist, service worker, manifest
+   ├── Android        · Capacitor → apps/field/android
+   └── iOS            · Capacitor → apps/field/ios  (gerado; compila só em macOS)
+```
+
+Capacitor, e não React Native: o React Native exigiria reescrever as telas, a
+fila com `client_operation_id`, a sincronização e o motor de conflito — e a
+versão reescrita divergiria, sempre na direção de quem é menos usado, que aqui
+seria o próprio PWA. O custo aceito é o `WebView`.
+
+### A porta de persistência, e as oito regras
+
+Nenhum caso de uso conhece o mecanismo. `ArmazenamentoOffline` declara seis
+operações e — o que importa mais — **oito regras de semântica**, porque uma porta
+em TypeScript garante assinaturas e não comportamento. Duas implementações que
+compilam e discordam são pior do que uma só: a diferença aparece num aparelho, em
+campo.
+
+A mesma suíte de conformidade roda contra três mecanismos:
+
+| Onde | Contra o quê |
+| --- | --- |
+| Vitest | memória e **SQLite de verdade**, via `node:sqlite` |
+| Navegador | **IndexedDB de verdade**, pela tela "Este aparelho" |
+
+A tela de diagnóstico não é artifício de teste: é o que o suporte pede para abrir
+quando alguém liga dizendo "sumiu tudo". Quando uma regra reprova num Android
+específico, a resposta deixa de ser "deve ser o aparelho".
+
+**A suíte reprova de verdade**: há dois adaptadores deliberadamente errados nela
+— um que devolve a referência guardada, outro que não isola coleções — e ela
+precisa achar exatamente a regra certa em cada um.
+
+**SQLite está preparado, e não ligado.** O `WebView` do Android e do iOS tem
+IndexedDB e ele funciona; a loja não espera a troca. Quando o driver nativo
+entrar, é uma linha em `resolverArmazenamento`.
+
+### Fotos: três coisas, três lugares
+
+Metadado na base local, estado do envio no mesmo registro, **bytes num adaptador
+de arquivos** — Cache Storage no navegador, sistema de arquivos no aparelho.
+Juntar os três faria toda leitura da lista de anexos carregar as fotos inteiras
+para a memória, e encheria a base do aplicativo com o que pertence ao sistema de
+arquivos.
+
+O envio é **retomável por fatia de 256 kB**, com o progresso gravado **depois de
+cada fatia aceita** — gravar no fim faria uma interrupção aos noventa por cento
+recomeçar do zero. E quem manda no progresso é o servidor: somar localmente faria
+uma fatia que chegou duas vezes passar do tamanho do arquivo, e o envio nunca
+terminaria.
+
+### Recursos do aparelho, todos atrás de porta
+
+Câmera, leitor de código, sistema de arquivos, estado de rede e notificação
+empurrada — em português, como o resto do código. Nenhuma tela importa um plugin,
+e os plugins são carregados **sob demanda**: o pacote do PWA não paga por código
+que só roda no aplicativo empacotado.
+
+A tela de QR pede "um código" e recebe um código. E ela **resolve contra a base
+local** — um leitor que precisa de rede para dizer que equipamento é aquele não
+serve na casa de máquinas, que é onde as etiquetas estão. Sem leitor no
+navegador, a tela diz por quê e oferece o número de patrimônio.
+
+### Cinco telas: HOJE · OS · QR · SINCRONIZAÇÃO · PERFIL
+
+Quatro destinos na barra, e não sete: a OS é alcançada de dentro do HOJE, e a
+tela de atenção mora dentro da sincronização, onde a pergunta "o que ainda não
+chegou?" já está sendo feita. Com sete, cada destino teria 51px num aparelho de
+360px — abaixo do que um polegar de luva acerta.
+
+### Quatro defeitos que este trabalho encontrou
+
+1. **O IndexedDB não obedecia à regra 7.** Ele guarda `Date` e devolve `Date`; o
+   SQLite guarda texto. O mesmo código mostraria data certa no navegador e data
+   errada no aplicativo da loja, sem nenhuma pista de que a causa é o
+   empacotamento. Encontrado pela suíte de conformidade rodando no navegador de
+   verdade — o adaptador passou a impor a conversão JSON na gravação.
+2. **`synced_at` perdia os milissegundos.** A marca era montada em JavaScript a
+   partir de um timestamp cujo tipo depende do driver; com `Date`, a concatenação
+   produzia o `toString` — sem milissegundos. Consequência: toda OS alterada nos
+   milissegundos seguintes voltava em **toda** sincronização incremental, para
+   sempre. O pacote "do que mudou" trazia o que não mudou, e o sintoma se confunde
+   com um dia cheio. Corrigido com `to_char` no banco.
+3. **O pacote do dia trazia só os ativos das ordens.** A SPEC §20 pede "ativos
+   referenciados por essas OS **+ ativos dos locais do dia**", e a segunda metade
+   faltava. A razão dela ficou óbvia quando a tela de leitura de etiqueta existiu:
+   o técnico aponta a câmera para um equipamento que não tem ordem hoje,
+   justamente porque acabou de encontrar um problema nele.
+4. **A suíte de conformidade reprovava por sujeira.** Ela promete "uma instância
+   limpa por regra", e no IndexedDB reabrir a mesma base devolve a anterior. A
+   fábrica passou a receber o número da regra — o requisito ficou visível na
+   assinatura, em vez de escondido num comentário.
+
+### O que está pronto para a loja, e o que trava
+
+Está tudo em [`AURORA-FIELD-LOJAS.md`](AURORA-FIELD-LOJAS.md): identificador,
+permissões com o motivo de cada uma, descrições de uso do iOS, versão e número de
+build por variável de ambiente, links profundos, processo de build.
+
+**Nada foi publicado, nenhuma conta paga foi criada, nenhum pacote foi assinado.**
+
+O que trava a publicação, e de quem depende:
+
+| Item | Depende de |
+| --- | --- |
+| Identificador definitivo | domínio real do cliente |
+| Política de privacidade | jurídico do cliente |
+| Ícones, splash, capturas de tela | identidade visual do cliente |
+| App Links / Universal Links | domínio de produção definido |
+| Push | projeto de FCM, certificado APNs, rota no servidor |
+| Assinatura Android | keystore, e onde guardá-la |
+| Build e assinatura iOS | conta paga da Apple e um Mac |
+
+Nenhum bloqueia o desenvolvimento. Todos bloqueiam a publicação. **Nada foi
+inventado sobre o que a Apple ou o Google exigem** — o que não pôde ser
+verificado está marcado **A VALIDAR**.
+
+### A VALIDAR, além da lista acima
+
+- **Teste de fumaça em aparelho.** A suíte cobre a lógica e o navegador; não cobre
+  a ponte nativa, a câmera real com as permissões do sistema, nem o comportamento
+  sob pouca memória. Etapa futura, quando houver build instalável.
+- **Localização geográfica.** A SPEC menciona ordenar o dia "por horário e
+  proximidade". Proximidade exigiria permissão de localização, com divulgação
+  própria nas duas lojas. Hoje o aplicativo **não pede localização** e ordena só
+  por horário.
+- **Espaço livre no aparelho.** O plugin de sistema de arquivos do Capacitor não
+  expõe. Existe plugin de terceiros; adotá-lo é decisão a tomar. Até lá o
+  adaptador devolve `null`, que a porta admite e a tela mostra como "não dá para
+  saber".
+- **Uma falha isolada** de `comercial.spec.ts` numa execução completa da suíte de
+  ponta a ponta, verde nas execuções seguintes. Registrada por honestidade: não é
+  instabilidade conhecida, é uma que ainda não foi observada o bastante para ter
+  nome.
+
+---
+
 ## Bloqueio externo ativo
 
 **Supabase remoto.** O CLI está autenticado e lista 28 projetos em ~15 organizações; nenhum identificável como Aurora e nenhum vinculado. Conforme a regra vigente, nenhuma operação remota foi executada. Para desbloquear é preciso o **project ref** do projeto correto (OQ-16). Nada no código depende disso: as migrations rodam em qualquer PostgreSQL 16+, e a escolha do ADR-026/027 removeu até a dependência de extensão.

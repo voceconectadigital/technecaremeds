@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:launchMode="singleTask"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              LINK PROFUNDO POR ESQUEMA PRÓPRIO.
+
+              É o que permite abrir uma ordem de serviço direto do aplicativo a
+              partir de um aviso, de uma mensagem ou de um QR impresso na
+              etiqueta: aurora-campo://ordens/<id>.
+
+              O esquema próprio funciona sem nenhuma verificação de domínio, e
+              por isso está aqui agora. A alternativa — App Links sobre
+              https://, que abre o aplicativo a partir de um endereço da web —
+              exige publicar assetlinks.json no domínio de produção e o domínio
+              ainda não está definido. Ver docs/AURORA-FIELD-LOJAS.md.
+
+              A VALIDAR: domínio de produção e App Links verificados.
+            -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="aurora-campo" />
+            </intent-filter>
+
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths"></meta-data>
+        </provider>
+    </application>
+
+    <!--
+      AS PERMISSÕES, UMA A UMA, E O PORQUÊ DE CADA UMA.
+
+      Toda permissão pedida a mais é uma pergunta que a loja faz ao cliente e um
+      motivo a mais para alguém recusar a instalação. O que está aqui é o que o
+      produto usa hoje; a lista de divulgação de privacidade das duas lojas sai
+      DESTE arquivo, e não de memória — ver docs/AURORA-FIELD-LOJAS.md.
+    -->
+
+    <!-- Falar com a API do Aurora. Sem isto, nada sincroniza. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      Saber se há rede antes de tentar. É informação para a tela, e nunca a
+      decisão de sincronizar: quem decide é a fila, porque ela tentou.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      Fotografar a evidência do serviço e ler o QR da etiqueta do equipamento.
+      Pedida no momento do uso, e não na abertura: uma permissão pedida antes de
+      a pessoa entender para quê é uma permissão negada.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!--
+      A câmera é OPCIONAL para instalar.
+
+      Sem `required="false"`, o Google Play esconde o aplicativo de todo
+      aparelho sem câmera — inclusive de tablets usados na coordenação, que
+      precisam do Aurora e não precisam fotografar.
+    -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+</manifest>

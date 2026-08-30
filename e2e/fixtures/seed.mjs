@@ -362,11 +362,28 @@ async function main() {
         const naturezaDaOs = await s.query(
           `SELECT id FROM aurora.catalog_items WHERE catalog_key = 'work_order_type' LIMIT 1`
         );
+        /*
+         * CINCO ORDENS, E NÃO DUAS.
+         *
+         * Duas eram o mínimo para provar que o travamento por conflito não
+         * bloqueia o dia inteiro. Não bastam para a SUÍTE: casos de conflito
+         * cancelam ordens, ordem cancelada sai do pacote do dia de propósito, e
+         * os casos seguintes ficavam sem nada com que trabalhar — falhando por
+         * um motivo que não tinha relação com o que eles afirmam.
+         *
+         * Cinco também é mais honesto como massa: o dia de um técnico de campo
+         * não tem duas ordens.
+         */
         for (const [titulo, ativoDaOs] of [
           ['Ventilador não pressuriza', 'Ventilador Alfa-1'],
           ['Monitor com alarme intermitente', 'Monitor Alfa-2'],
+          ['Preventiva trimestral do ventilador', 'Ventilador Alfa-1'],
+          ['Cabo de alimentação com mau contato', 'Monitor Alfa-2'],
+          ['Inspeção de rotina da UTI', null],
         ]) {
-          const [alvo] = await s.query(`SELECT id FROM aurora.assets WHERE name = $1`, [ativoDaOs]);
+          const [alvo] = ativoDaOs
+            ? await s.query(`SELECT id FROM aurora.assets WHERE name = $1`, [ativoDaOs])
+            : [undefined];
           await createWorkOrder(s, {
             customerId: clienteId,
             workOrderTypeId: naturezaDaOs[0].id,

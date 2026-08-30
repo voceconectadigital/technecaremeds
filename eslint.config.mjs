@@ -10,6 +10,14 @@ export default tseslint.config(
     // do resto, porque eles são código que a equipe lê e mantém.
     ignores: [
       '**/dist/**',
+      // Saída do `tsc -b` do aplicativo de campo. Ela existe porque o `dist`
+      // dele passou a ser a build do Vite — que é o que o Capacitor copia para
+      // os projetos nativos —, e as duas não podem dividir a mesma pasta.
+      '**/.tsc-out/**',
+      // Projetos nativos gerados pelo Capacitor: código de plataforma, com as
+      // convenções do Android e do iOS, e não do TypeScript deste repositório.
+      'apps/*/android/**',
+      'apps/*/ios/**',
       '**/node_modules/**',
       'docs/**',
       'tools/**',

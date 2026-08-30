@@ -6,7 +6,7 @@
  * plausível e errado no aparelho de alguém que está no subsolo.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { baseEmMemoria, type BaseLocal } from '../armazenamento';
+import { armazenamentoEmMemoria, type ArmazenamentoOffline } from '../armazenamento';
 import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao } from '../fila';
 import { Sincronizacao, type PacoteDoDia } from '../sincronizacao';
 
@@ -31,12 +31,12 @@ function pacote(over: Partial<PacoteDoDia> = {}): PacoteDoDia {
   };
 }
 
-let base: BaseLocal;
+let base: ArmazenamentoOffline;
 let fila: FilaDeSaida;
 let enviados: ComandoNaFila[];
 
 beforeEach(() => {
-  base = baseEmMemoria();
+  base = armazenamentoEmMemoria();
   enviados = [];
   fila = new FilaDeSaida(base.colecao<ComandoNaFila>('fila'), base.colecao<PendenciaDeAtencao>('atencao'), {
     enviar: async (c) => {

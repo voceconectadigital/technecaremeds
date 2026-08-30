@@ -102,6 +102,23 @@ export interface DependenciasDaFila {
   agora(): Date;
   /** Gerado aqui e não no `enviar`: ver decisão 2. */
   novoId(): string;
+  /**
+   * Avisa que um comando foi ACEITO, com a resposta do servidor.
+   *
+   * Existe por causa dos anexos, e o desenho é deliberado. Registrar uma foto
+   * devolve a chave de armazenamento que o servidor escolheu — e sem essa
+   * chave os bytes não têm para onde ir. A fila não conhece anexo, nem deve:
+   * ela avisa que o comando passou e entrega a resposta, e quem conhece anexo
+   * faz o resto.
+   *
+   * A alternativa — a fila saber tratar cada tipo de comando — transformaria o
+   * arquivo mais crítico do aplicativo num lugar onde regra de negócio se
+   * acumula.
+   *
+   * Uma falha aqui NÃO desfaz o comando: ele foi aceito pelo servidor, e voltar
+   * a enfileirá-lo produziria a duplicata que tudo isto existe para impedir.
+   */
+  aoConcluir?(c: ComandoNaFila, corpo: unknown): Promise<void>;
 }
 
 const MAX_ESPERA_MS = 60_000;
@@ -270,6 +287,24 @@ export class FilaDeSaida {
            * É o único caminho de remoção deste arquivo. Qualquer outro seria
            * uma forma de descartar trabalho sem resposta do servidor.
            */
+          /*
+           * O AVISO VEM ANTES DE O COMANDO SAIR DA FILA.
+           *
+           * Se o processo morrer entre uma coisa e outra, o comando é reenviado
+           * — e o servidor, que é idempotente por `client_operation_id`,
+           * devolve o mesmo desfecho. Na ordem inversa, um comando aceito cujo
+           * aviso não rodou deixaria o anexo sem chave para sempre, sem nada na
+           * fila para tentar de novo.
+           */
+          try {
+            await this.deps.aoConcluir?.(c, r.corpo);
+          } catch {
+            /*
+             * O comando FOI aceito. Uma falha ao processar a resposta não pode
+             * desfazer isso nem devolvê-lo à fila: reenviá-lo produziria a
+             * duplicata que a idempotência existe para impedir.
+             */
+          }
           await this.comandos.apagar(c.id);
           enviados++;
           continue;

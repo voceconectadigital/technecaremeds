@@ -89,7 +89,28 @@ export async function fieldSyncBundle(
    * Ler no COMEÇO faz o pior caso ser mandar a mesma linha duas vezes, que o
    * aparelho resolve sobrescrevendo.
    */
-  const relogio = await s.query<{ agora: string }>(`SELECT now() AT TIME ZONE 'UTC' AS agora`);
+  /*
+   * O INSTANTE VEM COMO TEXTO ISO, FORMATADO PELO BANCO — e essa escolha
+   * corrigiu um defeito real.
+   *
+   * A primeira versão pedia `now() AT TIME ZONE 'UTC'` e montava a cadeia em
+   * JavaScript. O tipo devolvido por um timestamp sem fuso depende do driver:
+   * um devolve texto, outro devolve `Date`. Concatenar 'Z' num `Date` produz o
+   * `toString` dele — que NÃO TEM MILISSEGUNDOS —, e o `synced_at` saía
+   * arredondado para o segundo.
+   *
+   * A consequência era silenciosa e cara: toda OS alterada nos milissegundos
+   * seguintes ao arredondamento voltava em TODA sincronização incremental,
+   * para sempre. O pacote "do que mudou" trazia o que não mudou, e ninguém
+   * teria motivo para desconfiar.
+   *
+   * Com `to_char`, o formato é decidido pelo banco e é o mesmo em qualquer
+   * driver. É a mesma razão pela qual o restante deste sistema não converte
+   * tipo na fronteira.
+   */
+  const relogio = await s.query<{ agora: string }>(
+    `SELECT to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS agora`
+  );
   const agora = relogio[0]!.agora;
 
   const ordens = await s.query<Record<string, unknown>>(
@@ -124,27 +145,32 @@ export async function fieldSyncBundle(
   );
 
   /*
-   * OS ATIVOS SÃO OS REFERENCIADOS PELAS ORDENS, e não o cadastro inteiro.
+   * OS ATIVOS SÃO OS DAS ORDENS **MAIS OS DOS LOCAIS DO DIA**, e não o cadastro
+   * inteiro.
    *
-   * Uma prestadora com dez mil equipamentos não cabe num celular, e nem
-   * precisa: o técnico abre a ficha do que ele vai tocar. A consulta parte das
-   * ordens já selecionadas — inclusive na sincronização incremental, em que a
-   * lista pode vir vazia.
+   * A primeira versão trazia só os referenciados pelas ordens. A SPEC §20 pede
+   * as duas coisas — "ativos referenciados por essas OS + ativos dos locais do
+   * dia" — e a razão ficou óbvia quando a tela de leitura de etiqueta existiu:
+   * o técnico aponta a câmera para um equipamento que NÃO tem ordem hoje,
+   * justamente porque encontrou um problema nele. Sem o segundo conjunto, o
+   * leitor responde "não encontrei" para todo equipamento do corredor que ele
+   * está atravessando — e a tela de abrir chamado em campo perde o sentido.
+   *
+   * Uma prestadora com dez mil equipamentos continua não cabendo num celular. O
+   * recorte é o ESCOPO DE LOCAIS do vínculo, que é o mesmo que limita tudo o
+   * mais neste sistema, com teto explícito.
    */
   const idsDeAtivos = ordens.map((o) => o.asset_id).filter((x): x is string => typeof x === 'string');
 
-  const ativos =
-    idsDeAtivos.length === 0
-      ? []
-      : await s.query<Record<string, unknown>>(
-          /*
-           * O FABRICANTE VEM PELO MODELO, e não do ativo.
-           *
-           * `assets` não tem `manufacturer_id`: o fabricante é atributo do
-           * MODELO, e o ativo aponta para o modelo. Duplicá-lo no ativo faria
-           * os dois divergirem na primeira correção de cadastro.
-           */
-          `SELECT a.id, a.tag, a.asset_number, a.name, a.serial_number,
+  const ativos = await s.query<Record<string, unknown>>(
+    /*
+     * O FABRICANTE VEM PELO MODELO, e não do ativo.
+     *
+     * `assets` não tem `manufacturer_id`: o fabricante é atributo do
+     * MODELO, e o ativo aponta para o modelo. Duplicá-lo no ativo faria
+     * os dois divergirem na primeira correção de cadastro.
+     */
+    `SELECT a.id, a.tag, a.asset_number, a.name, a.serial_number,
                   a.status::text AS status, a.customer_id, a.location_id,
                   a.asset_category_id, a.asset_model_id, a.qr_token,
                   a.requires_calibration, a.requires_electrical_test,
@@ -155,10 +181,22 @@ export async function fieldSyncBundle(
              LEFT JOIN aurora.asset_models     mo ON mo.id = a.asset_model_id
              LEFT JOIN aurora.manufacturers    m  ON m.id  = mo.manufacturer_id
              LEFT JOIN aurora.asset_categories c  ON c.id  = a.asset_category_id
-            WHERE a.id = ANY($1::uuid[])
-              AND a.deleted_at IS NULL`,
-          [idsDeAtivos]
-        );
+            WHERE a.deleted_at IS NULL
+              AND (
+                a.id = ANY($1::uuid[])
+                OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2))
+              )
+            ORDER BY a.name
+            /*
+             * O TETO É EXPLÍCITO, e é o que impede um escopo largo demais virar
+             * um pacote que não desce numa rede de hospital. Quando ele for
+             * atingido, o que falta continua alcançável pela busca com rede — e
+             * o número está aqui para ser medido e ajustado com dado real, e não
+             * escondido numa consulta sem limite.
+             */
+            LIMIT 2000`,
+    [idsDeAtivos, membershipId]
+  );
 
   // A árvore PODADA ao escopo, e não a árvore inteira: `accessible_location_ids`
   // é a mesma função que limita toda consulta deste sistema.
@@ -273,7 +311,9 @@ export async function fieldSyncBundle(
   );
 
   return {
-    synced_at: new Date(agora + 'Z').toISOString(),
+    // Já vem em ISO com milissegundos, do banco. Reprocessar em JavaScript foi
+    // exatamente o que perdeu a precisão antes.
+    synced_at: agora,
     incremental: desde !== null,
     work_orders: ordens,
     assets: ativos,

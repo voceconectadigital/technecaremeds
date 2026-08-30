@@ -19,11 +19,11 @@
  * mais comum. E é justamente o segundo e o terceiro que exigem ação.
  */
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
-import { CircleAlert, CloudOff, ListChecks, RefreshCw, TriangleAlert } from 'lucide-react';
+import { CloudOff, ListChecks, QrCode, RefreshCw, TriangleAlert, User } from 'lucide-react';
 import { useCampo } from './campo';
 
 function Pendencias() {
-  const { estado, sincronizando, sincronizar, online, ultimaSincronizacao } = useCampo();
+  const { estado, sincronizando, online, ultimaSincronizacao } = useCampo();
   const total = estado.pendentes + estado.bloqueados;
 
   return (
@@ -54,9 +54,9 @@ function Pendencias() {
         </Link>
       )}
 
-      <button
-        type="button"
-        onClick={() => void sincronizar()}
+      <Link
+        to="/sincronizacao"
+        aria-label="Ver o que ainda não foi enviado"
         className="flex min-h-11 items-center gap-1.5 rounded-control px-2 text-sm text-text"
       >
         <RefreshCw aria-hidden className={`size-4 ${sincronizando ? 'animate-spin' : ''}`} />
@@ -80,14 +80,29 @@ function Pendencias() {
             {ultimaSincronizacao ? 'tudo enviado' : 'nunca sincronizou'}
           </span>
         )}
-      </button>
+      </Link>
     </div>
   );
 }
 
+/*
+ * QUATRO DESTINOS, e não sete.
+ *
+ * A SPEC pede as telas HOJE, OS, QR, SINCRONIZAÇÃO e PERFIL. A da OS é alcançada
+ * de dentro do HOJE — ninguém procura uma ordem numa barra de navegação —, e a
+ * de atenção mora dentro da sincronização, que é onde a pergunta "o que ainda
+ * não chegou?" já está sendo feita.
+ *
+ * O que sobra são quatro, e quatro é o que cabe num rodapé de celular com o
+ * alvo de toque confortável: 56px de altura, num aparelho de 360px de largura,
+ * dá 90px por destino. Com sete, cada um teria 51px — abaixo do que um polegar
+ * de luva acerta.
+ */
 const DESTINOS = [
   { to: '/', rotulo: 'Hoje', Icone: ListChecks },
-  { to: '/atencao', rotulo: 'Atenção', Icone: CircleAlert },
+  { to: '/qr', rotulo: 'Ler QR', Icone: QrCode },
+  { to: '/sincronizacao', rotulo: 'Enviar', Icone: RefreshCw },
+  { to: '/perfil', rotulo: 'Aparelho', Icone: User },
 ] as const;
 
 export function Casca() {

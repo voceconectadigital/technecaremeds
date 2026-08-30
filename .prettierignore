@@ -2,3 +2,7 @@ dist
 node_modules
 docs
 package-lock.json
+
+.tsc-out/
+apps/*/android/
+apps/*/ios/

@@ -19,9 +19,9 @@ import { ToastProvider, TooltipProvider } from '@aurora/ui';
 import { SessionProvider, ThemeProvider } from '@aurora/app-kit';
 import { CampoProvider } from './campo';
 import { router } from './rotas';
-import type { BaseLocal } from './armazenamento';
+import type { ArmazenamentoOffline } from './armazenamento';
 
-export function App({ children, baseDeTeste }: { children?: ReactNode; baseDeTeste?: BaseLocal }) {
+export function App({ children, baseDeTeste }: { children?: ReactNode; baseDeTeste?: ArmazenamentoOffline }) {
   return (
     <ThemeProvider>
       <SessionProvider>

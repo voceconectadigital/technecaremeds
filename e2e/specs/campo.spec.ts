@@ -495,3 +495,165 @@ async function pararCronometros(request: APIRequestContext, workOrderId: string)
     });
   }
 }
+
+test.describe('CAMPO · as cinco telas, no polegar', () => {
+  test('a barra leva a Hoje, Ler QR, Enviar e Aparelho, e todas abrem sem rolar de lado', async ({
+    comoTecnico: page,
+  }) => {
+    /*
+     * A SPEC pede HOJE, OS, QR, SINCRONIZAÇÃO e PERFIL. A da OS é alcançada de
+     * dentro do HOJE — ninguém procura uma ordem numa barra de navegação —, e a
+     * de atenção mora dentro da sincronização, que é onde a pergunta "o que
+     * ainda não chegou?" já está sendo feita.
+     */
+    await page.goto('/');
+    const nav = page.getByRole('navigation', { name: 'Navegação do campo' });
+    await expect(nav.getByRole('link')).toHaveCount(4);
+
+    for (const [rotulo, titulo] of [
+      ['Hoje', 'Hoje'],
+      ['Ler QR', 'Ler etiqueta'],
+      ['Enviar', 'Sincronização'],
+      ['Aparelho', 'Este aparelho'],
+    ] as const) {
+      await nav.getByRole('link', { name: rotulo }).click();
+      await expect(page.getByRole('heading', { level: 1 })).toContainText(titulo, {
+        timeout: 20_000,
+      });
+
+      const r = await page.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        client: document.documentElement.clientWidth,
+      }));
+      expect(r.scroll - r.client, `${titulo} rola de lado`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test('o leitor de código resolve a etiqueta CONTRA A BASE DO APARELHO', async ({
+    comoTecnico: page,
+    context,
+  }) => {
+    /*
+     * É o ponto do épico aplicado ao QR: resolver o código exige a base local,
+     * e não o servidor. Um leitor que precisa de rede para dizer que
+     * equipamento é aquele não serve para nada na casa de máquinas — que é
+     * exatamente onde as etiquetas estão.
+     *
+     * Por isso o teste faz a busca EM MODO AVIÃO.
+     */
+    await page.goto('/');
+    await sincronizado(page);
+
+    await context.setOffline(true);
+    await page.getByRole('link', { name: 'Ler QR' }).click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Ler etiqueta');
+
+    await page.getByLabel('Ou digite o número').fill('PAT-ALFA-001');
+    await page.getByRole('button', { name: 'Buscar' }).click();
+
+    await expect(page.getByRole('heading', { level: 2 })).toContainText('Ventilador Alfa-1');
+    /*
+     * A seção das ordens daquele equipamento existe — com ordens ou com o vazio
+     * explicado.
+     *
+     * A primeira versão exigia a OS do ventilador aparecendo aqui, e ela falhava
+     * na execução completa: um caso anterior CANCELA essa ordem, e ordem
+     * cancelada sai do pacote do dia de propósito. O teste dependia da ordem em
+     * que os casos rodam, que é a forma mais cara de instabilidade.
+     *
+     * O que este caso prova é que o CÓDIGO RESOLVE O EQUIPAMENTO sem rede. As
+     * ordens daquele equipamento são consequência, e são cobertas em outro
+     * lugar.
+     */
+    await expect(page.getByRole('heading', { name: 'Ordens deste equipamento' })).toBeVisible();
+
+    await context.setOffline(false);
+  });
+
+  test('um código que não está no aparelho é dito como tal — e não como inexistente', async ({
+    comoTecnico: page,
+  }) => {
+    /*
+     * A diferença é tudo em campo: o equipamento pode existir e estar fora do
+     * escopo baixado hoje. "Não existe" faria o técnico concluir que a etiqueta
+     * está errada e procurar um problema que não há.
+     */
+    await page.goto('/qr');
+    await page.getByLabel('Ou digite o número').fill('PAT-QUE-NAO-EXISTE');
+    await page.getByRole('button', { name: 'Buscar' }).click();
+
+    await expect(page.getByText('Não encontrei no aparelho')).toBeVisible();
+    await expect(page.getByText(/fora do escopo de hoje/)).toBeVisible();
+  });
+});
+
+test.describe('CAMPO · o diagnóstico do aparelho', () => {
+  test('a suíte de conformidade do armazenamento passa NO NAVEGADOR DE VERDADE', async ({
+    comoTecnico: page,
+  }) => {
+    /*
+     * ESTE TESTE FECHA O BURACO QUE NENHUM TESTE DE NODE FECHA.
+     *
+     * A suíte de conformidade da porta de persistência roda no Vitest contra a
+     * memória e contra um SQLite de verdade. O IndexedDB não existe em Node —
+     * e um simulador provaria o simulador.
+     *
+     * Aqui ela roda contra o IndexedDB do navegador, pela mesma tela que o
+     * técnico aciona quando o suporte pede. Se uma regra reprovar num aparelho,
+     * a resposta deixa de ser "deve ser o aparelho" e passa a ser uma linha com
+     * nome.
+     */
+    await page.goto('/perfil');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Este aparelho');
+
+    // A tela diz QUAL implementação está em uso — é a primeira pergunta do
+    // suporte, e a que distingue navegador de aplicativo instalado.
+    await expect(page.getByText('indexeddb')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Conferir o armazenamento' }).click();
+
+    const resultado = page.getByRole('list', { name: 'Resultado do diagnóstico' });
+    await expect(resultado).toBeVisible({ timeout: 30_000 });
+
+    const itens = resultado.getByRole('listitem');
+    await expect(itens).toHaveCount(8);
+    // TODAS passam. Uma reprovada aqui é um defeito de plataforma, e o teste
+    // precisa falhar por isso.
+    await expect(resultado.getByText('reprovou')).toHaveCount(0);
+  });
+
+  test('sair avisa quando ainda há trabalho guardado', async ({ comoTecnico: page, context }) => {
+    /*
+     * Sair apaga a credencial, e sem credencial a fila não consegue enviar
+     * nada — o trabalho continua guardado e vira inalcançável. Um botão de sair
+     * sem este aviso, tocado por engano no fim do turno, transforma oito horas
+     * de trabalho num problema de suporte.
+     */
+    await page.goto('/');
+    await sincronizado(page);
+
+    /*
+     * A PRIMEIRA ORDEM DA LISTA, e não uma escolhida pelo título.
+     *
+     * Casos anteriores cancelam ordens, e ordem cancelada sai do pacote do dia.
+     * Um teste que procura um título específico passa a depender da ordem em
+     * que a suíte roda — e falha por um motivo que não tem relação com o que
+     * ele afirma.
+     */
+    const primeira = page.getByRole('main').getByRole('link').first();
+    await expect(primeira).toBeVisible({ timeout: 20_000 });
+    await primeira.click();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+    await context.setOffline(true);
+    await page.getByRole('button', { name: 'Iniciar cronômetro' }).click();
+    await expect(page.getByText(/(ação guardada|ações guardadas) no aparelho/)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByRole('link', { name: 'Aparelho' }).click();
+    await expect(page.getByText(/Ainda há trabalho seu esperando/)).toBeVisible();
+
+    await context.setOffline(false);
+  });
+});

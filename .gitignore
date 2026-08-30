@@ -37,3 +37,27 @@ apps/web/dist/
 /test-results/
 /playwright-report/
 /blob-report/
+
+# Saída do `tsc -b` do aplicativo de campo — separada do `dist`, que é a build
+# do Vite e é o que o Capacitor copia para os projetos nativos.
+.tsc-out/
+
+# ---------------------------------------------------------------------------
+# Capacitor — o que é COPIADO da build web, e não fonte.
+#
+# `cap sync` reescreve estes caminhos a cada build. Versioná-los faria todo
+# commit carregar o pacote inteiro do aplicativo de novo, e um conflito de
+# merge num arquivo com hash no nome não tem resolução possível.
+#
+# O resto do projeto Android É fonte — `AndroidManifest.xml`, `build.gradle`,
+# ícones, `strings.xml` — e fica versionado: são as decisões de empacotamento,
+# e elas precisam ser revisadas como código.
+# ---------------------------------------------------------------------------
+apps/field/android/app/src/main/assets/public/
+apps/field/android/app/src/main/assets/capacitor.config.json
+apps/field/android/app/src/main/assets/capacitor.plugins.json
+apps/field/ios/App/App/public/
+apps/field/ios/App/App/capacitor.config.json
+apps/field/ios/App/App/capacitor.plugins.json
+apps/field/ios/App/Pods/
+apps/field/ios/App/Podfile.lock

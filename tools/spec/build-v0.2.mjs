@@ -573,6 +573,24 @@ patch(
 );
 
 /* ============================================================
+   P20 — Aurora Field: PWA **E** lojas (ADR-029, ADR-030)
+
+   O ADR-018 escolheu PWA com a justificativa "uma base de código, distribuição
+   sem loja, atualização imediata". Duas das três razões continuam valendo; a do
+   meio deixou de valer quando o cliente confirmou a publicação nas lojas.
+
+   A linha não é apagada — ela é CORRIGIDA, e as duas decisões novas entram
+   logo abaixo. Apagar o ADR-018 esconderia que a decisão mudou, e por quê.
+   ============================================================ */
+patch(
+  'P20-adr-distribuicao',
+  '| ADR-018 | Mobile | (a) app nativo; (b) PWA | **(b)** | Uma base de código, distribuição sem loja, atualização imediata. Reavaliar se push confiável ou NFC virarem requisito |',
+  '| ADR-018 | Mobile | (a) app nativo; (b) PWA | **(b)** como base | Uma base de código. A distribuição passou a ser DUPLA — ver ADR-029 |\n' +
+    '| ADR-029 | Distribuição do Aurora Field | (a) só PWA; (b) PWA mais um app separado em React Native; (c) PWA mais empacotamento da MESMA base com Capacitor | **(c)** | Requisito confirmado pelo cliente: publicar na Google Play e na App Store **sem** abandonar o PWA. O React Native exigiria reescrever as telas, e a versão reescrita divergiria — sempre na direção de quem é menos usado, que aqui seria justamente o PWA. O Capacitor executa o código como está: a fila com `client_operation_id`, a sincronização e o motor de conflito continuam sendo um só. O custo aceito é o `WebView` — animação e gesto abaixo do nativo, o que não decide nada num aplicativo de lista, formulário, câmera e leitor de código |\n' +
+    '| ADR-030 | Persistência offline por plataforma | (a) IndexedDB direto no domínio; (b) porta com adaptadores intercambiáveis | **(b)**, com IndexedDB no navegador e SQLite preparado para o aparelho | O domínio não pode conhecer o mecanismo, ou cada caso de uso teria de ser reescrito para o empacotamento nativo. A porta declara **oito regras** de semântica, e existe uma suíte de conformidade que todo adaptador precisa passar: no Vitest contra memória e SQLite real, e no navegador contra IndexedDB real, pela tela de diagnóstico do aparelho. Foi ela que encontrou a divergência que mais dói — o IndexedDB guarda `Date` e devolve `Date`; o SQLite guarda texto |'
+);
+
+/* ============================================================
    cabeçalho de versão
    ============================================================ */
 patch(
