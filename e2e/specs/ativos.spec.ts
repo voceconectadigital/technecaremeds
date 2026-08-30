@@ -75,7 +75,21 @@ test.describe('EPIC-005 · parque de ativos', () => {
 
     // O histórico fica na primeira dobra: é o que responde à pergunta cara.
     await expect(page.getByText('Histórico de atendimentos')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Nenhum atendimento registrado')).toBeVisible();
+
+    /*
+     * O HISTÓRICO TEM CONTEÚDO, e esta prova mudou junto com a massa.
+     *
+     * Antes ela conferia o vazio explicado — e conferia porque a massa não
+     * tinha ordem de serviço nenhuma. Ao semear as duas OS do aplicativo de
+     * campo, este ativo passou a ter atendimento, e a asserção antiga passou a
+     * exigir um mundo que deixou de existir.
+     *
+     * A troca é para melhor: o vazio explicado desta tela já é coberto pelo
+     * teste do ativo sem atendimento, e o que faltava era justamente provar
+     * que a lista RENDERIZA o que existe. Uma tela que só foi vista vazia é
+     * uma tela meio testada.
+     */
+    await expect(page.getByText('Ventilador não pressuriza')).toBeVisible();
 
     // Idade sem data de origem é NULA, e não zero: zero diria "novo".
     await expect(page.getByText('Sem data de origem')).toBeVisible();

@@ -22,6 +22,30 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    /*
+     * O SERVICE WORKER NÃO RODA NUMA PÁGINA — roda num worker, com outro
+     * conjunto de globais.
+     *
+     * `self`, `caches`, `clients` e `skipWaiting` não existem em `window`, e
+     * `window` não existe aqui. Sem esta declaração, o lint acusa dezessete
+     * variáveis inexistentes num arquivo perfeitamente correto — e a saída
+     * óbvia seria ignorá-lo, o que tiraria da revisão justamente o arquivo que
+     * decide se o aplicativo ABRE sem rede.
+     */
+    files: ['apps/*/public/sw.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        clients: 'readonly',
+        fetch: 'readonly',
+        Response: 'readonly',
+        Request: 'readonly',
+        URL: 'readonly',
+      },
+    },
+  },
+  {
     files: ['**/*.ts'],
     languageOptions: { parserOptions: { projectService: false } },
     rules: {

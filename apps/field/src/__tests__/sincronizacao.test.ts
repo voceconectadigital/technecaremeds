@@ -1,0 +1,225 @@
+/**
+ * Aurora — descer o dia e subir o trabalho (EPIC-014 · SPEC §20).
+ *
+ * O que estes casos perseguem é a ORDEM e a IDEMPOTÊNCIA da gravação local.
+ * São dois lugares em que um erro não aparece como falha: aparece como um dado
+ * plausível e errado no aparelho de alguém que está no subsolo.
+ */
+import { describe, it, expect, beforeEach } from 'vitest';
+import { baseEmMemoria, type BaseLocal } from '../armazenamento';
+import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao } from '../fila';
+import { Sincronizacao, type PacoteDoDia } from '../sincronizacao';
+
+function pacote(over: Partial<PacoteDoDia> = {}): PacoteDoDia {
+  return {
+    synced_at: '2026-08-29T08:00:00.000Z',
+    incremental: false,
+    work_orders: [{ id: 'os-1' }, { id: 'os-2' }],
+    assets: [{ id: 'at-1' }],
+    locations: [{ id: 'lo-1' }],
+    checklist_templates: [{ id: 'ck-1' }],
+    catalogs: [{ id: 'ca-1' }],
+    statuses: [{ id: 'st-1' }],
+    transitions: [
+      { from_key: 'open', to_key: 'in_progress' },
+      { from_key: 'in_progress', to_key: 'completed' },
+    ],
+    wait_reasons: [{ id: 'mo-1' }],
+    stock: [{ item_id: 'it-1', warehouse_id: 'wh-1' }],
+    counts: {},
+    ...over,
+  };
+}
+
+let base: BaseLocal;
+let fila: FilaDeSaida;
+let enviados: ComandoNaFila[];
+
+beforeEach(() => {
+  base = baseEmMemoria();
+  enviados = [];
+  fila = new FilaDeSaida(base.colecao<ComandoNaFila>('fila'), base.colecao<PendenciaDeAtencao>('atencao'), {
+    enviar: async (c) => {
+      enviados.push(c);
+      return { status: 200, corpo: {} };
+    },
+    agora: () => new Date('2026-08-29T08:00:00.000Z'),
+    novoId: () => `op-${enviados.length + 1}`,
+  });
+});
+
+function sincronizacao(baixar: (desde: string | null) => Promise<PacoteDoDia>) {
+  return new Sincronizacao(base, fila, {
+    baixarPacote: baixar,
+    agora: () => new Date('2026-08-29T08:00:00.000Z'),
+  });
+}
+
+describe('SYNC-001 · sobe antes de descer', () => {
+  it('a fila é escoada ANTES de o pacote chegar', async () => {
+    /*
+     * Se o pacote descesse primeiro, ele sobrescreveria a base local com o
+     * estado do servidor — que ainda não sabe do trabalho que está na fila. O
+     * técnico veria a OS voltar para "em execução" depois de ter concluído, e
+     * concluiria de novo.
+     */
+    const ordem: string[] = [];
+    await fila.enfileirar({
+      agregado: 'work_order:os-1',
+      metodo: 'POST',
+      caminho: '/v1/x',
+      corpo: {},
+      rotulo: 'Concluir',
+    });
+
+    const s = new Sincronizacao(base, fila, {
+      baixarPacote: async () => {
+        ordem.push('desceu');
+        return pacote();
+      },
+      agora: () => new Date('2026-08-29T08:00:00.000Z'),
+    });
+
+    const filaOriginal = fila.escoar.bind(fila);
+    fila.escoar = async () => {
+      ordem.push('subiu');
+      return filaOriginal();
+    };
+
+    const r = await s.rodar();
+    expect(ordem).toEqual(['subiu', 'desceu']);
+    expect(r.enviados).toBe(1);
+  });
+
+  it('falhar ao descer não apaga o que subiu', async () => {
+    /*
+     * O número precisa aparecer na tela. Um "falhou" seco depois de a fila ter
+     * esvaziado faria o técnico sincronizar de novo por desconfiança — e a
+     * segunda vez não teria nada para mandar, confirmando a desconfiança.
+     */
+    await fila.enfileirar({
+      agregado: 'work_order:os-1',
+      metodo: 'POST',
+      caminho: '/v1/x',
+      corpo: {},
+      rotulo: 'Concluir',
+    });
+
+    const s = sincronizacao(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    const r = await s.rodar();
+    expect(r.enviados).toBe(1);
+    expect(r.falha).toContain('Failed to fetch');
+    expect(r.baixados).toEqual({});
+  });
+});
+
+describe('SYNC-002 · a base local fica igual ao pacote', () => {
+  it('cada coleção é gravada com a sua chave', async () => {
+    const s = sincronizacao(async () => pacote());
+    const r = await s.rodar();
+
+    expect(r.baixados).toEqual({
+      ordens: 2,
+      ativos: 1,
+      locais: 1,
+      checklists: 1,
+      catalogos: 1,
+      situacoes: 1,
+      transicoes: 2,
+      motivos: 1,
+      estoque: 1,
+    });
+
+    expect(await base.colecao('ordens').todos()).toHaveLength(2);
+  });
+
+  it('transição e saldo têm chave COMPOSTA, e não se sobrescrevem', async () => {
+    /*
+     * Nenhum dos dois tem identificador próprio. Com uma chave só, cada
+     * sincronização deixaria o aparelho com UMA transição — e uma tela offline
+     * sem grafo oferece todos os botões, que é a origem de metade dos conflitos
+     * de um dia.
+     */
+    const s = sincronizacao(async () => pacote());
+    await s.rodar();
+
+    expect(await base.colecao('transicoes').todos()).toHaveLength(2);
+    expect(await base.colecao<{ from_key: string }>('transicoes').ler('open->in_progress')).toEqual({
+      from_key: 'open',
+      to_key: 'in_progress',
+    });
+    expect(await base.colecao('estoque').ler('it-1@wh-1')).toBeDefined();
+  });
+
+  it('sincronizar duas vezes não duplica nada', async () => {
+    const s = sincronizacao(async () => pacote());
+    await s.rodar();
+    await s.rodar();
+    expect(await base.colecao('ordens').todos()).toHaveLength(2);
+    expect(await base.colecao('transicoes').todos()).toHaveLength(2);
+  });
+});
+
+describe('SYNC-003 · o incremental sobrepõe, o completo substitui', () => {
+  it('o pacote incremental NÃO apaga o que não mudou', async () => {
+    /*
+     * Limpar sempre apagaria, no incremental, tudo que não mudou — que é quase
+     * tudo. O técnico ficaria com uma OS na tela porque foi a única alterada
+     * desde a manhã, e concluiria que perdeu o dia.
+     */
+    await sincronizacao(async () => pacote()).rodar();
+    expect(await base.colecao('ordens').todos()).toHaveLength(2);
+
+    await sincronizacao(async () => pacote({ incremental: true, work_orders: [{ id: 'os-3' }] })).rodar();
+
+    const ordens = await base.colecao<{ id: string }>('ordens').todos();
+    expect(ordens.map((o) => o.id).sort()).toEqual(['os-1', 'os-2', 'os-3']);
+  });
+
+  it('o pacote completo substitui: a OS que saiu do escopo some do aparelho', async () => {
+    await sincronizacao(async () => pacote()).rodar();
+    await sincronizacao(async () => pacote({ work_orders: [{ id: 'os-2' }] })).rodar();
+
+    const ordens = await base.colecao<{ id: string }>('ordens').todos();
+    expect(ordens.map((o) => o.id)).toEqual(['os-2']);
+  });
+});
+
+describe('SYNC-004 · a marca do dia', () => {
+  it('é o instante do SERVIDOR, e volta como `since` na chamada seguinte', async () => {
+    /*
+     * A SPEC lista "relógio do dispositivo errado" entre os casos de borda. Um
+     * celular adiantado pediria "o que mudou desde 2027" e iria a campo com o
+     * pacote vazio, achando que está em dia.
+     */
+    const pedidos: (string | null)[] = [];
+    const s = sincronizacao(async (desde) => {
+      pedidos.push(desde);
+      return pacote({ synced_at: '2026-08-29T09:15:00.000Z' });
+    });
+
+    await s.rodar();
+    await s.rodar();
+
+    expect(pedidos).toEqual([null, '2026-08-29T09:15:00.000Z']);
+  });
+
+  it('não é gravada quando o download falha', async () => {
+    /*
+     * Gravá-la antes faria uma falha no meio deixar o aparelho achando que
+     * baixou o dia inteiro — e a sincronização incremental seguinte pularia
+     * justamente o que faltou.
+     *
+     * O pior caso desta ordem é baixar de novo o que já estava. O pior caso da
+     * outra é um dia com buracos, e ninguém sabendo.
+     */
+    const s = sincronizacao(async () => {
+      throw new Error('caiu no meio');
+    });
+    await s.rodar();
+    expect(await s.ultimaMarca()).toBeNull();
+  });
+});

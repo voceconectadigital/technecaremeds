@@ -20,6 +20,18 @@ export const E2E = {
   clienteB: '0193d900-0003-7000-8000-00000000000b',
   emailCoordA: 'coord.a@e2e.test',
   emailTecA: 'tec.a@e2e.test',
+  /**
+   * O VÍNCULO do técnico, e não só o e-mail dele.
+   *
+   * O aplicativo de campo filtra pelo vínculo — é ele que a atribuição de OS
+   * usa —, e sem esta chave a URL do teste saía como `?assignee=undefined`. O
+   * servidor recusa isso com 422, e a falha aparece três linhas depois como
+   * "não consigo ler 'find' de undefined": o sintoma não aponta para a causa.
+   *
+   * É a segunda vez que um identificador existia só em `seed.mjs` e faltava
+   * aqui. Os dois arquivos precisam ser lidos juntos.
+   */
+  memTecA: '0193d900-0002-7000-8000-00000000001a',
   emailCoordB: 'coord.b@e2e.test',
   /** Uma pessoa, dois vínculos — a persona do seletor de organização (§05). */
   emailConsultora: 'consultora@e2e.test',

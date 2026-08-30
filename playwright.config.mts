@@ -33,6 +33,15 @@ const WEB_PORT = 5311;
  * separação existe para garantir.
  */
 const PORTAL_PORT = 5312;
+/*
+ * E O APLICATIVO DE CAMPO NUMA TERCEIRA.
+ *
+ * Ele é a única das três que precisa funcionar com o aparelho no modo avião, e
+ * a separação é o que torna o cache do casco possível de raciocinar: o
+ * `service worker` guarda o casco DESTA aplicação, sem arrastar as dezesseis
+ * telas da aplicação interna junto.
+ */
+const FIELD_PORT = 5313;
 
 export default defineConfig({
   testDir: './e2e/specs',
@@ -66,8 +75,8 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      // O portal tem projeto próprio; este cobre a aplicação interna.
-      testIgnore: /portal.*\.spec\.ts$/,
+      // Portal e campo têm projeto próprio; este cobre a aplicação interna.
+      testIgnore: /(portal|campo).*\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
     {
@@ -83,6 +92,22 @@ export default defineConfig({
       use: {
         ...devices['Pixel 7'],
         baseURL: `http://localhost:${PORTAL_PORT}`,
+      },
+    },
+    {
+      /*
+       * O APLICATIVO DE CAMPO, TAMBÉM NUM CELULAR — e este DESLIGA A REDE.
+       *
+       * `context.setOffline(true)` corta a rede no nível do navegador: `fetch`
+       * falha, `navigator.onLine` vira falso, e a página se comporta como no
+       * subsolo de um hospital. É a diferença entre testar o comportamento
+       * offline e testar um simulador dele.
+       */
+      name: 'campo',
+      testMatch: /campo.*\.spec\.ts$/,
+      use: {
+        ...devices['Pixel 7'],
+        baseURL: `http://localhost:${FIELD_PORT}`,
       },
     },
   ],
@@ -108,7 +133,7 @@ export default defineConfig({
         // porta, e sem a origem na lista o navegador recusa a chamada e a tela
         // mostra "Failed to fetch" — que foi exatamente o primeiro defeito que
         // o Playwright achou nesta base.
-        AURORA_CORS_ORIGINS: `http://localhost:${WEB_PORT},http://localhost:${PORTAL_PORT}`,
+        AURORA_CORS_ORIGINS: `http://localhost:${WEB_PORT},http://localhost:${PORTAL_PORT},http://localhost:${FIELD_PORT}`,
       },
     },
     {
@@ -123,6 +148,28 @@ export default defineConfig({
       port: PORTAL_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      env: { VITE_API_URL: `http://localhost:${API_PORT}/v1` },
+    },
+    {
+      /*
+       * O CAMPO RODA CONTRA A BUILD, e não contra o servidor de desenvolvimento.
+       *
+       * É a única das três aplicações em que essa diferença importa. O
+       * `service worker` — que é o que faz o aplicativo ABRIR sem rede — só é
+       * registrado em produção, de propósito: em desenvolvimento ele cacheria
+       * módulos que mudam a cada salvamento, e a tela mostraria a versão de dez
+       * minutos atrás.
+       *
+       * Testar o modo avião contra o servidor de desenvolvimento provaria
+       * apenas que a base local sobrevive na memória da aba. Recarregar sem
+       * rede, que é o caso real — o sistema operacional derrubou o aplicativo
+       * no meio do turno —, exige o casco em cache. Contra a build, exige de
+       * verdade.
+       */
+      command: 'npm run e2e:field',
+      port: FIELD_PORT,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
       env: { VITE_API_URL: `http://localhost:${API_PORT}/v1` },
     },
   ],

@@ -1,0 +1,12 @@
+/**
+ * Aurora — folha de estilo do aplicativo de campo.
+ *
+ * Uma linha de Tailwind e uma de tokens. Toda cor, medida e movimento sai de
+ * `@aurora/ui`: um valor literal escrito numa tela é um valor que não muda
+ * quando o tema muda — e este aplicativo é usado tanto num corredor iluminado
+ * quanto numa casa de máquinas escura.
+ */
+@import 'tailwindcss';
+@import '../../../packages/ui/src/styles/tokens.css';
+
+@source '../../../packages/ui/src';

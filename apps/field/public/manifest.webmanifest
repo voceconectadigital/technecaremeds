@@ -1,0 +1,21 @@
+{
+  "name": "Aurora — Campo",
+  "short_name": "Aurora Campo",
+  "description": "Executa ordens de serviço em campo, com ou sem rede.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f4",
+  "theme_color": "#f1f5f4",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

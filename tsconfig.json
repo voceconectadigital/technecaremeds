@@ -33,6 +33,9 @@
     },
     {
       "path": "apps/portal"
+    },
+    {
+      "path": "apps/field"
     }
   ]
 }

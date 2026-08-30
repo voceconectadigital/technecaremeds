@@ -30,8 +30,22 @@ const test = base.extend<{ comoEnfermeira: Page }>({
   comoEnfermeira: async ({ page }, use) => {
     await page.addInitScript(
       ({ email, org }) => {
-        localStorage.setItem('aurora:token', `local:${email}:${email}`);
-        localStorage.setItem('aurora:organizacao', org);
+        /*
+         * O `try` NÃO é zelo excessivo.
+         *
+         * `addInitScript` roda em TODO documento, inclusive no `about:blank`
+         * que o navegador cria antes da primeira navegação — e ali o acesso ao
+         * armazenamento é negado. A exceção não atrapalha o teste, mas chega
+         * como erro não capturado na página, e a vigilância de console desta
+         * suíte a reprovaria: uma falha do arranjo com cara de defeito do
+         * produto.
+         */
+        try {
+          localStorage.setItem('aurora:token', `local:${email}:${email}`);
+          localStorage.setItem('aurora:organizacao', org);
+        } catch {
+          /* about:blank, ou armazenamento bloqueado. A navegação seguinte grava. */
+        }
       },
       { email: E2E.emailPortalA, org: E2E.orgA }
     );

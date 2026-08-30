@@ -1057,6 +1057,63 @@ coluna que eu havia suposto em vez de ler (`aurora.catalogs`, `is_initial`,
 decimal viaja como **texto** — `numeric` no banco existe para que peça fracionada
 não some em ponto flutuante, e converter na fronteira desfaria isso em silêncio.
 
+### 4. O aplicativo: `apps/field`
+
+Quatro telas — Hoje, a ordem, "Precisa da sua atenção" e a entrada — num
+aplicativo próprio, na porta 5313. Nenhuma delas carregada sob demanda: divisão
+por rota é ótima na aplicação interna e é o contrário do que este produto exige,
+porque uma rota carregada sob demanda é uma rota que não abre no subsolo.
+
+**Tudo que a tela mostra vem da base local, e nunca da rede.** Ler da rede
+"quando dá" dá à tela dois modos, o rápido e o vazio — e o vazio aparece
+exatamente no subsolo, onde o técnico não distingue "não tenho OS hoje" de "o
+wi-fi não alcança". Lendo do local, a tela tem um modo só; o que muda com a rede
+é a idade do dado, e isso está escrito no topo, em português.
+
+**A fila fala com uma PORTA de armazenamento**, e não com o IndexedDB direto. O
+que precisa ser provado aqui é ordem, retentativa e "nada é descartado" — isso é
+lógica, e lógica se prova com testes determinísticos. O adaptador de memória
+serve à suíte (31 provas com relógio e rede injetados, incluindo um dia inteiro
+de oito horas em quarenta comandos); o de IndexedDB serve ao aparelho e é
+exercitado no navegador de verdade.
+
+**A regra da fila é uma frase:** nada sai dela sem uma resposta do servidor sobre
+aquele comando. Não sai por tempo, nem por número de tentativas, nem por erro de
+rede. O único descarte é o explícito, pedido por gente numa tela que mostra o que
+está sendo jogado fora — porque a alternativa é pior: uma fila que não pode ser
+esvaziada trava para sempre num comando que nunca vai passar.
+
+### Cinco defeitos que só o modo avião encontrou
+
+O teste roda num Pixel 7 e desliga a rede de verdade (`setOffline`). Cada um
+destes passou por revisão de código sem ser notado:
+
+1. **O aplicativo nunca sincronizava ao abrir.** Esperava o evento `online` ou o
+   relógio de um minuto. Quem abrisse às 7h55 e descesse às 7h56 desceria com a
+   base vazia.
+2. **O `service worker` guardava o HTML e não o JavaScript.** Ele é registrado
+   no `load`, depois de os pedaços já terem sido pedidos — nenhum passou por
+   ele. No primeiro recarregamento sem rede, a tela abria em branco com o dia
+   inteiro intacto no IndexedDB e inalcançável. Agora a instalação lê o
+   `index.html` e extrai de lá os endereços com hash.
+3. **`caches.match` não encontrava o que estava guardado.** O módulo com
+   `crossorigin` é pedido com `mode: 'cors'`; o `cache.add` guardou sob uma
+   requisição padrão. Sem `ignoreVary`, as duas não casam — e o sintoma é o
+   mesmo do item 2, com o arquivo ali dentro.
+4. **A ordem da fila vinha do relógio.** Dois comandos no mesmo milissegundo —
+   o que uma tela que salva vários campos faz o tempo todo — ficavam com o mesmo
+   instante, e o travamento por conflito não travava nada. Passou a ser uma
+   posição que só cresce, lida do armazenamento para sobreviver a reaberturas.
+5. **A espera crescente não era zerada quando a rede voltava.** O indicador
+   ficava cheio no estacionamento, com sinal, esperando um relógio interno que
+   ninguém vê. O evento `online` do navegador também não é garantia: a cadência
+   passou a ser de dez segundos com coisa na fila e de um minuto sem nada.
+
+E dois de acessibilidade e de markup: uma `<section aria-labelledby>` apontando
+o rótulo do próprio campo (dois elementos com o mesmo nome acessível), e
+`useParams({ from })` recebendo um caminho onde se espera um id de rota — que
+sob a rota-casca derrubava a tela inteira no limite de erro do roteador.
+
 ### A VALIDAR
 
 - **Retenção das operações de cliente.** A tabela não concede `DELETE` a
@@ -1065,9 +1122,13 @@ não some em ponto flutuante, e converter na fronteira desfaria isso em silênci
   aqui seria escolher por quem vai operar isto.
 - **Fotos.** A política delas é oposta à do pacote: sobem numa fila com envio
   retomável, e não descem num pacote. O envio retomável ainda não existe.
-- **O aplicativo em si** (`apps/field`) não existe ainda. O que existe é o
-  servidor pronto para recebê-lo: idempotência, conflito preservado e o pacote
-  do dia.
+- **Fotos, QR Code e checklist na tela de execução.** O escopo do épico os
+  lista; o que existe hoje é o cronômetro e a mudança de situação. O motor de
+  checklist e o pacote do dia já descem os modelos publicados — falta a tela.
+- **Uma falha isolada e não diagnosticada** numa execução da suíte de unidade,
+  logo após uma reformatação em massa. Cinco execuções seguidas ficaram verdes e
+  eu não capturei qual prova falhou. Fica registrado por honestidade: não é uma
+  instabilidade conhecida, é uma que não foi observada o bastante para ter nome.
 
 ---
 

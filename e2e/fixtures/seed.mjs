@@ -230,6 +230,7 @@ async function main() {
     createCatalogItem,
     createAssetCategory,
     createAsset,
+    createWorkOrder,
     createWarehouse,
     createPlan,
     addPlanTask,
@@ -346,6 +347,38 @@ async function main() {
         locationId: sala,
         assetNumber: org === E2E.orgA ? 'PAT-ALFA-002' : 'PAT-BETA-002',
       });
+
+      /*
+       * DUAS ORDENS ATRIBUÍDAS AO TÉCNICO — e só na organização Alfa.
+       *
+       * O aplicativo de campo lê o dia do vínculo de quem entrou, e sem OS
+       * atribuídas a tela "Hoje" abriria vazia. Um teste de oito horas offline
+       * contra uma tela vazia provaria que nada continua sendo nada.
+       *
+       * São DUAS porque o travamento por conflito é por ordem: com uma só, "a
+       * OS que conflitou não trava as outras" não teria a outra.
+       */
+      if (org === E2E.orgA) {
+        const naturezaDaOs = await s.query(
+          `SELECT id FROM aurora.catalog_items WHERE catalog_key = 'work_order_type' LIMIT 1`
+        );
+        for (const [titulo, ativoDaOs] of [
+          ['Ventilador não pressuriza', 'Ventilador Alfa-1'],
+          ['Monitor com alarme intermitente', 'Monitor Alfa-2'],
+        ]) {
+          const [alvo] = await s.query(`SELECT id FROM aurora.assets WHERE name = $1`, [ativoDaOs]);
+          await createWorkOrder(s, {
+            customerId: clienteId,
+            workOrderTypeId: naturezaDaOs[0].id,
+            title: titulo,
+            description: 'Massa de campo: executada offline pelos testes.',
+            locationId: local,
+            assetId: alvo?.id ?? null,
+            assigneeMembershipId: E2E.memTecA,
+            publish: true,
+          });
+        }
+      }
 
       /*
        * ESTOQUE: dois itens, e um deles ABAIXO do mínimo de propósito.
