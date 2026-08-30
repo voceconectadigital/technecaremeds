@@ -106,6 +106,22 @@ async function main() {
      * falha no meio é pior do que o problema que ele resolve.
      */
     await q(`ALTER TABLE aurora.stock_movements DISABLE TRIGGER stock_movements_immutable`);
+    /*
+     * A ESTRUTURA DE UM CHECKLIST PUBLICADO TAMBÉM É IMUTÁVEL, e pelo mesmo
+     * motivo do razão de estoque.
+     *
+     * A migration 0024 recusa `DELETE` em `checklist_items` de um modelo que já
+     * foi publicado: mudar a estrutura depois faria as respostas já dadas
+     * apontarem para itens que mudaram de sentido. É uma garantia do produto e
+     * está certa.
+     *
+     * A cascata do `DELETE` da organização esbarra nela — e a saída NÃO é
+     * afrouxar o gatilho, é desligá-lo aqui, explicitamente, pelo tempo do
+     * apagamento. Este script roda como superusuário e é limpeza de massa de
+     * teste, não caminho da aplicação.
+     */
+    await q(`ALTER TABLE aurora.checklist_items DISABLE TRIGGER checklist_items_guard`);
+    await q(`ALTER TABLE aurora.checklist_sections DISABLE TRIGGER checklist_sections_guard`);
     try {
       // A cascata leva o resto: se apagar a organização deixasse órfão em
       // alguma tabela, este comando falharia — e falhar aqui é melhor do que
@@ -113,7 +129,11 @@ async function main() {
       await q(`DELETE FROM aurora.organizations WHERE slug LIKE 'e2e-%'`);
       await q(`DELETE FROM aurora.users WHERE email LIKE '%@e2e.test'`);
     } finally {
+      // O `ENABLE` volta no `finally`: um gatilho desligado por causa de uma
+      // falha no meio é pior do que o problema que ele resolve.
       await q(`ALTER TABLE aurora.stock_movements ENABLE TRIGGER stock_movements_immutable`);
+      await q(`ALTER TABLE aurora.checklist_items ENABLE TRIGGER checklist_items_guard`);
+      await q(`ALTER TABLE aurora.checklist_sections ENABLE TRIGGER checklist_sections_guard`);
     }
   }
 
@@ -239,6 +259,9 @@ async function main() {
     addCoverage,
     createQuote,
     createItem,
+    createChecklistTemplate,
+    addChecklistItem,
+    publishChecklist,
     recordMovement,
     setMinimum,
     withTenant,
@@ -347,6 +370,54 @@ async function main() {
         locationId: sala,
         assetNumber: org === E2E.orgA ? 'PAT-ALFA-002' : 'PAT-BETA-002',
       });
+
+      /*
+       * UM CHECKLIST PUBLICADO, e só na organização Alfa.
+       *
+       * Sem ele o pacote do dia desce com `checklist_templates` vazio, e a tela
+       * de execução mostra "nenhum roteiro publicado veio no pacote de hoje" —
+       * que é a mensagem certa e não exercita nada. O teste de sobrevivência
+       * offline precisa responder itens de verdade.
+       *
+       * Os três tipos aqui são os que a tela desenha de forma diferente:
+       * booleano vira dois botões, número vira campo, escolha vira uma linha de
+       * opções. Um só cobriria um terço da tela.
+       */
+      if (org === E2E.orgA) {
+        const modelo = await createChecklistTemplate(s, {
+          key: 'preventiva_ventilador',
+          title: 'Preventiva de ventilador pulmonar',
+          description: 'Roteiro trimestral',
+        });
+        await addChecklistItem(s, {
+          templateId: modelo,
+          kind: 'boolean',
+          label: 'Alarme sonoro funciona',
+          required: true,
+          expectedBoolean: true,
+          position: 1,
+        });
+        await addChecklistItem(s, {
+          templateId: modelo,
+          kind: 'number',
+          label: 'Pressão de pico',
+          required: true,
+          minValue: 10,
+          maxValue: 40,
+          unit: 'cmH2O',
+          position: 2,
+        });
+        await addChecklistItem(s, {
+          templateId: modelo,
+          kind: 'option',
+          label: 'Estado do circuito paciente',
+          required: false,
+          options: ['íntegro', 'ressecado', 'trincado'],
+          failingOptions: ['trincado'],
+          position: 3,
+        });
+        await publishChecklist(s, modelo);
+      }
 
       /*
        * DUAS ORDENS ATRIBUÍDAS AO TÉCNICO — e só na organização Alfa.

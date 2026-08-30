@@ -94,6 +94,22 @@ export interface AnexoPendente {
   ultimoErro: string | null;
   /** Onde o servidor quer o arquivo. Só existe depois do registro. */
   chaveNoServidor: string | null;
+  /**
+   * O IDENTIFICADOR QUE O SERVIDOR DEU A ESTE ANEXO — que NÃO é o `id` daqui.
+   *
+   * O `id` local é do aparelho e serve de `client_operation_id`; a linha no
+   * banco tem chave própria, escolhida lá. Quem precisa apontar para o anexo —
+   * a assinatura, que carrega `attachment_id` — precisa DESTE, e não daquele.
+   *
+   * Mandar o identificador local foi exatamente o defeito que o teste de
+   * sobrevivência offline encontrou: a assinatura era recusada pela chave
+   * estrangeira (`sig_attachment_org_fk`) depois de o dia inteiro de trabalho
+   * já ter sido feito, e ia parar na tela de atenção sem que ninguém
+   * entendesse por quê.
+   *
+   * Nulo enquanto o registro não voltou do servidor.
+   */
+  idNoServidor: string | null;
   /** Onde os bytes estão, no adaptador de arquivos. */
   referenciaLocal: ReferenciaDeArquivo;
   criadoEm: string;

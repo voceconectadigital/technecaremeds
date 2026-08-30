@@ -119,6 +119,31 @@ export interface DependenciasDaFila {
    * a enfileirá-lo produziria a duplicata que tudo isto existe para impedir.
    */
   aoConcluir?(c: ComandoNaFila, corpo: unknown): Promise<void>;
+  /**
+   * Última chance de completar o corpo com algo que só o SERVIDOR sabia.
+   *
+   * Existe por um caso concreto e inevitável: a assinatura aponta para o anexo
+   * da imagem por `attachment_id` — e esse identificador é escolhido pelo
+   * servidor, no registro do anexo, que no meio do mato ainda não aconteceu. No
+   * momento do toque não há o que colocar ali.
+   *
+   * Adiar o comando não serve (a pessoa assinou, e o trabalho tem de ficar
+   * guardado); mandar o identificador local não serve (o servidor recusa por
+   * chave estrangeira, e o trabalho vai para a tela de atenção sem culpa de
+   * ninguém). Então o comando fica na fila com uma REFERÊNCIA no lugar do
+   * valor, e esta função a troca pelo valor de verdade um instante antes do
+   * envio — quando o comando anterior do mesmo agregado já voltou do servidor.
+   *
+   * Devolver `{ pronto: false }` significa "a referência ainda não existe": o
+   * comando FICA na fila, intacto, e o agregado inteiro espera — exatamente
+   * como faz quando não há rede.
+   *
+   * A fila continua sem conhecer anexo: ela sabe que um corpo pode depender de
+   * uma resposta anterior, e quem conhece anexo resolve.
+   */
+  resolverCorpo?(
+    c: ComandoNaFila
+  ): Promise<{ pronto: true; corpo: unknown } | { pronto: false; motivo: string }>;
 }
 
 const MAX_ESPERA_MS = 60_000;
@@ -191,8 +216,21 @@ export class FilaDeSaida {
     caminho: string;
     corpo: unknown;
     rotulo: string;
+    /**
+     * O IDENTIFICADOR DA OPERAÇÃO, quando quem chama já tem um.
+     *
+     * O anexo precisa disto: o `client_operation_id` do comando que registra a
+     * foto é o mesmo identificador da foto no aparelho, e é por ele que o aviso
+     * de conclusão reencontra o anexo para guardar a chave do servidor.
+     *
+     * Sem isto a fila sorteava um identificador próprio, `aoConcluir` procurava
+     * um anexo que não existia com aquele nome, saía em silêncio — e a foto
+     * ficava em "capturado" para sempre, sem nunca subir os bytes. Foi o que o
+     * teste de sobrevivência offline pegou.
+     */
+    id?: string;
   }): Promise<string> {
-    const id = this.deps.novoId();
+    const id = entrada.id ?? this.deps.novoId();
     const agora = this.deps.agora().toISOString();
 
     /*
@@ -258,9 +296,36 @@ export class FilaDeSaida {
         if (c.bloqueado) break;
         if (new Date(c.proximaTentativaEm) > agora) break;
 
+        /*
+         * A RESOLUÇÃO TARDIA VEM ANTES DO ENVIO. Ver `resolverCorpo`.
+         *
+         * O comando gravado NÃO é alterado: se o envio falhar, a próxima
+         * tentativa resolve de novo, com o que se souber então.
+         */
+        let aEnviar = c;
+        if (this.deps.resolverCorpo) {
+          const resolvido = await this.deps.resolverCorpo(c);
+          if (!resolvido.pronto) {
+            await this.comandos.gravar(c.id, {
+              ...c,
+              ultimoErro: resolvido.motivo,
+              proximaTentativaEm: new Date(agora.getTime() + esperaApos(c.tentativas + 1)).toISOString(),
+            });
+            /*
+             * O agregado inteiro para aqui. O que este comando espera é a
+             * resposta de um comando ANTERIOR deste mesmo agregado; os
+             * seguintes dependem deste, e mandá-los agora seria mandar fora de
+             * ordem. As tentativas NÃO sobem: esperar não é falhar, e contá-lo
+             * como falha empurraria a espera para um minuto sem motivo.
+             */
+            break;
+          }
+          aEnviar = { ...c, corpo: resolvido.corpo };
+        }
+
         let r: RespostaDoEnvio;
         try {
-          r = await this.deps.enviar(c);
+          r = await this.deps.enviar(aEnviar);
         } catch (e) {
           /*
            * SEM REDE. O comando FICA. Nada é descartado, nada é marcado como
@@ -297,7 +362,7 @@ export class FilaDeSaida {
            * fila para tentar de novo.
            */
           try {
-            await this.deps.aoConcluir?.(c, r.corpo);
+            await this.deps.aoConcluir?.(aEnviar, r.corpo);
           } catch {
             /*
              * O comando FOI aceito. Uma falha ao processar a resposta não pode
@@ -324,7 +389,9 @@ export class FilaDeSaida {
             agregado: c.agregado,
             rotulo: c.rotulo,
             caminho: c.caminho,
-            corpo: c.corpo,
+            // O corpo RESOLVIDO, e não o guardado: é o que o servidor recusou,
+            // e é o que quem for decidir precisa ver.
+            corpo: aEnviar.corpo,
             codigo: problema.code ?? 'conflict',
             mensagem: problema.message ?? 'O servidor recusou esta operação.',
             recusadoEm: agora.toISOString(),

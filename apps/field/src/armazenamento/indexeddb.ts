@@ -20,7 +20,18 @@
 import { COLECOES, copiaJson, type ArmazenamentoOffline, type Colecao } from './porta';
 import { MARCA } from '@aurora/app-kit';
 
-const VERSAO = 1;
+/*
+ * A VERSÃO SOBE QUANDO UMA COLEÇÃO NOVA ENTRA.
+ *
+ * O IndexedDB só cria `objectStore` durante o `upgradeneeded`, e ele só dispara
+ * quando o número muda. Sem subir, um aparelho que já tem a base aberta na
+ * versão anterior continuaria sem a coleção nova — e a gravação falharia com
+ * "NotFoundError" num aplicativo que estava funcionando ontem.
+ *
+ * 2: entrou `rascunhos`, para o que o técnico digitou sobreviver ao aplicativo
+ *    ser derrubado pelo sistema no meio de uma OS.
+ */
+const VERSAO = 2;
 
 export async function armazenamentoIndexedDb(nome = 'aurora-campo'): Promise<ArmazenamentoOffline> {
   const db = await new Promise<IDBDatabase>((resolver, recusar) => {

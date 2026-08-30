@@ -29,7 +29,7 @@ import {
 } from '@aurora/db';
 import { NotFoundError, ValidationError, type AttachmentPurpose } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
-import { uuidParam } from '../common/params';
+import { optionalUuid, uuidParam } from '../common/params';
 import { runFieldOperation } from '../common/client-operation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -90,10 +90,23 @@ export class ExecutionController {
   async attach(
     @Req() req: AuroraRequest,
     @Param('id') id: string,
-    @Body() body: { template_id?: unknown }
+    @Body() body: { template_id?: unknown; response_id?: unknown }
   ): Promise<{ response_id: string }> {
     const responseId = await runFieldOperation(this.db, req, 'POST /work-orders/:id/checklists', body, (s) =>
-      attachChecklist(s, uuidParam(id, 'id'), uuidParam(body.template_id, 'template_id'))
+      attachChecklist(
+        s,
+        uuidParam(id, 'id'),
+        uuidParam(body.template_id, 'template_id'),
+        /*
+         * O APARELHO PODE TRAZER O IDENTIFICADOR DA RESPOSTA.
+         *
+         * Sem isso, responder um item exigiria estar online para anexar
+         * primeiro — e anexar é a primeira coisa que o técnico faz ao chegar
+         * no equipamento, que é onde não há rede. Com o identificador vindo
+         * de lá, o anexo e as respostas entram na fila juntos, na ordem certa.
+         */
+        optionalUuid(body.response_id, 'response_id') ?? undefined
+      )
     );
     return { response_id: responseId };
   }

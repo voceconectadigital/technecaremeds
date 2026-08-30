@@ -58,6 +58,7 @@ export interface CapturaDeEvidencia {
     caminho: string;
     corpo: unknown;
     rotulo: string;
+    id?: string;
   }): Promise<string>;
 }
 
@@ -71,6 +72,21 @@ export interface CapturaDeEvidencia {
 export async function capturarEvidencia(e: CapturaDeEvidencia): Promise<AnexoPendente | null> {
   const foto = await e.camera.capturar({ qualidade: 70, larguraMaxima: 1600 });
   if (!foto) return null;
+  return guardarEvidencia({ ...e, bytes: foto.bytes, tipo: foto.tipo });
+}
+
+/**
+ * Guarda bytes que JÁ EXISTEM como evidência pendente.
+ *
+ * A captura pela câmera é um caminho; a assinatura desenhada no dedo é outro, e
+ * produz um PNG sem passar por câmera nenhuma. As duas terminam no mesmo lugar
+ * — e precisam terminar, ou a assinatura teria um caminho de envio próprio, com
+ * a própria retomada e os próprios defeitos.
+ */
+export async function guardarEvidencia(
+  e: Omit<CapturaDeEvidencia, 'camera'> & { bytes: Uint8Array; tipo: string }
+): Promise<AnexoPendente> {
+  const foto = { bytes: e.bytes, tipo: e.tipo };
 
   /*
    * O IDENTIFICADOR DO ANEXO É TAMBÉM O DA OPERAÇÃO.
@@ -101,6 +117,7 @@ export async function capturarEvidencia(e: CapturaDeEvidencia): Promise<AnexoPen
     tentativas: 0,
     ultimoErro: null,
     chaveNoServidor: null,
+    idNoServidor: null,
     referenciaLocal: id,
     criadoEm: e.agora().toISOString(),
   };
@@ -111,6 +128,9 @@ export async function capturarEvidencia(e: CapturaDeEvidencia): Promise<AnexoPen
    * o que faz a resposta do servidor encontrar o anexo certo em `aoConcluir`.
    */
   await e.enfileirar({
+    // O MESMO identificador do anexo. Ver a nota do campo `id` acima: é por
+    // ele que o aviso de conclusão da fila reencontra esta foto.
+    id,
     agregado: anexo.agregado,
     metodo: 'POST',
     caminho: `/work-orders/${e.workOrderId}/attachments`,
@@ -161,6 +181,98 @@ export async function registrarChaveDoServidor(
     ...anexo,
     estado: 'registrado',
     chaveNoServidor: r.storage_key,
+    /*
+     * O identificador do servidor é guardado AQUI, e é a única passagem em que
+     * ele existe. Sem guardá-lo, a assinatura que aponta para esta foto não
+     * teria para onde apontar. Ver a nota em `AnexoPendente.idNoServidor`.
+     */
+    idNoServidor: r.attachment_id ?? null,
     ultimoErro: null,
   });
+}
+
+/*
+ * ------------------------------------------------------------------------
+ * APONTAR PARA UM ANEXO QUE AINDA NÃO EXISTE NO SERVIDOR
+ * ------------------------------------------------------------------------
+ *
+ * A assinatura precisa dizer a QUAL imagem ela se refere, e o servidor
+ * identifica a imagem pela chave que ELE escolheu no registro. No meio do mato
+ * esse registro ainda não aconteceu: no instante em que a pessoa levanta o
+ * dedo, o identificador do servidor não existe em lugar nenhum.
+ *
+ * Então o comando sai com uma REFERÊNCIA no lugar do valor, e a fila a troca
+ * pelo valor de verdade um instante antes de enviar — quando o registro do
+ * anexo, que é anterior no mesmo agregado, já voltou.
+ *
+ * Foi o defeito que o teste de sobrevivência offline encontrou: mandando o
+ * identificador local, o servidor recusava a assinatura por chave estrangeira
+ * (`sig_attachment_org_fk`) DEPOIS de o dia inteiro de trabalho já estar feito.
+ */
+
+/** A marca que ocupa o lugar do identificador do servidor até ele existir. */
+export interface ReferenciaAoAnexo {
+  $anexoLocal: string;
+}
+
+export function referenciaAoAnexo(idLocal: string): ReferenciaAoAnexo {
+  return { $anexoLocal: idLocal };
+}
+
+function ehReferencia(v: unknown): v is ReferenciaAoAnexo {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    !Array.isArray(v) &&
+    typeof (v as ReferenciaAoAnexo).$anexoLocal === 'string' &&
+    Object.keys(v).length === 1
+  );
+}
+
+/**
+ * Troca as referências do corpo pelos identificadores do servidor.
+ *
+ * `pronto: false` quer dizer "ainda não dá" — e a fila entende isso como
+ * esperar, e não como falha: o comando fica intacto e o agregado espera.
+ *
+ * Um corpo SEM referência nenhuma passa direto, inclusive o mesmo objeto: o
+ * caso comum não paga nada por esta função existir.
+ */
+export async function resolverReferenciasAoAnexo(
+  anexos: Colecao<AnexoPendente>,
+  corpo: unknown
+): Promise<{ pronto: true; corpo: unknown } | { pronto: false; motivo: string }> {
+  let pendente: string | null = null;
+
+  async function caminhar(v: unknown): Promise<unknown> {
+    if (ehReferencia(v)) {
+      const anexo = await anexos.ler(v.$anexoLocal);
+      if (!anexo) {
+        /*
+         * O anexo sumiu do aparelho. Mandar a referência crua o servidor
+         * recusaria com uma mensagem incompreensível; mandar nulo é honesto —
+         * a assinatura existe, a imagem se perdeu, e o registro diz isso.
+         */
+        return null;
+      }
+      if (!anexo.idNoServidor) {
+        pendente = anexo.nomeDoArquivo;
+        return null;
+      }
+      return anexo.idNoServidor;
+    }
+    if (Array.isArray(v)) return Promise.all(v.map(caminhar));
+    if (typeof v === 'object' && v !== null) {
+      const saida: Record<string, unknown> = {};
+      for (const [k, valor] of Object.entries(v)) saida[k] = await caminhar(valor);
+      return saida;
+    }
+    return v;
+  }
+
+  const resolvido = await caminhar(corpo);
+  if (pendente) {
+    return { pronto: false, motivo: `esperando o servidor registrar ${pendente}` };
+  }
+  return { pronto: true, corpo: resolvido };
 }

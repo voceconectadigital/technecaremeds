@@ -29,4 +29,5 @@ export * from './work-order-detail';
 export * from './roles';
 export * from './portal';
 export * from './client-operations';
+export * from './attachment-uploads';
 export * from './field-sync';

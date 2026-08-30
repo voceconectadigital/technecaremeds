@@ -34,17 +34,26 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { AutomationsController } from './automations/automations.controller';
 import { SearchController } from './search/search.controller';
 import { AuditController } from './audit/audit.controller';
+import { FieldUploadController } from './work-orders/field-upload.controller';
+import { armazenamentoEmDisco } from './common/arquivos/disco';
+import type { ArmazenamentoDeObjetos } from './common/arquivos/porta';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
 import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
 import { createLogger, type StructuredLogger } from './common/logger';
-import { DATABASE, ENV, LOGGER, AUTH_PROVIDER } from './common/tokens';
+import { ARQUIVOS, DATABASE, ENV, LOGGER, AUTH_PROVIDER } from './common/tokens';
 
 export interface AppDeps {
   db: Database;
   env: AuroraEnv;
   logger?: StructuredLogger;
   authProvider?: AuthProvider;
+  /**
+   * Onde os bytes dos anexos moram. Sem isto, disco — o padrão da
+   * homologação. Os testes passam memória, e assim exercitam o mesmo caminho
+   * sem tocar no sistema de arquivos.
+   */
+  arquivos?: ArmazenamentoDeObjetos;
 }
 
 export function createAppModule(deps: AppDeps): new () => NestModule {
@@ -86,9 +95,14 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       AutomationsController,
       SearchController,
       AuditController,
+      FieldUploadController,
     ],
     providers: [
       { provide: DATABASE, useValue: deps.db },
+      {
+        provide: ARQUIVOS,
+        useValue: deps.arquivos ?? armazenamentoEmDisco(deps.env.AURORA_ARQUIVOS_DIR),
+      },
       { provide: ENV, useValue: deps.env },
       { provide: LOGGER, useValue: logger },
       { provide: AUTH_PROVIDER, useValue: auth },

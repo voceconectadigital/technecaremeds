@@ -155,15 +155,48 @@ export async function enviarAnexosPendentes(
 
       if (r.status === 409) {
         /*
-         * O SERVIDOR JÁ TEM ESTE ARQUIVO INTEIRO.
+         * 409 NÃO É FALHA: é o servidor dizendo qual é a conta dele.
          *
-         * Acontece quando o envio anterior chegou e a confirmação se perdeu —
-         * o caso mais comum de rede ruim. Marcar como enviado é a leitura certa
-         * do 409 aqui: reenviar não acrescentaria nada, e insistir deixaria a
-         * foto presa para sempre.
+         * Acontece o tempo todo em rede ruim — a fatia chegou e a confirmação
+         * se perdeu no elevador. O aparelho tentou de novo do ponto que ele
+         * achava, e o servidor respondeu "eu já tenho mais do que isso".
+         *
+         * A versão anterior lia 409 como "o arquivo inteiro já está lá" e dava
+         * o envio por concluído. Quando o desencontro era no MEIO do arquivo,
+         * ela marcava como enviada uma foto que o servidor tinha pela metade —
+         * exatamente a perda silenciosa que este produto não faz.
+         *
+         * O certo é alinhar-se ao número dele e continuar dali. Se o número já
+         * cobre o arquivo, acabou de verdade.
          */
-        atual = { ...atual, enviados: tamanho, ultimoErro: null };
-        break;
+        const recebidos = r.recebidos ?? tamanho;
+        const andou = Math.min(recebidos, tamanho) !== atual.enviados;
+        atual = { ...atual, enviados: Math.min(recebidos, tamanho), ultimoErro: null };
+        await anexos.gravar(atual.id, atual);
+        if (atual.enviados >= tamanho) break;
+        /*
+         * Realinhar não conta tentativa QUANDO ANDA: não houve falha nenhuma, e
+         * contar empurraria para "falhou" um envio que está indo bem.
+         *
+         * Quando NÃO anda, conta. Um servidor que responde 409 sempre com o
+         * mesmo número — por defeito dele, ou por uma fatia que ele recusa em
+         * silêncio — faria este laço girar para sempre, gastando bateria e rede
+         * do técnico sem nunca terminar. O teto por rodada é a saída.
+         */
+        if (andou) continue;
+        tentativasNestaRodada++;
+        if (tentativasNestaRodada >= MAX_TENTATIVAS_POR_RODADA) {
+          atual = {
+            ...atual,
+            estado: 'falhou',
+            tentativas: atual.tentativas + 1,
+            ultimoErro: `o servidor não avança do byte ${atual.enviados}`,
+          };
+          await anexos.gravar(atual.id, atual);
+          deuCerto = false;
+          break;
+        }
+        continue;
       }
 
       tentativasNestaRodada++;

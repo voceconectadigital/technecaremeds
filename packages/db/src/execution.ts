@@ -234,12 +234,32 @@ export async function loadChecklistItems(
 /* -------------------------------------------------------------------------- */
 
 /** Anexa um checklist publicado a uma OS. */
+/**
+ * Anexa um checklist a uma OS.
+ *
+ * O IDENTIFICADOR PODE VIR DO APARELHO, e essa possibilidade é o que torna o
+ * checklist offline viável.
+ *
+ * Responder um item exige o identificador da resposta. Se ele nascesse só aqui,
+ * o técnico teria de estar online para ANEXAR antes de poder responder — e
+ * anexar é a primeira coisa que ele faz ao chegar no equipamento, que é
+ * exatamente onde não há rede.
+ *
+ * Com o identificador vindo do aparelho, as respostas entram na fila junto com
+ * o anexo, na ordem certa, e sobem juntas quando o sinal voltar. Não é o cliente
+ * "inventando" dado: é o mesmo desenho do `client_operation_id` — um UUID
+ * gerado na origem, cuja unicidade o banco garante.
+ *
+ * A NUMERAÇÃO CONTINUA SENDO DO SERVIDOR (§20). Isto aqui é chave técnica, e
+ * não número que alguém lê.
+ */
 export async function attachChecklist(
   session: TenantSession,
   workOrderId: string,
-  templateId: string
+  templateId: string,
+  responseId?: string
 ): Promise<string> {
-  const id = newId();
+  const id = responseId ?? newId();
   await session.query(
     `INSERT INTO aurora.checklist_responses
        (id, organization_id, work_order_id, template_id, template_key, template_version)

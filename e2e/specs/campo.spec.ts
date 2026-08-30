@@ -112,6 +112,23 @@ async function sincronizado(page: Page) {
   await expect(page.getByText(/sincronizados há|sincronizados agora/)).toBeVisible({
     timeout: 20_000,
   });
+
+  /*
+   * E O SERVICE WORKER PRECISA ESTAR NO CONTROLE.
+   *
+   * "Sincronizado" fala dos DADOS; isto fala do APLICATIVO. São duas coisas, e
+   * a segunda chega depois: o registro do service worker, a instalação, o
+   * `skipWaiting` e o `clients.claim` acontecem em segundo plano, e a tela já
+   * está pronta muito antes disso terminar.
+   *
+   * Um caso que desliga a rede e recarrega ANTES do controle recebe
+   * `ERR_INTERNET_DISCONNECTED` — não porque o produto perdeu o dia, mas porque
+   * ainda não havia quem servisse a página. A falha aparece como se o modo
+   * avião não funcionasse, que é o oposto do que estava acontecendo.
+   */
+  await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, null, {
+    timeout: 30_000,
+  });
 }
 
 test.describe('CAMPO · o dia cabe no aparelho', () => {
@@ -280,6 +297,11 @@ test.describe('CAMPO · executar em modo avião', () => {
     const monitor = items.find((o: { title: string }) => o.title.includes('Monitor'));
     expect(monitor).toBeTruthy();
     expect(await contarHoras(request, monitor.id)).toBe(1);
+
+    // O cronômetro é parado aqui pelo mesmo motivo do caso anterior: um aberto
+    // por pessoa. Este caso ficou sem parar o dele até um caso posterior
+    // precisar iniciar o seu — e falhar com 409, apontando para o lugar errado.
+    await pararCronometros(request, monitor.id);
   });
 });
 
@@ -477,6 +499,23 @@ async function contarHoras(request: APIRequestContext, workOrderId: string): Pro
 }
 
 /**
+ * O identificador da ordem que está aberta na tela.
+ *
+ * Sai do endereço porque é a única fonte que não depende de o teste ter
+ * escolhido a ordem pelo título — e escolher pelo título é o que faz um caso
+ * depender da ordem em que a suíte roda.
+ */
+function idDaOrdemNaUrl(page: Page): string {
+  const partes = new URL(page.url()).pathname.split('/').filter(Boolean);
+  return partes[partes.length - 1] ?? '';
+}
+
+/** Espera a fila escoar — sem isso, parar o cronômetro chega antes dele. */
+async function esperarFilaVazia(page: Page): Promise<void> {
+  await expect.poll(async () => (await estadoDaFila(page)).pendentes, { timeout: 60_000 }).toBe(0);
+}
+
+/**
  * Fecha os cronômetros abertos desta ordem.
  *
  * O banco admite um aberto por pessoa; um caso que deixa o seu correndo faz o
@@ -622,7 +661,7 @@ test.describe('CAMPO · o diagnóstico do aparelho', () => {
     await expect(resultado.getByText('reprovou')).toHaveCount(0);
   });
 
-  test('sair avisa quando ainda há trabalho guardado', async ({ comoTecnico: page, context }) => {
+  test('sair avisa quando ainda há trabalho guardado', async ({ comoTecnico: page, context, request }) => {
     /*
      * Sair apaga a credencial, e sem credencial a fila não consegue enviar
      * nada — o trabalho continua guardado e vira inalcançável. Um botão de sair
@@ -651,9 +690,358 @@ test.describe('CAMPO · o diagnóstico do aparelho', () => {
       timeout: 15_000,
     });
 
+    // O identificador é lido AGORA, com a ordem ainda na tela: depois de ir
+    // para "Aparelho" o endereço já é outro, e a limpeza do fim iria parar o
+    // cronômetro de uma ordem que não existe.
+    const ordemDoCaso = idDaOrdemNaUrl(page);
+
     await page.getByRole('link', { name: 'Aparelho' }).click();
     await expect(page.getByText(/Ainda há trabalho seu esperando/)).toBeVisible();
 
     await context.setOffline(false);
+
+    /*
+     * O CRONÔMETRO É PARADO AQUI TAMBÉM, e pelo mesmo motivo do caso do
+     * subsolo: o banco admite UM aberto por pessoa.
+     *
+     * Este caso ficou anos sem parar o dele porque começou como um teste de
+     * aviso de saída, que nunca chegava a mandar nada ao servidor. Quando a
+     * fila passou a escoar sozinha ao voltar a rede, o apontamento virou real —
+     * e o caso SEGUINTE passou a receber recusa ao iniciar o seu, com o sintoma
+     * aparecendo lá como "a fila não esvaziou". Um rastro que aponta para o
+     * arquivo errado.
+     */
+    await esperarFilaVazia(page);
+    await pararCronometros(request, ordemDoCaso);
   });
 });
+
+test.describe('CAMPO · SOBREVIVÊNCIA: o dia inteiro, sem rede, com o aplicativo fechado no meio', () => {
+  test('os vinte passos — nada se perde, nada duplica, a fila esvazia', async ({
+    comoTecnico: page,
+    context,
+    request,
+  }) => {
+    /*
+     * ESTE É O TESTE QUE VALE MAIS QUE TODOS OS OUTROS DESTE ARQUIVO.
+     *
+     * Conferir que o service worker existe prova que um arquivo foi registrado.
+     * Este teste prova a PROMESSA: um técnico executa uma OS inteira sem rede,
+     * o sistema derruba o aplicativo no meio, ele reabre ainda sem rede, tudo
+     * continua lá, e quando o sinal volta o trabalho chega ao servidor uma vez
+     * só.
+     *
+     * `context.setOffline(true)` corta a rede no nível do navegador — `fetch`
+     * falha de verdade. E o passo 12 fecha a PÁGINA, não a aba: uma página
+     * fechada leva junto toda a memória do React, e o que sobreviver a isso
+     * sobreviveu porque está no aparelho.
+     */
+    const cab = cabDoTecnico;
+
+    /* ---------------------------------------------------------- passo 1 */
+    await page.goto('/');
+    await sincronizado(page);
+
+    const lista = await request.get(`${apiUrl()}/work-orders?assignee=${E2E.memTecA}`, {
+      headers: cab,
+    });
+    const { items } = await lista.json();
+    const alvo = items.find(
+      (o: { title: string; category: string }) =>
+        o.title === 'Preventiva trimestral do ventilador' && o.category !== 'cancelled'
+    );
+    expect(alvo, 'a massa precisa da OS de preventiva aberta').toBeTruthy();
+
+    const horasAntes = await contarHoras(request, alvo.id);
+
+    await expect(page.getByText('Preventiva trimestral do ventilador')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    /* ---------------------------------------------------------- passo 2 */
+    await context.setOffline(true);
+
+    /* ------------------------------------------------------- passo 3 e 4 */
+    await page.getByText('Preventiva trimestral do ventilador').click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Preventiva trimestral');
+
+    await page.getByRole('button', { name: 'Iniciar cronômetro' }).click();
+    await expect(page.getByText(/(ação guardada|ações guardadas) no aparelho/)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    /* ---------------------------------------------------------- passo 5 */
+    // O checklist é ANEXADO offline — o identificador da resposta nasce no
+    // aparelho, que é o que torna isto possível.
+    await page.getByRole('button', { name: /Preventiva de ventilador pulmonar/ }).click();
+
+    await expect(page.getByText('Alarme sonoro funciona')).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'sim', exact: true }).click();
+    await page.getByLabel('Pressão de pico').fill('28');
+    await page.getByLabel('Pressão de pico').blur();
+    await page.getByRole('button', { name: 'íntegro' }).click();
+
+    // As três respostas ficaram marcadas na tela, vindas do aparelho.
+    await expect(page.getByText('resposta guardada')).toHaveCount(3, { timeout: 15_000 });
+
+    /* ------------------------------------------------------- passo 6 e 7 */
+    // O apontamento de tempo já entrou no passo 4. As fotos entram aqui: a
+    // captura no navegador abre um seletor de arquivo, que o Playwright
+    // intercepta — é o mesmo caminho que um técnico percorre com a câmera.
+    const escolha = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Antes' }).click();
+    const seletor = await escolha;
+    await seletor.setFiles({
+      name: 'evidencia-antes.jpg',
+      mimeType: 'image/jpeg',
+      buffer: Buffer.from(PIXEL_JPEG, 'base64'),
+    });
+
+    /*
+     * A ASSERÇÃO É DENTRO DA LINHA DA FOTO, e não na tela inteira.
+     *
+     * "no aparelho" aparece em três lugares desta tela — a dica do rascunho, o
+     * contador da fila e o estado do anexo —, e cada um fala de uma coisa. Uma
+     * busca solta casaria com o primeiro que encontrasse e o teste passaria sem
+     * olhar o anexo.
+     */
+    const linhaDaFoto = page.getByRole('listitem').filter({ hasText: /^before-/ });
+    await expect(linhaDaFoto).toBeVisible({ timeout: 15_000 });
+    // A foto está NO APARELHO e ainda não chegou ao servidor — e a tela
+    // distingue as duas coisas, que é o ponto.
+    await expect(linhaDaFoto).toContainText('no aparelho');
+
+    /* ---------------------------------------------------------- passo 8 */
+    await page
+      .getByRole('button', { name: /Usei uma unidade de/ })
+      .first()
+      .click();
+
+    /* ---------------------------------------------------------- passo 9 */
+    const diagnostico = 'Célula de O2 saturada; leitura oscilando 6% acima do padrão.';
+    const resolucao = 'Substituída a célula e refeita a calibração de dois pontos.';
+    await page.getByLabel('O que estava acontecendo').fill(diagnostico);
+    await page.getByLabel('O que foi feito').fill(resolucao);
+
+    /* --------------------------------------------------------- passo 10 */
+    await page.getByLabel('Quem está assinando').fill('Ana Enfermeira');
+    await page.getByLabel('Documento (opcional)').fill('123456789');
+
+    /*
+     * Assinar de verdade: um traço no quadro, com o ponteiro.
+     *
+     * O `scrollIntoViewIfNeeded` não é zelo — é necessário. Numa tela de celular
+     * a seção de assinatura fica muito abaixo da dobra, e `boundingBox()`
+     * devolve a posição RELATIVA À JANELA: sem rolar antes, as coordenadas caem
+     * fora da tela e o mouse desenha no vazio. O quadro fica em branco, o botão
+     * nunca habilita, e o teste acusa a assinatura quando o defeito é do gesto.
+     */
+    const quadro = page.getByRole('img', { name: 'Área de assinatura' });
+    await quadro.scrollIntoViewIfNeeded();
+    const caixa = (await quadro.boundingBox())!;
+    await page.mouse.move(caixa.x + 30, caixa.y + caixa.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(caixa.x + 90, caixa.y + caixa.height / 2 - 20, { steps: 8 });
+    await page.mouse.move(caixa.x + 150, caixa.y + caixa.height / 2 + 15, { steps: 8 });
+    await page.mouse.up();
+
+    await page.getByRole('button', { name: 'Guardar assinatura' }).click();
+    await expect(page.getByRole('listitem').filter({ hasText: /^signature-/ })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    /* --------------------------------------------------------- passo 11 */
+    // Nada disso foi ao servidor: continuamos offline desde o passo 2.
+    expect(await contarHoras(request, alvo.id)).toBe(horasAntes);
+
+    const antesDeFechar = await estadoDaFila(page);
+    expect(antesDeFechar.pendentes, 'a fila precisa ter o trabalho todo').toBeGreaterThanOrEqual(6);
+
+    /* --------------------------------------------------------- passo 12 */
+    /*
+     * O APLICATIVO É FECHADO DE VERDADE.
+     *
+     * `page.close()` destrói a página inteira — memória do React, estado dos
+     * componentes, tudo. Um `reload()` seria mais fraco: ele mantém o processo
+     * e algumas coisas sobrevivem por acidente. O que passar daqui passou
+     * porque está no aparelho.
+     */
+    await page.close();
+
+    /* --------------------------------------------------------- passo 13 */
+    const reaberto = await context.newPage();
+    // Ainda offline: o contexto inteiro está sem rede.
+    await reaberto.goto('/');
+    await expect(reaberto.getByRole('heading', { level: 1, name: 'Hoje' })).toBeVisible({
+      timeout: 25_000,
+    });
+
+    /* --------------------------------------------------------- passo 14 */
+    await reaberto.getByText('Preventiva trimestral do ventilador').click();
+    await expect(reaberto.getByRole('heading', { level: 1 })).toContainText('Preventiva trimestral');
+
+    // O TEXTO CONTINUA LÁ — é o que a pessoa levou mais tempo para escrever.
+    await expect(reaberto.getByLabel('O que estava acontecendo')).toHaveValue(diagnostico);
+    await expect(reaberto.getByLabel('O que foi feito')).toHaveValue(resolucao);
+
+    // O CHECKLIST CONTINUA ABERTO, com as respostas — e não voltou para a
+    // lista de modelos, que faria a pessoa anexar um segundo checklist.
+    await expect(reaberto.getByText('Alarme sonoro funciona')).toBeVisible();
+    await expect(reaberto.getByText('resposta guardada')).toHaveCount(3);
+
+    // AS FOTOS CONTINUAM NO APARELHO.
+    await expect(reaberto.getByRole('listitem').filter({ hasText: /^before-/ })).toBeVisible();
+    await expect(reaberto.getByRole('listitem').filter({ hasText: /^signature-/ })).toBeVisible();
+
+    // E A FILA CONTINUA INTEIRA.
+    const depoisDeReabrir = await estadoDaFila(reaberto);
+    expect(depoisDeReabrir.pendentes).toBe(antesDeFechar.pendentes);
+
+    /* --------------------------------------------------------- passo 15 */
+    await context.setOffline(false);
+
+    /* --------------------------------------------------------- passo 16 */
+    // Sem intervenção: o aplicativo escoa sozinho.
+    await expect(reaberto.getByText('tudo enviado')).toBeVisible({ timeout: 60_000 });
+
+    /* ------------------------------------------------------ passos 17-19 */
+    // A PROVA É DO SERVIDOR, e não da tela.
+    expect(await contarHoras(request, alvo.id)).toBe(horasAntes + 1);
+
+    const respostas = await request.get(`${apiUrl()}/work-orders/${alvo.id}/checklists`, {
+      headers: cab,
+    });
+    const corpo = await respostas.json();
+    expect(corpo.items.length, 'um checklist, e não dois').toBe(1);
+
+    const anexosNoServidor = await request.get(`${apiUrl()}/work-orders/${alvo.id}/attachments`, {
+      headers: cab,
+    });
+    if (anexosNoServidor.ok()) {
+      const { items: arquivos } = await anexosNoServidor.json();
+      // Foto + assinatura, uma vez cada.
+      expect(arquivos.length).toBeGreaterThanOrEqual(2);
+    }
+
+    const assinaturas = await request.get(`${apiUrl()}/work-orders/${alvo.id}/signatures`, {
+      headers: cab,
+    });
+    const { items: assinado } = await assinaturas.json();
+    /*
+     * OS BYTES DAS FOTOS TAMBÉM PRECISAM TER CHEGADO.
+     *
+     * Esta conferência é a que encontrou o defeito mais caro deste épico: o
+     * registro do anexo subia, a tela mostrava a foto como capturada, a OS
+     * fechava — e as fatias iam para uma rota que NÃO EXISTIA no servidor. A
+     * fila esvaziava, tudo parecia certo, e a evidência não estava em lugar
+     * nenhum.
+     *
+     * "Enviado" aqui quer dizer o que o aparelho diz depois de o servidor
+     * confirmar o último byte e o resumo criptográfico fechar.
+     */
+    await expect
+      .poll(async () => (await anexosDoAparelho(reaberto)).map((a) => a.estado).sort(), {
+        timeout: 30_000,
+        message: 'as fotos precisam chegar ao servidor, e não só serem registradas',
+      })
+      .toEqual(['enviado', 'enviado']);
+    expect(assinado.length, 'uma assinatura, e não duas').toBe(1);
+
+    const pecas = await request.get(`${apiUrl()}/inventory/work-orders/${alvo.id}/parts`, {
+      headers: cab,
+    });
+    const { items: consumidas } = await pecas.json();
+    expect(consumidas.length, 'uma peça consumida, e não duas').toBe(1);
+
+    /* --------------------------------------------------------- passo 20 */
+    const fim = await estadoDaFila(reaberto);
+    expect(fim.pendentes, 'a fila precisa terminar vazia').toBe(0);
+    expect(fim.bloqueados).toBe(0);
+    expect(fim.atencao, 'nada pode ter virado conflito').toBe(0);
+
+    await reaberto.close();
+  });
+});
+
+/**
+ * O estado da fila, lido do APARELHO e não da tela.
+ *
+ * A tela mostra um número; o que interessa é o que está guardado. Ler direto do
+ * IndexedDB é o que permite afirmar "a fila terminou vazia" sem depender de a
+ * interface ter atualizado.
+ */
+/**
+ * Os anexos, lidos do APARELHO.
+ *
+ * O estado que importa não é o da tela: é o que está guardado. Ler direto do
+ * IndexedDB é o que permite afirmar "a foto chegou" sem depender de a interface
+ * ter atualizado — e foi assim que se descobriu que ela NÃO chegava.
+ */
+async function anexosDoAparelho(
+  page: Page
+): Promise<{ nomeDoArquivo: string; estado: string; ultimoErro: string | null }[]> {
+  return page.evaluate(async () => {
+    const abrir = (): Promise<IDBDatabase> =>
+      new Promise((ok, no) => {
+        const p = indexedDB.open('aurora-campo');
+        p.onsuccess = () => ok(p.result);
+        p.onerror = () => no(p.error);
+      });
+    const todos = (db: IDBDatabase, loja: string): Promise<unknown[]> =>
+      new Promise((ok, no) => {
+        const r = db.transaction(loja, 'readonly').objectStore(loja).getAll();
+        r.onsuccess = () => ok(r.result as unknown[]);
+        r.onerror = () => no(r.error);
+      });
+    const db = await abrir();
+    const anexos = (await todos(db, 'anexos')) as {
+      nomeDoArquivo: string;
+      estado: string;
+      ultimoErro: string | null;
+    }[];
+    db.close();
+    return anexos.map((a) => ({
+      nomeDoArquivo: a.nomeDoArquivo,
+      estado: a.estado,
+      ultimoErro: a.ultimoErro,
+    }));
+  });
+}
+
+async function estadoDaFila(page: Page): Promise<{ pendentes: number; bloqueados: number; atencao: number }> {
+  return page.evaluate(async () => {
+    const abrir = (): Promise<IDBDatabase> =>
+      new Promise((ok, no) => {
+        const p = indexedDB.open('aurora-campo');
+        p.onsuccess = () => ok(p.result);
+        p.onerror = () => no(p.error);
+      });
+    const todos = (db: IDBDatabase, loja: string): Promise<unknown[]> =>
+      new Promise((ok, no) => {
+        const r = db.transaction(loja, 'readonly').objectStore(loja).getAll();
+        r.onsuccess = () => ok(r.result as unknown[]);
+        r.onerror = () => no(r.error);
+      });
+
+    const db = await abrir();
+    const fila = (await todos(db, 'fila')) as { bloqueado: boolean }[];
+    const atencao = await todos(db, 'atencao');
+    db.close();
+    return {
+      pendentes: fila.filter((c) => !c.bloqueado).length,
+      bloqueados: fila.filter((c) => c.bloqueado).length,
+      atencao: atencao.length,
+    };
+  });
+}
+
+/**
+ * Um JPEG mínimo e válido, para a captura de foto ter bytes de verdade.
+ *
+ * Um arquivo falso de texto passaria pelo seletor e falharia no servidor, na
+ * validação de tipo — e o teste acusaria o lugar errado.
+ */
+const PIXEL_JPEG =
+  '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0a' +
+  'HBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAA' +
+  'AAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';

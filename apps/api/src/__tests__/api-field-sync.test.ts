@@ -850,3 +850,186 @@ describe('CAMPO-010 · os equipamentos do corredor, e não só os das ordens', (
     expect(nomes).not.toContain('Beta');
   });
 });
+
+describe('CAMPO-011 · o checklist nasce no aparelho', () => {
+  it('o identificador da resposta pode vir do aparelho, e as respostas o alcançam', async () => {
+    /*
+     * SEM ISTO, O CHECKLIST OFFLINE NÃO EXISTE.
+     *
+     * Responder um item exige o identificador da resposta. Se ele nascesse só no
+     * servidor, o técnico teria de estar online para ANEXAR antes de responder —
+     * e anexar é a primeira coisa que ele faz ao chegar no equipamento, que é
+     * exatamente onde não há rede.
+     *
+     * Com o identificador vindo do aparelho, o anexo e as respostas entram na
+     * fila juntos, na ordem certa, e sobem quando o sinal voltar.
+     */
+    const os = await novaOS('Checklist offline');
+    const modelo = await withTenant(t.db, sysCtx, async (s) => {
+      const [m] = await s.query<{ id: string }>(
+        `SELECT id FROM aurora.checklist_templates WHERE published_at IS NOT NULL LIMIT 1`
+      );
+      return m!.id;
+    });
+
+    // O aparelho decide o identificador ANTES de falar com o servidor.
+    const respostaId = newId();
+
+    const anexo = await http
+      .post(`/v1/work-orders/${os}/checklists`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(newId()) })
+      .send({ template_id: modelo, response_id: respostaId });
+    expect(anexo.status).toBe(201);
+    expect(anexo.body.response_id).toBe(respostaId);
+
+    // E a resposta encontra o checklist, porque o identificador é o mesmo.
+    const itens = await withTenant(t.db, sysCtx, (s) =>
+      s.query<{ id: string; kind: string }>(
+        `SELECT id, kind::text AS kind FROM aurora.checklist_items WHERE template_id = $1 ORDER BY position`,
+        [modelo]
+      )
+    );
+    const booleano = itens.find((i) => i.kind === 'boolean')!;
+
+    const r = await http
+      .post(`/v1/checklist-responses/${respostaId}/answers`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(newId()) })
+      .send({ item_id: booleano.id, boolean: true });
+
+    expect(r.status).toBe(201);
+    expect(r.body.verdict).toBe('pass');
+  });
+
+  it('sem o identificador do aparelho, o servidor continua gerando o dele', async () => {
+    // O caminho de escritório não muda: quem está online não precisa decidir
+    // identificador nenhum.
+    const os = await novaOS('Checklist online');
+    const modelo = await withTenant(t.db, sysCtx, async (s) => {
+      const [m] = await s.query<{ id: string }>(
+        `SELECT id FROM aurora.checklist_templates WHERE published_at IS NOT NULL LIMIT 1`
+      );
+      return m!.id;
+    });
+
+    const r = await http
+      .post(`/v1/work-orders/${os}/checklists`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(newId()) })
+      .send({ template_id: modelo });
+
+    expect(r.status).toBe(201);
+    expect(r.body.response_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+describe('CAMPO-012 · a peça consumida em campo', () => {
+  it('reserva e baixa numa transação só, e o saldo cai', async () => {
+    /*
+     * O caminho de escritório é reservar antes e consumir depois. Em campo isso
+     * não existe: a pessoa está com a peça na mão e o fato já aconteceu. Duas
+     * chamadas produziriam reservas órfãs toda vez que a segunda falhasse — e o
+     * saldo ficaria preso sem ninguém saber por quê.
+     */
+    const os = await novaOS('Consumo de peça');
+
+    const antes = await withTenant(t.db, sysCtx, (s) =>
+      s.query<{ on_hand: string; item_id: string; warehouse_id: string }>(
+        `SELECT on_hand, item_id::text, warehouse_id::text FROM aurora.stock_balances LIMIT 1`
+      )
+    );
+    const saldo = antes[0]!;
+
+    const r = await http
+      .post(`/v1/inventory/work-orders/${os}/parts`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(newId()) })
+      .send({ item_id: saldo.item_id, warehouse_id: saldo.warehouse_id, qty: 2 });
+
+    expect(r.status).toBe(201);
+    expect(r.body.movement_id).toBeTruthy();
+
+    const depois = await withTenant(t.db, sysCtx, (s) =>
+      s.query<{ on_hand: string }>(
+        `SELECT on_hand FROM aurora.stock_balances WHERE item_id = $1 AND warehouse_id = $2`,
+        [saldo.item_id, saldo.warehouse_id]
+      )
+    );
+    expect(Number(depois[0]!.on_hand)).toBe(Number(saldo.on_hand) - 2);
+  });
+
+  it('a peça que acabou é RECUSADA, e o saldo não fica negativo', async () => {
+    /*
+     * O caso de borda que a SPEC lista por extenso: "peça consumida offline que
+     * já não existe no estoque — operação entra em conflito visível; saldo não
+     * fica negativo".
+     *
+     * A recusa precisa chegar como recusa para a fila do aparelho transformá-la
+     * em pendência de atenção, com o trabalho preservado. Um saldo negativo
+     * seria pior do que a recusa: ele parece funcionar.
+     */
+    const os = await novaOS('Peça que acabou');
+    const saldo = (
+      await withTenant(t.db, sysCtx, (s) =>
+        s.query<{ on_hand: string; item_id: string; warehouse_id: string }>(
+          `SELECT on_hand, item_id::text, warehouse_id::text FROM aurora.stock_balances LIMIT 1`
+        )
+      )
+    )[0]!;
+
+    const r = await http
+      .post(`/v1/inventory/work-orders/${os}/parts`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(newId()) })
+      .send({
+        item_id: saldo.item_id,
+        warehouse_id: saldo.warehouse_id,
+        qty: Number(saldo.on_hand) + 1000,
+      });
+
+    expect(r.status).toBeGreaterThanOrEqual(400);
+
+    const depois = await withTenant(t.db, sysCtx, (s) =>
+      s.query<{ on_hand: string }>(
+        `SELECT on_hand FROM aurora.stock_balances WHERE item_id = $1 AND warehouse_id = $2`,
+        [saldo.item_id, saldo.warehouse_id]
+      )
+    );
+    expect(Number(depois[0]!.on_hand)).toBe(Number(saldo.on_hand));
+    expect(Number(depois[0]!.on_hand)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reenviar o mesmo consumo não baixa duas vezes', async () => {
+    // É o mesmo motivo de tudo o mais na fila: o aparelho reenvia quando a
+    // resposta se perde, e uma peça baixada duas vezes é um inventário que não
+    // fecha.
+    const os = await novaOS('Consumo reenviado');
+    const saldo = (
+      await withTenant(t.db, sysCtx, (s) =>
+        s.query<{ on_hand: string; item_id: string; warehouse_id: string }>(
+          `SELECT on_hand, item_id::text, warehouse_id::text FROM aurora.stock_balances LIMIT 1`
+        )
+      )
+    )[0]!;
+
+    const op = newId();
+    const corpo = { item_id: saldo.item_id, warehouse_id: saldo.warehouse_id, qty: 1 };
+
+    const um = await http
+      .post(`/v1/inventory/work-orders/${os}/parts`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(op) })
+      .send(corpo);
+    const dois = await http
+      .post(`/v1/inventory/work-orders/${os}/parts`)
+      .set({ ...auth(EMAIL_TEC), ...operacao(op) })
+      .send(corpo);
+
+    expect(um.status).toBe(201);
+    expect(dois.status).toBe(201);
+    expect(dois.body.movement_id).toBe(um.body.movement_id);
+
+    const depois = await withTenant(t.db, sysCtx, (s) =>
+      s.query<{ on_hand: string }>(
+        `SELECT on_hand FROM aurora.stock_balances WHERE item_id = $1 AND warehouse_id = $2`,
+        [saldo.item_id, saldo.warehouse_id]
+      )
+    );
+    expect(Number(depois[0]!.on_hand)).toBe(Number(saldo.on_hand) - 1);
+  });
+});

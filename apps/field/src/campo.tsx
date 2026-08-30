@@ -37,7 +37,12 @@ import {
   type AnexoPendente,
   type EstadoDosAnexos,
 } from './arquivos';
-import { capturarEvidencia, registrarChaveDoServidor } from './anexos';
+import {
+  capturarEvidencia,
+  guardarEvidencia,
+  registrarChaveDoServidor,
+  resolverReferenciasAoAnexo,
+} from './anexos';
 import {
   pluginDeArquivosDoAparelho,
   resolverArmazenamento,
@@ -116,9 +121,21 @@ export interface Campo {
     caminho: string;
     corpo: unknown;
     rotulo: string;
+    id?: string;
   }): Promise<string>;
   /** Captura uma evidência. `null` quando a pessoa desiste. */
   capturarFoto(workOrderId: string, finalidade: string): Promise<AnexoPendente | null>;
+  /**
+   * Guarda bytes que já existem como evidência — a assinatura desenhada no dedo
+   * produz um PNG sem passar por câmera nenhuma, e precisa terminar no MESMO
+   * lugar que a foto: mesma fila, mesma retomada, mesmos defeitos conhecidos.
+   */
+  anexarBytes(
+    workOrderId: string,
+    finalidade: string,
+    bytes: Uint8Array,
+    tipo: string
+  ): Promise<AnexoPendente | null>;
   resolverAtencao(id: string, opcoes: { desbloquear: boolean }): Promise<void>;
   descartar(id: string): Promise<void>;
   atualizarEstado(): Promise<void>;
@@ -242,6 +259,14 @@ export function CampoProvider({
        * libera o envio dos bytes. A fila não conhece anexo — ela avisa que o
        * comando passou, e quem conhece faz o resto.
        */
+      /*
+       * A assinatura aponta para o anexo pelo identificador DO SERVIDOR, que só
+       * existe depois do registro. Ver `resolverReferenciasAoAnexo`.
+       */
+      async resolverCorpo(c) {
+        if (!anexosRef.current) return { pronto: true, corpo: c.corpo };
+        return resolverReferenciasAoAnexo(anexosRef.current, c.corpo);
+      },
       async aoConcluir(c, corpo) {
         if (!anexosRef.current) return;
         if (!c.caminho.endsWith('/attachments')) return;
@@ -296,7 +321,14 @@ export function CampoProvider({
         await enviarAnexosPendentes(anexos, arquivos, {
           agora: () => new Date(),
           async enviarFatia({ anexo, offset, pedaco, ultima }) {
-            const resposta = await fetch(`${API}/field/attachments/${anexo.id}/bytes`, {
+            /*
+             * O IDENTIFICADOR DO SERVIDOR, e não o local.
+             *
+             * O `id` daqui é do aparelho; a linha no banco tem chave própria.
+             * Mandar o local dava 404 numa rota que já existia — e o anexo
+             * ficava "falhou" sem que ninguém entendesse por quê.
+             */
+            const resposta = await fetch(`${API}/field/attachments/${anexo.idNoServidor ?? anexo.id}/bytes`, {
               method: 'PUT',
               headers: cabecalhos({
                 'content-type': 'application/octet-stream',
@@ -418,6 +450,27 @@ export function CampoProvider({
     [fila, arquivos, anexos, dispositivo, atualizarEstado]
   );
 
+  const anexarBytes = useCallback<Campo['anexarBytes']>(
+    async (workOrderId, finalidade, bytes, tipo) => {
+      if (!fila || !arquivos || !anexos) return null;
+      const anexo = await guardarEvidencia({
+        workOrderId,
+        finalidade,
+        arquivos,
+        anexos,
+        novoId,
+        agora: () => new Date(),
+        bytes,
+        tipo,
+        enfileirar: (e) => fila.enfileirar(e),
+      });
+      await atualizarEstado();
+      void sincronizarRef.current();
+      return anexo;
+    },
+    [fila, arquivos, anexos, atualizarEstado]
+  );
+
   const resolverAtencao = useCallback<Campo['resolverAtencao']>(
     async (id, opcoes) => {
       if (!fila) return;
@@ -481,6 +534,7 @@ export function CampoProvider({
     sincronizar,
     enfileirar,
     capturarFoto,
+    anexarBytes,
     resolverAtencao,
     descartar,
     atualizarEstado,
@@ -513,4 +567,72 @@ export function useColecaoLocal<T>(nome: string): { linhas: T[]; carregando: boo
   }, [base, nome, ultimaSincronizacao, estado.pendentes, estado.atencao]);
 
   return { linhas, carregando };
+}
+
+/**
+ * Um campo de formulário que SOBREVIVE ao aplicativo ser derrubado.
+ *
+ * O sistema operacional derruba o aplicativo de campo o tempo todo — memória
+ * apertada, a pessoa trocando de aplicativo, a tela apagando por dez minutos.
+ * Um `useState` some junto, e o que some é o diagnóstico que o técnico digitou
+ * na frente do equipamento, que é a informação mais cara da OS inteira.
+ *
+ * Este gancho grava no aparelho a cada tecla, com um respiro: um `setTimeout`
+ * curto junta as teclas de uma palavra numa gravação só. Gravar a cada tecla
+ * sem o respiro faria uma escrita no IndexedDB por caractere — e a digitação
+ * ficaria travada num aparelho lento, que é onde ela mais precisa ser fluida.
+ *
+ * O respiro é de 400ms, e não de dois segundos: o custo de perder o que foi
+ * digitado nos últimos instantes antes de o sistema derrubar o aplicativo é
+ * alto, e uma gravação de poucos bytes é barata.
+ */
+export function useRascunho(
+  chave: string,
+  inicial = ''
+): [string, (v: string) => void, { carregado: boolean }] {
+  const { base } = useCampo();
+  const [valor, setValor] = useState(inicial);
+  const [carregado, setCarregado] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    void base
+      .colecao<{ valor: string }>('rascunhos')
+      .ler(chave)
+      .then((r) => {
+        if (!vivo) return;
+        /*
+         * O QUE ESTÁ NO APARELHO VENCE o valor inicial.
+         *
+         * Sem esta ordem, reabrir o aplicativo mostraria o campo vazio por um
+         * instante e depois o texto — e, pior, uma tecla digitada nesse
+         * instante gravaria por cima do que estava guardado.
+         */
+        if (r?.valor !== undefined) setValor(r.valor);
+        setCarregado(true);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [base, chave]);
+
+  const definir = useCallback(
+    (v: string) => {
+      setValor(v);
+      if (!carregado) return;
+      const t = window.setTimeout(() => {
+        void base.colecao<{ valor: string }>('rascunhos').gravar(chave, { valor: v });
+      }, 400);
+      return () => window.clearTimeout(t);
+    },
+    [base, chave, carregado]
+  );
+
+  return [valor, definir, { carregado }];
+}
+
+/** Apaga o rascunho depois de ele virar comando na fila. */
+export async function limparRascunhos(base: ArmazenamentoOffline, chaves: readonly string[]): Promise<void> {
+  const c = base.colecao<{ valor: string }>('rascunhos');
+  for (const k of chaves) await c.apagar(k);
 }

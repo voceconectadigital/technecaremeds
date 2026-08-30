@@ -8,7 +8,7 @@ import { DomainErrorFilter } from './common/error.filter';
 import { PermissionsGuard } from './common/permissions.guard';
 import { Reflector } from '@nestjs/core';
 import { createLogger } from './common/logger';
-import { json, urlencoded } from 'express';
+import { json, raw, urlencoded } from 'express';
 
 export async function createApp(deps: AppDeps): Promise<INestApplication> {
   const logger = deps.logger ?? createLogger(deps.env.AURORA_LOG_LEVEL, { app: 'aurora-api' });
@@ -17,6 +17,20 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   // qualquer validação nossa — e recusa com 500, porque o erro nasce no
   // middleware. 12 MB cobre as 50 mil linhas que a rota aceita (§07) com folga,
   // e continua sendo um teto: acima dele o cliente recebe 413, não 500.
+  /*
+   * O CORPO CRU VEM ANTES DO JSON, e só neste caminho.
+   *
+   * A fatia de uma foto é `application/octet-stream`: `express.json` a
+   * ignoraria, o corpo chegaria vazio e o servidor gravaria um arquivo
+   * truncado com aparência de sucesso. O interpretador cru é montado no
+   * endereço exato do envio — o resto da API continua sem aceitar binário, que
+   * é uma porta que nada mais precisa.
+   *
+   * O teto de 8 MB é largo de propósito: o aparelho manda fatias de 256 kB, e
+   * qualquer coisa perto deste número já é sinal de defeito, não de foto
+   * grande.
+   */
+  app.use('/v1/field/attachments', raw({ type: 'application/octet-stream', limit: '8mb' }));
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: false, limit: '1mb' }));
   /*
@@ -50,6 +64,16 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
         'x-aurora-organization',
         'x-request-id',
         'x-aurora-client-operation',
+        /*
+         * O envio retomável de fotos. Sem estes quatro na lista, o navegador
+         * recusa a requisição inteira no `preflight` e a tela mostra "Failed
+         * to fetch" — que foi exatamente o sintoma com que este defeito
+         * apareceu, e que não aponta para lugar nenhum.
+         */
+        'x-aurora-offset',
+        'x-aurora-sha256',
+        'x-aurora-storage-key',
+        'x-aurora-final',
       ],
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       maxAge: 600,

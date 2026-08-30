@@ -61,3 +61,6 @@ apps/field/ios/App/App/capacitor.config.json
 apps/field/ios/App/App/capacitor.plugins.json
 apps/field/ios/App/Pods/
 apps/field/ios/App/Podfile.lock
+
+# Bytes dos anexos em desenvolvimento e homologação — nunca versionados.
+.aurora/

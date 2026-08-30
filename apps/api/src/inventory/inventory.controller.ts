@@ -30,12 +30,15 @@ import {
   reverseMovement,
   setMinimum,
   workOrderParts,
+  reserve,
+  consume,
   type Database,
 } from '@aurora/db';
 import { ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { runFieldOperation } from '../common/client-operation';
 import type { AuroraRequest } from '../common/context.middleware';
 
 /**
@@ -114,6 +117,52 @@ export class InventoryController {
     const woId = uuidParam(id, 'id');
     const items = await withTenant(this.db, ctx, (s) => workOrderParts(s, woId));
     return { items };
+  }
+
+  /**
+   * O TÉCNICO PEGOU A PEÇA. Reserva e baixa, numa transação só.
+   *
+   * O caminho de escritório é reservar antes e consumir depois — a reserva
+   * segura o saldo entre "vou precisar" e "usei". Em campo isso não existe: a
+   * pessoa está com a peça na mão e o fato já aconteceu. Obrigá-la a duas
+   * chamadas produziria reservas órfãs toda vez que o segundo passo falhasse, e
+   * o saldo ficaria preso sem ninguém saber por quê.
+   *
+   * A ATOMICIDADE É O PONTO. As duas operações rodam na mesma transação: ou o
+   * consumo existe inteiro, ou o saldo fica como estava. Uma reserva sem
+   * consumo é estoque bloqueado que ninguém liberou.
+   *
+   * E É AQUI QUE A SPEC PEDE CONFLITO VISÍVEL: "peça consumida offline que já
+   * não existe no estoque — a operação entra em conflito visível, o saldo não
+   * fica negativo, e o técnico escolhe outro almoxarifado ou registra
+   * requisição". Quem garante que o saldo não fica negativo é a restrição do
+   * banco; o que este método faz é deixar a recusa chegar como recusa, para a
+   * fila do aparelho transformá-la em pendência de atenção com o trabalho
+   * preservado.
+   */
+  @Post('work-orders/:id/parts')
+  @RequirePermissions('inventory.move')
+  async consumirPeca(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>
+  ): Promise<{ movement_id: string; reservation_id: string }> {
+    const woId = uuidParam(id, 'id');
+    const itemId = uuidParam(body.item_id, 'item_id');
+    const warehouseId = uuidParam(body.warehouse_id, 'warehouse_id');
+
+    const qty = Number(body.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new ValidationError('a quantidade consumida deve ser um número positivo', {
+        field: 'qty',
+      });
+    }
+
+    return runFieldOperation(this.db, req, 'POST /work-orders/:id/parts', body, async (s) => {
+      const reservationId = await reserve(s, woId, itemId, warehouseId, qty);
+      const movementId = await consume(s, reservationId, qty);
+      return { movement_id: movementId, reservation_id: reservationId };
+    });
   }
 
   /**

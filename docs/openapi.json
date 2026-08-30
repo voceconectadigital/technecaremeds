@@ -6296,6 +6296,85 @@
         ]
       }
     },
+    "/v1/field/attachments/{id}/bytes": {
+      "put": {
+        "operationId": "FieldUploadController.bytes",
+        "summary": "(sem contrato) FieldUploadController.bytes",
+        "tags": [
+          "FieldUpload"
+        ],
+        "x-aurora-permissions": [
+          "work_order.execute"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/field-upload.controller.ts",
+        "x-aurora-contract": "ausente",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/field/attention/{id}/resolve": {
       "post": {
         "operationId": "field.resolveConflict",
@@ -12625,6 +12704,83 @@
                     "items"
                   ]
                 }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "InventoryController.consumirPeca",
+        "summary": "(sem contrato) InventoryController.consumirPeca",
+        "tags": [
+          "Inventory"
+        ],
+        "x-aurora-permissions": [
+          "inventory.move"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/inventory.controller.ts",
+        "x-aurora-contract": "ausente",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },

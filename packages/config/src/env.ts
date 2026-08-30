@@ -69,6 +69,15 @@ export const envSchema = z
      * lista precisa ser explícita — nunca deduzida.
      */
     AURORA_CORS_ORIGINS: z.string().default(''),
+    /**
+     * Onde ficam os bytes dos anexos.
+     *
+     * Um diretório, e nada mais: a homologação do cliente não pode depender de
+     * serviço pago, e um caminho em disco atende sem conta, sem chave e sem
+     * fatura. Trocar por armazenamento de objetos é trocar o adaptador — a
+     * porta `ArmazenamentoDeObjetos` existe para isso.
+     */
+    AURORA_ARQUIVOS_DIR: z.string().default('.aurora/arquivos'),
 
     AURORA_ALLOW_UNSAFE_DEV: booleanish.default(false),
   })

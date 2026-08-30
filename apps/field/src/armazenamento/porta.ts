@@ -94,6 +94,23 @@ export const COLECOES = [
    * base de dados com o que pertence ao sistema de arquivos.
    */
   'anexos',
+  /**
+   * O QUE O TÉCNICO DIGITOU E AINDA NÃO ENVIOU.
+   *
+   * Diagnóstico, resolução, nome de quem assina, quantidade de peça. São campos
+   * de formulário — não são comandos, e por isso não pertencem à fila: enfileirar
+   * cada tecla produziria centenas de operações para um texto que ainda está
+   * sendo escrito.
+   *
+   * Mas eles precisam SOBREVIVER, e é isso que esta coleção existe para
+   * garantir. Guardá-los só na memória do React significa perdê-los quando o
+   * sistema derrubar o aplicativo — que é o comportamento normal de um celular
+   * com pouca memória, e acontece no meio de uma OS, sem aviso.
+   *
+   * O critério do épico é literal: fechar o aplicativo, reabrir ainda offline, e
+   * TUDO continuar lá.
+   */
+  'rascunhos',
   /** Marcas: último `synced_at`, identidade, versão do pacote. */
   'meta',
 ] as const;
