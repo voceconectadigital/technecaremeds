@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button, Card, Field, Input } from '@aurora/ui';
-import { useSession } from '@aurora/app-kit';
+import { useSession, MARCA } from '@aurora/app-kit';
 
 export function EntrarPage() {
   const { signIn } = useSession();
@@ -68,7 +68,7 @@ export function EntrarPage() {
               </svg>
             </span>
             <div>
-              <h1 className="text-xl font-semibold text-text">Aurora</h1>
+              <h1 className="text-xl font-semibold text-text">{MARCA.produto}</h1>
               <p className="mt-1 text-sm text-muted">Entre para continuar.</p>
             </div>
           </header>

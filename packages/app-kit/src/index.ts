@@ -43,3 +43,4 @@ export { lerSessaoGuardada, CHAVE_TOKEN, CHAVE_ORG } from './session-guard';
 export { ThemeProvider, useTheme } from './theme';
 export type { Theme } from './theme';
 export { useUrlState } from './url-state';
+export { MARCA } from './marca.gerada';

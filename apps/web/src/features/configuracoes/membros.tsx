@@ -24,7 +24,7 @@ import {
   useToast,
 } from '@aurora/ui';
 import { membersInvite, membersList, membersSuspend, type Member } from '@aurora/contracts';
-import { ApiError, Can, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { ApiError, Can, useApiMutation, useApiQuery, usePermissions, MARCA } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { GavetaDeAcesso } from './acesso';
@@ -212,7 +212,7 @@ function DialogoConvite({ open, onOpenChange }: { open: boolean; onOpenChange: (
                     toast.success(
                       `${nome} foi convidada`,
                       reaproveitou
-                        ? 'Esta pessoa já usava a Aurora em outra organização e agora tem acesso aqui também.'
+                        ? `Esta pessoa já usava o ${MARCA.produto} em outra organização e agora tem acesso aqui também.`
                         : 'O acesso já está valendo.'
                     );
                     limpar();

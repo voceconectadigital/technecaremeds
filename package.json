@@ -19,7 +19,7 @@
     "format:check": "prettier --check .",
     "spec:build": "node tools/spec/build-v0.2.mjs",
     "spec:audit": "node tools/spec/audit.mjs docs/AURORA-CMMS-SPEC-v0.2.md",
-    "verify": "npm run spec:audit && npm run typecheck && npm run lint && npm run openapi:check && npm run test",
+    "verify": "npm run spec:audit && npm run typecheck && npm run lint && npm run marca:check && npm run openapi:check && npm run test",
     "db:migrate": "node tools/db/run.mjs migrate",
     "db:seed": "node tools/db/run.mjs seed",
     "db:status": "node tools/db/run.mjs status",
@@ -33,7 +33,9 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:portal": "vite --config apps/portal/vite.config.ts --port 5312 --strictPort",
-    "e2e:field": "vite build --config apps/field/vite.config.ts && vite preview --config apps/field/vite.config.ts --port 5313 --strictPort"
+    "e2e:field": "vite build --config apps/field/vite.config.ts && vite preview --config apps/field/vite.config.ts --port 5313 --strictPort",
+    "marca": "node tools/marca/aplicar.mjs",
+    "marca:check": "node tools/marca/aplicar.mjs --check"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

@@ -1,0 +1,53 @@
+{
+  "$comentario": [
+    "A MARCA MORA AQUI, e em nenhum outro lugar.",
+    "",
+    "O cliente ainda NÃO aprovou um nome comercial. 'Aurora' é NOME DE TRABALHO —",
+    "codinome interno enquanto a decisão não vem —, e a homologação vai mostrá-lo",
+    "na tela. Quando o nome definitivo for escolhido, a troca precisa ser uma",
+    "edição neste arquivo seguida de `npm run marca`, e não uma caçada a strings",
+    "em cinco aplicações, dois projetos nativos e três arquivos de manifesto.",
+    "",
+    "O que NÃO está aqui, de propósito: `x-aurora-*` nos cabeçalhos HTTP,",
+    "`aurora:` nas chaves de armazenamento, `aurora_app` nos papéis do banco e",
+    "`@aurora/*` nos pacotes. Esses são NAMESPACES TÉCNICOS, não marca — trocá-los",
+    "junto com o nome comercial quebraria sessões guardadas, migrations aplicadas e",
+    "a compatibilidade da fila offline de quem já tem trabalho no aparelho.",
+    "",
+    "A separação é a razão de este arquivo existir: sem ela, 'renomear o produto'",
+    "e 'renomear o sistema' viram a mesma tarefa, e a segunda é irreversível."
+  ],
+
+  "produto": "Aurora",
+  "descricao": "Gestão de ativos e manutenção",
+
+  "aplicacoes": {
+    "web": {
+      "titulo": "Aurora",
+      "descricao": "Gestão de ativos e manutenção"
+    },
+    "portal": {
+      "titulo": "Portal — Aurora",
+      "nomeNaTela": "Portal do cliente",
+      "descricao": "Acompanhe seus chamados e abra novos, de onde estiver."
+    },
+    "campo": {
+      "titulo": "Campo — Aurora",
+      "nomeNaTela": "Aurora Campo",
+      "nomeCurto": "Aurora Campo",
+      "descricao": "Executa ordens de serviço em campo, com ou sem rede."
+    }
+  },
+
+  "$naoDefinitivo": {
+    "$comentario": [
+      "Identificadores que NÃO podem ser congelados antes de o cliente decidir.",
+      "Trocar qualquer um deles depois de publicado cria um aplicativo novo, sem",
+      "as instalações e sem as avaliações. Estão aqui para ficarem visíveis, e",
+      "não para serem usados como se fossem definitivos."
+    ],
+    "appId": "br.com.aurora.field",
+    "esquemaDeLinkProfundo": "aurora-campo",
+    "situacao": "A VALIDAR — nome comercial não aprovado pelo cliente"
+  }
+}

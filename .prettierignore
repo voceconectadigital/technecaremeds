@@ -6,3 +6,9 @@ package-lock.json
 .tsc-out/
 apps/*/android/
 apps/*/ios/
+
+# Arquivo GERADO por `npm run marca` a partir de marca.config.json.
+# Formatá-lo faria a conferência (`marca:check`) acusar divergência a cada
+# execução do prettier — o gerador escreve, o prettier reescreve, e os dois
+# discordam para sempre. Quem manda na forma dele é o gerador.
+packages/app-kit/src/marca.gerada.ts

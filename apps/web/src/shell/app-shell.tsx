@@ -18,6 +18,7 @@ import { Menu as MenuIcon, X } from 'lucide-react';
 import { Button, Breadcrumbs, type Crumb, cn } from '@aurora/ui';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
+import { MARCA } from '@aurora/app-kit';
 
 export interface AppShellProps {
   /** Título da página. Vira o `<h1>` e o título do documento. */
@@ -38,7 +39,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
   useEffect(() => {
     // O título do documento é o que aparece na aba e no histórico. Sem ele,
     // dez abas da Aurora ficam indistinguíveis.
-    document.title = `${title} · Aurora`;
+    document.title = `${title} · ${MARCA.produto}`;
   }, [title]);
 
   useEffect(() => {

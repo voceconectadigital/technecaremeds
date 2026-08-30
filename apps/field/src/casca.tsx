@@ -21,6 +21,7 @@
 import { Link, Outlet, useRouterState } from '@tanstack/react-router';
 import { CloudOff, ListChecks, QrCode, RefreshCw, TriangleAlert, User } from 'lucide-react';
 import { useCampo } from './campo';
+import { MARCA } from '@aurora/app-kit';
 
 function Pendencias() {
   const { estado, sincronizando, online, ultimaSincronizacao } = useCampo();
@@ -118,7 +119,7 @@ export function Casca() {
       </a>
 
       <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-border-subtle bg-surface px-3 py-2">
-        <span className="text-sm font-semibold text-text">Aurora Campo</span>
+        <span className="text-sm font-semibold text-text">{MARCA.campo.nomeNaTela}</span>
         <Pendencias />
       </header>
 

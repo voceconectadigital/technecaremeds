@@ -18,6 +18,7 @@
  * adaptador. É esse o ponto de ter porta.
  */
 import { COLECOES, copiaJson, type ArmazenamentoOffline, type Colecao } from './porta';
+import { MARCA } from '@aurora/app-kit';
 
 const VERSAO = 1;
 
@@ -39,7 +40,7 @@ export async function armazenamentoIndexedDb(nome = 'aurora-campo'): Promise<Arm
      * para a pessoa: ela pelo menos sabe o que fazer.
      */
     pedido.onblocked = () =>
-      recusar(new Error('Outra aba do Aurora está aberta. Feche as outras abas e recarregue.'));
+      recusar(new Error(`Outra aba do ${MARCA.produto} está aberta. Feche as outras abas e recarregue.`));
   });
 
   function transacao<T>(

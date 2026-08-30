@@ -8,7 +8,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { cn, Tooltip } from '@aurora/ui';
-import { usePermissions, useSessionQuery } from '@aurora/app-kit';
+import { usePermissions, useSessionQuery, MARCA } from '@aurora/app-kit';
 import { MAIN_NAV, SETTINGS_NAV, type NavItem } from './navigation';
 
 export interface SidebarProps {
@@ -36,7 +36,9 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
         <div className="min-w-0 flex-1">
           {/* O nome da organização fica AQUI, e não escondido num menu: quem
               atende duas empresas precisa saber em qual está antes de agir. */}
-          <p className="truncate text-sm font-semibold text-text">{sessao?.organization.name ?? 'Aurora'}</p>
+          <p className="truncate text-sm font-semibold text-text">
+            {sessao?.organization.name ?? MARCA.produto}
+          </p>
         </div>
         {header}
       </div>

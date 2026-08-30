@@ -16,7 +16,26 @@ const booleanish = z
 
 export const envSchema = z
   .object({
+    /*
+     * `NODE_ENV` é o MODO DE EXECUÇÃO, e continua com os três valores da
+     * convenção do Node — meia dúzia de ferramentas ramifica nele, e inventar um
+     * quarto valor faria o Vite, o React e o próprio Node tratarem homologação
+     * como desenvolvimento.
+     */
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+
+    /*
+     * `AURORA_AMBIENTE` é QUAL IMPLANTAÇÃO ESTA É, e é outra pergunta.
+     *
+     * Uma homologação roda com build de produção — `NODE_ENV=production` — e
+     * mesmo assim não é produção: os dados são de teste, o domínio é interno, e
+     * as travas precisam ser diferentes. Sem esta variável, "é produção?" e "foi
+     * compilado como produção?" viram a mesma pergunta, e a resposta errada
+     * libera numa das duas o que só podia valer na outra.
+     */
+    AURORA_AMBIENTE: z
+      .enum(['desenvolvimento', 'teste', 'homologacao', 'producao'])
+      .default('desenvolvimento'),
     AURORA_PORT: z.coerce.number().int().positive().max(65535).default(3000),
     AURORA_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
@@ -81,22 +100,66 @@ export const envSchema = z
         }
       }
     }
-    // trava de segurança: em produção o papel de aplicação é obrigatório
-    if (env.NODE_ENV === 'production') {
+    /*
+     * AS TRAVAS VALEM PARA HOMOLOGAÇÃO TAMBÉM, e essa é a decisão que importa.
+     *
+     * Uma homologação é acessada pelo CLIENTE, por uma rede que não é a nossa.
+     * Tratá-la como "quase desenvolvimento" é o que produz o desastre clássico:
+     * um ambiente que aceita entrar com qualquer e-mail, sem senha, exposto na
+     * internet, com dado que alguém achou que era de mentira.
+     *
+     * Por isso as duas travas abaixo consideram `homologacao` e `producao`
+     * juntas, e só desenvolvimento e teste ficam de fora.
+     */
+    const exposto = env.AURORA_AMBIENTE === 'producao' || env.AURORA_AMBIENTE === 'homologacao';
+
+    /*
+     * `NODE_ENV=production` CONTINUA VALENDO SOZINHO como sinal de "não é a
+     * máquina de quem desenvolve".
+     *
+     * A primeira versão desta mudança trocou a condição por `exposto`, e com
+     * isso enfraqueceu uma trava que já existia: um processo compilado como
+     * produção, sem `AURORA_AMBIENTE` definido, voltava a aceitar o atalho de
+     * desenvolvimento. A prova antiga acusou — e ela estava certa.
+     *
+     * As duas condições somam, não se substituem.
+     */
+    const naoEhMaquinaDeDesenvolvimento = env.NODE_ENV === 'production' || exposto;
+
+    if (naoEhMaquinaDeDesenvolvimento) {
       if (!env.AURORA_DB_APP_ROLE) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['AURORA_DB_APP_ROLE'],
-          message: 'em produção o papel de aplicação é obrigatório — sem ele a API rodaria como owner',
+          message:
+            'o papel de aplicação é obrigatório fora de desenvolvimento — sem ele a API rodaria como owner, e a RLS deixaria de valer',
         });
       }
-      if (env.AURORA_ALLOW_UNSAFE_DEV) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['AURORA_ALLOW_UNSAFE_DEV'],
-          message: 'AURORA_ALLOW_UNSAFE_DEV não pode estar ativo em produção',
-        });
-      }
+    }
+
+    if (naoEhMaquinaDeDesenvolvimento && env.AURORA_ALLOW_UNSAFE_DEV) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AURORA_ALLOW_UNSAFE_DEV'],
+        message:
+          'AURORA_ALLOW_UNSAFE_DEV não pode estar ativo em produção nem em ambiente exposto (homologação): ele aceita entrar com qualquer e-mail, sem senha',
+      });
+    }
+
+    /*
+     * E O PROVEDOR DE IDENTIDADE PRECISA SER REAL nos dois.
+     *
+     * O provedor local existe para a suíte e para a máquina de quem desenvolve.
+     * Deixá-lo valendo numa homologação seria a mesma porta aberta por outro
+     * caminho — a trava acima recusa o atalho, e esta recusa o provedor.
+     */
+    if (exposto && env.AURORA_AUTH_PROVIDER === 'local') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AURORA_AUTH_PROVIDER'],
+        message:
+          'em homologação e em produção a identidade precisa vir de um provedor real; o provedor local entra sem senha',
+      });
     }
   });
 

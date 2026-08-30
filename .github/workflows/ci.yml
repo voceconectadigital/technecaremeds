@@ -46,6 +46,14 @@ jobs:
       - name: Contratos e OpenAPI
         run: npm run openapi:check
 
+      # O nome do produto ainda NÃO foi aprovado pelo cliente. Ele mora em
+      # `marca.config.json` e é carimbado nas superfícies que não conseguem
+      # importar nada — os três `index.html`, o manifesto do PWA, o
+      # `strings.xml` e o `Info.plist`. Esta conferência acusa quem editar a
+      # superfície em vez da fonte, que é como uma tela fica para trás na troca.
+      - name: Marca centralizada
+        run: npm run marca:check
+
       - name: Verificação de segredos versionados
         run: node tools/ci/check-secrets.mjs
 
