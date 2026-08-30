@@ -46,8 +46,25 @@ for (const v of LARGURAS) {
     test(`${caminho} cabe em ${v.width}×${v.height} (${v.nome})`, async ({ comoCoordenadorA: page }) => {
       await page.setViewportSize({ width: v.width, height: v.height });
       await page.goto(caminho);
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+      const titulo = page.getByRole('heading', { level: 1 });
+      await expect(titulo).toBeVisible({ timeout: 15_000 });
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
+
+      /*
+       * O TÍTULO PRECISA TER LARGURA DE VERDADE, e não só estar "visível".
+       *
+       * "Visível" é um limiar baixo: um contêiner esmagado a poucos pixels
+       * ainda passa em alguns arranjos, e o texto some sem a asserção reclamar.
+       * Foi assim que este defeito atravessou esta máquina e só apareceu na
+       * integração contínua, em Linux, onde as fontes são outras e as ações do
+       * cabeçalho ficam alguns pixels mais largas.
+       *
+       * 80px é o piso: abaixo disso não cabe nem uma palavra com reticências, e
+       * o que a pessoa vê é um cabeçalho sem nome.
+       */
+      const caixa = await titulo.boundingBox();
+      expect(caixa, 'o título não tem caixa').not.toBeNull();
+      expect(caixa!.width, 'o título foi esmagado pelas ações do cabeçalho').toBeGreaterThan(80);
 
       /*
        * 1. A PÁGINA NÃO ROLA DE LADO.

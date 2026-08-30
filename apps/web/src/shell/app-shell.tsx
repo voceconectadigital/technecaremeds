@@ -131,21 +131,56 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
           <section
             aria-labelledby="titulo-da-pagina"
             /*
-              EMPILHA NO ESTREITO, e por um defeito medido.
-              
+              EMPILHA ATÉ 1024px, e o limiar subiu por um defeito medido DUAS
+              vezes.
+
               Era `flex` numa linha só com as ações em `shrink-0`. Em 390px as
               ações da tela de ordens — o alternador mais o par Quadro/Lista —
-              tomavam a largura inteira, o contêiner do título encolhia a zero,
-              e o `<h1>` DESAPARECIA. A auditoria de larguras acusou:
-              "expected visible, received hidden".
-              
+              tomavam a largura inteira, o contêiner do título encolhia a zero, e
+              o `<h1>` DESAPARECIA: "expected visible, received hidden".
+
+              A correção de então empilhou abaixo de 640px, e o defeito voltou em
+              768px — na integração contínua, em Linux, onde as fontes são outras
+              e as mesmas ações ficam alguns pixels mais largas. Foi a primeira
+              execução da CI que o mostrou; esta máquina nunca mostraria.
+
+              O limiar agora é 1024px, e não é um número escolhido para caber:
+              abaixo dele NÃO HÁ largura para as duas coisas na mesma linha. As
+              ações desta aplicação são densas por natureza — alternadores,
+              grupos de modo, botões com rótulo — e num tablet em pé o normal é o
+              título acima e a barra de ações abaixo, cada um com a largura
+              inteira. Espremer os dois numa linha é o que produzia a escolha
+              entre um título invisível e uma página que rola de lado.
+
               Um título invisível não é só estética: é o `<h1>` da página, o
               primeiro item do índice de quem usa leitor de tela e a única
               confirmação de onde a pessoa está.
             */
-            className="flex flex-col gap-2 border-b border-border bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4 md:px-6"
+            className="flex flex-col gap-2 border-b border-border bg-surface px-4 py-3 md:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4"
           >
-            <div className="min-w-0">
+            {/*
+              O TÍTULO TEM PISO DE LARGURA, e o piso é a correção de um defeito
+              que voltou.
+
+              A primeira versão empilhava abaixo de `sm` porque em 390px as ações
+              esmagavam o contêiner do título a zero e o `<h1>` sumia. Acima de
+              640px o arranjo volta a ser uma linha — e ali o mesmo defeito
+              continuava possível: `min-w-0` autoriza encolher até zero, e
+              `truncate` num contêiner de largura zero não mostra nada.
+
+              Ele reapareceu em 768px, e não nesta máquina: na integração
+              contínua, em Linux, onde as fontes são outras e as ações da tela de
+              ordens — alternador mais o par Quadro/Lista — ficam alguns pixels
+              mais largas. A auditoria de larguras acusou "expected visible,
+              received hidden" com o `<h1>` presente no DOM.
+
+              `min-w-40` garante 10rem para o título em qualquer largura. Ele
+              trunca com reticências dentro desse espaço, que é o comportamento
+              certo; o que não pode é desaparecer. Um título invisível é o `<h1>`
+              da página, o primeiro item do índice de quem usa leitor de tela e a
+              única confirmação de onde a pessoa está.
+            */}
+            <div className="min-w-40 flex-1">
               {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-1" />}
               {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
                   não vê a tela. */}
@@ -154,9 +189,16 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               </h1>
               {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
             </div>
-            {/* `flex-wrap` e sem `shrink-0`: no estreito as ações quebram em
-                linhas em vez de empurrar o título para fora. */}
-            {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>}
+            {/*
+              `flex-wrap` e SEM `shrink-0` em nenhuma largura.
+
+              O `sm:shrink-0` que existia aqui era a outra metade do defeito: ele
+              dava às ações a largura inteira que elas pedissem, e o que sobrava
+              — que podia ser nada — ia para o título. Sem ele, as ações quebram
+              em linhas quando o espaço aperta, que é o que uma barra de ações
+              deve fazer.
+            */}
+            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
           </section>
 
           <main

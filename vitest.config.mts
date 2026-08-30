@@ -34,12 +34,34 @@ const alias = {
   '@aurora/web': resolve(raiz, 'apps/web/src'),
 };
 
-/** O que roda no navegador de mentira. */
+/**
+ * O que roda no navegador de mentira.
+ *
+ * `apps/field` NÃO está aqui, e a ausência é deliberada.
+ *
+ * A entrada existia por antecipação, antes de o aplicativo de campo ter uma
+ * linha escrita. Hoje ele tem quatro suítes, e nenhuma toca o DOM: a fila, a
+ * sincronização, o envio de anexos e a conformidade da porta de persistência são
+ * lógica pura. Montar um DOM falso para elas custa tempo em toda execução e não
+ * prova nada.
+ *
+ * E uma delas não apenas dispensa o DOM: ela é INCOMPATÍVEL com ele. A
+ * conformidade exercita o adaptador de SQLite contra `node:sqlite`, e o ambiente
+ * de cliente recusa empacotar módulo interno do Node — "Cannot bundle Node.js
+ * built-in". Nesta máquina passava; na integração contínua, não. A CI está
+ * certa: um teste que usa módulo interno do Node é um teste de Node.
+ *
+ * A parte que precisa mesmo de navegador — o IndexedDB — é conferida no
+ * navegador de verdade, pela tela de diagnóstico do aparelho, e o teste de ponta
+ * a ponta exige que ela passe.
+ *
+ * Quando existir teste de COMPONENTE do campo, ele entra aqui com um padrão
+ * próprio — e não devolvendo a pasta inteira para o jsdom.
+ */
 const INTERFACE = [
   'packages/ui/**/*.test.{ts,tsx}',
   'apps/web/**/*.test.{ts,tsx}',
   'apps/portal/**/*.test.{ts,tsx}',
-  'apps/field/**/*.test.{ts,tsx}',
 ];
 
 const comum = {
