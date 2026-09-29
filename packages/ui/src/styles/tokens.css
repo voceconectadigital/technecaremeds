@@ -95,6 +95,24 @@
     --aurora-info-500: #2f6bc4;
     --aurora-info-700: #1f4e95;
 
+    /*
+     * DADOS — a paleta dos gráficos, e ela é separada de tudo o resto.
+     *
+     * Série de gráfico não é estado: se "série 2" reusasse o vermelho de
+     * crítico, uma barra alta pareceria um alarme. E não pode reusar o
+     * destaque, senão toda série parece clicável.
+     *
+     * Seis tons que se distinguem em escala de cinza também (a luminosidade
+     * sobe e desce alternadamente), porque gráfico impresso em preto e branco
+     * continua sendo gráfico. A ordem é a ordem de uso.
+     */
+    --aurora-data-1: #0c776f;
+    --aurora-data-2: #4a7fb5;
+    --aurora-data-3: #b57d0a;
+    --aurora-data-4: #7b5ea7;
+    --aurora-data-5: #2c8c63;
+    --aurora-data-6: #b1583f;
+
     /* ------------------------------------------------- papéis semânticos */
 
     /* O fundo da janela e o das superfícies são DIFERENTES: é o degrau entre
@@ -103,6 +121,10 @@
     --aurora-surface: var(--aurora-neutral-0);
     --aurora-surface-raised: var(--aurora-neutral-0);
     --aurora-surface-sunken: var(--aurora-neutral-100);
+    /* O degrau intermediário: fundo de cabeçalho de tabela, de barra de
+       ferramentas e de faixa dentro de cartão. Sem ele, tudo o que não é
+       branco vira o mesmo cinza e a tela perde os planos. */
+    --aurora-surface-subtle: var(--aurora-neutral-25);
     --aurora-surface-hover: var(--aurora-neutral-50);
     --aurora-surface-active: var(--aurora-neutral-100);
 
@@ -149,17 +171,31 @@
       sans-serif;
     --aurora-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
-    /* Escala de 1.2 (terça menor): densa o bastante para tabela operacional,
-       e ainda com hierarquia legível. Passos maiores brigariam com a densidade. */
+    /*
+     * ESCALA DUPLA: densa embaixo, generosa em cima.
+     *
+     * A primeira versão usava 1.2 uniforme, e o resultado era exatamente o
+     * diagnóstico que o cliente deu: "parece sistema interno". Uma razão
+     * constante mantém a densidade da tabela — que é boa — e ACHATA o topo: o
+     * título de um cartão ficava 16px, o da página 22px, e nada na tela
+     * dizia "isto é importante". Hierarquia não é o tamanho do corpo; é a
+     * DISTÂNCIA entre o corpo e o título.
+     *
+     * Agora a base operacional (2xs…md) fica onde estava, porque a leitura de
+     * tabela depende dela, e a escala se abre a partir de `lg` — onde moram
+     * título de seção, título de página e número de indicador. É o que
+     * qualquer produto B2B de valor faz: corpo compacto, títulos com presença.
+     */
     --aurora-text-2xs: 0.6875rem; /* 11px — só rótulo em caixa alta */
     --aurora-text-xs: 0.75rem; /* 12px — metadado, legenda */
     --aurora-text-sm: 0.8125rem; /* 13px — corpo de tabela */
     --aurora-text-base: 0.875rem; /* 14px — corpo da interface */
     --aurora-text-md: 1rem; /* 16px — corpo de leitura, campo em mobile */
-    --aurora-text-lg: 1.125rem;
-    --aurora-text-xl: 1.375rem;
-    --aurora-text-2xl: 1.75rem;
-    --aurora-text-3xl: 2.125rem;
+    --aurora-text-lg: 1.1875rem; /* 19px — título de cartão */
+    --aurora-text-xl: 1.5rem; /* 24px — título de seção */
+    --aurora-text-2xl: 1.9375rem; /* 31px — título de página */
+    --aurora-text-3xl: 2.4375rem; /* 39px — número de indicador */
+    --aurora-text-4xl: 3.0625rem; /* 49px — número herói do painel */
 
     --aurora-leading-tight: 1.25;
     --aurora-leading-normal: 1.5;
@@ -172,6 +208,12 @@
     /* Rótulo em caixa alta precisa de entreletra; texto normal, não. */
     --aurora-tracking-label: 0.06em;
     --aurora-tracking-tight: -0.011em;
+    /*
+     * Título grande precisa de entreletra NEGATIVA, e é o detalhe que separa
+     * um título que parece desenhado de um que parece texto ampliado. Acima de
+     * 24px o espaço entre as letras cresce junto e o conjunto se solta.
+     */
+    --aurora-tracking-display: -0.022em;
 
     /* -------------------------------------------------------- espaçamento */
 
@@ -206,9 +248,24 @@
      * diálogo, painel deslizante.
      */
     --aurora-shadow-none: none;
-    --aurora-shadow-raised: 0 1px 2px rgb(13 18 17 / 0.06);
+    /*
+     * `card` é a elevação NOVA, e ela corrige um excesso do desenho original.
+     *
+     * A regra "a separação é a borda, não a sombra" continua certa para
+     * tabela e lista — e foi longe demais quando virou "nada tem sombra". Uma
+     * tela inteira de retângulos de 1px sobre fundo quase igual não tem
+     * profundidade nenhuma, e é metade da razão de o produto parecer plano.
+     *
+     * A sombra aqui é de DOIS estágios e quase invisível de perto: um contato
+     * de 1px que assenta o cartão, e uma difusão larga e fraquíssima que o
+     * descola do fundo. Junto com a borda, e não no lugar dela.
+     */
+    --aurora-shadow-card: 0 1px 2px rgb(13 18 17 / 0.04), 0 4px 12px -4px rgb(13 18 17 / 0.06);
+    --aurora-shadow-raised: 0 1px 2px rgb(13 18 17 / 0.06), 0 8px 20px -6px rgb(13 18 17 / 0.1);
     --aurora-shadow-overlay: 0 4px 6px -2px rgb(13 18 17 / 0.06), 0 12px 24px -6px rgb(13 18 17 / 0.14);
     --aurora-shadow-sheet: 0 8px 12px -4px rgb(13 18 17 / 0.08), 0 24px 48px -12px rgb(13 18 17 / 0.2);
+    /* O anel interno que dá borda "de vidro" ao cartão de destaque. */
+    --aurora-ring-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.6);
 
     /* ---------------------------------------------------------- movimento */
 
@@ -266,6 +323,7 @@
     --aurora-surface: var(--aurora-neutral-900);
     --aurora-surface-raised: var(--aurora-neutral-800);
     --aurora-surface-sunken: #0a0f0e;
+    --aurora-surface-subtle: #131a19;
     --aurora-surface-hover: var(--aurora-neutral-800);
     --aurora-surface-active: var(--aurora-neutral-700);
 
@@ -299,7 +357,9 @@
     --aurora-info-soft: rgb(47 107 196 / 0.22);
     --aurora-info-text: #a6c6f5;
 
-    --aurora-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4);
+    --aurora-shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 4px 12px -4px rgb(0 0 0 / 0.45);
+    --aurora-shadow-raised: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 20px -6px rgb(0 0 0 / 0.5);
+    --aurora-ring-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
     --aurora-shadow-overlay: 0 4px 6px -2px rgb(0 0 0 / 0.4), 0 12px 24px -6px rgb(0 0 0 / 0.6);
     --aurora-shadow-sheet: 0 8px 12px -4px rgb(0 0 0 / 0.5), 0 24px 48px -12px rgb(0 0 0 / 0.7);
 
@@ -319,6 +379,7 @@
   --color-surface: var(--aurora-surface);
   --color-surface-raised: var(--aurora-surface-raised);
   --color-surface-sunken: var(--aurora-surface-sunken);
+  --color-surface-subtle: var(--aurora-surface-subtle);
   --color-surface-hover: var(--aurora-surface-hover);
   --color-surface-active: var(--aurora-surface-active);
 
@@ -349,6 +410,13 @@
   --color-info-soft: var(--aurora-info-soft);
   --color-info-text: var(--aurora-info-text);
 
+  --color-data-1: var(--aurora-data-1);
+  --color-data-2: var(--aurora-data-2);
+  --color-data-3: var(--aurora-data-3);
+  --color-data-4: var(--aurora-data-4);
+  --color-data-5: var(--aurora-data-5);
+  --color-data-6: var(--aurora-data-6);
+
   --font-sans: var(--aurora-font-sans);
   --font-mono: var(--aurora-font-mono);
 
@@ -361,12 +429,14 @@
   --text-xl: var(--aurora-text-xl);
   --text-2xl: var(--aurora-text-2xl);
   --text-3xl: var(--aurora-text-3xl);
+  --text-4xl: var(--aurora-text-4xl);
 
   --radius-control: var(--aurora-radius-control);
   --radius-card: var(--aurora-radius-card);
   --radius-sheet: var(--aurora-radius-sheet);
   --radius-pill: var(--aurora-radius-pill);
 
+  --shadow-card: var(--aurora-shadow-card);
   --shadow-raised: var(--aurora-shadow-raised);
   --shadow-overlay: var(--aurora-shadow-overlay);
   --shadow-sheet: var(--aurora-shadow-sheet);

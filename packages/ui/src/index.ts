@@ -70,3 +70,43 @@ export {
   type TabItem,
 } from './components/navigation';
 export { CommandPalette, type CommandPaletteProps, type CommandItem } from './components/command-palette';
+
+/* ---------------------------------------------------------------------------
+ * As peças que o redesenho de 29/09/2026 acrescentou.
+ *
+ * Elas nasceram de um diagnóstico específico: o produto tinha componentes de
+ * CONTROLE (botão, campo, diálogo) e quase nenhum de APRESENTAÇÃO DE DADOS. O
+ * resultado é o que se via na tela — números soltos sem referência, listas
+ * textuais sem imagem, seções sem hierarquia e cada tela inventando a própria
+ * barra de filtros.
+ * ------------------------------------------------------------------------- */
+export {
+  Metric,
+  MetricGrid,
+  type MetricProps,
+  type MetricTrend,
+  type MetricGridProps,
+} from './components/metric';
+export {
+  BarChart,
+  DonutChart,
+  Sparkline,
+  type ChartDatum,
+  type BarChartProps,
+  type DonutChartProps,
+  type SparklineProps,
+} from './components/charts';
+export { Thumb, type ThumbProps } from './components/thumb';
+export {
+  Section,
+  Toolbar,
+  FilterChip,
+  StatStrip,
+  FieldPair,
+  type SectionProps,
+  type ToolbarProps,
+  type FilterChipProps,
+  type StatStripProps,
+  type StatStripItem,
+  type FieldPairProps,
+} from './components/layout';

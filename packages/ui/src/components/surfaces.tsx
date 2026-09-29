@@ -27,9 +27,12 @@ export function Card({ children, className, raised = false, as: Tag = 'div' }: C
   return (
     <Tag
       className={cn(
-        'rounded-card border border-border bg-surface',
-        // A separação normal é a BORDA. Sombra fica para o que flutua de
-        // verdade — interface densa se afoga em sombra.
+        // A sombra `card` é quase invisível de perto e faz todo o trabalho de
+        // longe: é ela que dá ao conjunto a profundidade que uma tela de
+        // retângulos de 1px não tem. `raised` continua existindo para o que
+        // precisa se destacar DENTRE cartões — e aí a diferença volta a ser
+        // perceptível, porque o piso subiu junto.
+        'rounded-card border border-border bg-surface shadow-card',
         raised && 'shadow-raised',
         className
       )}
@@ -66,15 +69,15 @@ export function CardHeader({ title, description, actions, className, headingLeve
   return (
     <div
       className={cn(
-        'flex items-start justify-between gap-4 border-b border-border-subtle px-4 py-3',
+        'flex items-start justify-between gap-4 border-b border-border-subtle px-4 py-3.5',
         className
       )}
     >
       <div className="min-w-0">
         {/* O TAMANHO é do estilo; o NÍVEL é da estrutura. Um cartão parece
             igual em qualquer nível, e é a árvore de cabeçalhos que muda. */}
-        <H className="truncate text-md font-semibold text-text">{title}</H>
-        {description && <p className="mt-0.5 text-xs text-muted">{description}</p>}
+        <H className="truncate text-lg font-semibold tracking-display text-text">{title}</H>
+        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
@@ -111,17 +114,17 @@ export function EmptyState({
   filtered = false,
 }: EmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-12 text-center', className)}>
+    <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-14 text-center', className)}>
       {icon && (
         <div
           aria-hidden="true"
-          className="flex size-10 items-center justify-center rounded-card bg-surface-sunken text-subtle"
+          className="flex size-12 items-center justify-center rounded-card border border-border-subtle bg-surface-subtle text-subtle"
         >
           {icon}
         </div>
       )}
       <div className="max-w-sm">
-        <p className="text-md font-medium text-text">{title}</p>
+        <p className="text-lg font-semibold tracking-display text-text">{title}</p>
         {description && <p className="mt-1 text-sm text-muted">{description}</p>}
         {filtered && !description && (
           <p className="mt-1 text-sm text-muted">Nenhum registro corresponde aos filtros aplicados.</p>
