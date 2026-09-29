@@ -107,6 +107,10 @@ describe('cliente tipado', () => {
   function clienteFalso(resposta: {
     status: number;
     body: unknown;
+    /** Cabeçalhos da resposta. `content-type` é o que denuncia página em vez de dados. */
+    headers?: Record<string, string>;
+    /** Corpo que NÃO é JSON — é o que um servidor de arquivos devolve. */
+    corpoNaoEhJson?: boolean;
     onRequest?: (url: string, init: RequestInit) => void;
   }) {
     const fetchFalso: typeof globalThis.fetch = async (url, init) => {
@@ -114,8 +118,11 @@ describe('cliente tipado', () => {
       return {
         ok: resposta.status < 400,
         status: resposta.status,
-        headers: new Headers(),
-        json: async () => resposta.body,
+        headers: new Headers(resposta.headers ?? {}),
+        json: async () => {
+          if (resposta.corpoNaoEhJson) throw new SyntaxError("Unexpected token '<'");
+          return resposta.body;
+        },
       } as Response;
     };
     return createApiClient({
@@ -182,6 +189,65 @@ describe('cliente tipado', () => {
       const erro = e as ApiError;
       expect(erro).toBeInstanceOf(ApiError);
       expect(erro.problem.code).toBe('internal_error');
+    }
+  });
+
+  /*
+   * OS DOIS SINTOMAS DE "A API NÃO FOI PUBLICADA", E POR QUE ELES TÊM PROVA.
+   *
+   * Aconteceu em 29/09/2026: a interface subiu para um servidor estático, a API
+   * não subiu para lugar nenhum, e a tela de entrada mostrou "resposta 405 sem
+   * detalhe de problema" a quem tinha digitado a senha certa. O número estava
+   * certo e não ajudava ninguém.
+   *
+   * São duas formas do mesmo defeito, e a segunda é pior: com `200` e HTML, o
+   * erro que chegava à tela era um `SyntaxError` sobre o caractere `<`.
+   */
+  it('405 sem corpo JSON é apontado como API ausente, não como erro de senha', async () => {
+    const c = clienteFalso({ status: 405, body: null, corpoNaoEhJson: true });
+    try {
+      await c.call(meOrganizations);
+      throw new Error('deveria ter falhado');
+    } catch (e) {
+      const erro = e as ApiError;
+      expect(erro).toBeInstanceOf(ApiError);
+      expect(erro.problem.message).toMatch(/servidor de arquivos/);
+      expect(erro.problem.message).toMatch(/Não é erro de senha/);
+      expect(erro.problem.details?.motivo).toBe('api_ausente');
+      // O endereço chamado vai junto: sem ele a frase não é acionável.
+      expect(erro.problem.details?.endereco).toBe('http://api.test/v1/me/organizations');
+    }
+  });
+
+  it('200 com HTML é recusado antes de virar SyntaxError na tela', async () => {
+    const c = clienteFalso({
+      status: 200,
+      body: null,
+      corpoNaoEhJson: true,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+    try {
+      await c.call(meOrganizations);
+      throw new Error('deveria ter falhado');
+    } catch (e) {
+      const erro = e as ApiError;
+      expect(erro).toBeInstanceOf(ApiError);
+      expect(erro.problem.details?.motivo).toBe('api_ausente');
+      expect(erro.problem.details?.content_type).toMatch('text/html');
+    }
+  });
+
+  it('502 continua sendo queda de serviço, e não ausência de API', async () => {
+    // A distinção importa para quem está de plantão: em `502` existe API e ela
+    // caiu; em `405` ela nunca foi publicada. Procura-se em lugares diferentes.
+    const c = clienteFalso({ status: 502, body: null, corpoNaoEhJson: true });
+    try {
+      await c.call(meOrganizations);
+      throw new Error('deveria ter falhado');
+    } catch (e) {
+      const erro = e as ApiError;
+      expect(erro.problem.code).toBe('internal_error');
+      expect(erro.problem.details?.motivo).toBeUndefined();
     }
   });
 

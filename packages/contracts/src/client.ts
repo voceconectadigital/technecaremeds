@@ -113,6 +113,75 @@ export interface ApiClient {
   urlFor<O extends OperationDefinition>(operation: O, args?: CallArgs<O>): string;
 }
 
+/**
+ * Diz se quem respondeu mandou uma página em vez de dados.
+ *
+ * `null` quando não dá para afirmar: um servidor que não declara o tipo do
+ * conteúdo não deve ser acusado por omissão.
+ */
+function ehHtml(resposta: Response): string | null {
+  const tipo = resposta.headers.get('content-type');
+  if (!tipo) return null;
+  const t = tipo.toLowerCase();
+  return t.startsWith('text/html') || t.startsWith('application/xhtml') ? tipo : null;
+}
+
+/**
+ * O DEFEITO DE IMPLANTAÇÃO QUE MAIS CUSTA TEMPO, E POR QUE ELE TEM NOME AQUI.
+ *
+ * Quando a interface é publicada e a API não, o endereço `/v1/...` continua
+ * existindo — mas quem atende é o servidor de arquivos, não a Aurora. Ele
+ * responde `405` a um POST, `404` a um método que não conhece, ou devolve o
+ * `index.html` com `200` para qualquer caminho.
+ *
+ * A mensagem que sobrava disso era "resposta 405 sem detalhe de problema": um
+ * número, na tela de entrada, para alguém que digitou a senha certa. O número
+ * está correto e não serve para nada — não diz que o problema é de implantação,
+ * não diz qual endereço foi chamado, e deixa a pessoa tentando a senha de novo,
+ * que é a única coisa que com certeza não resolve.
+ *
+ * O código continua sendo `internal_error` de propósito: `PROBLEM_CODES` é uma
+ * lista fechada, compartilhada com o servidor e com a especificação OpenAPI —
+ * inventar um código só para esta situação faria o cliente falar uma língua que
+ * o contrato não declara. E `internal_error` é a verdade: a falha é nossa, não
+ * de quem está tentando entrar.
+ */
+function problemaDeApiAusente(resposta: Response, tipo: string | null): ProblemDetails {
+  return {
+    code: 'internal_error',
+    message:
+      'a API não respondeu neste endereço — quem atendeu foi o servidor de arquivos. ' +
+      'A interface está publicada e o serviço da API não. Não é erro de senha.',
+    request_id: resposta.headers.get('x-request-id') ?? 'sem-api',
+    details: {
+      motivo: 'api_ausente',
+      status: resposta.status,
+      ...(tipo ? { content_type: tipo } : {}),
+    },
+  };
+}
+
+/**
+ * Reconhece, pelo status, a mesma ausência de API num erro sem corpo JSON.
+ *
+ * Só estes três: `405` (servidor de arquivos recusando POST), `404` (caminho
+ * que a API teria) e `501`. `502` e `503` NÃO entram — ali existe API, e ela
+ * está fora do ar ou atrás de um proxy que caiu. São problemas diferentes, e
+ * confundi-los manda quem está de plantão procurar no lugar errado.
+ */
+function semApiNoEndereco(resposta: Response): ProblemDetails | null {
+  const tipo = ehHtml(resposta);
+  if (tipo) return problemaDeApiAusente(resposta, tipo);
+  return resposta.status === 404 || resposta.status === 405 || resposta.status === 501
+    ? problemaDeApiAusente(resposta, null)
+    : null;
+}
+
+/** Carimba o endereço chamado — sem ele, "a API não respondeu" não é acionável. */
+function comEndereco(problema: ProblemDetails, endereco: string): ProblemDetails {
+  return { ...problema, details: { ...problema.details, endereco } };
+}
+
 export function createApiClient(options: ClientOptions): ApiClient {
   const buscar = options.fetch ?? globalThis.fetch;
   if (!buscar) throw new Error('nenhuma implementação de fetch disponível');
@@ -149,6 +218,8 @@ export function createApiClient(options: ClientOptions): ApiClient {
         ...(a?.signal ? { signal: a.signal as AbortSignal } : {}),
       });
 
+      const endereco = enderecar(op, a);
+
       if (!resposta.ok) {
         // O servidor manda problem details; se não mandar — proxy no meio,
         // rede caindo — ainda assim quem chamou recebe a mesma forma de erro.
@@ -157,16 +228,33 @@ export function createApiClient(options: ClientOptions): ApiClient {
           problema = (await resposta.json()) as ProblemDetails;
           if (typeof problema?.code !== 'string') throw new Error('sem código');
         } catch {
-          problema = {
-            code: resposta.status >= 500 ? 'internal_error' : 'validation_failed',
-            message: `resposta ${resposta.status} sem detalhe de problema`,
-            request_id: resposta.headers.get('x-request-id') ?? 'desconhecido',
-          };
+          problema =
+            semApiNoEndereco(resposta) ??
+            ({
+              code: resposta.status >= 500 ? 'internal_error' : 'validation_failed',
+              message: `resposta ${resposta.status} sem detalhe de problema`,
+              request_id: resposta.headers.get('x-request-id') ?? 'desconhecido',
+            } satisfies ProblemDetails);
+          problema = comEndereco(problema, endereco);
         }
         throw new ApiError(resposta.status, problema);
       }
 
       if (resposta.status === 204) return undefined as never;
+
+      /*
+       * `200` NÃO PROVA QUE QUEM RESPONDEU FOI A API.
+       *
+       * Uma aplicação de página única hospedada em servidor estático devolve o
+       * próprio `index.html` para todo caminho desconhecido — inclusive
+       * `/v1/...`. Sem esta checagem, `resposta.json()` estoura num
+       * `SyntaxError` sobre o caractere `<`, e a tela mostra isso a quem só
+       * queria entrar.
+       */
+      const html = ehHtml(resposta);
+      if (html) {
+        throw new ApiError(resposta.status, comEndereco(problemaDeApiAusente(resposta, html), endereco));
+      }
 
       const dados = (await resposta.json()) as Infer<O['response']>;
       if (!validar) return dados;
