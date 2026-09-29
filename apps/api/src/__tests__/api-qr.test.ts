@@ -265,7 +265,17 @@ describe('limite de tentativas', () => {
     let bloqueado = false;
     for (let i = 0; i < 80; i++) {
       const r = await http.get('/q/AAAAAAAAAAAAAAAAAAAAAAAAAA').set('x-forwarded-for', `10.0.0.${i}`);
-      if (r.status === 422) {
+      /*
+       * 429, e não 422 — esta expectativa MUDOU junto com uma correção.
+       *
+       * O limitador recusava com `ValidationError`, que é 422: "o que você
+       * mandou está errado, corrija e tente". A recusa por volume é o oposto —
+       * "o que você mandou está certo, espere" — e a diferença decide o que um
+       * cliente faz: quem trata 422 como erro de entrada nunca tentaria de
+       * novo. O contrato já declarava `rate_limited`; era a API que discordava
+       * dele.
+       */
+      if (r.status === 429) {
         bloqueado = true;
         break;
       }

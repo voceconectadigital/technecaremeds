@@ -101,6 +101,29 @@ export class InvalidTransitionError extends DomainError {
 }
 
 /**
+ * Tentativas demais, e o cliente precisa saber quando voltar.
+ *
+ * NASCEU DE UM DEFEITO MEDIDO: o limitador do login recusava com
+ * `ValidationError`, que é 422. O contrato da rota declarava `rate_limited`, que
+ * é 429 — então o documento OpenAPI prometia um código que a API nunca
+ * devolvia. Para quem integra, a diferença é grande: 422 quer dizer "o que você
+ * mandou está errado, corrija e tente" e 429 quer dizer "o que você mandou está
+ * certo, espere" — um cliente que trata 422 como erro de entrada jamais tentaria
+ * de novo, e um que ignora 429 tentaria para sempre.
+ *
+ * `retry_after_seconds` vai nos detalhes porque um 429 sem prazo empurra todo
+ * cliente para a mesma estratégia: tentar de novo já.
+ */
+export class RateLimitedError extends DomainError {
+  readonly code = 'rate_limited' as const;
+  readonly httpStatus = 429;
+
+  constructor(message: string, retryAfterSeconds?: number) {
+    super(message, retryAfterSeconds ? { retry_after_seconds: retryAfterSeconds } : {});
+  }
+}
+
+/**
  * Nenhuma operação tenant-scoped pode ocorrer sem contexto.
  * Se este erro aparecer, há um caminho de código que escapou da unidade de
  * trabalho — é defeito, não condição esperada.

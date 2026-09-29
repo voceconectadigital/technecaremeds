@@ -23,9 +23,9 @@
  *    precisamos criar.
  */
 import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
-import { authLogin, authLogout, authConfig, LoginInput, type AuthConfig } from '@aurora/contracts';
+import { LoginInput, type AuthConfig } from '@aurora/contracts';
 import { abrirSessaoPorSenha, encerrarSessao, type Database } from '@aurora/db';
-import { UnauthenticatedError, ValidationError, SENHA_MINIMA } from '@aurora/domain';
+import { UnauthenticatedError, RateLimitedError, SENHA_MINIMA } from '@aurora/domain';
 import type { AuroraEnv } from '@aurora/config';
 import { DATABASE, ENV, LOGGER } from '../common/tokens';
 import { parseWith } from '../common/contract-validation';
@@ -73,10 +73,11 @@ export class AuthController {
      * mesmo defeito que já foi corrigido uma vez na rota do QR.
      */
     const origem = req.ip ?? 'desconhecida';
-    if (!this.limiter.allow(origem)) {
-      throw new ValidationError('muitas tentativas de entrada; aguarde um instante', {
-        retry_after_seconds: this.limiter.retryAfterSeconds(origem),
-      });
+    if (this.limiter.bloqueado(origem)) {
+      throw new RateLimitedError(
+        'Muitas tentativas de entrada desta origem. Aguarde um instante e tente de novo.',
+        this.limiter.retryAfterSeconds(origem)
+      );
     }
 
     const entrada = parseWith(LoginInput, body);
@@ -89,6 +90,10 @@ export class AuthController {
     });
 
     if ('motivo' in resultado) {
+      // SÓ A FALHA CONSOME COTA — ver `bloqueado()` em attempt-limiter.ts:
+      // contar também o acerto puniria um hospital inteiro atrás de um NAT.
+      this.limiter.registrarFalha(origem);
+
       /*
        * O LOG REGISTRA A TENTATIVA E NÃO REGISTRA A SENHA.
        *
