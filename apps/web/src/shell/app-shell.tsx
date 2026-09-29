@@ -157,7 +157,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               primeiro item do índice de quem usa leitor de tela e a única
               confirmação de onde a pessoa está.
             */
-            className="flex flex-col gap-2 border-b border-border bg-surface px-4 py-3 md:px-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4"
+            className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-5 md:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6"
           >
             {/*
               O TÍTULO TEM PISO DE LARGURA, e o piso é a correção de um defeito
@@ -185,10 +185,13 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-1" />}
               {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
                   não vê a tela. */}
-              <h1 id="titulo-da-pagina" className="truncate text-xl font-semibold text-text">
+              <h1
+                id="titulo-da-pagina"
+                className="truncate text-2xl font-semibold tracking-display text-text"
+              >
                 {title}
               </h1>
-              {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
+              {subtitle && <p className="mt-1 text-base text-muted">{subtitle}</p>}
             </div>
             {/*
               `flex-wrap` e SEM `shrink-0` em nenhuma largura.
@@ -223,7 +226,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               se quer numa região rolável.
             */
             tabIndex={0}
-            className={cn('min-h-0 flex-1 overflow-auto outline-none', !bleed && 'p-4 md:p-6')}
+            className={cn('min-h-0 flex-1 overflow-auto outline-none', !bleed && 'p-4 md:p-6 lg:p-8')}
           >
             {children}
           </main>

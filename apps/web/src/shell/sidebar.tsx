@@ -4,6 +4,28 @@
  * Ciente de permissão: um item só aparece quando leva a algum lugar. Ver §21 e
  * o comentário de `lib/permissions.tsx` — esconder é conveniência, quem nega é
  * o servidor.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * O REDESENHO DE 29/09/2026, E O QUE ELE CORRIGE
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * A versão anterior era uma coluna branca com oito links cinza. Funcionava e
+ * não pertencia a lugar nenhum — podia ser o menu de qualquer sistema interno
+ * escrito em qualquer década.
+ *
+ * Três mudanças, e nenhuma é decorativa:
+ *
+ *  1. A barra fica SOBRE fundo rebaixado, e não sobre branco. O conteúdo passa
+ *     a ser a superfície mais clara da tela, que é onde o olho deve ir. Uma
+ *     navegação com o mesmo peso visual do conteúdo compete com ele.
+ *
+ *  2. O item ativo ganha uma BARRA à esquerda além do fundo. Fundo sozinho, em
+ *     tom suave, some em tela ruim e com brilho baixo — que é a condição de
+ *     quem usa isto num corredor de hospital.
+ *
+ *  3. A identidade da organização vira um BLOCO, com marca e nome, em vez de
+ *     uma linha de texto. Quem atende quatro hospitais precisa saber em qual
+ *     está antes de agir, e "antes de agir" quer dizer sem procurar.
  */
 import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -29,28 +51,36 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
   return (
     <nav
       aria-label="Navegação principal"
-      className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-surface"
+      className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface-subtle"
     >
-      <div className="flex h-14 items-center gap-2 border-b border-border px-4">
+      {/* ------------------------------------------------------- identidade */}
+      <div className="flex items-center gap-3 px-4 py-4">
         <Marca />
         <div className="min-w-0 flex-1">
-          {/* O nome da organização fica AQUI, e não escondido num menu: quem
-              atende duas empresas precisa saber em qual está antes de agir. */}
-          <p className="truncate text-sm font-semibold text-text">
+          <p className="truncate text-base font-semibold text-text" title={sessao?.organization.name}>
             {sessao?.organization.name ?? MARCA.produto}
+          </p>
+          {/*
+           * O rótulo do que a organização mantém ("Equipamento", "Ativo",
+           * "Frota") é configurável por organização (ADR-006), e mostrá-lo aqui
+           * é de graça: a pessoa vê, sem perguntar, que o sistema fala a
+           * língua dela.
+           */}
+          <p className="truncate text-2xs tracking-label text-subtle uppercase">
+            {sessao?.organization.asset_label ?? MARCA.produto}
           </p>
         </div>
         {header}
       </div>
 
-      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
+      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
         {visiveis.map((item) => (
           <ItemDeMenu key={item.to} item={item} ativo={ehAtivo(caminho, item.to)} onNavigate={onNavigate} />
         ))}
       </ul>
 
       {mostrarConfig && (
-        <ul className="border-t border-border-subtle p-2">
+        <ul className="border-t border-border-subtle px-3 py-3">
           <ItemDeMenu item={SETTINGS_NAV} ativo={ehAtivo(caminho, SETTINGS_NAV.to)} onNavigate={onNavigate} />
         </ul>
       )}
@@ -82,10 +112,17 @@ function ItemDeMenu({ item, ativo, onNavigate }: { item: NavItem; ativo: boolean
           // sozinho não chega a quem não vê a tela.
           aria-current={ativo ? 'page' : undefined}
           className={cn(
-            'flex items-center gap-3 rounded-control px-3 py-2 text-base font-medium transition-colors',
-            ativo ? 'bg-accent-soft text-accent-text' : 'text-muted hover:bg-surface-hover hover:text-text'
+            'relative flex items-center gap-3 rounded-control py-2.5 pr-3 pl-4 text-base transition-colors',
+            ativo
+              ? 'bg-surface font-semibold text-accent-text shadow-card'
+              : 'font-medium text-muted hover:bg-surface hover:text-text'
           )}
         >
+          {/* O terceiro canal do estado ativo: uma barra que existe mesmo em
+              tela lavada, onde o fundo suave desaparece. */}
+          {ativo && (
+            <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-accent" />
+          )}
           <Icone aria-hidden="true" className="size-[18px] shrink-0" />
           <span className="truncate">{item.label}</span>
         </Link>
@@ -98,13 +135,13 @@ function Marca() {
   return (
     <span
       aria-hidden="true"
-      className="flex size-7 shrink-0 items-center justify-center rounded-control bg-accent text-on-accent"
+      className="flex size-9 shrink-0 items-center justify-center rounded-card bg-accent text-on-accent shadow-card"
     >
       {/*
        * O símbolo: um arco nascendo — a aurora. Traço só, sem preenchimento,
-       * porque a marca aparece em 28px e forma cheia vira borrão nesse tamanho.
+       * porque a marca aparece pequena e forma cheia vira borrão nesse tamanho.
        */}
-      <svg viewBox="0 0 24 24" fill="none" className="size-4">
+      <svg viewBox="0 0 24 24" fill="none" className="size-5">
         <path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
         <path
           d="M7.5 18a4.5 4.5 0 0 1 9 0"
