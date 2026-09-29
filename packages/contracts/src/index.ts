@@ -23,6 +23,7 @@ export * from './client';
 
 // Os módulos de operação registram-se ao serem importados. A ordem não importa;
 // o registro reclama de identificador repetido.
+export * from './operations/auth';
 export * from './operations/platform';
 export * from './operations/session';
 export * from './operations/members';

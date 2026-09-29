@@ -31,3 +31,4 @@ export * from './portal';
 export * from './client-operations';
 export * from './attachment-uploads';
 export * from './field-sync';
+export * from './credenciais';

@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { loadEnv, describe as describeEnv } from '@aurora/config';
 import { pgPoolAdapter, assertAppRoleIsSafe } from '@aurora/db';
 import { createApp } from './bootstrap';
+import { escolherProvedorDeAutenticacao } from './auth/escolher-provedor';
 import { createLogger } from './common/logger';
 
 async function main(): Promise<void> {
@@ -21,7 +22,10 @@ async function main(): Promise<void> {
   const role = await assertAppRoleIsSafe(db, env.AURORA_ALLOW_UNSAFE_DEV);
   logger.info('papel de banco verificado', { role: role.role });
 
-  const app = await createApp({ db, env, logger });
+  const auth = escolherProvedorDeAutenticacao(env, db);
+  logger.info('provedor de identidade', { provider: auth.name });
+
+  const app = await createApp({ db, env, logger, authProvider: auth });
   await app.listen(env.AURORA_PORT);
   logger.info('api no ar', { port: env.AURORA_PORT });
 

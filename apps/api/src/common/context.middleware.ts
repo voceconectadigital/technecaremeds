@@ -35,6 +35,14 @@ type Next = (err?: unknown) => void;
  * rota nova, que é exatamente o que se quer numa lista de isenção.
  *
  *  · health/*        — precisa responder quando tudo mais falhou;
+ *  · auth/config     — a tela de login pergunta COMO se entra antes de existir
+ *                      qualquer credencial;
+ *  · auth/login      — é onde a credencial nasce. Isenta de CONTEXTO, e não de
+ *                      verificação: confere senha, limita tentativas por origem
+ *                      e por conta;
+ *  · auth/logout     — precisa funcionar para quem tem token e perdeu o vínculo.
+ *                      Quem foi suspenso no meio da sessão também tem de
+ *                      conseguir sair, e sair exige o token em mãos;
  *  · me/organizations — responde ANTES de existir organização no contexto; é a
  *                       rota que o seletor usa, e faz a própria verificação de
  *                       credencial;
@@ -44,7 +52,7 @@ type Next = (err?: unknown) => void;
  *                       token inexistente e para organização que não permite
  *                       acesso anônimo.
  */
-const PUBLIC_PATH = /(^|\/)(health(\/|$)|me\/organizations$|q\/)/;
+const PUBLIC_PATH = /(^|\/)(health(\/|$)|auth\/(config|login|logout)$|me\/organizations$|q\/)/;
 
 export function createContextMiddleware(resolver: ContextResolver, logger: StructuredLogger) {
   return async function contextMiddleware(req: AuroraRequest, _res: unknown, next: Next): Promise<void> {

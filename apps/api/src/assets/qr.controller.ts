@@ -23,43 +23,13 @@ import { isQrToken, generateQrToken, isUuid, ValidationError, NotFoundError } fr
 import { RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
+import { AttemptLimiter } from '../common/attempt-limiter';
 
 interface QrResolution {
   organization: string;
   asset_label: string;
   asset: { name: string; category: string; location: string | null; retired: boolean };
   can_open_request: boolean;
-}
-
-/**
- * Limitador em memória.
- *
- * É honesto sobre o que é: vale por processo. Com mais de uma instância, cada
- * uma tem a sua contagem. A defesa de verdade é da borda (WAF, CDN); isto
- * impede que uma única instância seja derrubada por um laço de shell, e não
- * pretende ser mais que isso.
- */
-class AttemptLimiter {
-  private readonly hits = new Map<string, { count: number; resetAt: number }>();
-
-  constructor(
-    private readonly max = 60,
-    private readonly windowMs = 60_000
-  ) {}
-
-  allow(key: string, now = Date.now()): boolean {
-    const atual = this.hits.get(key);
-    if (!atual || now >= atual.resetAt) {
-      this.hits.set(key, { count: 1, resetAt: now + this.windowMs });
-      // Limpeza oportunista: sem ela o mapa cresce com cada origem já expirada.
-      if (this.hits.size > 10_000) {
-        for (const [k, v] of this.hits) if (now >= v.resetAt) this.hits.delete(k);
-      }
-      return true;
-    }
-    atual.count += 1;
-    return atual.count <= this.max;
-  }
 }
 
 @Controller()

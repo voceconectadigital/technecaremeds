@@ -46,7 +46,20 @@ export const envSchema = z
       .default('aurora_app'),
     AURORA_DB_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
 
-    AURORA_AUTH_PROVIDER: z.enum(['local', 'supabase']).default('local'),
+    /**
+     * Qual adaptador da porta `AuthProvider` este processo usa.
+     *
+     *   local     — `local:<sujeito>:<e-mail>`, SEM SENHA. Suíte e máquina de
+     *               quem desenvolve. Recusado em homologação e em produção,
+     *               abaixo, e recusado de novo pelo próprio construtor.
+     *   password  — identidade da própria plataforma: senha em `scrypt`, sessão
+     *               como token opaco revogável (migration 0045). É o provedor
+     *               real disponível hoje.
+     *   supabase  — previsto, SEM ADAPTADOR. O boot falha ao escolhê-lo, em vez
+     *               de cair no provedor local em silêncio. Ver
+     *               `apps/api/src/auth/escolher-provedor.ts`.
+     */
+    AURORA_AUTH_PROVIDER: z.enum(['local', 'password', 'supabase']).default('local'),
     AURORA_SUPABASE_URL: z.string().url().optional(),
     AURORA_SUPABASE_ANON_KEY: z.string().min(10).optional(),
     AURORA_SUPABASE_SERVICE_ROLE_KEY: z.string().min(10).optional(),

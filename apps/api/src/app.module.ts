@@ -39,7 +39,9 @@ import { armazenamentoEmDisco } from './common/arquivos/disco';
 import type { ArmazenamentoDeObjetos } from './common/arquivos/porta';
 import { createContextMiddleware } from './common/context.middleware';
 import { ContextResolver } from './common/context.resolver';
-import { LocalAuthProvider, type AuthProvider } from './auth/auth-provider.port';
+import type { AuthProvider } from './auth/auth-provider.port';
+import { escolherProvedorDeAutenticacao } from './auth/escolher-provedor';
+import { AuthController } from './auth/auth.controller';
 import { createLogger, type StructuredLogger } from './common/logger';
 import { ARQUIVOS, DATABASE, ENV, LOGGER, AUTH_PROVIDER } from './common/tokens';
 
@@ -58,15 +60,17 @@ export interface AppDeps {
 
 export function createAppModule(deps: AppDeps): new () => NestModule {
   const logger = deps.logger ?? createLogger(deps.env.AURORA_LOG_LEVEL, { app: 'aurora-api' });
-  const auth =
-    deps.authProvider ??
-    new LocalAuthProvider(deps.env.NODE_ENV !== 'production' || deps.env.AURORA_ALLOW_UNSAFE_DEV);
+  // O provedor vem da CONFIGURAÇÃO, e não de um padrão embutido. Ver
+  // `escolher-provedor.ts`: um padrão silencioso aqui foi o defeito que fazia
+  // `AURORA_AUTH_PROVIDER=supabase` subir aceitando entrada sem senha.
+  const auth = deps.authProvider ?? escolherProvedorDeAutenticacao(deps.env, deps.db);
   const resolver = new ContextResolver(deps.db, auth);
   const contextMiddleware = createContextMiddleware(resolver, logger);
 
   @Module({
     controllers: [
       HealthController,
+      AuthController,
       MeController,
       OrganizationsController,
       MembersController,
