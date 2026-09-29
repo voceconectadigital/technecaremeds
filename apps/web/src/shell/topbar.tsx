@@ -6,7 +6,7 @@ import { Bell, Building2, LogOut, Moon, Search, Sun, User } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Avatar, Button, CountBadge, Menu, cn, type MenuItem as MenuItemUi } from '@aurora/ui';
 import { meOrganizations } from '@aurora/contracts';
-import { useApiQuery, useSession, useSessionQuery, useTheme } from '@aurora/app-kit';
+import { useApiQuery, useSessionQuery, useTheme, useEncerrarSessao } from '@aurora/app-kit';
 import { GlobalSearch } from './global-search';
 
 export interface TopbarProps {
@@ -16,7 +16,7 @@ export interface TopbarProps {
 
 export function Topbar({ menuButton }: TopbarProps) {
   const { data: sessao } = useSessionQuery();
-  const sessaoLocal = useSession();
+  const encerrarSessao = useEncerrarSessao();
   const navigate = useNavigate();
   const { tema, alternar } = useTheme();
   const [buscaAberta, setBuscaAberta] = useState(false);
@@ -73,8 +73,9 @@ export function Topbar({ menuButton }: TopbarProps) {
     icon: <LogOut className="size-4" />,
     destructive: true,
     onSelect: () => {
-      sessaoLocal.signOut();
-      void navigate({ to: '/entrar' });
+      // Encerra NO SERVIDOR e depois navega. Ver `encerrar-sessao.ts`:
+      // limpar só o armazenamento local deixaria o token válido até expirar.
+      void encerrarSessao().then(() => navigate({ to: '/entrar' }));
     },
   });
 

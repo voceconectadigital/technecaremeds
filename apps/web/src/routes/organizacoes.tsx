@@ -16,12 +16,13 @@ import { useNavigate } from '@tanstack/react-router';
 import { Building2, LogOut } from 'lucide-react';
 import { Button, Card, EmptyState, SkeletonList, StatusChip } from '@aurora/ui';
 import { meOrganizations, type OrganizationOption } from '@aurora/contracts';
-import { useApiQuery, useSession } from '@aurora/app-kit';
+import { useApiQuery, useSession, useEncerrarSessao } from '@aurora/app-kit';
 import { ErrorScreen } from '../shell/error-boundary';
 
 export function OrganizacoesPage() {
   const navigate = useNavigate();
-  const { chooseOrganization, organizationId, signOut } = useSession();
+  const { chooseOrganization, organizationId } = useSession();
+  const encerrarSessao = useEncerrarSessao();
 
   const { data, isLoading, isError, error } = useApiQuery(meOrganizations, undefined, {
     retry: false,
@@ -68,8 +69,7 @@ export function OrganizacoesPage() {
                   variant="secondary"
                   icon={<LogOut className="size-4" />}
                   onClick={() => {
-                    signOut();
-                    void navigate({ to: '/entrar' });
+                    void encerrarSessao().then(() => navigate({ to: '/entrar' }));
                   }}
                 >
                   Entrar com outro e-mail

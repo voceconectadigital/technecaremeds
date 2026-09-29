@@ -34,6 +34,7 @@ export type { ApiProviderProps, QueryOptions } from './api';
 export { ApiError } from '@aurora/contracts';
 
 export { SessionProvider, useSession } from './session';
+export { useEncerrarSessao } from './encerrar-sessao';
 export type { SessionState } from './session';
 export { PermissionsProvider, usePermissions, Can } from './permissions';
 export type { PermissionApi } from './permissions';

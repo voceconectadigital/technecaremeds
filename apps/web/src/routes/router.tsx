@@ -143,6 +143,24 @@ function exigirSessao() {
 
 const entrar = createRoute({ getParentRoute: () => raiz, path: '/entrar', component: EntrarPage });
 
+/*
+ * `/login` existe como APELIDO de `/entrar`.
+ *
+ * A aplicação fala português e a rota canônica é `/entrar`. Mas `/login` é o
+ * endereço que todo mundo digita e o que aparece em qualquer instrução escrita
+ * às pressas — deixá-lo dar 404 faria a pessoa concluir que o sistema está fora
+ * do ar. Redireciona, e não duplica a tela: duas rotas com a mesma tela seriam
+ * duas telas na primeira vez que alguém mexesse numa delas.
+ */
+const login = createRoute({
+  getParentRoute: () => raiz,
+  path: '/login',
+  beforeLoad: () => {
+    throw redirect({ to: '/entrar' });
+  },
+  component: EntrarPage,
+});
+
 const organizacoes = createRoute({
   getParentRoute: () => raiz,
   path: '/organizacoes',
@@ -158,6 +176,7 @@ function rotaProtegida(path: string, component: () => ReactElement) {
 
 export const routeTree = raiz.addChildren([
   entrar,
+  login,
   organizacoes,
 
   rotaProtegida('/', HojePage),
