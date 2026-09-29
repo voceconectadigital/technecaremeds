@@ -97,6 +97,7 @@ export {
   type SparklineProps,
 } from './components/charts';
 export { Thumb, type ThumbProps } from './components/thumb';
+export { Logo, type LogoProps } from './components/logo';
 export {
   Section,
   Toolbar,

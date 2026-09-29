@@ -31,7 +31,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Field, Input } from '@aurora/ui';
+import { Button, Card, Field, Input, Logo } from '@aurora/ui';
 import { useSession, useApiQuery, useApiMutation, MARCA, ApiError } from '@aurora/app-kit';
 import { authConfig, authLogin, type AuthConfig, type LoginResult } from '@aurora/contracts';
 
@@ -107,8 +107,30 @@ export function EntrarPage() {
   const entrando = login.isPending;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-bg p-4">
-      <Card className="w-full max-w-sm">
+    /*
+     * O FUNDO NÃO É UM CINZA CHAPADO.
+     *
+     * Esta é a primeira tela que o cliente vê, e um retângulo cinza com um
+     * cartão no meio é o que todo template entrega. Dois brilhos radiais muito
+     * fracos — um azul, um verde-limão, as duas cores da marca — dão
+     * profundidade sem virar gradiente de página de marketing.
+     *
+     * Eles são `radial-gradient` em opacidade baixíssima, e não uma imagem:
+     * nada a baixar, nada que falte quando a rede falha, e acompanham o tema
+     * porque saem dos tokens.
+     */
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-bg p-4">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(60rem 30rem at 15% -10%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 60%),' +
+            'radial-gradient(45rem 26rem at 95% 110%, color-mix(in oklab, var(--color-brand-accent) 13%, transparent), transparent 62%)',
+        }}
+      />
+
+      <Card raised className="relative w-full max-w-md">
         {/*
          * `noValidate`: a validação NOSSA é a que roda.
          *
@@ -117,31 +139,20 @@ export function EntrarPage() {
          * com o campo, e invisível para leitor de tela. A nossa mensagem fica
          * no campo, é anunciada, e está em português.
          */}
-        <form onSubmit={entrar} noValidate className="flex flex-col gap-5 p-6">
-          <header className="flex flex-col items-center gap-3 text-center">
-            <span
-              aria-hidden="true"
-              className="flex size-11 items-center justify-center rounded-card bg-accent text-on-accent"
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="size-6">
-                <path
-                  d="M3 18a9 9 0 0 1 18 0"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M7.5 18a4.5 4.5 0 0 1 9 0"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  opacity="0.55"
-                />
-              </svg>
-            </span>
+        <form onSubmit={entrar} noValidate className="flex flex-col gap-5 p-7 sm:p-8">
+          <header className="flex flex-col items-center gap-4 text-center">
+            {/*
+             * A LOGO REAL, no tamanho em que o arquivo ainda é nítido.
+             *
+             * O original tem 272px de largura; 208px deixa margem para a
+             * reamostragem em tela de alta densidade. Maior que o original
+             * seria esticar um asset que já é pequeno — o vetor continua
+             * sendo necessário, e está registrado no LEIA-ME da pasta.
+             */}
+            <Logo src={MARCA.logoHorizontal} nome={MARCA.produto} largura={208} />
             <div>
-              <h1 className="text-xl font-semibold text-text">{MARCA.produto}</h1>
-              <p className="mt-1 text-sm text-muted">Entre para continuar.</p>
+              <h1 className="text-xl font-semibold tracking-display text-text">Entrar</h1>
+              <p className="mt-1 text-sm text-muted">{MARCA.descricao}</p>
             </div>
           </header>
 

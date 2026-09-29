@@ -15,7 +15,21 @@ test.describe('E2E-WEB-001 · entrar', () => {
   test('sem sessão, a aplicação leva para a tela de entrada', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveURL(/\/entrar$/);
-    await expect(page.getByRole('heading', { name: 'Aurora' })).toBeVisible();
+    /*
+     * O `<h1>` do login é "Entrar", e não mais o nome do produto.
+     *
+     * A marca virou IMAGEM — a logo da Téchne Care —, e uma imagem não é
+     * cabeçalho. O nome continua acessível pelo texto alternativo dela, que é
+     * o que esta prova confere logo abaixo: quem usa leitor de tela ouve de
+     * quem é o sistema, e quem vê lê o que a tela pede para fazer.
+     *
+     * A asserção não volta a ser o nome escrito: ele agora vem da
+     * configuração de marca, e amarrar um teste a ele faria a prova quebrar
+     * no dia em que o cliente trocar o nome — que é justamente a operação que
+     * `marca.config.json` existe para tornar barata.
+     */
+    await expect(page.getByRole('heading', { level: 1, name: 'Entrar' })).toBeVisible();
+    await expect(page.getByRole('img').first()).toBeVisible();
   });
 
   test('a tela diz que é o provedor de desenvolvimento', async ({ page }) => {

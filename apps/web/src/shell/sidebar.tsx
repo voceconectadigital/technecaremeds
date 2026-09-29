@@ -29,7 +29,7 @@
  */
 import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import { cn, Tooltip } from '@aurora/ui';
+import { cn, Logo, Tooltip } from '@aurora/ui';
 import { usePermissions, useSessionQuery, MARCA } from '@aurora/app-kit';
 import { MAIN_NAV, SETTINGS_NAV, type NavItem } from './navigation';
 
@@ -54,23 +54,34 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
       className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface-subtle"
     >
       {/* ------------------------------------------------------- identidade */}
-      <div className="flex items-center gap-3 px-4 py-4">
+      {/*
+       * A MARCA E A ORGANIZAÇÃO SÃO DUAS COISAS, e ficam separadas por uma
+       * linha de propósito.
+       *
+       * Antes, o topo mostrava "[HOMOLOGAÇÃO] Prestadora Horizonte" ao lado de
+       * um símbolo genérico — e o resultado era que o prefixo do ambiente
+       * parecia parte do nome comercial. São informações de naturezas
+       * diferentes: uma é de quem é o produto, a outra é de onde a pessoa está
+       * trabalhando agora.
+       */}
+      <div className="flex items-start gap-2 px-4 pt-4 pb-3">
         <Marca />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-semibold text-text" title={sessao?.organization.name}>
-            {sessao?.organization.name ?? MARCA.produto}
-          </p>
-          {/*
-           * O rótulo do que a organização mantém ("Equipamento", "Ativo",
-           * "Frota") é configurável por organização (ADR-006), e mostrá-lo aqui
-           * é de graça: a pessoa vê, sem perguntar, que o sistema fala a
-           * língua dela.
-           */}
-          <p className="truncate text-2xs tracking-label text-subtle uppercase">
-            {sessao?.organization.asset_label ?? MARCA.produto}
-          </p>
-        </div>
         {header}
+      </div>
+
+      <div className="border-b border-border-subtle px-4 pb-3">
+        <NomeDaOrganizacao nome={sessao?.organization.name ?? null} />
+        {/*
+         * O rótulo do que a organização mantém ("Equipamento", "Ativo",
+         * "Frota") é configurável por organização (ADR-006), e mostrá-lo aqui
+         * é de graça: a pessoa vê, sem perguntar, que o sistema fala a língua
+         * dela.
+         */}
+        {sessao?.organization.asset_label && (
+          <p className="mt-0.5 truncate text-2xs tracking-label text-subtle uppercase">
+            {sessao.organization.asset_label}
+          </p>
+        )}
       </div>
 
       <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
@@ -114,14 +125,29 @@ function ItemDeMenu({ item, ativo, onNavigate }: { item: NavItem; ativo: boolean
           className={cn(
             'relative flex items-center gap-3 rounded-control py-2.5 pr-3 pl-4 text-base transition-colors',
             ativo
-              ? 'bg-surface font-semibold text-accent-text shadow-card'
+              ? 'bg-accent-soft font-semibold text-accent-text'
               : 'font-medium text-muted hover:bg-surface hover:text-text'
           )}
         >
-          {/* O terceiro canal do estado ativo: uma barra que existe mesmo em
-              tela lavada, onde o fundo suave desaparece. */}
+          {/*
+           * O MARCADOR É VERDE E O RESTO É AZUL — é aqui que as duas cores da
+           * marca aparecem juntas, na mesma relação em que aparecem na logo.
+           *
+           * O fundo e o texto usam o azul, que é a cor de AÇÃO e se repete em
+           * toda a interface; a barra usa o verde-limão, que é a cor de
+           * IDENTIDADE e aparece pouco. Ela é pequena e é FORMA, não texto —
+           * exatamente o uso para o qual o verde tem contraste (2,23:1
+           * reprovaria como texto, e passa folgado como marcador).
+           *
+           * E ela continua sendo o terceiro canal do estado ativo: fundo suave
+           * desaparece em tela lavada com brilho baixo, que é a condição de
+           * quem usa isto num corredor de hospital.
+           */}
           {ativo && (
-            <span aria-hidden="true" className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-accent" />
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-brand-accent"
+            />
           )}
           <Icone aria-hidden="true" className="size-[18px] shrink-0" />
           <span className="truncate">{item.label}</span>
@@ -131,26 +157,52 @@ function ItemDeMenu({ item, ativo, onNavigate }: { item: NavItem; ativo: boolean
   );
 }
 
-function Marca() {
+/**
+ * O nome da organização, com o ambiente destacado FORA dele.
+ *
+ * A massa de homologação prefixa toda organização com "[HOMOLOGAÇÃO]", e isso
+ * é correto no banco — é o que impede alguém de confundir a massa de
+ * demonstração com dado real. Na tela, porém, o prefixo colado ao nome faz o
+ * ambiente parecer parte da razão social do cliente.
+ *
+ * Aqui ele é separado e vira etiqueta. Quando o prefixo não existir — em
+ * produção, ou numa organização real — não sobra nada: a etiqueta só aparece
+ * quando há o que etiquetar.
+ */
+function NomeDaOrganizacao({ nome }: { nome: string | null }) {
+  if (!nome) return <p className="truncate text-sm font-semibold text-text">{MARCA.produto}</p>;
+
+  const marcado = /^\[([^\]]+)\]\s*/.exec(nome);
+  const ambiente = marcado?.[1] ?? null;
+  const limpo = marcado ? nome.slice(marcado[0].length) : nome;
+
   return (
-    <span
-      aria-hidden="true"
-      className="flex size-9 shrink-0 items-center justify-center rounded-card bg-accent text-on-accent shadow-card"
-    >
-      {/*
-       * O símbolo: um arco nascendo — a aurora. Traço só, sem preenchimento,
-       * porque a marca aparece pequena e forma cheia vira borrão nesse tamanho.
-       */}
-      <svg viewBox="0 0 24 24" fill="none" className="size-5">
-        <path d="M3 18a9 9 0 0 1 18 0" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-        <path
-          d="M7.5 18a4.5 4.5 0 0 1 9 0"
-          stroke="currentColor"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          opacity="0.55"
-        />
-      </svg>
-    </span>
+    <div className="flex flex-col gap-1">
+      {ambiente && (
+        <span className="w-fit rounded-pill bg-warn-soft px-2 py-0.5 text-2xs font-semibold tracking-label text-warn-text uppercase">
+          {ambiente}
+        </span>
+      )}
+      <p className="truncate text-sm font-semibold text-text" title={limpo}>
+        {limpo}
+      </p>
+    </div>
   );
+}
+
+/**
+ * A logo da Téchne Care.
+ *
+ * ARQUIVO REAL, e não um desenho nosso. O símbolo anterior era um arco
+ * inventado para o codinome interno; este é o asset que o cliente forneceu,
+ * recortado do horizontal (ver `apps/web/public/marca`).
+ *
+ * A largura é limitada a 168px por uma razão medida: o original tem 272px, e
+ * exibi-lo maior que isso o esticaria. Em tela de alta densidade ele é
+ * reamostrado em cerca de 1,2× — suave, não serrilhado. **O vetor original
+ * continua sendo necessário** para nitidez perfeita, e isso está registrado em
+ * `apps/web/public/marca/LEIA-ME.md`.
+ */
+function Marca() {
+  return <Logo src={MARCA.logoHorizontal} nome={MARCA.produto} largura={168} />;
 }

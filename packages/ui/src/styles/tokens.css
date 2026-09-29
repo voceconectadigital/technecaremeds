@@ -1,22 +1,48 @@
 /**
  * Aurora — os tokens do design system (SPEC v0.2 §34, §40).
  *
- * A IDENTIDADE, EM UMA FRASE
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A IDENTIDADE VEM DA MARCA DO CLIENTE, E NÃO DE UMA ESCOLHA NOSSA
+ * ─────────────────────────────────────────────────────────────────────────────
  *
- * Aurora é um instrumento de trabalho para quem mantém equipamento crítico
- * funcionando. A tela precisa parecer o painel de um instrumento bem feito:
- * calma, precisa, densa sem ser apertada. Não é um site de marketing e não
- * deve se comportar como um — nada de gradiente de herói, nada de sombra
- * decorativa, nada de cor que muda de significado entre duas telas.
+ * Em 29/09/2026 a paleta deixou de ser autoral e passou a ser EXTRAÍDA da logo
+ * da Téchne Care. As cores abaixo não são aproximações: saíram de um
+ * histograma dos pixels opacos de `apps/web/public/marca/technecare-horizontal.png`,
+ * agrupados em blocos de 8 e ordenados por frequência.
  *
- * DE ONDE VEM A PALETA
+ *   #3E69AC   o azul do "Care"        · 5,50:1 sobre branco
+ *   #9DB924   o verde-limão do "Téchne" · 2,23:1 sobre branco
+ *   #262937   o grafite do símbolo    · 14,44:1 sobre branco
  *
- * Do assunto. Vidro de instrumento, aço escovado, o verde-azulado dos
- * mostradores: os neutros têm viés frio levemente esverdeado — nunca cinza
- * puro, que é o cinza de quem não escolheu — e o destaque é um teal profundo,
- * não o índigo/violeta que todo SaaS usa. As cores semânticas (bom, atenção,
- * crítico) são SEPARADAS do destaque: se "crítico" e "botão principal" fossem
- * a mesma cor, um alerta de SLA estourado ficaria indistinguível de um botão.
+ * O procedimento está em `docs/AI-HANDOFF.md` §20-B, e pode ser refeito.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A HIERARQUIA DAS DUAS CORES DA MARCA
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * AZUL É A COR DE PRODUTO. Botão primário, link, seleção, controle ativo,
+ * série principal de gráfico, anel de foco. É o azul que o olho encontra em
+ * toda tela, e é ele que faz o sistema parecer de uma empresa só.
+ *
+ * VERDE É ACENTO, e acento é raro por definição. Marcador da navegação ativa,
+ * detalhe de cartão, ponto de gráfico, forma pequena. Nunca fundo de região
+ * grande, nunca texto corrido.
+ *
+ * A razão não é gosto — é medida. O verde-limão dá **2,23:1** sobre branco,
+ * quando a WCAG AA exige 4,5:1 para texto. Ele é uma cor de FORMA, não de
+ * texto. Onde a marca precisa aparecer escrita, entra o `brand-accent-text`
+ * (#6b7e18, 4,54:1), que é o mesmo verde escurecido até passar — e não um
+ * verde diferente.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * IDENTIDADE NÃO É ESTADO
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Emergência continua vermelha, atenção continua âmbar, sucesso continua
+ * verde semântico — e o verde semântico é OUTRO verde, de propósito. Se a cor
+ * da marca virasse a cor de "tudo certo", um alerta de SLA estourado ficaria
+ * indistinguível de um botão, e a tela perderia a única linguagem que a
+ * operação precisa ler em um segundo.
  *
  * A REGRA QUE VALE MAIS QUE TODAS
  *
@@ -29,7 +55,7 @@
  * Este arquivo é a fonte. O Tailwind lê estes mesmos tokens pelo `@theme`, de
  * modo que `bg-surface` e `var(--color-surface)` são sempre a mesma cor. Um
  * valor literal escrito num componente é um valor que não existe no tema — e
- * que não vai mudar quando o tema mudar.
+ * que não vai mudar quando a marca mudar.
  */
 
 @layer theme {
@@ -37,51 +63,86 @@
     /* ---------------------------------------------------------------- cor */
 
     /*
-     * NEUTROS — viés frio esverdeado, do vidro de instrumento.
-     * A escala vai do papel (0) ao quase-preto (900) e é a MESMA em light e
-     * dark; o que muda é qual degrau cada papel semântico usa.
+     * NEUTROS — derivados do GRAFITE DA MARCA (#262937), e não de cinza puro.
+     *
+     * O grafite do símbolo tem um viés azulado discreto, e os neutros o
+     * herdam: é o que faz o cinza da interface pertencer à mesma família da
+     * logo em vez de conviver com ela. Cinza puro é o cinza de quem não
+     * escolheu.
+     *
+     * A escala vai do papel (0) ao quase-preto (950) e é a MESMA em claro e
+     * escuro; o que muda é qual degrau cada papel semântico usa.
      */
     --aurora-neutral-0: #ffffff;
-    --aurora-neutral-25: #f8faf9;
-    --aurora-neutral-50: #f1f5f4;
-    --aurora-neutral-100: #e5ebea;
-    --aurora-neutral-200: #cfd8d7;
-    --aurora-neutral-300: #aeb9b8;
-    --aurora-neutral-400: #8a9695;
-    --aurora-neutral-500: #6b7877;
+    --aurora-neutral-25: #f9fafb;
+    --aurora-neutral-50: #f3f5f8;
+    --aurora-neutral-100: #e8eaf0;
+    --aurora-neutral-200: #d3d7e0;
+    --aurora-neutral-300: #b0b6c4;
+    --aurora-neutral-400: #8b92a4;
+    --aurora-neutral-500: #6c7385;
     /*
-     * O degrau que faltava, e por que ele existe.
+     * O degrau que existe por causa de uma auditoria.
      *
-     * `text-subtle` apontava para o 500 (#6b7877), que dá 4,02:1 sobre a
-     * superfície rebaixada do quadro e 4,17:1 sobre a do parque — abaixo dos
-     * 4,5:1 que a WCAG AA exige para texto pequeno. A auditoria automatizada
-     * acusou em cinco telas.
-     *
-     * Escurecer até o 600 resolveria o contraste e apagaria a HIERARQUIA:
-     * `muted` já é o 600, e os dois passariam a ser a mesma cor. Este degrau
-     * intermediário dá 4,95:1 no pior fundo e continua visivelmente mais claro
-     * que `muted`.
+     * `text-subtle` apontava para o 500, que não alcança 4,5:1 sobre a
+     * superfície rebaixada. Escurecer até o 600 resolveria o contraste e
+     * apagaria a HIERARQUIA — `muted` já é o 600, e os dois virariam a mesma
+     * cor. Este degrau intermediário dá 5,06:1 no pior fundo e continua
+     * visivelmente mais claro que `muted`.
      */
-    --aurora-neutral-550: #5c6a69;
-    --aurora-neutral-600: #526060;
-    --aurora-neutral-700: #3c4a4a;
-    --aurora-neutral-800: #26312f;
-    --aurora-neutral-900: #161d1c;
-    --aurora-neutral-950: #0d1211;
+    --aurora-neutral-550: #5b6275;
+    --aurora-neutral-600: #4f5768;
+    --aurora-neutral-700: #3c4354;
+    --aurora-neutral-800: #272c3a;
+    --aurora-neutral-900: #171b26;
+    --aurora-neutral-950: #0d1017;
 
-    /* DESTAQUE — teal profundo. Ação, seleção, foco. Nunca estado. */
-    --aurora-accent-50: #eafaf7;
-    --aurora-accent-100: #ccf2ec;
-    --aurora-accent-200: #99e4da;
-    --aurora-accent-300: #5ecfc2;
-    --aurora-accent-400: #2fb3a6;
-    --aurora-accent-500: #14958a;
-    --aurora-accent-600: #0c776f;
-    --aurora-accent-700: #0b5f59;
-    --aurora-accent-800: #0c4b47;
-    --aurora-accent-900: #0b3d3a;
+    /*
+     * AZUL DA MARCA — o "Care" da logo. A cor de PRODUTO.
+     *
+     * A rampa é a cor real (500) clareada até o branco e escurecida até o
+     * preto, em passos conferidos um a um:
+     *   500 sobre branco  5,50:1  → botão primário com texto branco
+     *   600 sobre branco  7,13:1  → link e texto de destaque
+     *   300 sobre #0d1017 8,31:1  → o degrau do tema escuro
+     */
+    --aurora-brand-50: #f1f5f9;
+    --aurora-brand-100: #e2e9f3;
+    --aurora-brand-200: #c1cfe4;
+    --aurora-brand-300: #95add1;
+    --aurora-brand-400: #6587bd;
+    --aurora-brand-500: #3e69ac;
+    --aurora-brand-600: #345890;
+    --aurora-brand-700: #2a4775;
+    --aurora-brand-800: #1f3556;
+    --aurora-brand-900: #15243a;
 
-    /* SEMÂNTICAS — significado, nunca decoração. */
+    /*
+     * VERDE DA MARCA — o "Téchne" da logo. ACENTO, e só.
+     *
+     * O 500 é a cor real e serve para FORMA: barra, ponto, marcador, borda.
+     * Para TEXTO ele reprova (2,23:1), e por isso existe o 700 (4,54:1) — o
+     * mesmo verde escurecido até passar, e não um verde inventado.
+     */
+    --aurora-lime-50: #f8faf0;
+    --aurora-lime-100: #f0f5de;
+    --aurora-lime-200: #e0e9b9;
+    --aurora-lime-300: #c9d987;
+    --aurora-lime-400: #b1c750;
+    --aurora-lime-500: #9db924;
+    --aurora-lime-600: #849b1e;
+    --aurora-lime-700: #6b7e18;
+    --aurora-lime-800: #4f5d12;
+    --aurora-lime-900: #353f0c;
+
+    /*
+     * SEMÂNTICAS — significado, nunca decoração, e NUNCA a cor da marca.
+     *
+     * O verde semântico é deliberadamente OUTRO verde que o da logo: um
+     * verde-esmeralda, distinguível do verde-limão lado a lado. Se "tudo
+     * certo" e "esta é a nossa marca" fossem a mesma cor, um chip de sucesso
+     * viraria enfeite institucional e pararia de informar.
+     */
     --aurora-good-100: #d7f2e0;
     --aurora-good-500: #16915a;
     --aurora-good-700: #0f6b42;
@@ -96,22 +157,22 @@
     --aurora-info-700: #1f4e95;
 
     /*
-     * DADOS — a paleta dos gráficos, e ela é separada de tudo o resto.
+     * DADOS — a paleta dos gráficos.
      *
-     * Série de gráfico não é estado: se "série 2" reusasse o vermelho de
-     * crítico, uma barra alta pareceria um alarme. E não pode reusar o
-     * destaque, senão toda série parece clicável.
+     * Começa pelas duas cores da marca, nessa ordem: a série principal é o
+     * azul, a secundária é o verde. Da terceira em diante entram neutros e
+     * apoios que se distinguem das duas primeiras E entre si em escala de
+     * cinza — gráfico impresso em preto e branco continua sendo gráfico.
      *
-     * Seis tons que se distinguem em escala de cinza também (a luminosidade
-     * sobe e desce alternadamente), porque gráfico impresso em preto e branco
-     * continua sendo gráfico. A ordem é a ordem de uso.
+     * Nenhuma delas é uma cor semântica: uma série que reusasse o vermelho de
+     * crítico faria uma barra alta parecer um alarme.
      */
-    --aurora-data-1: #0c776f;
-    --aurora-data-2: #4a7fb5;
-    --aurora-data-3: #b57d0a;
-    --aurora-data-4: #7b5ea7;
-    --aurora-data-5: #2c8c63;
-    --aurora-data-6: #b1583f;
+    --aurora-data-1: #3e69ac;
+    --aurora-data-2: #849b1e;
+    --aurora-data-3: #6587bd;
+    --aurora-data-4: #4f5768;
+    --aurora-data-5: #2a4775;
+    --aurora-data-6: #b1c750;
 
     /* ------------------------------------------------- papéis semânticos */
 
@@ -138,10 +199,40 @@
     --aurora-text-on-accent: var(--aurora-neutral-0);
     --aurora-text-inverse: var(--aurora-neutral-0);
 
-    --aurora-accent: var(--aurora-accent-600);
-    --aurora-accent-hover: var(--aurora-accent-700);
-    --aurora-accent-soft: var(--aurora-accent-50);
-    --aurora-accent-text: var(--aurora-accent-700);
+    /*
+     * DESTAQUE = AZUL DA MARCA.
+     *
+     * `accent` é o nome que o código inteiro já usa (botão primário, seleção,
+     * foco), e por isso ele continua sendo a porta: trocar a marca é reapontar
+     * estas quatro linhas, não caçar `bg-accent` em oitenta arquivos.
+     *
+     * Os degraus são escolhidos pelo CONTRASTE, não pela aparência:
+     *   `accent` (500) é FUNDO de botão, com texto branco — 5,50:1;
+     *   `accent-text` (600) é TEXTO sobre superfície clara — 7,13:1.
+     * Usar o mesmo tom para as duas coisas reprovaria numa das duas.
+     */
+    --aurora-accent: var(--aurora-brand-500);
+    --aurora-accent-hover: var(--aurora-brand-600);
+    --aurora-accent-soft: var(--aurora-brand-50);
+    --aurora-accent-text: var(--aurora-brand-600);
+
+    /*
+     * ACENTO DE MARCA — o verde-limão do "Téchne".
+     *
+     * Separado de `accent` de propósito: são papéis diferentes. `accent` é a
+     * cor de AÇÃO e aparece em toda tela; `brand-accent` é a cor de
+     * IDENTIDADE e aparece pouco — o marcador da navegação ativa, um detalhe
+     * de cartão, um ponto de gráfico.
+     *
+     * `brand-accent` é para FORMA (2,23:1 — reprova como texto).
+     * `brand-accent-text` é o mesmo verde escurecido até 4,54:1, e é o único
+     * que pode escrever. Quem precisar de verde em texto usa este; quem usar o
+     * outro produz uma linha que metade das pessoas não lê.
+     */
+    --aurora-brand-accent: var(--aurora-lime-500);
+    --aurora-brand-accent-hover: var(--aurora-lime-600);
+    --aurora-brand-accent-soft: var(--aurora-lime-100);
+    --aurora-brand-accent-text: var(--aurora-lime-700);
 
     --aurora-good: var(--aurora-good-500);
     --aurora-good-soft: var(--aurora-good-100);
@@ -287,7 +378,10 @@
      * exige que o foco seja perceptível e não fique escondido atrás de barra
      * fixa — é por isso que ele tem deslocamento em vez de ficar colado.
      */
-    --aurora-focus-ring: var(--aurora-accent-500);
+    /* O anel de foco é o AZUL DA MARCA: é o elemento de interface que mais
+       aparece para quem navega por teclado, e ele deve pertencer à marca
+       tanto quanto o botão primário. */
+    --aurora-focus-ring: var(--aurora-brand-500);
     --aurora-focus-ring-width: 2px;
     --aurora-focus-ring-offset: 2px;
 
@@ -322,14 +416,14 @@
     --aurora-bg: var(--aurora-neutral-950);
     --aurora-surface: var(--aurora-neutral-900);
     --aurora-surface-raised: var(--aurora-neutral-800);
-    --aurora-surface-sunken: #0a0f0e;
-    --aurora-surface-subtle: #131a19;
+    --aurora-surface-sunken: #080a10;
+    --aurora-surface-subtle: #12151f;
     --aurora-surface-hover: var(--aurora-neutral-800);
     --aurora-surface-active: var(--aurora-neutral-700);
 
-    --aurora-border: #2a3634;
-    --aurora-border-strong: #3d4b49;
-    --aurora-border-subtle: #1d2726;
+    --aurora-border: #2b3040;
+    --aurora-border-strong: #3d4356;
+    --aurora-border-subtle: #1e2230;
 
     --aurora-text: var(--aurora-neutral-50);
     --aurora-text-muted: var(--aurora-neutral-300);
@@ -337,10 +431,24 @@
     --aurora-text-on-accent: var(--aurora-neutral-950);
     --aurora-text-inverse: var(--aurora-neutral-950);
 
-    --aurora-accent: var(--aurora-accent-300);
-    --aurora-accent-hover: var(--aurora-accent-200);
-    --aurora-accent-soft: rgb(12 119 111 / 0.18);
-    --aurora-accent-text: var(--aurora-accent-200);
+    /*
+     * NO ESCURO O AZUL SOBE DE DEGRAU: o 500 sobre fundo quase-preto dá
+     * 3,44:1, e não serve para texto. O 300 dá 8,31:1.
+     */
+    --aurora-accent: var(--aurora-brand-300);
+    --aurora-accent-hover: var(--aurora-brand-200);
+    --aurora-accent-soft: rgb(62 105 172 / 0.22);
+    --aurora-accent-text: var(--aurora-brand-300);
+
+    /*
+     * E O VERDE PURO PASSA A PODER ESCREVER: 8,52:1 sobre o fundo escuro.
+     * É a única situação em que `brand-accent` e `brand-accent-text` ficam
+     * próximos — no claro eles divergem por necessidade de contraste.
+     */
+    --aurora-brand-accent: var(--aurora-lime-500);
+    --aurora-brand-accent-hover: var(--aurora-lime-400);
+    --aurora-brand-accent-soft: rgb(157 185 36 / 0.18);
+    --aurora-brand-accent-text: var(--aurora-lime-400);
 
     /* As semânticas ganham versão clara para o texto e versão translúcida
        para o fundo: o tom 100 do tema claro sobre fundo escuro cega. */
@@ -363,7 +471,7 @@
     --aurora-shadow-overlay: 0 4px 6px -2px rgb(0 0 0 / 0.4), 0 12px 24px -6px rgb(0 0 0 / 0.6);
     --aurora-shadow-sheet: 0 8px 12px -4px rgb(0 0 0 / 0.5), 0 24px 48px -12px rgb(0 0 0 / 0.7);
 
-    --aurora-focus-ring: var(--aurora-accent-300);
+    --aurora-focus-ring: var(--aurora-brand-300);
   }
 }
 
@@ -396,6 +504,11 @@
   --color-accent-hover: var(--aurora-accent-hover);
   --color-accent-soft: var(--aurora-accent-soft);
   --color-accent-text: var(--aurora-accent-text);
+
+  --color-brand-accent: var(--aurora-brand-accent);
+  --color-brand-accent-hover: var(--aurora-brand-accent-hover);
+  --color-brand-accent-soft: var(--aurora-brand-accent-soft);
+  --color-brand-accent-text: var(--aurora-brand-accent-text);
 
   --color-good: var(--aurora-good);
   --color-good-soft: var(--aurora-good-soft);
@@ -527,6 +640,30 @@
     clip-path: inset(50%);
     white-space: nowrap;
     border-width: 0;
+  }
+
+  /*
+   * A LOGO SOBRE FUNDO ESCURO GANHA UMA PLACA CLARA.
+   *
+   * O arquivo da Téchne Care foi desenhado para papel branco: o símbolo é
+   * grafite e a assinatura é cinza. Sobre o tema escuro os dois desaparecem, e
+   * sobra o lettering flutuando sem o símbolo — que é metade da marca.
+   *
+   * Filtrar a imagem (inverter, clarear) resolveria e estaria errado: as cores
+   * da marca não são nossas para alterar. A placa é o que todo manual de
+   * identidade prescreve para uso sobre fundo escuro — uma área de respiro
+   * clara, com o arquivo original intacto em cima dela.
+   *
+   * No tema claro ela não existe: `background: transparent` e nenhum
+   * preenchimento, porque ali a logo já está no fundo para o qual foi feita.
+   */
+  .aurora-logo {
+    border-radius: var(--aurora-radius-card);
+  }
+  :root[data-theme='dark'] .aurora-logo {
+    background-color: var(--aurora-neutral-0);
+    padding: var(--aurora-space-2) var(--aurora-space-3);
+    box-shadow: var(--aurora-shadow-card);
   }
 
   /* O pulo para o conteúdo: invisível até receber foco. Primeira parada do

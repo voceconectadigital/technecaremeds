@@ -2,43 +2,44 @@
   "$comentario": [
     "A MARCA MORA AQUI, e em nenhum outro lugar.",
     "",
-    "O cliente ainda NÃO aprovou um nome comercial. 'Aurora' é NOME DE TRABALHO —",
-    "codinome interno enquanto a decisão não vem —, e a homologação vai mostrá-lo",
-    "na tela. Quando o nome definitivo for escolhido, a troca precisa ser uma",
-    "edição neste arquivo seguida de `npm run marca`, e não uma caçada a strings",
-    "em cinco aplicações, dois projetos nativos e três arquivos de manifesto.",
+    "Em 29/09/2026 o cliente definiu a identidade visível: Téchne Care, com a",
+    "logo e as cores extraídas dela. \"Aurora\" continua sendo o NOME TÉCNICO",
+    "INTERNO — pacotes, papéis de banco, prefixos de variável e chaves de",
+    "armazenamento — e não aparece mais em nenhuma tela do cliente.",
+    "",
+    "Trocar a marca de novo é editar este arquivo e rodar `npm run marca`, e não",
+    "uma caçada a strings em cinco aplicações, dois projetos nativos e três",
+    "arquivos de manifesto.",
     "",
     "O que NÃO está aqui, de propósito: `x-aurora-*` nos cabeçalhos HTTP,",
     "`aurora:` nas chaves de armazenamento, `aurora_app` nos papéis do banco e",
-    "`@aurora/*` nos pacotes. Esses são NAMESPACES TÉCNICOS, não marca — trocá-los",
-    "junto com o nome comercial quebraria sessões guardadas, migrations aplicadas e",
-    "a compatibilidade da fila offline de quem já tem trabalho no aparelho.",
+    "`@aurora/*` nos pacotes. Esses são NAMESPACES TÉCNICOS, não marca —",
+    "trocá-los junto com o nome comercial quebraria sessões guardadas, migrations",
+    "aplicadas e a compatibilidade da fila offline de quem já tem trabalho no",
+    "aparelho.",
     "",
-    "A separação é a razão de este arquivo existir: sem ela, 'renomear o produto'",
-    "e 'renomear o sistema' viram a mesma tarefa, e a segunda é irreversível."
+    "A separação é a razão de este arquivo existir: sem ela, \"renomear o produto\"",
+    "e \"renomear o sistema\" viram a mesma tarefa, e a segunda é irreversível."
   ],
-
-  "produto": "Aurora",
-  "descricao": "Gestão de ativos e manutenção",
-
+  "produto": "Téchne Care",
+  "descricao": "Engenharia clínica e gestão de ativos",
   "aplicacoes": {
     "web": {
-      "titulo": "Aurora",
-      "descricao": "Gestão de ativos e manutenção"
+      "titulo": "Téchne Care",
+      "descricao": "Engenharia clínica e gestão de ativos"
     },
     "portal": {
-      "titulo": "Portal — Aurora",
+      "titulo": "Portal — Téchne Care",
       "nomeNaTela": "Portal do cliente",
       "descricao": "Acompanhe seus chamados e abra novos, de onde estiver."
     },
     "campo": {
-      "titulo": "Campo — Aurora",
-      "nomeNaTela": "Aurora Campo",
-      "nomeCurto": "Aurora Campo",
+      "titulo": "Campo — Téchne Care",
+      "nomeNaTela": "Téchne Care Campo",
+      "nomeCurto": "Téchne Campo",
       "descricao": "Executa ordens de serviço em campo, com ou sem rede."
     }
   },
-
   "$naoDefinitivo": {
     "$comentario": [
       "Identificadores que NÃO podem ser congelados antes de o cliente decidir.",
@@ -49,5 +50,23 @@
     "appId": "br.com.aurora.field",
     "esquemaDeLinkProfundo": "aurora-campo",
     "situacao": "A VALIDAR — nome comercial não aprovado pelo cliente"
+  },
+  "identidadeVisual": {
+    "$comentario": [
+      "As cores saíram de um HISTOGRAMA DOS PIXELS da logo, e não de estimativa.",
+      "O procedimento está em docs/AI-HANDOFF.md §20-B e pode ser refeito.",
+      "",
+      "Os tokens de CSS vivem em packages/ui/src/styles/tokens.css e são a fonte",
+      "para a interface. Os valores aqui existem para as superfícies que NÃO",
+      "conseguem importar CSS: theme-color do navegador, manifesto do PWA e as",
+      "strings nativas dos projetos de loja."
+    ],
+    "logoHorizontal": "/marca/technecare-horizontal.png",
+    "logoSimbolo": "/marca/technecare-simbolo.png",
+    "corPrimaria": "#3e69ac",
+    "corAcento": "#9db924",
+    "corTinta": "#262937",
+    "temaClaro": "#f3f5f8",
+    "temaEscuro": "#0d1017"
   }
 }

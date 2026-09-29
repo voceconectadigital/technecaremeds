@@ -27,8 +27,8 @@
  * entra — antes disso, o número honesto vale mais que a curva bonita.
  */
 import { useState } from 'react';
-import { HelpCircle, TrendingUp } from 'lucide-react';
-import { Card, CardHeader, Dialog, EmptyState, Input, Skeleton, StatusChip, cn } from '@aurora/ui';
+import { HelpCircle, Minus, TrendingUp } from 'lucide-react';
+import { Card, CardHeader, Dialog, DonutChart, EmptyState, Input, Skeleton, StatusChip } from '@aurora/ui';
 import {
   insightBacklog,
   insightFirstResponse,
@@ -132,8 +132,20 @@ export function IndicadoresPage() {
             <h2 id="qualidade" className="text-xl font-semibold tracking-display text-text">
               Prevenção
             </h2>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <Indicador op={insightPreventiveVsCorrective} periodo={periodo} onExplicar={setExplicando} />
+            <div className="grid gap-3 lg:grid-cols-3">
+              {/*
+               * O MIX GANHA FORMA, porque ele é o único desta tela que é uma
+               * COMPOSIÇÃO — "deste total, quanto foi planejado e quanto foi
+               * apagar incêndio?" — e é a pergunta que um gestor de engenharia
+               * clínica leva para a diretoria.
+               *
+               * As duas fatias usam as duas cores da marca: azul para
+               * preventiva, verde para corretiva. Não há juízo de valor na
+               * escolha (não é "verde = bom"): são as duas séries do gráfico,
+               * na ordem da paleta de dados. O juízo está no número, que a
+               * própria definição explica.
+               */}
+              <MixPreventiva periodo={periodo} onExplicar={setExplicando} />
               <Indicador op={insightPlanCompliance} periodo={periodo} onExplicar={setExplicando} />
               <Indicador op={insightTimeByWaitReason} periodo={periodo} onExplicar={setExplicando} />
             </div>
@@ -210,20 +222,31 @@ function Indicador({
       />
       <div className="flex flex-col gap-1 px-4 pb-4">
         {/*
-          O NÚMERO É O CONTEÚDO DO CARTÃO, e agora tem o tamanho disso.
-          Em 31px ele é a primeira coisa que o olho encontra ao varrer nove
-          cartões — em 22px, competia com o próprio título.
-        */}
-        <p
-          className={cn(
-            'text-3xl font-semibold tracking-display tabular-nums',
-            valor === '—' ? 'text-subtle' : 'text-text'
-          )}
-          data-numeric
-        >
-          {valor}
-        </p>
-        {detalhe && <p className="text-xs text-muted">{detalhe}</p>}
+         * SEM AMOSTRA NÃO É UM TRAÇO GIGANTE.
+         *
+         * Um "—" em 39px ocupa o lugar de um número e não informa nada; o
+         * cartão fica com cara de tela inacabada, que foi exatamente a
+         * impressão relatada. A ausência de dado é uma RESPOSTA — "nenhum caso
+         * fechou neste período" é informação útil para quem escolheu o
+         * período — e merece o espaço dela, com forma própria.
+         *
+         * O que ela não pode é parecer um erro. Daí o tom neutro, o ícone
+         * discreto e a frase que explica o porquê, que vem do próprio
+         * apresentador.
+         */}
+        {valor === '—' ? (
+          <div className="flex items-start gap-2 rounded-control bg-surface-subtle px-3 py-2.5">
+            <Minus aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-subtle" />
+            <p className="text-sm text-muted">{detalhe ?? 'sem amostra no período'}</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-3xl font-semibold tracking-display text-text tabular-nums" data-numeric>
+              {valor}
+            </p>
+            {detalhe && <p className="text-xs text-muted">{detalhe}</p>}
+          </>
+        )}
 
         {/*
           A COBERTURA FICA JUNTO DO NÚMERO, e não atrás de um clique.
@@ -459,4 +482,83 @@ function trintaDiasAtras(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().slice(0, 10);
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Preventiva × corretiva, com a forma que o número sozinho não dá.
+ *
+ * Reusa o MESMO carregamento e o MESMO cartão dos outros indicadores — o que
+ * muda é que, havendo amostra, a rosca aparece ao lado do percentual. Sem
+ * amostra, cai no estado vazio como qualquer outro: um gráfico de zero fatias
+ * seria um círculo cinza afirmando que existe uma distribuição.
+ */
+function MixPreventiva({
+  periodo,
+  onExplicar,
+}: {
+  periodo: Record<string, string>;
+  onExplicar: (d: MetricDefinition) => void;
+}) {
+  const { data, isLoading, isError } = useApiQuery(insightPreventiveVsCorrective, { query: periodo }) as {
+    data: Envelope | undefined;
+    isLoading: boolean;
+    isError: boolean;
+  };
+
+  if (isLoading) return <Skeleton className="h-52 w-full" />;
+  if (isError || !data) {
+    return (
+      <Card className="border-bad/30">
+        <div className="p-4">
+          <p className="text-sm text-bad-text">Este indicador não pôde ser calculado agora.</p>
+          <p className="mt-1 text-xs text-muted">Os outros continuam válidos.</p>
+        </div>
+      </Card>
+    );
+  }
+
+  const preventivas = Number((data.data as Record<string, unknown>).preventive ?? 0);
+  const corretivas = Number((data.data as Record<string, unknown>).corrective ?? 0);
+  const total = preventivas + corretivas;
+  const { valor, detalhe } = apresentar(data);
+
+  return (
+    <Card>
+      <CardHeader
+        headingLevel={3}
+        title={data.definition.label}
+        actions={
+          <button
+            type="button"
+            onClick={() => onExplicar(data.definition)}
+            aria-label={`Como ${data.definition.label} é calculado`}
+            className="rounded-control p-1 text-subtle transition-colors hover:bg-surface-hover hover:text-text"
+          >
+            <HelpCircle aria-hidden="true" className="size-4" />
+          </button>
+        }
+      />
+      <div className="p-4">
+        {total === 0 ? (
+          <div className="flex items-start gap-2 rounded-control bg-surface-subtle px-3 py-2.5">
+            <Minus aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-subtle" />
+            <p className="text-sm text-muted">{detalhe ?? 'nenhuma ordem concluída no período'}</p>
+          </div>
+        ) : (
+          <DonutChart
+            size={104}
+            label="Ordens concluídas por natureza"
+            centerValue={valor}
+            centerLabel="preventiva"
+            data={[
+              { label: 'Preventivas', value: preventivas, series: 1 },
+              { label: 'Corretivas', value: corretivas, series: 2 },
+            ]}
+          />
+        )}
+      </div>
+    </Card>
+  );
 }

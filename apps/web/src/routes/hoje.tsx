@@ -154,7 +154,19 @@ function PainelDoTurno() {
         value={abertas}
         hint={emExecucao > 0 ? `${emExecucao} em execução agora` : 'Nenhuma em execução'}
         icon={<ClipboardList className="size-4" />}
-        tone={abertas === 0 ? 'good' : 'neutral'}
+        /*
+         * A HIERARQUIA DOS TONS AQUI É SEMÂNTICA, E NÃO DECORATIVA.
+         *
+         * "Em aberto" é a contagem institucional do turno — nem boa nem má —,
+         * e por isso usa o AZUL DA MARCA: é o número que diz o tamanho da
+         * operação. Os outros três são juízos: atrasada é vermelha, parada e
+         * sem data são âmbar, e zero em qualquer um deles é verde semântico.
+         *
+         * O verde de "tudo certo" NÃO é o verde da logo: são cores
+         * diferentes de propósito, para que um chip de sucesso não vire
+         * enfeite institucional e pare de informar.
+         */
+        tone={abertas === 0 ? 'good' : 'accent'}
         action={<AtalhoDeCartao to="/ordens">Abrir o quadro</AtalhoDeCartao>}
       />
       <Metric

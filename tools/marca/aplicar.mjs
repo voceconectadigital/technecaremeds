@@ -65,15 +65,43 @@ function carimbar(caminho, substituicoes) {
 
 /* ---------------------------------------------------- os três `index.html` */
 
-carimbar('apps/web/index.html', [[/<title>[^<]*<\/title>/, `<title>${marca.aplicacoes.web.titulo}</title>`]]);
+/*
+ * TÍTULO, FAVICON E `theme-color` SAEM DO MESMO LUGAR.
+ *
+ * O título já vinha daqui; o ícone e a cor da barra do navegador estavam
+ * escritos à mão em cada `index.html`. Eram três valores que ninguém lembraria
+ * de trocar junto com a marca — e o sintoma seria o pior tipo: o cliente abre
+ * a aplicação com o nome dele no título, a aba mostra um ícone genérico, e o
+ * celular pinta a barra com a cor do produto anterior.
+ *
+ * `identidadeVisual` é opcional de propósito: um projeto sem logo definida
+ * continua funcionando, apenas sem carimbo de ícone.
+ */
+const visual = marca.identidadeVisual ?? null;
 
-carimbar('apps/portal/index.html', [
-  [/<title>[^<]*<\/title>/, `<title>${marca.aplicacoes.portal.titulo}</title>`],
-]);
+function alvosDeMarca(app) {
+  const alvos = [[/<title>[^<]*<\/title>/, `<title>${app.titulo}</title>`]];
+  if (!visual) return alvos;
 
-carimbar('apps/field/index.html', [
-  [/<title>[^<]*<\/title>/, `<title>${marca.aplicacoes.campo.titulo}</title>`],
-]);
+  alvos.push(
+    [
+      /<meta name="theme-color" content="[^"]*" media="\(prefers-color-scheme: light\)" \/>/,
+      `<meta name="theme-color" content="${visual.temaClaro}" media="(prefers-color-scheme: light)" />`,
+    ],
+    [
+      /<meta name="theme-color" content="[^"]*" media="\(prefers-color-scheme: dark\)" \/>/,
+      `<meta name="theme-color" content="${visual.temaEscuro}" media="(prefers-color-scheme: dark)" />`,
+    ],
+    [/<link rel="icon"[^>]*\/>/, `<link rel="icon" type="image/png" href="${visual.logoSimbolo}" />`]
+  );
+  return alvos;
+}
+
+carimbar('apps/web/index.html', alvosDeMarca(marca.aplicacoes.web));
+
+carimbar('apps/portal/index.html', alvosDeMarca(marca.aplicacoes.portal));
+
+carimbar('apps/field/index.html', alvosDeMarca(marca.aplicacoes.campo));
 
 /* ------------------------------------------------------- manifesto do PWA */
 
@@ -129,15 +157,21 @@ const modulo = `/**
  * ARQUIVO GERADO por \`npm run marca\` a partir de \`marca.config.json\`.
  * Não edite à mão: a próxima geração desfaz.
  *
- * O nome comercial ainda NÃO foi aprovado pelo cliente. "Aurora" é nome de
- * trabalho, e a homologação vai mostrá-lo na tela — por isso ele mora num lugar
- * só, e por isso existe uma prova que recusa o nome escrito à mão numa tela.
+ * A marca visível é a do CLIENTE; "Aurora" é o nome técnico interno e não
+ * aparece em tela nenhuma. Por isso tudo o que o usuário lê mora num lugar só,
+ * e por isso existe uma prova que recusa o nome escrito à mão numa tela.
+ *
+ * As logos são CAMINHOS, e não imagens importadas: o arquivo é servido do
+ * diretório público de cada aplicação, então trocar a marca é trocar dois
+ * arquivos e uma linha de configuração — sem recompilar nada.
  */
 
 export const MARCA = ${JSON.stringify(
   {
     produto: marca.produto,
     descricao: marca.descricao,
+    logoHorizontal: marca.identidadeVisual?.logoHorizontal ?? null,
+    logoSimbolo: marca.identidadeVisual?.logoSimbolo ?? null,
     web: marca.aplicacoes.web,
     portal: marca.aplicacoes.portal,
     campo: marca.aplicacoes.campo,

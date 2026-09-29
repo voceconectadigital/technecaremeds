@@ -20,14 +20,30 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/cn';
 import { Spinner } from './spinner';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'brand' | 'danger' | 'link';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 const VARIANTES: Record<ButtonVariant, string> = {
+  /*
+   * PRIMÁRIO É O AZUL DA MARCA, e ele chega aqui por `bg-accent` — não por um
+   * hex escrito nesta linha. Trocar a marca reaponta um token e este arquivo
+   * não muda.
+   */
   primary: 'bg-accent text-on-accent hover:bg-accent-hover active:brightness-95 border border-transparent',
   secondary:
-    'bg-surface text-text border border-border-strong hover:bg-surface-hover active:bg-surface-active',
+    'bg-surface text-text border border-border-strong hover:border-accent hover:bg-accent-soft hover:text-accent-text active:bg-surface-active',
   ghost: 'bg-transparent text-muted border border-transparent hover:bg-surface-hover hover:text-text',
+  /*
+   * ACENTO DE MARCA — o verde-limão, e SÓ onde a ação é da identidade e não da
+   * operação: um convite de marca, um destaque institucional pontual.
+   *
+   * O TEXTO É GRAFITE, e não branco. O verde tem luminância alta demais:
+   * branco sobre ele dá 2,3:1, que é ilegível. Grafite sobre o verde dá mais
+   * de 7:1. É a mesma razão por que o verde puro não escreve — aqui ele é
+   * fundo, e quem escreve é a tinta escura.
+   */
+  brand:
+    'bg-brand-accent text-[var(--aurora-neutral-900)] border border-transparent hover:bg-brand-accent-hover active:brightness-95',
   // Vermelho só onde a ação é destrutiva de verdade. Um botão vermelho em
   // "Salvar" ensina a pessoa a ignorar vermelho.
   danger: 'bg-bad text-white border border-transparent hover:brightness-110 active:brightness-95',
