@@ -137,6 +137,8 @@ describe('migrations (EPIC-001)', () => {
       'team_members',
       'teams',
       'time_entries',
+      'user_credentials',
+      'user_sessions',
       'users',
       'wait_reasons',
       'warehouses',

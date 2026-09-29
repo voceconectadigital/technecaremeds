@@ -36,7 +36,7 @@
 --     sobre `user_sessions`. Uma consulta direta a partir do código da
 --     aplicação falha com "permission denied" — ALTO, e não com zero linhas;
 --   · todo acesso passa por funções `SECURITY DEFINER` de consulta FIXA,
---     pertencentes a `aurora_identity`, papel `NOLOGIN` que a API não pode
+--     pertencentes a `aurora_auth`, papel `NOLOGIN` que a API não pode
 --     assumir;
 --   · `aurora_app` recebe apenas `EXECUTE` nessas funções.
 --
@@ -58,6 +58,41 @@
 --    (a fila de saída existe, o adaptador não). Enquanto não houver, redefinir
 --    senha é operação administrativa local — `npm run admin:criar`.
 -- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- `aurora_auth` — um papel NOVO, e não `aurora_identity`.
+--
+-- A primeira versão desta migration pendurou as funções em `aurora_identity`,
+-- que já existia para a resolução de vínculos, e a suíte de isolamento acusou:
+-- há um teste que exige que `aurora_identity` tenha APENAS `SELECT` — "não
+-- escreve em lugar nenhum". O teste estava certo e a migration, errada.
+--
+-- A propriedade que ele defende vale dinheiro no dia ruim: se alguma função
+-- `SECURITY DEFINER` daquele papel for explorada, um papel só-leitura limita o
+-- estrago a leitura. Ampliá-lo para escrever sessão teria trocado essa garantia
+-- por conveniência, e a troca só apareceria num incidente.
+--
+-- Então autenticar ganha o SEU papel, com o mínimo: escreve em duas tabelas, e
+-- em nenhuma outra. `NOLOGIN` porque ninguém se conecta como ele — é dono das
+-- funções, e só.
+-- -----------------------------------------------------------------------------
+DO $do$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aurora_auth') THEN
+    CREATE ROLE aurora_auth NOLOGIN NOBYPASSRLS;
+  END IF;
+END
+$do$;
+ALTER ROLE aurora_auth NOBYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE;
+GRANT USAGE ON SCHEMA aurora TO aurora_auth;
+
+/*
+ * Leitura de `users` para as funções montarem a identidade (e-mail e nome) sem
+ * uma segunda ida ao banco. SELECT e nada mais: quem autentica não altera
+ * cadastro.
+ */
+GRANT SELECT ON aurora.users TO aurora_auth;
+CREATE POLICY users_auth_read ON aurora.users FOR SELECT TO aurora_auth USING (true);
 
 -- -----------------------------------------------------------------------------
 -- user_credentials — uma linha por pessoa que tem senha nesta plataforma.
@@ -339,7 +374,7 @@ BEGIN
    * que alguém escreveria por conveniência não devolve dado, e não há policy
    * frouxa para alguém ampliar sem perceber.
    *
-   * As funções `SECURITY DEFINER` rodam como `aurora_identity`, que é DONO
+   * As funções `SECURITY DEFINER` rodam como `aurora_auth`, que é DONO
    * delas e não está sujeito à RLS destas tabelas porque recebe privilégio
    * explícito abaixo — e é o único caminho que existe.
    */
@@ -348,13 +383,13 @@ BEGIN
   ALTER TABLE aurora.user_sessions    ENABLE ROW LEVEL SECURITY;
   ALTER TABLE aurora.user_sessions    FORCE  ROW LEVEL SECURITY;
 
-  GRANT SELECT, INSERT, UPDATE ON aurora.user_credentials TO aurora_identity;
-  GRANT SELECT, INSERT, UPDATE ON aurora.user_sessions    TO aurora_identity;
+  GRANT SELECT, INSERT, UPDATE ON aurora.user_credentials TO aurora_auth;
+  GRANT SELECT, INSERT, UPDATE ON aurora.user_sessions    TO aurora_auth;
 
   CREATE POLICY user_credentials_identity ON aurora.user_credentials FOR ALL
-    TO aurora_identity USING (true) WITH CHECK (true);
+    TO aurora_auth USING (true) WITH CHECK (true);
   CREATE POLICY user_sessions_identity ON aurora.user_sessions FOR ALL
-    TO aurora_identity USING (true) WITH CHECK (true);
+    TO aurora_auth USING (true) WITH CHECK (true);
 
   /*
    * `aurora_app` NÃO recebe grant nenhum sobre as duas tabelas. É deliberado, e
@@ -365,12 +400,12 @@ BEGIN
 END
 $do$;
 
-ALTER FUNCTION aurora.credencial_por_email(text)                     OWNER TO aurora_identity;
-ALTER FUNCTION aurora.registrar_tentativa_de_senha(uuid, boolean)    OWNER TO aurora_identity;
-ALTER FUNCTION aurora.abrir_sessao(uuid, uuid, text, timestamptz, text, text) OWNER TO aurora_identity;
-ALTER FUNCTION aurora.sessao_por_token(text, interval)               OWNER TO aurora_identity;
-ALTER FUNCTION aurora.encerrar_sessao(text, text)                    OWNER TO aurora_identity;
-ALTER FUNCTION aurora.definir_senha(uuid, text)                      OWNER TO aurora_identity;
+ALTER FUNCTION aurora.credencial_por_email(text)                     OWNER TO aurora_auth;
+ALTER FUNCTION aurora.registrar_tentativa_de_senha(uuid, boolean)    OWNER TO aurora_auth;
+ALTER FUNCTION aurora.abrir_sessao(uuid, uuid, text, timestamptz, text, text) OWNER TO aurora_auth;
+ALTER FUNCTION aurora.sessao_por_token(text, interval)               OWNER TO aurora_auth;
+ALTER FUNCTION aurora.encerrar_sessao(text, text)                    OWNER TO aurora_auth;
+ALTER FUNCTION aurora.definir_senha(uuid, text)                      OWNER TO aurora_auth;
 
 REVOKE ALL ON FUNCTION aurora.credencial_por_email(text)                     FROM PUBLIC;
 REVOKE ALL ON FUNCTION aurora.registrar_tentativa_de_senha(uuid, boolean)    FROM PUBLIC;
