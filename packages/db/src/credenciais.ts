@@ -103,10 +103,9 @@ export async function abrirSessaoPorSenha(
   if (!email || !entrada.senha) return { motivo: 'credencial_invalida' };
 
   return withPlatformSession(db, async (c: SqlClient) => {
-    const [linha] = await c.query<LinhaDeCredencial>(
-      'SELECT * FROM aurora.credencial_por_email($1)',
-      [email]
-    );
+    const [linha] = await c.query<LinhaDeCredencial>('SELECT * FROM aurora.credencial_por_email($1)', [
+      email,
+    ]);
 
     if (!linha) {
       /*
@@ -168,10 +167,7 @@ function resumoDeEngodo(): string {
 }
 
 /** Quem é o portador deste token? `null` para qualquer motivo de recusa. */
-export async function identidadePorToken(
-  db: Database,
-  token: string
-): Promise<IdentidadeDeSessao | null> {
+export async function identidadePorToken(db: Database, token: string): Promise<IdentidadeDeSessao | null> {
   // Token malformado não chega ao banco — e responde igual a token inexistente.
   if (!pareceTokenDeSessao(token)) return null;
 
@@ -219,10 +215,7 @@ export async function encerrarSessao(db: Database, token: string, motivo?: strin
  * dono. A função vive aqui para que a regra do resumo e o nome da função do
  * banco morem num lugar só.
  */
-export async function definirSenha(
-  db: Database,
-  entrada: { userId: string; senha: string }
-): Promise<void> {
+export async function definirSenha(db: Database, entrada: { userId: string; senha: string }): Promise<void> {
   const hash = resumirSenha(entrada.senha);
   await db.transaction(async (tx) => {
     await tx.query('SELECT aurora.definir_senha($1, $2)', [entrada.userId, hash]);

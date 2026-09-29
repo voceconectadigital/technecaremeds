@@ -239,9 +239,7 @@ try {
 
   /* ------------------------------------------------------------ a pessoa */
 
-  const email = (
-    typeof argumentos.email === 'string' ? argumentos.email : await perguntar('E-mail: ')
-  )
+  const email = (typeof argumentos.email === 'string' ? argumentos.email : await perguntar('E-mail: '))
     .trim()
     .toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
@@ -363,10 +361,9 @@ try {
       );
     } else {
       // Quem já existia pode ter vindo do provedor local. Passa a ser 'password'.
-      await tx.query(
-        `UPDATE aurora.users SET auth_provider = 'password', updated_at = now() WHERE id = $1`,
-        [userId]
-      );
+      await tx.query(`UPDATE aurora.users SET auth_provider = 'password', updated_at = now() WHERE id = $1`, [
+        userId,
+      ]);
     }
 
     const vinculo = await tx.query(

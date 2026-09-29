@@ -200,13 +200,7 @@ export function EntrarPage() {
             </Field>
           )}
 
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            disabled={entrando || carregandoConfig}
-          >
+          <Button type="submit" variant="primary" size="lg" fullWidth disabled={entrando || carregandoConfig}>
             {entrando ? 'Entrando…' : 'Entrar'}
           </Button>
 

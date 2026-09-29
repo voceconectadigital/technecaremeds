@@ -19,7 +19,14 @@
 import { Body, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { withTenant, withPlatformSession, type Database, type SqlClient } from '@aurora/db';
-import { isQrToken, generateQrToken, isUuid, ValidationError, RateLimitedError, NotFoundError } from '@aurora/domain';
+import {
+  isQrToken,
+  generateQrToken,
+  isUuid,
+  ValidationError,
+  RateLimitedError,
+  NotFoundError,
+} from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -56,7 +63,10 @@ export class QrController {
     // de verdade.
     const origem = req.ip ?? 'desconhecida';
     if (!this.limiter.allow(origem)) {
-      throw new RateLimitedError('Muitas tentativas; aguarde um minuto.', this.limiter.retryAfterSeconds(origem));
+      throw new RateLimitedError(
+        'Muitas tentativas; aguarde um minuto.',
+        this.limiter.retryAfterSeconds(origem)
+      );
     }
 
     // Token malformado nem chega ao banco, e responde igual a token inexistente.

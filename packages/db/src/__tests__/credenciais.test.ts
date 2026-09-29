@@ -155,7 +155,10 @@ describe('bloqueio por tentativas', () => {
      * prazo, quem soubesse o e-mail de alguém poderia trancá-lo para sempre de
      * fora — o ataque vira negação de serviço em vez de invasão.
      */
-    await t.raw(`UPDATE aurora.user_credentials SET locked_until = now() - interval '1 minute' WHERE user_id = $1`, [id]);
+    await t.raw(
+      `UPDATE aurora.user_credentials SET locked_until = now() - interval '1 minute' WHERE user_id = $1`,
+      [id]
+    );
 
     const r = await abrirSessaoPorSenha(t.db, { email: 'prazo@hospital.test', senha: SENHA });
     expect('token' in r).toBe(true);

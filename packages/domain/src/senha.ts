@@ -58,7 +58,10 @@ const PADROES_RECUSADOS: readonly { regex: RegExp; motivo: string }[] = Object.f
   { regex: /^(.)\1+$/, motivo: 'é o mesmo caractere repetido' },
   { regex: /12345678|87654321/, motivo: 'contém uma sequência de números óbvia' },
   { regex: /qwerty|asdfgh|zxcvbn/i, motivo: 'contém uma sequência de teclado' },
-  { regex: /senha|password|aurora|becare|technecare/i, motivo: 'contém uma palavra previsível neste contexto' },
+  {
+    regex: /senha|password|aurora|becare|technecare/i,
+    motivo: 'contém uma palavra previsível neste contexto',
+  },
 ]);
 
 export interface ProblemaDeSenha {
@@ -208,5 +211,7 @@ export function resumoDoToken(token: string): string {
 
 /** Parece um token nosso? Recusa antes de tocar o banco. */
 export function pareceTokenDeSessao(valor: string): boolean {
-  return valor.startsWith(PREFIXO_DO_TOKEN) && /^[A-Za-z0-9_-]{43}$/.test(valor.slice(PREFIXO_DO_TOKEN.length));
+  return (
+    valor.startsWith(PREFIXO_DO_TOKEN) && /^[A-Za-z0-9_-]{43}$/.test(valor.slice(PREFIXO_DO_TOKEN.length))
+  );
 }
