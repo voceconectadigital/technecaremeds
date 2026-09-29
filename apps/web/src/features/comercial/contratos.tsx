@@ -21,7 +21,7 @@
  */
 import { Link, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { Boxes, FileSignature, Search, ShieldCheck } from 'lucide-react';
+import { Boxes, FileSignature, Search, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Card, CardHeader, EmptyState, Select, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import {
   contractAssets,
@@ -126,31 +126,10 @@ export function ContratosPage() {
               filtered={itens.length > 0}
             />
           ) : (
-            <ul>
-              {filtrados.map((c, i) => (
-                <li key={c.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
-                  <Link
-                    to="/contratos/$id"
-                    params={{ id: c.id }}
-                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base text-text">
-                        {/* Título nulo é permitido: há contrato identificado só
-                            pelo número, e mostrar "—" seria pior do que mostrar
-                            o número, que é o que a pessoa procura. */}
-                        {c.title || c.number}
-                      </span>
-                      <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
-                        {c.number} · de {formatarData(c.starts_on)}
-                        {c.ends_on ? ` até ${formatarData(c.ends_on)}` : ' · sem data de fim'}
-                        {c.auto_renew && ' · renova sozinho'}
-                      </span>
-                    </span>
-                    <StatusChip tone={TOM[c.status]} size="sm">
-                      {ROTULO[c.status]}
-                    </StatusChip>
-                  </Link>
+            <ul className="divide-y divide-border-subtle">
+              {filtrados.map((c) => (
+                <li key={c.id}>
+                  <LinhaDeContrato contrato={c} />
                 </li>
               ))}
             </ul>
@@ -158,6 +137,105 @@ export function ContratosPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A linha de um contrato.
+ *
+ * O que ela precisa dizer sem abrir: de quem é, até quando vale, se renova
+ * sozinho, e se está para vencer. A versão anterior punha tudo numa frase
+ * concatenada com pontos — legível uma vez, ilegível numa lista.
+ *
+ * A VIGÊNCIA VIRA BARRA, e é a informação que a frase escondia: "de 01/01 até
+ * 31/12" exige que a pessoa faça a conta de quanto falta. A barra faz a conta.
+ *
+ * O AVISO DE VENCIMENTO diz quantos dias restam — e num contrato que renova
+ * sozinho com aviso prévio, isso é o que impede a conversa tardia: faltando 45
+ * dias numa janela de 60, a decisão já foi tomada por omissão, e dizer só
+ * "vigente" esconde isso (§17).
+ */
+function LinhaDeContrato({ contrato: c }: { contrato: ContractRow }) {
+  const inicio = new Date(c.starts_on).getTime();
+  const fim = c.ends_on ? new Date(c.ends_on).getTime() : null;
+  const agora = Date.now();
+
+  const diasParaVencer = fim === null ? null : Math.round((fim - agora) / 86_400_000);
+  const decorrido =
+    fim === null || fim <= inicio ? null : Math.min(Math.max((agora - inicio) / (fim - inicio), 0), 1);
+
+  const vencendo = diasParaVencer !== null && diasParaVencer >= 0 && diasParaVencer <= 90;
+  const vencido = diasParaVencer !== null && diasParaVencer < 0;
+  const larguraDaBarra = decorrido === null ? 0 : Math.round(decorrido * 100);
+
+  return (
+    <Link
+      to="/contratos/$id"
+      params={{ id: c.id }}
+      className="flex flex-col gap-2.5 px-4 py-3.5 transition-colors hover:bg-surface-hover"
+    >
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          {/* Título nulo é permitido: há contrato identificado só pelo número,
+              e mostrar "—" seria pior do que mostrar o número, que é o que a
+              pessoa procura. */}
+          <p className="truncate text-base font-medium text-text">{c.title || c.number}</p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted" data-numeric>
+            <span className="font-medium">{c.number}</span>
+            {c.auto_renew && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1">
+                  <RefreshCw aria-hidden="true" className="size-3" />
+                  renova sozinho
+                </span>
+              </>
+            )}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2">
+          {vencido && (
+            <StatusChip tone="bad" size="sm">
+              Vencido
+            </StatusChip>
+          )}
+          {vencendo && (
+            <StatusChip tone="warn" size="sm" hint="Prazo restante de vigência">
+              Vence em {diasParaVencer} d
+            </StatusChip>
+          )}
+          <StatusChip tone={TOM[c.status]} size="sm">
+            {ROTULO[c.status]}
+          </StatusChip>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <span className="w-20 shrink-0 text-2xs text-subtle" data-numeric>
+          {formatarData(c.starts_on)}
+        </span>
+        <span
+          aria-hidden="true"
+          className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-pill bg-surface-sunken"
+        >
+          {decorrido !== null && (
+            <span
+              className={cn(
+                'block h-full rounded-pill',
+                vencido ? 'bg-border-strong' : vencendo ? 'bg-warn' : 'bg-accent'
+              )}
+              style={{ width: `${larguraDaBarra}%` }}
+            />
+          )}
+        </span>
+        <span className="w-20 shrink-0 text-right text-2xs text-subtle" data-numeric>
+          {c.ends_on ? formatarData(c.ends_on) : 'sem fim'}
+        </span>
+      </div>
+    </Link>
   );
 }
 

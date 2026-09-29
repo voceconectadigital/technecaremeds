@@ -24,7 +24,7 @@
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { Boxes, ChevronRight, MapPin, Search } from 'lucide-react';
-import { Card, EmptyState, Select, SkeletonList, StatusChip, cn } from '@aurora/ui';
+import { Card, EmptyState, Select, SkeletonList, StatusChip, Thumb, cn } from '@aurora/ui';
 import {
   assetsList,
   locationsList,
@@ -183,26 +183,24 @@ export function AtivosPage() {
                 filtered={itens.length > 0}
               />
             ) : (
-              <ul>
-                {filtrados.map((a, i) => (
-                  <li key={a.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
-                    <Link
-                      to="/ativos/$id"
-                      params={{ id: a.id }}
-                      className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-hover"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base text-text">{a.name}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
-                          {[a.tag, a.serial_number, a.category_name, a.location_name]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                      </span>
-                      <StatusChip tone={TOM_SITUACAO[a.status]} size="sm">
-                        {ROTULO_SITUACAO[a.status]}
-                      </StatusChip>
-                    </Link>
+              /*
+               * LINHA RICA, e não duas linhas de texto.
+               *
+               * A versão anterior concatenava tag, série, categoria e local
+               * com pontos: "VNT-001 · SN-4471 · Ventilador pulmonar · Leito
+               * 7". Isso é legível uma vez e ilegível numa lista de duzentos —
+               * o olho não tem onde se apoiar, e é o que fazia o parque
+               * parecer cadastro cru em vez de patrimônio.
+               *
+               * Agora cada informação tem coluna e peso próprios: o nome
+               * comanda, fabricante e modelo ficam abaixo (é a pergunta
+               * "quantos BeneHeart R3 temos?"), local e identificadores viram
+               * colunas alinhadas, e garantia vencendo aparece como alerta.
+               */
+              <ul className="divide-y divide-border-subtle">
+                {filtrados.map((a) => (
+                  <li key={a.id}>
+                    <LinhaDeAtivo ativo={a} />
                   </li>
                 ))}
               </ul>
@@ -327,5 +325,88 @@ function ArvoreDeLocais({
         })}
       </nav>
     </Card>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A linha de um ativo no parque.
+ *
+ * Quatro decisões de leitura:
+ *
+ *  · O NOME COMANDA e fabricante/modelo vêm abaixo dele. É a cadeia que
+ *    responde "quantos BeneHeart R3 temos, e qual a taxa de falha desse
+ *    modelo?" — a pergunta que justifica trocar de fornecedor, e que a
+ *    referência auditada não respondia porque lá fabricante era texto livre.
+ *  · OS IDENTIFICADORES ficam numa coluna monoespaçada e alinhada. Tag, série
+ *    e patrimônio são lidos em comparação com uma etiqueta física, e para isso
+ *    a coluna precisa ser estável, não concatenada no meio de uma frase.
+ *  · A GARANTIA só aparece quando é notícia: vencida, ou vencendo em 90 dias.
+ *    Uma data de garantia em toda linha é ruído que esconde as três que
+ *    importam.
+ *  · A SITUAÇÃO fica à direita, no mesmo lugar em toda linha, porque é o campo
+ *    que se varre verticalmente.
+ */
+function LinhaDeAtivo({ ativo: a }: { ativo: AssetRow }) {
+  const garantia = a.warranty_until ? new Date(a.warranty_until) : null;
+  const diasDeGarantia = garantia ? Math.round((garantia.getTime() - Date.now()) / 86_400_000) : null;
+  const garantiaEhNoticia = diasDeGarantia !== null && diasDeGarantia < 90;
+
+  const identificadores = [a.tag, a.asset_number, a.serial_number].filter(Boolean);
+
+  return (
+    <Link
+      to="/ativos/$id"
+      params={{ id: a.id }}
+      className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover"
+    >
+      <Thumb name={a.name} size="sm" />
+
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-medium text-text">{a.name}</span>
+        <span className="mt-0.5 block truncate text-xs text-muted">
+          {[a.manufacturer_name, a.model_name].filter(Boolean).join(' ') || a.category_name}
+        </span>
+      </span>
+
+      {/*
+        A CATEGORIA APARECE UMA VEZ SÓ.
+        Ela estava embaixo do nome (quando não havia fabricante) E nesta
+        coluna — dois rótulos idênticos na mesma linha, que é ruído que faz o
+        olho desistir de procurar a diferença entre as linhas.
+      */}
+      <span className="hidden w-44 min-w-0 shrink-0 md:block">
+        <span className="block truncate text-sm text-text">{a.location_name ?? 'sem local'}</span>
+      </span>
+
+      <span className="hidden w-36 shrink-0 lg:block" data-numeric>
+        {identificadores.length > 0 ? (
+          <>
+            <span className="block truncate font-mono text-xs text-text">{identificadores[0]}</span>
+            {identificadores[1] && (
+              <span className="block truncate font-mono text-2xs text-subtle">{identificadores[1]}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-2xs text-subtle">sem identificador</span>
+        )}
+      </span>
+
+      <span className="flex shrink-0 items-center gap-2">
+        {garantiaEhNoticia && (
+          <StatusChip
+            tone={diasDeGarantia! < 0 ? 'neutral' : 'warn'}
+            size="sm"
+            hint={`Garantia até ${garantia!.toLocaleDateString('pt-BR')}`}
+          >
+            {diasDeGarantia! < 0 ? 'Fora de garantia' : `Garantia: ${diasDeGarantia} d`}
+          </StatusChip>
+        )}
+        <StatusChip tone={TOM_SITUACAO[a.status]} size="sm">
+          {ROTULO_SITUACAO[a.status]}
+        </StatusChip>
+      </span>
+    </Link>
   );
 }

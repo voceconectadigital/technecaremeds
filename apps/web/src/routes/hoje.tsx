@@ -204,7 +204,11 @@ function AtalhoDeCartao({ to, children }: { to: string; children: React.ReactNod
   return (
     <Link
       to={to}
-      className="inline-flex items-center gap-1 text-sm font-medium text-accent-text hover:underline"
+      /* `min-h-6`: a auditoria de largura exige alvo de toque de ao menos
+         24×24 no celular (WCAG 2.2, 2.5.8). Um link de texto tem a altura da
+         linha, que fica abaixo disso — e este atalho é como o cartão inteiro
+         se torna acionável no polegar. */
+      className="inline-flex min-h-6 items-center gap-1 text-sm font-medium text-accent-text hover:underline"
     >
       {children}
       <ArrowRight aria-hidden="true" className="size-3.5" />

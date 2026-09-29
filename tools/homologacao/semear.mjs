@@ -724,6 +724,24 @@ async function main() {
       locationId: arvore.vidaPlena,
     });
 
+    /*
+     * OS DOIS CONTRATOS ENTRAM EM VIGOR, e isso não é detalhe de vitrine.
+     *
+     * Um contrato em rascunho não cobre nada: a cascata de SLA não o encontra,
+     * a OS não nasce carimbada com ele, e a tela de medição não tem o que
+     * medir. A massa inteira ficava, por causa disso, num estado que nenhuma
+     * operação real tem — e a demonstração mostrava "Rascunho" em tudo,
+     * sugerindo um módulo pela metade quando o módulo está pronto.
+     *
+     * A ativação passa por `activateContract`, que RECUSA contrato sem
+     * cobertura: ativá-lo produziria o pior estado possível — a interface diz
+     * "vigente", o cliente acredita que está coberto, e a cascata não encontra
+     * nada (§17). Por isso ela vem depois das coberturas, e não antes.
+     */
+    for (const id of [contrato, contratoClinica]) {
+      await db.activateContract(s, id);
+    }
+
     await db.createQuote(s, { customerId: clinicaCliente, validUntil: '2026-12-31' });
 
     /* ---------------------------------------------------- plano preventivo */

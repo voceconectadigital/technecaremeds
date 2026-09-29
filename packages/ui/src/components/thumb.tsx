@@ -47,13 +47,46 @@ const TAMANHOS = {
  * Derivados da paleta de dados, e não do acaso: são os mesmos seis tons que os
  * gráficos usam, então a tela inteira continua tendo uma família de cores só.
  */
+/**
+ * O TEXTO É A COR DA SÉRIE PUXADA PARA A COR DO TEXTO, e não a cor pura.
+ *
+ * A primeira versão usava `var(--color-data-N)` direto, e a auditoria de
+ * acessibilidade acusou em três telas: `--color-data-3` é um âmbar (#b57d0a)
+ * que dá cerca de 3,5:1 sobre um fundo quase branco — abaixo dos 4,5:1 que a
+ * WCAG AA exige. As outras cinco passavam, e é justamente esse tipo de falha
+ * parcial que atravessa uma revisão visual: cinco miniaturas legíveis e uma
+ * apagada não chamam atenção de ninguém.
+ *
+ * Misturar com `--color-text` resolve nos DOIS temas de uma vez, sem uma
+ * segunda paleta: no claro o texto é quase preto e a mistura escurece; no
+ * escuro o texto é quase branco e a mesma expressão clareia. A matiz da série
+ * sobrevive nos dois, que é o que dá a memória visual.
+ */
 const PALETA = [
-  { bg: 'color-mix(in oklab, var(--color-data-1) 14%, var(--color-surface))', fg: 'var(--color-data-1)' },
-  { bg: 'color-mix(in oklab, var(--color-data-2) 14%, var(--color-surface))', fg: 'var(--color-data-2)' },
-  { bg: 'color-mix(in oklab, var(--color-data-3) 16%, var(--color-surface))', fg: 'var(--color-data-3)' },
-  { bg: 'color-mix(in oklab, var(--color-data-4) 14%, var(--color-surface))', fg: 'var(--color-data-4)' },
-  { bg: 'color-mix(in oklab, var(--color-data-5) 14%, var(--color-surface))', fg: 'var(--color-data-5)' },
-  { bg: 'color-mix(in oklab, var(--color-data-6) 14%, var(--color-surface))', fg: 'var(--color-data-6)' },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-1) 14%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-1) 55%, var(--color-text))',
+  },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-2) 14%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-2) 55%, var(--color-text))',
+  },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-3) 16%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-3) 55%, var(--color-text))',
+  },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-4) 14%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-4) 55%, var(--color-text))',
+  },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-5) 14%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-5) 55%, var(--color-text))',
+  },
+  {
+    bg: 'color-mix(in oklab, var(--color-data-6) 14%, var(--color-surface))',
+    fg: 'color-mix(in oklab, var(--color-data-6) 55%, var(--color-text))',
+  },
 ];
 
 /**

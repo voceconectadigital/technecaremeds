@@ -43,7 +43,18 @@ test.describe('E2E-WEB-001 · entrar', () => {
     // Quem tem UMA organização é levado adiante por lá — escolher entre uma
     // opção não é escolha, é obstáculo.
     await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Bom dia|Hoje/);
+    /*
+     * A ASSERÇÃO É SOBRE O NOME, e não sobre a saudação.
+     *
+     * Ela dizia `/Bom dia|Hoje/`, e passou a falhar à tarde: a saudação agora
+     * segue o relógio de quem abre. O teste estava amarrado à decoração, e o
+     * que ele existe para provar é que a pessoa entrou e a tela sabe quem ela
+     * é — o primeiro nome no `<h1>` prova isso em qualquer hora do dia.
+     *
+     * Uma prova que só passa de manhã é uma prova que vai falhar sozinha na
+     * integração contínua, e ninguém vai saber se o produto quebrou.
+     */
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Carla');
   });
 });
 
