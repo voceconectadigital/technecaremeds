@@ -83,7 +83,7 @@ export class InventoryController {
         belowMinimum: belowMinimum === 'true',
       })
     );
-    return { items };
+    return { items: items.map(comEnderecoDaImagem) };
   }
 
   /**
@@ -274,4 +274,27 @@ export class InventoryController {
     await withTenant(this.db, ctx, (s) => setMinimum(s, itemId, warehouseId, min));
     return { ok: true };
   }
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A chave relativa do banco vira endereço aqui, e em nenhum outro lugar.
+ *
+ * É a mesma regra dos anexos (§28): a tela não sabe onde os bytes moram. Hoje
+ * as imagens de catálogo são arquivos estáticos servidos junto da aplicação;
+ * amanhã podem vir de um armazenamento de objetos com URL assinada. Quem muda
+ * é esta função — nenhuma tela, nenhum contrato.
+ *
+ * A chave já é validada como RELATIVA por restrição de tabela (migration 0046),
+ * então não há como uma URL externa chegar até aqui e virar um `src` que
+ * entrega o endereço IP de quem abriu a tela a um terceiro. A barra é
+ * acrescentada aqui porque a chave gravada não a tem: guardar "/x" e "x" nas
+ * mesmas linhas seria a origem de uma barra dupla em metade dos endereços.
+ */
+function comEnderecoDaImagem<T extends { image_key: string | null }>(
+  linha: T
+): Omit<T, 'image_key'> & { image_url: string | null } {
+  const { image_key, ...resto } = linha;
+  return { ...resto, image_url: image_key ? `/${image_key.replace(/^\/+/, '')}` : null };
 }

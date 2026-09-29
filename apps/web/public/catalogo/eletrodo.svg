@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Eletrodo">
+  <circle cx="48" cy="48" r="26" fill="#f1f5f4" stroke="#8a9695" stroke-width="2.5"/>
+  <circle cx="48" cy="48" r="13" fill="#7b5ea7"/>
+  <circle cx="48" cy="48" r="5" fill="#f1f5f4"/>
+  <path d="M48 22v-12" stroke="#3c4a4a" stroke-width="4" stroke-linecap="round"/>
+</svg>

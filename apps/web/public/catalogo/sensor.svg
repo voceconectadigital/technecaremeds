@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Sensor">
+  <circle cx="48" cy="44" r="22" fill="#dce7f5"/>
+  <circle cx="48" cy="44" r="22" fill="none" stroke="#2f6bc4" stroke-width="3"/>
+  <circle cx="48" cy="44" r="9" fill="#2f6bc4"/>
+  <circle cx="44" cy="40" r="3" fill="#ffffff" opacity="0.8"/>
+  <path d="M48 66v14" stroke="#5c6a69" stroke-width="4" stroke-linecap="round"/>
+  <path d="M36 80h24" stroke="#5c6a69" stroke-width="4" stroke-linecap="round"/>
+</svg>

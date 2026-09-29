@@ -33,6 +33,7 @@ import {
   StatusChip,
   Tabs,
   Textarea,
+  Thumb,
   cn,
   tabIds,
   useToast,
@@ -126,12 +127,14 @@ export function EstoquePage() {
         </div>
 
         <div role="tabpanel" id={tabIds('estoque', aba).painel} aria-labelledby={tabIds('estoque', aba).aba}>
-          <Card>
-            {isLoading ? (
-              <div className="p-3">
-                <SkeletonList rows={8} label="saldos" />
-              </div>
-            ) : filtrados.length === 0 ? (
+          {isLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <div key={i} className="h-28 animate-pulse rounded-card border border-border bg-surface" />
+              ))}
+            </div>
+          ) : filtrados.length === 0 ? (
+            <Card>
               <EmptyState
                 icon={
                   aba === 'faltando' ? <Package className="size-5" /> : <PackageSearch className="size-5" />
@@ -150,32 +153,26 @@ export function EstoquePage() {
                 }
                 filtered={itens.length > 0}
               />
-            ) : (
-              <ul>
-                {filtrados.map((b, i) => (
-                  <li key={`${b.item_id}-${b.warehouse_id}`}>
-                    <button
-                      type="button"
-                      onClick={() => setVendo(b)}
-                      className={cn(
-                        'flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-surface-hover',
-                        i > 0 && 'border-t border-border-subtle'
-                      )}
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-base text-text">{b.item_name}</span>
-                        <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
-                          {b.sku} · {b.warehouse_name}
-                        </span>
-                      </span>
-
-                      <Quantidades saldo={b} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+            </Card>
+          ) : (
+            /*
+             * GRADE DE CARTÕES, e não uma tabela de texto.
+             *
+             * A lista anterior era duas linhas de texto por item, e é onde o
+             * produto mais parecia planilha. A imagem não é enfeite: quem está
+             * no almoxarifado está com a peça NA MÃO conferindo com a tela, e
+             * "Filtro HEPA FIL-HEPA-01" ao lado de "Filtro HEPA FIL-HEPA-02"
+             * são duas linhas que só se distinguem lendo caractere por
+             * caractere.
+             */
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {filtrados.map((b) => (
+                <li key={`${b.item_id}-${b.warehouse_id}`}>
+                  <CartaoDeItem saldo={b} onAbrir={() => setVendo(b)} />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <p className="text-xs text-subtle" data-numeric>
@@ -193,48 +190,134 @@ export function EstoquePage() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Os três números, com o reservado só quando existe.
+ * A SITUAÇÃO DE UM SALDO É UMA ESCALA DE QUATRO, e não um booleano.
  *
- * Mostrar "reservado: 0" em toda linha é ruído que esconde as linhas em que o
- * número não é zero — e são exatamente essas que mudam a decisão de quem está
- * separando peça.
+ * "Abaixo do mínimo" sozinho junta dois casos que pedem ações opostas: o item
+ * que está com 4 de 10 (compre esta semana) e o que está zerado (a próxima OS
+ * que precisar dele vai travar). Quem compra precisa ver a diferença sem
+ * calcular.
+ *
+ * O corte de 50% para "crítico" é uma decisão de produto desta tela, e não uma
+ * regra do domínio — o banco guarda apenas o mínimo. Se um dia virar política
+ * configurável, o lugar é o servidor; até lá, está aqui, dito por extenso.
  */
-function Quantidades({ saldo }: { saldo: StockBalance }) {
-  const emMaos = Number(saldo.on_hand);
-  const reservado = Number(saldo.reserved);
+type SituacaoDoSaldo = 'zerado' | 'critico' | 'baixo' | 'normal';
+
+function situacaoDe(saldo: StockBalance): SituacaoDoSaldo {
   const disponivel = Number(saldo.available);
   const minimo = Number(saldo.min_qty);
-  const abaixo = minimo > 0 && emMaos < minimo;
+  if (disponivel <= 0) return 'zerado';
+  if (minimo > 0 && disponivel <= minimo * 0.5) return 'critico';
+  if (minimo > 0 && disponivel < minimo) return 'baixo';
+  return 'normal';
+}
+
+const APARENCIA: Record<
+  SituacaoDoSaldo,
+  { tom: 'bad' | 'warn' | 'good'; rotulo: string; barra: string; numero: string }
+> = {
+  zerado: { tom: 'bad', rotulo: 'Zerado', barra: 'bg-bad', numero: 'text-bad-text' },
+  critico: { tom: 'bad', rotulo: 'Crítico', barra: 'bg-bad', numero: 'text-bad-text' },
+  baixo: { tom: 'warn', rotulo: 'Abaixo do mínimo', barra: 'bg-warn', numero: 'text-warn-text' },
+  normal: { tom: 'good', rotulo: 'Normal', barra: 'bg-good', numero: 'text-text' },
+};
+
+/**
+ * O cartão de um item no almoxarifado.
+ *
+ * Carrega o que decide uma compra sem abrir nada: imagem, nome, código,
+ * almoxarifado, disponível, mínimo, unidade e a situação. A barra de
+ * preenchimento é o quarto canal — antes do texto, do tom e do número, ela
+ * mostra "quanto falta" de relance.
+ */
+function CartaoDeItem({ saldo, onAbrir }: { saldo: StockBalance; onAbrir: () => void }) {
+  const situacao = situacaoDe(saldo);
+  const aparencia = APARENCIA[situacao];
+  const disponivel = Number(saldo.available);
+  const reservado = Number(saldo.reserved);
+  const minimo = Number(saldo.min_qty);
+
+  // O quanto da meta está coberto. Sem mínimo definido não há meta, e uma
+  // barra cheia diria "está ótimo" sobre algo que ninguém está vigiando.
+  const cobertura = minimo > 0 ? Math.min((disponivel / minimo) * 100, 100) : null;
 
   return (
-    <span className="flex shrink-0 items-center gap-4">
-      {reservado > 0 && (
-        <span className="hidden text-right sm:block">
-          <span className="block text-2xs text-subtle">reservado</span>
-          <span className="block text-sm text-muted tabular-nums" data-numeric>
-            {formatar(saldo.reserved)}
+    <button
+      type="button"
+      onClick={onAbrir}
+      className="group flex w-full flex-col gap-3 rounded-card border border-border bg-surface p-3 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised"
+    >
+      <div className="flex items-start gap-3">
+        <Thumb src={saldo.image_url} name={saldo.item_name} size="lg" />
+
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {/*
+            DUAS LINHAS, e não reticências.
+
+            `truncate` cortava "Anel de vedação 22 mm" em "Anel de vedação…" —
+            e a medida É o que distingue esse anel dos outros quatro. Num
+            catálogo de peças o fim do nome costuma ser a parte que identifica:
+            a bitola, a via, a tensão.
+          */}
+          <span
+            className="line-clamp-2 text-base leading-tight font-semibold text-text"
+            title={saldo.item_name}
+          >
+            {saldo.item_name}
           </span>
-        </span>
-      )}
-      <span className="text-right">
-        <span className="block text-2xs text-subtle">disponível</span>
-        <span
-          className={cn(
-            'block text-sm font-medium tabular-nums',
-            disponivel <= 0 ? 'text-bad-text' : 'text-text'
+          <span className="truncate text-xs text-muted" data-numeric title={saldo.sku}>
+            {saldo.sku}
+          </span>
+          <span className="truncate text-xs text-subtle">{saldo.warehouse_name}</span>
+          {saldo.category && (
+            <span className="mt-1 w-fit rounded-pill bg-surface-sunken px-2 py-0.5 text-2xs text-muted">
+              {saldo.category}
+            </span>
           )}
-          data-numeric
-        >
-          {formatar(saldo.available)}
-        </span>
-      </span>
-      {abaixo && (
-        <StatusChip tone="warn" size="sm" hint={`Mínimo definido: ${formatar(saldo.min_qty)}`}>
-          <AlertTriangle aria-hidden="true" className="mr-1 inline size-3" />
-          abaixo do mínimo
-        </StatusChip>
-      )}
-    </span>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <span
+            data-numeric
+            className={cn('block text-xl font-semibold tabular-nums tracking-display', aparencia.numero)}
+          >
+            {formatar(saldo.available)}
+          </span>
+          <span className="block text-2xs text-subtle">{saldo.unit} disponível</span>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------- a barra e o pé */}
+      <div className="flex flex-col gap-1.5">
+        {cobertura !== null && (
+          <span
+            aria-hidden="true"
+            className="block h-1.5 overflow-hidden rounded-pill bg-surface-sunken"
+            title={`${formatar(saldo.available)} de um mínimo de ${formatar(saldo.min_qty)}`}
+          >
+            <span
+              className={cn('block h-full rounded-pill transition-[width]', aparencia.barra)}
+              style={{ width: `${Math.max(cobertura, 3)}%` }}
+            />
+          </span>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <StatusChip tone={aparencia.tom} size="sm">
+            {situacao !== 'normal' && <AlertTriangle aria-hidden="true" className="mr-1 inline size-3" />}
+            {aparencia.rotulo}
+          </StatusChip>
+
+          <span className="flex items-center gap-3 text-2xs text-subtle" data-numeric>
+            {minimo > 0 && <span>mín. {formatar(saldo.min_qty)}</span>}
+            {/* "reservado: 0" em toda linha é ruído que esconde as linhas em
+                que o número não é zero — e são essas que mudam a decisão de
+                quem está separando peça. */}
+            {reservado > 0 && <span className="text-warn-text">{formatar(saldo.reserved)} reservado</span>}
+          </span>
+        </div>
+      </div>
+    </button>
   );
 }
 

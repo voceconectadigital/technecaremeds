@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Filtro HEPA">
+  <rect x="12" y="22" width="72" height="52" rx="4" fill="#e8eeec"/>
+  <rect x="12" y="22" width="72" height="52" rx="4" fill="none" stroke="#5c6a69" stroke-width="3"/>
+  <g stroke="#2c8c63" stroke-width="3" stroke-linecap="round">
+    <path d="M20 28v40M28 28v40M36 28v40M44 28v40M52 28v40M60 28v40M68 28v40M76 28v40"/>
+  </g>
+  <rect x="12" y="22" width="72" height="9" fill="#5c6a69"/>
+  <rect x="12" y="65" width="72" height="9" fill="#5c6a69"/>
+</svg>

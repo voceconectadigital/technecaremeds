@@ -36,6 +36,19 @@ export const StockBalance = z.object({
   available: Decimal,
   min_qty: Decimal,
   average_cost: Decimal,
+  /** "un", "cx", "m" — a unidade em que a quantidade é contada. */
+  unit: z.string(),
+  /** Categoria de almoxarifado. Filtra, agrupa, e escolhe a ilustração. */
+  category: z.string().nullable(),
+  /**
+   * Endereço da imagem do item, já pronto para o `src`.
+   *
+   * É o SERVIDOR que monta, a partir da chave relativa gravada no banco — a
+   * mesma decisão dos anexos (§28): a tela não sabe, e não deve saber, onde os
+   * bytes moram. Nulo quando o item ainda não tem foto, e aí a interface
+   * desenha as iniciais em vez de um retângulo vazio.
+   */
+  image_url: z.string().nullable(),
 });
 export type StockBalance = z.infer<typeof StockBalance>;
 

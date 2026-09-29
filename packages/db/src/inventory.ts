@@ -53,13 +53,24 @@ export async function createItem(
     tracking?: 'none' | 'lot' | 'serial';
     leadTimeDays?: number | null;
     manufacturerId?: string | null;
+    /** Categoria de almoxarifado (migration 0046). Texto livre. */
+    category?: string | null;
+    /**
+     * Caminho RELATIVO da imagem — `catalogo/filtro-hepa.svg`.
+     *
+     * Uma URL absoluta é recusada por restrição de tabela, e não por
+     * validação aqui: a regra precisa valer também para importação em lote e
+     * para correção manual no banco.
+     */
+    imageKey?: string | null;
   }
 ): Promise<string> {
   const id = newId();
   await session.query(
     `INSERT INTO aurora.inventory_items
-       (id, organization_id, sku, name, unit, tracking, lead_time_days, manufacturer_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6::aurora.item_tracking, $7, $8, $9)`,
+       (id, organization_id, sku, name, unit, tracking, lead_time_days, manufacturer_id,
+        category, image_key, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6::aurora.item_tracking, $7, $8, $9, $10, $11)`,
     [
       id,
       session.context.organizationId,
@@ -69,6 +80,8 @@ export async function createItem(
       input.tracking ?? 'none',
       input.leadTimeDays ?? null,
       input.manufacturerId ?? null,
+      input.category ?? null,
+      input.imageKey ?? null,
       session.context.actorId,
     ]
   );
@@ -455,6 +468,15 @@ export interface BalanceRow {
   available: string;
   min_qty: string;
   average_cost: string;
+  unit: string;
+  category: string | null;
+  /**
+   * Caminho RELATIVO da imagem, como está gravado.
+   *
+   * A camada de dados devolve o que está no banco e não supõe onde os bytes
+   * são servidos — quem transforma a chave em endereço é a borda HTTP.
+   */
+  image_key: string | null;
 }
 
 export async function balances(
@@ -463,7 +485,8 @@ export async function balances(
 ): Promise<BalanceRow[]> {
   return session.query<BalanceRow>(
     `SELECT b.item_id, b.warehouse_id, i.sku, i.name AS item_name, w.name AS warehouse_name,
-            b.on_hand, b.reserved, (b.on_hand - b.reserved) AS available, b.min_qty, b.average_cost
+            b.on_hand, b.reserved, (b.on_hand - b.reserved) AS available, b.min_qty, b.average_cost,
+            i.unit, i.category, i.image_key
        FROM aurora.stock_balances b
        JOIN aurora.inventory_items i ON i.id = b.item_id
        JOIN aurora.warehouses w      ON w.id = b.warehouse_id

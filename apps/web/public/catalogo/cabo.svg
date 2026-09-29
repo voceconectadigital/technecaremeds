@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="Cabo">
+  <path d="M20 26c0 22 56 12 56 34" fill="none" stroke="#3c4a4a" stroke-width="7" stroke-linecap="round"/>
+  <rect x="10" y="18" width="20" height="14" rx="3" fill="#b57d0a"/>
+  <rect x="66" y="56" width="20" height="14" rx="3" fill="#b57d0a"/>
+  <path d="M14 22h12M14 27h12" stroke="#f8faf9" stroke-width="2" stroke-linecap="round"/>
+</svg>

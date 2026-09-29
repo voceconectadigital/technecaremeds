@@ -516,15 +516,47 @@ async function main() {
     const deposito = await db.createWarehouse(s, { name: 'Almoxarifado Central' });
     const oficina = await db.createWarehouse(s, { name: 'Carro da oficina móvel' });
 
+    /*
+     * O CATÁLOGO TEM IMAGEM E CATEGORIA, e isso não é enfeite da demonstração.
+     *
+     * Uma lista de peças puramente textual é onde o produto mais parecia
+     * planilha: "Filtro HEPA FIL-HEPA-01" e "Filtro HEPA FIL-HEPA-02" são duas
+     * linhas quase idênticas, e quem está no almoxarifado está com a peça na
+     * mão comparando com a tela.
+     *
+     * As imagens são ILUSTRAÇÕES PRÓPRIAS em SVG, servidas junto da aplicação
+     * (`apps/web/public/catalogo`) — nada é carregado de fora. O porquê está
+     * escrito lá, no LEIA-ME: uma foto de catálogo de fornecedor some quando o
+     * site dele muda, e entrega o endereço de quem abriu a tela a um terceiro.
+     *
+     * Doze itens, e não cinco: com cinco, toda tela de estoque cabia em meia
+     * dobra e os filtros por categoria não tinham o que filtrar.
+     */
     const itens = {};
-    for (const [chave, sku, nome, unidade] of [
-      ['valvula', 'VAL-EXA-01', 'Válvula de exalação', 'un'],
-      ['filtro', 'FIL-HEPA-01', 'Filtro HEPA', 'un'],
-      ['celula', 'CEL-O2-01', 'Célula de oxigênio', 'un'],
-      ['bateria', 'BAT-12V-01', 'Bateria selada 12 V', 'un'],
-      ['circuito', 'CIR-PAC-01', 'Circuito paciente adulto', 'un'],
+    for (const [chave, sku, nome, unidade, categoria, imagem] of [
+      ['valvula', 'VAL-EXA-01', 'Válvula de exalação', 'un', 'Pneumática', 'catalogo/valvula.svg'],
+      ['filtro', 'FIL-HEPA-01', 'Filtro HEPA', 'un', 'Filtros', 'catalogo/filtro-hepa.svg'],
+      ['celula', 'CEL-O2-01', 'Célula de oxigênio', 'un', 'Sensores', 'catalogo/sensor.svg'],
+      ['bateria', 'BAT-12V-01', 'Bateria selada 12 V', 'un', 'Energia', 'catalogo/bateria.svg'],
+      ['circuito', 'CIR-PAC-01', 'Circuito paciente adulto', 'un', 'Descartáveis', 'catalogo/mangueira.svg'],
+      ['placa', 'PCB-VNT-03', 'Placa de controle do ventilador', 'un', 'Eletrônica', 'catalogo/circuito.svg'],
+      ['cabo', 'CAB-ECG-05', 'Cabo de ECG 5 vias', 'un', 'Cabos', 'catalogo/cabo.svg'],
+      ['eletrodo', 'ELE-DES-01', 'Eletrodo descartável', 'cx', 'Descartáveis', 'catalogo/eletrodo.svg'],
+      ['equipo', 'EQP-INF-02', 'Equipo de infusão', 'un', 'Descartáveis', 'catalogo/seringa.svg'],
+      ['oring', 'VED-OR-220', 'Anel de vedação 22 mm', 'un', 'Vedação', 'catalogo/oring.svg'],
+      ['fusivel', 'FUS-5A-01', 'Fusível 5 A retardado', 'un', 'Energia', 'catalogo/fusivel.svg'],
+      // O ÚNICO SEM IMAGEM, de propósito: é ele que prova, na demonstração,
+      // que o item sem foto continua legível — o desenho de iniciais do
+      // componente `Thumb` em vez de um retângulo cinza.
+      ['lampada', 'LAM-FOC-01', 'Lâmpada de foco cirúrgico', 'un', 'Iluminação', null],
     ]) {
-      itens[chave] = await db.createItem(s, { sku, name: nome, unit: unidade });
+      itens[chave] = await db.createItem(s, {
+        sku,
+        name: nome,
+        unit: unidade,
+        category: categoria,
+        imageKey: imagem,
+      });
     }
 
     /*
@@ -539,6 +571,13 @@ async function main() {
       ['celula', deposito, 12, 420],
       ['bateria', deposito, 2, 180],
       ['circuito', oficina, 15, 65],
+      ['placa', deposito, 3, 1850],
+      ['cabo', deposito, 9, 320],
+      ['eletrodo', deposito, 48, 28],
+      ['equipo', oficina, 30, 22],
+      ['oring', deposito, 120, 4],
+      ['fusivel', oficina, 6, 9],
+      ['lampada', deposito, 1, 640],
     ]) {
       await db.recordMovement(s, {
         itemId: itens[item],
@@ -548,10 +587,54 @@ async function main() {
         unitCost: custo,
       });
     }
-    // Dois abaixo do mínimo de propósito: a tela de estoque abre justamente
-    // nessa aba, e uma massa com tudo em ordem a deixaria vazia.
-    await db.setMinimum(s, itens.filtro, deposito, 10);
-    await db.setMinimum(s, itens.bateria, deposito, 6);
+
+    /*
+     * OS MÍNIMOS SÃO ESCOLHIDOS PARA MOSTRAR OS TRÊS ESTADOS.
+     *
+     * A tela de estoque abre na aba "abaixo do mínimo", e uma massa com tudo
+     * em ordem a deixaria vazia — o que passa a impressão de módulo quebrado,
+     * e não de estoque saudável.
+     *
+     * Quatro abaixo (dois deles bem abaixo, para a leitura de urgência ter
+     * gradação), e o resto com mínimo definido e saldo confortável, para que a
+     * aba "todos" mostre o contraste em vez de uma coluna de traços.
+     */
+    for (const [item, deposito_, minimo] of [
+      ['filtro', deposito, 10],
+      ['bateria', deposito, 6],
+      ['placa', deposito, 4],
+      ['lampada', deposito, 3],
+      ['valvula', deposito, 12],
+      ['celula', deposito, 6],
+      ['cabo', deposito, 4],
+      ['eletrodo', deposito, 20],
+      ['oring', deposito, 50],
+      ['circuito', oficina, 8],
+      ['equipo', oficina, 15],
+      ['fusivel', oficina, 10],
+    ]) {
+      await db.setMinimum(s, itens[item], deposito_, minimo);
+    }
+
+    /*
+     * CONSUMO RECENTE: sem ele o extrato de todo item tem uma linha só, e a
+     * gaveta de movimentação — que é onde se responde "por que este saldo está
+     * assim?" — não tem nada para mostrar numa demonstração.
+     */
+    for (const [item, deposito_, quantidade] of [
+      ['oring', deposito, 8],
+      ['eletrodo', deposito, 6],
+      ['valvula', deposito, 2],
+      ['equipo', oficina, 4],
+    ]) {
+      await db.recordMovement(s, {
+        itemId: itens[item],
+        warehouseId: deposito_,
+        kind: 'issue',
+        qty: quantidade,
+        reason: 'Consumo em ordem de serviço',
+      });
+    }
 
     /* ------------------------------------------------------- comercial */
 
