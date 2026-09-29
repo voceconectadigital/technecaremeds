@@ -165,7 +165,7 @@ export function EstoquePage() {
              * são duas linhas que só se distinguem lendo caractere por
              * caractere.
              */
-            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filtrados.map((b) => (
                 <li key={`${b.item_id}-${b.warehouse_id}`}>
                   <CartaoDeItem saldo={b} onAbrir={() => setVendo(b)} />

@@ -12200,6 +12200,29 @@
                           },
                           "average_cost": {
                             "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "image_url": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -12212,7 +12235,10 @@
                           "reserved",
                           "available",
                           "min_qty",
-                          "average_cost"
+                          "average_cost",
+                          "unit",
+                          "category",
+                          "image_url"
                         ]
                       }
                     }
@@ -21334,9 +21360,9 @@
                           "bucket": {
                             "type": "string",
                             "enum": [
+                              "late",
                               "unscheduled",
-                              "overdue",
-                              "today"
+                              "to_reschedule"
                             ]
                           },
                           "minutes": {

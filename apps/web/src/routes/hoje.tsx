@@ -87,14 +87,14 @@ export function HojePage() {
       <div className="flex flex-col gap-8">
         {can('work_order.read') && <PainelDoTurno />}
 
-        <div className="grid gap-5 xl:grid-cols-3">
-          {can('service_request.read') && <BlocoTriagem className="xl:col-span-1" />}
-          {can('work_order.read') && <BlocoQuadro className="xl:col-span-2" />}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {can('service_request.read') && <BlocoTriagem className="lg:col-span-1" />}
+          {can('work_order.read') && <BlocoQuadro className="lg:col-span-2" />}
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-3">
-          {can('work_order.read') && <BlocoAgenda className="xl:col-span-2" />}
-          {can('work_order.read') && <BlocoParadas className="xl:col-span-1" />}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {can('work_order.read') && <BlocoAgenda className="lg:col-span-2" />}
+          {can('work_order.read') && <BlocoParadas className="lg:col-span-1" />}
         </div>
 
         {can('inventory.read') && <BlocoEstoque />}
@@ -133,7 +133,7 @@ function PainelDoTurno() {
   const abertas = porCategoria('open') + porCategoria('scheduled') + porCategoria('in_progress');
   const emExecucao = porCategoria('in_progress');
   const paradas = porCategoria('waiting') + porCategoria('paused');
-  const atrasadas = baldes?.counts.overdue ?? 0;
+  const atrasadas = baldes?.counts.late ?? 0;
   const semData = baldes?.counts.unscheduled ?? 0;
   const abaixoDoMinimo = faltando?.items.length ?? 0;
 
@@ -289,8 +289,8 @@ function BlocoQuadro({ className }: { className?: string }) {
     in_progress: 'accent',
     waiting: 'warn',
     paused: 'warn',
+    review: 'info',
     done: 'good',
-    validated: 'good',
     closed: 'good',
     cancelled: 'neutral',
   };
@@ -345,15 +345,22 @@ function BlocoAgenda({ className }: { className?: string }) {
   };
 
   const itens = data?.items ?? [];
-  const hoje = itens.filter((i) => i.bucket === 'today');
-  const atrasadas = itens.filter((i) => i.bucket === 'overdue');
-  const mostrar = [...atrasadas, ...hoje].slice(0, 6);
+  /*
+   * A ORDEM É A DA URGÊNCIA: o que já venceu, depois o que precisa ser
+   * remarcado, depois o que nunca teve data. É a mesma ordem do §13, e é como
+   * a coordenação decide — o atrasado entra no dia de alguém hoje, não espera
+   * um segundo momento.
+   */
+  const atrasadas = itens.filter((i) => i.bucket === 'late');
+  const remarcar = itens.filter((i) => i.bucket === 'to_reschedule');
+  const semData = itens.filter((i) => i.bucket === 'unscheduled');
+  const mostrar = [...atrasadas, ...remarcar, ...semData].slice(0, 6);
 
   return (
     <Card className={cn('flex flex-col', className)}>
       <CardHeader
-        title="O dia"
-        description="O que está marcado para hoje, e o que já passou da data."
+        title="Precisa de data"
+        description="O que venceu, o que precisa remarcar e o que ninguém programou."
         actions={<VerTudo to="/agenda">Ver agenda</VerTudo>}
       />
       <div className="min-h-0 flex-1 p-3">
@@ -362,8 +369,8 @@ function BlocoAgenda({ className }: { className?: string }) {
         ) : mostrar.length === 0 ? (
           <EmptyState
             icon={<CalendarClock className="size-5" />}
-            title="Nada marcado para hoje"
-            description="Nenhuma ordem com janela para hoje, e nenhuma atrasada."
+            title="A programação está em dia"
+            description="Nenhuma ordem vencida, para remarcar ou sem data."
           />
         ) : (
           <ul className="flex flex-col gap-0.5">
@@ -385,9 +392,14 @@ function BlocoAgenda({ className }: { className?: string }) {
                         .join(' · ')}
                     </span>
                   </span>
-                  {i.bucket === 'overdue' && (
+                  {i.bucket === 'late' && (
                     <StatusChip tone="bad" size="sm">
                       Atrasada
+                    </StatusChip>
+                  )}
+                  {i.bucket === 'to_reschedule' && (
+                    <StatusChip tone="warn" size="sm" hint={i.window_invalidated_reason ?? undefined}>
+                      Reagendar
                     </StatusChip>
                   )}
                   {/* Remarcar quatro vezes não é um item comum do balde: é um

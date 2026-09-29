@@ -11,9 +11,9 @@
  * ao recarregamento.
  */
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Inbox, Plus } from 'lucide-react';
+import { Clock, Inbox, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { Button, Card, EmptyState, SkeletonList, StatusChip, Tabs, cn } from '@aurora/ui';
+import { Button, Card, EmptyState, SkeletonList, StatStrip, StatusChip, Tabs, Toolbar, cn } from '@aurora/ui';
 import { requestsQueue, type ServiceRequestRow, type RequestStatus } from '@aurora/contracts';
 import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
@@ -52,6 +52,22 @@ export function SolicitacoesPage() {
     });
   }, [todas, situacao, busca]);
 
+  /*
+   * Os quatro números da faixa saem da MESMA lista que a tela já carregou.
+   * Contá-los aqui custa uma passada sobre um array que já está em memória;
+   * pedir ao servidor custaria quatro consultas para responder o que ele já
+   * respondeu.
+   */
+  const criticas = todas.filter((r) => r.priority === 'emergency' || r.priority === 'very_urgent').length;
+  const aguardando = todas.filter((r) => r.status === 'info_needed').length;
+  const abertas = todas.filter((r) => r.status === 'submitted' || r.status === 'triage');
+  const maisAntiga = abertas.reduce<ServiceRequestRow | null>(
+    (velha, r) => (!velha || r.created_at < velha.created_at ? r : velha),
+    null
+  );
+  const envelhecida =
+    maisAntiga !== null && Date.now() - new Date(maisAntiga.created_at).getTime() > 24 * 3_600_000;
+
   const abas = ABAS.map((a) => ({
     ...a,
     count: a.id === 'todas' ? todas.length : todas.filter((r) => r.status === a.id).length,
@@ -75,25 +91,63 @@ export function SolicitacoesPage() {
         </Can>
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Tabs aria-label="Situação" items={abas} value={situacao} onChange={setSituacao} />
-          <input
-            type="search"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Filtrar por número ou resumo"
-            aria-label="Filtrar solicitações"
-            className="h-8 w-full rounded-control border border-border-strong bg-surface px-3 text-sm text-text placeholder:text-subtle sm:w-64"
-          />
-        </div>
+      <div className="flex flex-col gap-5">
+        {/*
+         * A FAIXA RESPONDE A PERGUNTA DO GESTOR ANTES DA LISTA.
+         *
+         * "O que chegou, o que é crítico, o que está parado" é o que ele quer
+         * saber ao bater o olho — e contar linhas de uma lista de cem itens
+         * não é uma resposta. Os quatro números saem da mesma consulta que a
+         * lista já faz, então não custam nada.
+         */}
+        <StatStrip
+          items={[
+            { label: 'Na fila', value: todas.length },
+            {
+              label: 'Críticas',
+              value: criticas,
+              tone: criticas > 0 ? 'bad' : 'good',
+              hint: 'Emergência ou muito urgente',
+            },
+            {
+              label: 'Aguardando informação',
+              value: aguardando,
+              tone: aguardando > 0 ? 'warn' : 'neutral',
+              hint: 'Paradas esperando resposta de quem pediu',
+            },
+            {
+              label: 'Mais antiga',
+              value: maisAntiga ? formatarDataRelativa(maisAntiga.created_at).replace('há ', '') : '—',
+              tone: envelhecida ? 'warn' : 'neutral',
+              hint: 'Idade do pedido mais velho ainda sem decisão',
+            },
+          ]}
+        />
 
-        <Card>
-          {isLoading ? (
-            <div className="p-3">
-              <SkeletonList rows={6} label="solicitações" />
+        <Toolbar
+          search={
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
+              />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Filtrar por número ou resumo"
+                aria-label="Filtrar solicitações"
+                className="h-9 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
+              />
             </div>
-          ) : filtradas.length === 0 ? (
+          }
+          filters={<Tabs aria-label="Situação" items={abas} value={situacao} onChange={setSituacao} />}
+        />
+
+        {isLoading ? (
+          <SkeletonList rows={6} label="solicitações" />
+        ) : filtradas.length === 0 ? (
+          <Card>
             <EmptyState
               icon={<Inbox className="size-5" />}
               title={todas.length === 0 ? 'Nada aguardando triagem' : 'Nenhuma solicitação nesta situação'}
@@ -104,33 +158,83 @@ export function SolicitacoesPage() {
               }
               filtered={todas.length > 0}
             />
-          ) : (
-            <ul>
-              {filtradas.map((r, i) => (
-                <li key={r.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
-                  <Link
-                    to="/solicitacoes/$id"
-                    params={{ id: r.id }}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-base text-text">{r.summary}</span>
-                      <span className="mt-0.5 block text-xs text-muted" data-numeric>
-                        {r.number} · aberta {formatarDataRelativa(r.created_at)}
-                      </span>
-                    </span>
-                    <PrioridadeChip prioridade={r.priority} />
-                    <SituacaoChip status={r.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+          </Card>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {filtradas.map((r) => (
+              <li key={r.id}>
+                <LinhaDeSolicitacao solicitacao={r} />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </AppShell>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A linha rica de uma solicitação.
+ *
+ * A versão anterior era duas linhas de texto e dois chips à direita — todas
+ * iguais, e a pessoa tinha de LER cada uma para saber qual pegar primeiro.
+ *
+ * O que mudou: a urgência virou uma BARRA na borda esquerda, que é lida antes
+ * de qualquer texto; a idade ganha destaque quando passa de um dia, porque
+ * pedido velho na fila de triagem é o defeito que a triagem existe para
+ * impedir; e o cartão inteiro tem alvo maior, porque a ação mais comum aqui é
+ * abrir.
+ */
+function LinhaDeSolicitacao({ solicitacao: r }: { solicitacao: ServiceRequestRow }) {
+  const critica = r.priority === 'emergency' || r.priority === 'very_urgent';
+  const urgente = r.priority === 'urgent';
+  const idadeEmHoras = (Date.now() - new Date(r.created_at).getTime()) / 3_600_000;
+  const envelhecida = idadeEmHoras > 24 && (r.status === 'submitted' || r.status === 'triage');
+
+  return (
+    <Link
+      to="/solicitacoes/$id"
+      params={{ id: r.id }}
+      className="relative flex items-center gap-4 overflow-hidden rounded-card border border-border bg-surface py-3 pr-4 pl-5 shadow-card transition-all hover:border-border-strong hover:shadow-raised"
+    >
+      {/* A urgência, antes do texto. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-y-0 left-0 w-1',
+          critica ? 'bg-bad' : urgente ? 'bg-warn' : 'bg-border'
+        )}
+      />
+
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-medium text-text">{r.summary}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+          <span data-numeric className="font-medium">
+            {r.number}
+          </span>
+          <span className={cn(envelhecida && 'font-medium text-warn-text')}>
+            aberta {formatarDataRelativa(r.created_at)}
+          </span>
+          {envelhecida && (
+            <span className="inline-flex items-center gap-1 text-warn-text">
+              <Clock aria-hidden="true" className="size-3" />
+              na fila há mais de um dia
+            </span>
+          )}
+        </span>
+      </span>
+
+      <span className="flex shrink-0 items-center gap-2">
+        <PrioridadeChip prioridade={r.priority} />
+        <SituacaoChip status={r.status} />
+      </span>
+    </Link>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 
 const SITUACOES: Record<string, { rotulo: string; tom: 'neutral' | 'info' | 'warn' | 'good' | 'bad' }> = {
   draft: { rotulo: 'Rascunho', tom: 'neutral' },

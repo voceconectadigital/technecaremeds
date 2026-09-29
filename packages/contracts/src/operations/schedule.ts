@@ -181,7 +181,23 @@ export const AgendaBucketItem = z.object({
   reschedule_count: z.number().int(),
   window_invalidated_at: Timestamp.nullable(),
   window_invalidated_reason: z.string().nullable(),
-  bucket: z.enum(['unscheduled', 'overdue', 'today']),
+  /**
+   * O balde do painel lateral.
+   *
+   * ESTES SÃO OS VALORES QUE O SERVIDOR DE FATO DEVOLVE, e o contrato dizia
+   * outros: `['unscheduled', 'overdue', 'today']`. Nenhum dos dois inventados
+   * existe — `SCHEDULE_BUCKETS` em `@aurora/domain` é `late | unscheduled |
+   * to_reschedule`, e é ele que a consulta usa.
+   *
+   * O erro sobreviveu porque nenhuma tela lia o campo: a agenda filtrava por
+   * posição na lista, e o painel nem existia. A primeira tela a usá-lo
+   * encontrou três baldes vazios com os dados todos presentes na resposta.
+   *
+   * Não há "hoje" entre eles, e isso é do desenho: o balde responde "o que
+   * precisa de DECISÃO", e uma OS marcada para daqui a duas horas não precisa
+   * de nenhuma. A agenda do dia é outra lente — `schedule.calendar`.
+   */
+  bucket: z.enum(['late', 'unscheduled', 'to_reschedule']),
   /** Duração da janela marcada, quando existe janela. */
   minutes: z.number().int().nullable(),
 });

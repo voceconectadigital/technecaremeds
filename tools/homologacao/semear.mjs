@@ -511,6 +511,58 @@ async function main() {
     await db.transitionWorkOrder(s, ordens[3], 'validated', { note: 'Conferido pela coordenação.' });
     await db.transitionWorkOrder(s, ordens[3], 'closed', { note: 'Aceite do cliente registrado.' });
 
+    /*
+     * ---------------------------------------------------------------------
+     * A AGENDA PRECISA TER O QUE MOSTRAR, e isso não é maquiagem.
+     * ---------------------------------------------------------------------
+     *
+     * Com toda ordem sem data, os três baldes da agenda ficavam assim: quatro
+     * em "sem data" e dois vazios. A tela ficava correta e muda — e a leitura
+     * que ela existe para dar ("o que é para hoje, o que escapou") não tinha
+     * como ser demonstrada.
+     *
+     * As janelas são relativas a AGORA, e não datas fixas: uma massa com
+     * "14/09" envelhece, e em duas semanas a demonstração mostra tudo
+     * atrasado. `hoje.setHours(...)` mantém a cena correta em qualquer dia em
+     * que alguém rode o comando.
+     *
+     * O agendamento passa por `scheduleWorkOrder`, que CONFERE conflito de
+     * ausência e de jornada — semear por fora produziria uma agenda que a
+     * própria aplicação recusaria criar.
+     */
+    const agora = new Date();
+    const emHoras = (h, duracaoMin) => {
+      const inicio = new Date(agora);
+      inicio.setHours(agora.getHours() + h, 0, 0, 0);
+      const fim = new Date(inicio);
+      fim.setMinutes(inicio.getMinutes() + duracaoMin);
+      return { startsAt: inicio, endsAt: fim };
+    };
+
+    for (const [indice, horas, duracao] of [
+      // Uma no passado: é ela que povoa o balde "atrasadas" e o aviso do painel.
+      [0, -30, 120],
+      // Duas para hoje, em horários diferentes: a leitura do dia.
+      [2, 2, 90],
+      [4, 5, 60],
+    ]) {
+      try {
+        await db.scheduleWorkOrder(s, {
+          workOrderId: ordens[indice],
+          assigneeMembershipId: H.memTecnico,
+          ...emHoras(horas, duracao),
+        });
+      } catch {
+        /*
+         * A agenda RECUSA por ausência e por jornada, e isso é correto — o
+         * seed não deve forçar. Se a janela cair num bloqueio, a ordem
+         * simplesmente permanece sem data, que é um estado legítimo e que a
+         * tela sabe mostrar. Uma massa que morre por causa de um feriado
+         * seria pior que uma massa com um balde a menos.
+         */
+      }
+    }
+
     /* --------------------------------------------------------- estoque */
 
     const deposito = await db.createWarehouse(s, { name: 'Almoxarifado Central' });

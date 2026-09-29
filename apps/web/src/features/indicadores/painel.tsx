@@ -28,7 +28,7 @@
  */
 import { useState } from 'react';
 import { HelpCircle, TrendingUp } from 'lucide-react';
-import { Card, CardHeader, Dialog, EmptyState, Input, Skeleton, StatusChip } from '@aurora/ui';
+import { Card, CardHeader, Dialog, EmptyState, Input, Skeleton, StatusChip, cn } from '@aurora/ui';
 import {
   insightBacklog,
   insightFirstResponse,
@@ -99,9 +99,9 @@ export function IndicadoresPage() {
           />
         </Card>
       ) : (
-        <div className="flex flex-col gap-4">
-          <section aria-labelledby="volume" className="flex flex-col gap-2">
-            <h2 id="volume" className="text-sm font-semibold text-muted">
+        <div className="flex flex-col gap-8">
+          <section aria-labelledby="volume" className="flex flex-col gap-3">
+            <h2 id="volume" className="text-xl font-semibold tracking-display text-text">
               Volume
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -117,8 +117,8 @@ export function IndicadoresPage() {
             </div>
           </section>
 
-          <section aria-labelledby="tempo" className="flex flex-col gap-2">
-            <h2 id="tempo" className="text-sm font-semibold text-muted">
+          <section aria-labelledby="tempo" className="flex flex-col gap-3">
+            <h2 id="tempo" className="text-xl font-semibold tracking-display text-text">
               Tempo
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -128,8 +128,8 @@ export function IndicadoresPage() {
             </div>
           </section>
 
-          <section aria-labelledby="qualidade" className="flex flex-col gap-2">
-            <h2 id="qualidade" className="text-sm font-semibold text-muted">
+          <section aria-labelledby="qualidade" className="flex flex-col gap-3">
+            <h2 id="qualidade" className="text-xl font-semibold tracking-display text-text">
               Prevenção
             </h2>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -209,7 +209,18 @@ function Indicador({
         }
       />
       <div className="flex flex-col gap-1 px-4 pb-4">
-        <p className="text-2xl font-semibold text-text tabular-nums" data-numeric>
+        {/*
+          O NÚMERO É O CONTEÚDO DO CARTÃO, e agora tem o tamanho disso.
+          Em 31px ele é a primeira coisa que o olho encontra ao varrer nove
+          cartões — em 22px, competia com o próprio título.
+        */}
+        <p
+          className={cn(
+            'text-3xl font-semibold tracking-display tabular-nums',
+            valor === '—' ? 'text-subtle' : 'text-text'
+          )}
+          data-numeric
+        >
           {valor}
         </p>
         {detalhe && <p className="text-xs text-muted">{detalhe}</p>}
@@ -269,10 +280,93 @@ function apresentar(e: Envelope): { valor: string; detalhe: string | null } {
     return { valor: `${Math.round(d.percent)}%`, detalhe: null };
   }
 
+  /* ---------------------------------------------------------------------- */
+  /* As formas que a API DE FATO devolve, e que faltavam aqui.              */
+  /*                                                                        */
+  /* O painel mostrava "formato ainda não apresentado nesta tela" em cinco  */
+  /* indicadores — MTTR, tempo de primeira resposta, SLA, preventiva ×      */
+  /* corretiva e conformidade de plano. Não era uma pendência de produto:   */
+  /* era este `if` que nunca casava. Os números existiam e chegavam ao      */
+  /* navegador; a tela é que não sabia lê-los, e anunciava a própria        */
+  /* limitação como se fosse um recurso a construir.                        */
+  /* ---------------------------------------------------------------------- */
+
+  /* `{ value, samples }` — MTTR e tempo de primeira resposta. */
+  if ('value' in d && 'samples' in d) {
+    const valor = d.value === null ? null : Number(d.value);
+    const amostras = Number(d.samples ?? 0);
+    return {
+      valor: valor === null ? '—' : formatar(valor, unidade),
+      // NULO NÃO É ZERO: um período sem amostra não teve excelência, e dizer
+      // "0 min" afirmaria uma que não aconteceu.
+      detalhe:
+        valor === null ? 'sem caso concluído no período' : `${amostras} ${amostras === 1 ? 'caso' : 'casos'}`,
+    };
+  }
+
+  /* `{ met, breached, rate }` — cumprimento de SLA. */
+  if ('rate' in d && ('met' in d || 'breached' in d)) {
+    const taxa = d.rate === null ? null : Number(d.rate);
+    const cumpridos = Number(d.met ?? 0);
+    const violados = Number(d.breached ?? 0);
+    return {
+      valor: taxa === null ? '—' : `${Math.round(taxa * (taxa <= 1 ? 100 : 1))}%`,
+      detalhe:
+        taxa === null
+          ? 'nenhum relógio de SLA fechou no período'
+          : `${cumpridos} no prazo · ${violados} ${violados === 1 ? 'violado' : 'violados'}`,
+    };
+  }
+
+  /* `{ expected, done, skipped, rate }` — conformidade de plano preventivo. */
+  if ('rate' in d && 'expected' in d) {
+    const taxa = d.rate === null ? null : Number(d.rate);
+    const previstas = Number(d.expected ?? 0);
+    const feitas = Number(d.done ?? 0);
+    const dispensadas = Number(d.skipped ?? 0);
+    return {
+      valor: taxa === null ? '—' : `${Math.round(taxa * (taxa <= 1 ? 100 : 1))}%`,
+      detalhe:
+        previstas === 0
+          ? 'nenhuma preventiva prevista no período'
+          : // As dispensadas saem do DENOMINADOR (§12) e por isso aparecem
+            // separadas: escondê-las faria o número parecer melhor sem dizer
+            // por quê.
+            `${feitas} de ${previstas}${dispensadas > 0 ? ` · ${dispensadas} dispensada${dispensadas === 1 ? '' : 's'}` : ''}`,
+    };
+  }
+
+  /* `{ preventive, corrective, preventiveShare }` — o mix. */
+  if ('preventiveShare' in d) {
+    const parcela = d.preventiveShare === null ? null : Number(d.preventiveShare);
+    const preventivas = Number(d.preventive ?? 0);
+    const corretivas = Number(d.corrective ?? 0);
+    const total = preventivas + corretivas;
+    return {
+      valor: total === 0 || parcela === null ? '—' : `${Math.round(parcela * (parcela <= 1 ? 100 : 1))}%`,
+      detalhe:
+        total === 0
+          ? 'nenhuma ordem concluída no período'
+          : `${preventivas} preventiva${preventivas === 1 ? '' : 's'} · ${corretivas} corretiva${corretivas === 1 ? '' : 's'}`,
+    };
+  }
+
   if (Array.isArray(d.items)) {
     return {
       valor: String(d.items.length),
       detalhe: d.items.length === 1 ? '1 categoria' : `${d.items.length} categorias`,
+    };
+  }
+
+  /*
+   * Distribuição vazia — `time-by-wait-reason` devolve `[]` quando nada
+   * esperou. É resposta, e não ausência de resposta: "nada parou no período"
+   * é exatamente o que o gestor quer ver.
+   */
+  if (Array.isArray(d)) {
+    return {
+      valor: d.length === 0 ? '0' : String(d.length),
+      detalhe: d.length === 0 ? 'nada ficou parado no período' : null,
     };
   }
 

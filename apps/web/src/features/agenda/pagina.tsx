@@ -20,7 +20,7 @@
  * que evita o técnico com onze chamados e o colega com dois.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CalendarDays, Ban } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Ban, User } from 'lucide-react';
 import {
   Button,
   Card,
@@ -32,7 +32,9 @@ import {
   Progress,
   Select,
   SkeletonList,
+  StatStrip,
   StatusChip,
+  cn,
   useToast,
 } from '@aurora/ui';
 import {
@@ -72,64 +74,182 @@ export function AgendaPage() {
 
   if (isError) return <ErrorScreen error={error} />;
 
-  const baldes = Object.keys(data?.labels ?? {});
+  const itens = data?.items ?? [];
+  const contagem = (b: string) => data?.counts[b] ?? 0;
+
+  /*
+   * A ORDEM DOS BALDES É UMA DECISÃO, e ela vem do §13.
+   *
+   * "Reagendar" vem antes de "atrasada": uma OS cuja janela caiu sobre férias
+   * não está atrasada por culpa de ninguém, e misturar as duas junta o
+   * problema de PROGRAMAÇÃO com o de EXECUÇÃO — que são conversas diferentes,
+   * com pessoas diferentes.
+   */
+  const BALDES: { id: string; tom: 'bad' | 'warn' | 'accent'; explicacao: string }[] = [
+    {
+      id: 'to_reschedule',
+      tom: 'warn',
+      explicacao: 'A janela caiu sobre uma ausência criada depois. Remarque perto da data original.',
+    },
+    { id: 'late', tom: 'bad', explicacao: 'A janela marcada terminou e o trabalho não começou.' },
+    { id: 'unscheduled', tom: 'warn', explicacao: 'Sem data: ninguém programou ainda.' },
+  ];
 
   return (
     <AppShell title="Agenda" subtitle="O que está sem data, o que atrasou e o que é para hoje.">
       {isLoading ? (
         <SkeletonList rows={6} label="agenda" />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {baldes.map((b) => {
-            const itens = (data?.items ?? []).filter((i) => i.bucket === b);
-            return (
-              <Card key={b}>
-                <CardHeader
-                  title={data?.labels[b] ?? b}
-                  actions={
-                    <span className="text-sm font-semibold text-muted tabular-nums" data-numeric>
-                      {data?.counts[b] ?? 0}
-                    </span>
-                  }
-                />
-                <div className="p-2">
-                  {itens.length === 0 ? (
-                    <EmptyState
-                      icon={<CalendarDays className="size-5" />}
-                      title="Vazio"
-                      description={b === 'overdue' ? 'Nada atrasado.' : 'Nada aqui agora.'}
-                      className="py-6"
-                    />
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {itens.map((os) => (
-                        <li key={os.work_order_id}>
-                          <button
-                            type="button"
-                            onClick={() => setProgramando(os)}
-                            className="w-full rounded-control px-2.5 py-2 text-left transition-colors hover:bg-surface-hover"
-                          >
-                            <span className="block truncate text-sm text-text">{os.title}</span>
-                            <span className="block truncate text-xs text-muted" data-numeric>
-                              {os.number ?? 'sem número'}
-                              {os.scheduled_start
-                                ? ` · ${new Date(os.scheduled_start).toLocaleString('pt-BR')}`
-                                : ''}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
+        <div className="flex flex-col gap-5">
+          {/*
+           * A faixa existe porque três cartões lado a lado com um número no
+           * canto NÃO comunicam urgência — era o diagnóstico "parece três
+           * caixas". Aqui os números têm o peso do que significam, e o
+           * atrasado tem tom próprio.
+           */}
+          <StatStrip
+            items={[
+              { label: 'Atrasadas', value: contagem('late'), tone: contagem('late') > 0 ? 'bad' : 'good' },
+              {
+                label: 'Reagendar',
+                value: contagem('to_reschedule'),
+                tone: contagem('to_reschedule') > 0 ? 'warn' : 'good',
+                hint: 'Janela invalidada por ausência criada depois',
+              },
+              {
+                label: 'Sem data',
+                value: contagem('unscheduled'),
+                tone: contagem('unscheduled') > 0 ? 'warn' : 'good',
+              },
+              {
+                label: 'Remarcadas 3+',
+                value: itens.filter((i) => i.reschedule_count >= 3).length,
+                tone: itens.some((i) => i.reschedule_count >= 3) ? 'warn' : 'neutral',
+                hint: 'Remarcar muitas vezes é sinal de problema, não de rotina',
+              },
+            ]}
+          />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {BALDES.filter((b) => (data?.labels[b.id] ?? null) !== null).map((balde) => {
+              const doBalde = itens.filter((i) => i.bucket === balde.id);
+              return (
+                <Card key={balde.id} className="flex flex-col">
+                  <CardHeader
+                    title={data?.labels[balde.id] ?? balde.id}
+                    description={balde.explicacao}
+                    actions={
+                      <StatusChip tone={doBalde.length > 0 ? balde.tom : 'neutral'} size="sm" withoutDot>
+                        {contagem(balde.id)}
+                      </StatusChip>
+                    }
+                  />
+                  <div className="min-h-0 flex-1 p-2">
+                    {doBalde.length === 0 ? (
+                      <EmptyState
+                        icon={<CalendarDays className="size-5" />}
+                        title={balde.id === 'late' ? 'Nada atrasado' : 'Vazio'}
+                        description={
+                          balde.id === 'late' ? 'Toda janela marcada está em dia.' : 'Nada neste balde agora.'
+                        }
+                        className="py-8"
+                      />
+                    ) : (
+                      <ul className="flex flex-col gap-1.5">
+                        {doBalde.map((os) => (
+                          <li key={os.work_order_id}>
+                            <CartaoDaAgenda os={os} onProgramar={() => setProgramando(os)} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {programando && <DialogoProgramar ordem={programando} onFechar={() => setProgramando(null)} />}
     </AppShell>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O cartão de uma ordem dentro de um balde da agenda.
+ *
+ * Antes eram duas linhas de texto. O que faltava era tudo que a coordenação
+ * usa para decidir A QUEM dar o trabalho e QUANDO: o responsável (ou a
+ * ausência dele, que é a informação mais acionável do balde), o local, a
+ * duração da janela e o histórico de remarcação.
+ *
+ * "Sem responsável" aparece em tom de atenção, e não como texto cinza: uma OS
+ * marcada para hoje sem ninguém designado é a que não vai acontecer.
+ */
+function CartaoDaAgenda({ os, onProgramar }: { os: Balde; onProgramar: () => void }) {
+  const critica = os.priority === 'emergency' || os.priority === 'very_urgent';
+
+  return (
+    <button
+      type="button"
+      onClick={onProgramar}
+      className={cn(
+        'relative w-full overflow-hidden rounded-card border border-border bg-surface p-3 pl-4 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised',
+        os.window_invalidated_at && 'border-warn'
+      )}
+    >
+      {critica && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-bad" />}
+
+      <span className="flex items-start gap-2">
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-2 text-sm leading-tight font-medium text-text">{os.title}</span>
+          <span className="mt-1 block truncate text-2xs text-muted" data-numeric>
+            {os.number ?? 'sem número'}
+            {os.location_name ? ` · ${os.location_name}` : ''}
+          </span>
+        </span>
+        {os.scheduled_start && (
+          <span className="shrink-0 text-right">
+            <span className="block text-sm font-semibold tabular-nums text-text" data-numeric>
+              {new Date(os.scheduled_start).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </span>
+            {os.minutes !== null && <span className="block text-2xs text-subtle">{os.minutes} min</span>}
+          </span>
+        )}
+      </span>
+
+      <span className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span
+          className={cn(
+            'inline-flex items-center gap-1 rounded-pill px-2 py-0.5 text-2xs font-medium',
+            os.assignee_name ? 'bg-surface-sunken text-muted' : 'bg-warn-soft text-warn-text'
+          )}
+        >
+          <User aria-hidden="true" className="size-3" />
+          {os.assignee_name ?? 'sem responsável'}
+        </span>
+
+        {os.reschedule_count >= 3 && (
+          <StatusChip tone="warn" size="sm" hint={`Remarcada ${os.reschedule_count} vezes`}>
+            {os.reschedule_count}× remarcada
+          </StatusChip>
+        )}
+
+        {/* A janela invalidada carrega o MOTIVO, e é o que impede o telefonema:
+            "a pessoa entrou em férias de 07/04 a 20/04" resolve sozinho. */}
+        {os.window_invalidated_at && (
+          <StatusChip tone="warn" size="sm" hint={os.window_invalidated_reason ?? undefined}>
+            Reagendar
+          </StatusChip>
+        )}
+      </span>
+    </button>
   );
 }
 

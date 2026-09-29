@@ -17,7 +17,7 @@
  */
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { ClipboardList, LayoutGrid, List } from 'lucide-react';
+import { CalendarClock, ClipboardList, LayoutGrid, List, MapPin } from 'lucide-react';
 import { Button, Card, EmptyState, SkeletonList, StatusChip, Tabs, cn, useToast } from '@aurora/ui';
 import {
   workOrdersBoard,
@@ -189,13 +189,22 @@ function Quadro() {
             onDragLeave={() => setAlvo((a) => (a === coluna.key ? null : a))}
             onDrop={() => soltar(coluna)}
             className={cn(
-              'flex w-72 shrink-0 flex-col rounded-card border bg-surface-sunken/40',
+              'flex w-80 shrink-0 flex-col rounded-card border bg-surface-sunken',
               destacada ? 'border-accent bg-accent-soft/40' : 'border-border'
             )}
           >
-            <header className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{coluna.label}</h2>
-              <span className="text-sm text-muted tabular-nums" data-numeric>
+            <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
+              {/* O PONTO DE CATEGORIA: a coluna passa a ter identidade visual
+                  além da posição, e o olho encontra "em execução" sem ler. */}
+              <span
+                aria-hidden="true"
+                className={cn('size-2 shrink-0 rounded-full', PONTO_DE_CATEGORIA[coluna.category])}
+              />
+              <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text">{coluna.label}</h2>
+              <span
+                className="rounded-pill bg-surface px-2 py-0.5 text-xs font-semibold text-muted tabular-nums"
+                data-numeric
+              >
                 {coluna.total}
               </span>
             </header>
@@ -238,6 +247,46 @@ function Quadro() {
   );
 }
 
+/**
+ * O cartão de uma OS no quadro.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * O QUADRO PRECISA RESPONDER SEM QUE NINGUÉM ABRA NADA
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * A versão anterior trazia título, número e prioridade. Isso diz o que a OS é,
+ * e não diz nada sobre o que fazer com ela — que é a pergunta de quem olha um
+ * quadro. As quatro perguntas de gestão são:
+ *
+ *   · onde está o gargalo?      → a contagem e a quebra por motivo, na coluna
+ *   · o que está crítico?       → a barra de prioridade, lida antes do texto
+ *   · o que está SEM DONO?      → o rosto ausente, dito por extenso
+ *   · o que está atrasado?      → a data, destacada quando já passou
+ *
+ * As três últimas são deste cartão, e nenhuma existia.
+ */
+/**
+ * A cor de cada fase, e por que ela não sai do banco.
+ *
+ * `work_order_statuses.color` existe e é configurável por organização — e é
+ * exatamente por isso que NÃO é usada aqui: uma organização que escolheu
+ * vermelho para "concluída" faria o quadro inteiro parecer um alarme. A cor da
+ * COLUNA sai da CATEGORIA, que é fixa na plataforma e é o que o software
+ * interpreta (ADR-003); a cor escolhida pela organização continua valendo onde
+ * ela identifica a situação, e não onde comunica gravidade.
+ */
+const PONTO_DE_CATEGORIA: Record<string, string> = {
+  draft: 'bg-border-strong',
+  open: 'bg-info',
+  scheduled: 'bg-accent',
+  in_progress: 'bg-accent',
+  waiting: 'bg-warn',
+  review: 'bg-info',
+  done: 'bg-good',
+  closed: 'bg-good',
+  cancelled: 'bg-border-strong',
+};
+
 function CartaoDeOs({
   os,
   onDragStart,
@@ -249,6 +298,19 @@ function CartaoDeOs({
   onDragEnd: () => void;
   ocupada: boolean;
 }) {
+  const critica = os.priority === 'emergency' || os.priority === 'very_urgent';
+  const urgente = os.priority === 'urgent';
+
+  // "Atrasada" aqui é sobre a JANELA marcada, e não sobre o SLA: são dois
+  // relógios diferentes, e misturá-los faria o cartão acusar atraso numa OS
+  // cujo prazo contratual está em dia.
+  const atrasada =
+    os.scheduled_start !== null &&
+    new Date(os.scheduled_start).getTime() < Date.now() &&
+    os.category !== 'done' &&
+    os.category !== 'closed' &&
+    os.category !== 'cancelled';
+
   return (
     <Link
       to="/ordens/$id"
@@ -258,23 +320,68 @@ function CartaoDeOs({
       onDragEnd={onDragEnd}
       aria-busy={ocupada || undefined}
       className={cn(
-        'block rounded-control border border-border bg-surface p-2.5 transition-colors hover:border-border-strong',
+        'relative block overflow-hidden rounded-card border border-border bg-surface p-3 pl-4 shadow-card transition-all hover:border-border-strong hover:shadow-raised',
         ocupada && 'opacity-60'
       )}
     >
-      <p className="line-clamp-2 text-sm text-text">{os.title}</p>
-      <p className="mt-1 truncate text-xs text-muted" data-numeric>
+      {/* A prioridade como barra: lida antes de qualquer palavra, e visível
+          em tela lavada onde um chip suave desaparece. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-y-0 left-0 w-1',
+          critica ? 'bg-bad' : urgente ? 'bg-warn' : 'bg-transparent'
+        )}
+      />
+
+      <p className="line-clamp-2 text-sm leading-tight font-medium text-text">{os.title}</p>
+
+      <p className="mt-1.5 truncate text-2xs text-muted" data-numeric>
         {os.number ?? 'sem número'}
         {os.asset_name_snapshot ? ` · ${os.asset_name_snapshot}` : ''}
       </p>
-      <div className="mt-2 flex items-center gap-1.5">
+
+      {os.location_name_snapshot && (
+        <p className="mt-0.5 flex items-center gap-1 truncate text-2xs text-subtle">
+          <MapPin aria-hidden="true" className="size-3 shrink-0" />
+          {os.location_name_snapshot}
+        </p>
+      )}
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <PrioridadeChip prioridade={os.priority} />
         {os.wait_reason_label && (
           <StatusChip tone="warn" size="sm">
             {os.wait_reason_label}
           </StatusChip>
         )}
+        {atrasada && (
+          <StatusChip tone="bad" size="sm">
+            Atrasada
+          </StatusChip>
+        )}
       </div>
+
+      {os.scheduled_start && (
+        <p
+          className={cn(
+            'mt-2 flex items-center gap-1 text-2xs',
+            atrasada ? 'font-medium text-bad-text' : 'text-subtle'
+          )}
+          data-numeric
+        >
+          <CalendarClock aria-hidden="true" className="size-3 shrink-0" />
+          {new Date(os.scheduled_start).toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+          })}
+          {' · '}
+          {new Date(os.scheduled_start).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </p>
+      )}
     </Link>
   );
 }
