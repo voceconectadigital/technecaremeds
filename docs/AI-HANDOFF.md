@@ -7,7 +7,7 @@
 > ensinar mais do que está escrito aqui.
 
 **Atualizado em:** 29/09/2026 · **HEAD desta atualização:** ver `git log -1`
-**Migration mais recente:** `0045_credenciais_e_sessoes.sql` · **46 migrations** ·
+**Migration mais recente:** `0046_item_imagem_e_categoria.sql` · **47 migrations** ·
 **94 tabelas** · **183 rotas** · **110 permissões** · **11 papéis** ·
 **107 tipos de evento** · **1707 testes de unidade/HTTP + 147 de navegador**
 
@@ -90,7 +90,7 @@ emite documento, mede SLA e produz indicador.
 | SLA | ✅ | Tempo útil por fuso e feriado, pausa por motivo |
 | Agenda | ✅ | Projeção da OS (ADR-011); confere antes de salvar |
 | Preventivas | ✅ | Frequência por tarefa; **ciclo nunca fecha** — ver §32 |
-| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva |
+| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046) |
 | Contratos | ✅ | Cobertura por expressão, medição congelada |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
 | Documentos | 🟡 | Motor completo; 6 tipos provisionados com **payload vazio**; **sem PDF** |
@@ -168,7 +168,7 @@ graph TB
 | `packages/contracts` | Esquemas Zod das operações | **Fonte única**: valida o controller, gera o OpenAPI, tipa o cliente |
 | `packages/events` | Catálogo de 107 eventos de domínio | Nome no formato `agregado.fato_no_passado` |
 | `packages/config` | `loadEnv`, marca, **guard de destino de banco** | Falha **alto** no boot; nunca default silencioso em segurança |
-| `packages/ui` | Design system próprio | Tokens em `src/styles/tokens.css` |
+| `packages/ui` | Design system próprio | Tokens em `src/styles/tokens.css`; componentes em §20-A |
 | `packages/app-kit` | Sessão, cliente da API, tema, URL-state | Infra **sem opinião de produto**. Nada que decida o que a tela mostra |
 
 ---
@@ -727,7 +727,68 @@ escrita guardada por permissão de leitura, ou rota literal sombreada.
 
 ---
 
+## 20-A · Design system — o que saber antes de desenhar uma tela
+
+Redesenhado em 29/09/2026. A fundação (tokens semânticos, contraste conferido,
+foco visível, estado nunca só por cor) **não mudou**; o que mudou foi
+calibração e o catálogo de componentes.
+
+**Escala tipográfica DUPLA.** Base operacional densa (`2xs`…`md`, 11–16px)
+porque leitura de tabela depende dela; e aberta a partir de `lg` (19px) até
+`4xl` (49px), onde moram título de cartão, de seção, de página e número de
+indicador. Títulos acima de 24px usam `tracking-display` (entreletra negativa).
+**Hierarquia é a distância entre corpo e título, não o tamanho do corpo.**
+
+**Elevação.** `shadow-card` é o piso de todo `Card` — dois estágios, quase
+invisível de perto, e é o que dá profundidade a uma tela que antes era só
+retângulos de 1px. `shadow-raised` para o que precisa se destacar DENTRE
+cartões. A borda continua sendo a separação de lista e tabela.
+
+**Superfícies:** `bg` (janela) < `surface-subtle` (barra lateral, cabeçalho de
+tabela) < `surface` (cartão). A navegação fica sobre a rebaixada para que o
+conteúdo seja a superfície mais clara da tela.
+
+**Paleta de dados** (`--color-data-1..6`): só para série de gráfico e
+identidade de miniatura. **Nunca para estado** — uma série que reusasse o
+vermelho de crítico faria uma barra alta parecer alarme.
+
+### Componentes de apresentação de dados
+
+| Componente | Quando usar | A regra que ele carrega |
+| --- | --- | --- |
+| `Metric` / `MetricGrid` | número de painel | `value={null}` vira traço, nunca zero; `coverage` fica visível, não atrás de clique |
+| `BarChart` | comparar grandezas com rótulo em frase | barras horizontais; tem tabela só para leitor de tela |
+| `DonutChart` | composição de um todo | nunca para comparar grandezas |
+| `Sparkline` | tendência dentro de um cartão | responde "para onde", não "quanto" |
+| `Thumb` | item físico numa lista | o vazio é DESENHADO — iniciais sobre cor estável derivada do nome |
+| `Section` | bloco de página com título | título `text-xl`, para varrer a página sem ler |
+| `Toolbar` | busca + filtro + ação de uma lista | sempre na mesma ordem, em toda tela |
+| `FilterChip` | filtro visível | ativo em três canais: fundo, peso e borda |
+| `StatStrip` | números no topo de uma lista | versão compacta do `Metric`, quando o assunto já é da tela |
+| `FieldPair` | rótulo + valor numa ficha | rótulo pequeno em caixa alta; o valor é o conteúdo |
+
+**Gráficos são SVG à mão, sem biblioteca** — três formas simples não pagam
+40–150 kB nem um segundo sistema de temas que discorda do nosso na primeira
+cor. Todo gráfico tem alternativa textual: um `<svg>` sem ela é informação que
+não existe para metade do painel.
+
+**Imagem de item de estoque:** `inventory_items.image_key` guarda caminho
+**relativo** (restrição de tabela recusa URL absoluta — ver a migration 0046) e
+a borda HTTP monta `image_url`. As ilustrações de catálogo estão em
+`apps/web/public/catalogo`; leia o `LEIA-ME.md` de lá antes de acrescentar uma.
+
+### Três armadilhas que já custaram um teste vermelho
+
+1. **Cor de série como cor de texto.** `--color-data-3` é âmbar e dá ~3,5:1
+   sobre fundo claro. Para texto, misture com `--color-text` — resolve os dois
+   temas de uma vez.
+2. **Link de texto como alvo de toque.** A altura da linha fica abaixo dos
+   24×24 da WCAG 2.2. Use `min-h-6`.
+3. **Teste amarrado à decoração.** A saudação da tela inicial segue o relógio;
+   uma asserção em "Bom dia" falha à tarde, sozinha, na integração contínua.
+
 ## 20 · Frontends
+
 
 | | `apps/web` | `apps/portal` | `apps/field` |
 | --- | --- | --- | --- |
@@ -1066,7 +1127,7 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Marca / nome** | `marca.config.json` · `tools/marca/aplicar.mjs` |
 | **Destino de banco** | `aurora.destinos.json` · `packages/config/src/destino.ts` · `tools/db/destino.mjs` |
 | **Configuração / env** | `packages/config/src/env.ts` · `.env.example` |
-| **Design system** | `packages/ui/src/styles/tokens.css` |
+| **Design system** | `packages/ui/src/styles/tokens.css` · §20-A deste documento |
 | **Requisitos do cliente** | `docs/AUDITORIA-GAP-BECARE-TECHNECARE-V2-2026-09.md` |
 
 ---

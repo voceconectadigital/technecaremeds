@@ -52,7 +52,17 @@ describe('força da senha', () => {
   });
 
   it('recusa o nome do produto, em qualquer caixa', () => {
-    for (const s of ['AURORA no comando 42', 'BeCare#Demo2026!', 'technecare para todos']) {
+    /*
+     * NENHUMA DESTAS É UMA SENHA DE VERDADE DE LUGAR NENHUM.
+     *
+     * A primeira versão deste caso usava, como exemplo de "senha com o nome do
+     * produto", a senha real da conta de demonstração. Ela é fraca por
+     * definição e é trocada antes de qualquer implantação — e mesmo assim não
+     * pode morar no repositório: uma senha versionada continua no histórico
+     * do Git depois de trocada, e um exemplo de teste é o último lugar onde
+     * alguém pensaria em procurar por uma.
+     */
+    for (const s of ['AURORA no comando 42', 'BeCare sem nada mais', 'technecare para todos']) {
       expect(conferirForcaDaSenha(s).length).toBeGreaterThan(0);
     }
   });
