@@ -167,12 +167,18 @@ function Quadro() {
      * `tabIndex={0}` põe a faixa na ordem de tabulação; as setas do teclado
      * então rolam. O `role="group"` com rótulo é o que faz o leitor de tela
      * anunciar o que a pessoa acabou de alcançar em vez de dizer só "grupo".
+     *
+     * `relative` NÃO É ENFEITE. O texto para leitor de tela das etiquetas
+     * (`aurora-sr-only`) tem posição absoluta; sem um ancestral posicionado
+     * aqui dentro, ele se ancorava na página — e o de um cartão na quarta
+     * coluna, fora da tela, alargava o documento em 318px, fazendo a página
+     * inteira deslizar de lado. Com o rolável posicionado, ele fica contido.
      */
     <div
       role="group"
       aria-label="Colunas do quadro — use as setas para rolar"
       tabIndex={0}
-      className="flex h-full gap-3 overflow-x-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="relative flex h-full gap-3 overflow-x-auto p-4 outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       {(colunas.data?.columns ?? []).map((coluna) => {
         const cartoes = porColuna.get(coluna.key) ?? [];

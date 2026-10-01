@@ -6,7 +6,7 @@
 > ele tem ~600 arquivos versionados e a varredura gasta o seu contexto sem
 > ensinar mais do que está escrito aqui.
 
-**Atualizado em:** 29/09/2026 · **HEAD desta atualização:** ver `git log -1`
+**Atualizado em:** 30/09/2026 (demo pública, §27-A) · **HEAD desta atualização:** ver `git log -1`
 **Migration mais recente:** `0046_item_imagem_e_categoria.sql` · **47 migrations** ·
 **94 tabelas** · **183 rotas** · **110 permissões** · **11 papéis** ·
 **107 tipos de evento** · **1707 testes de unidade/HTTP + 147 de navegador**
@@ -942,12 +942,13 @@ Detalhes em `docs/AURORA-AMBIENTES.md`.
 
 ## 27 · Deploy
 
-### NADA ESTÁ PUBLICADO. Não presuma o contrário porque existe configuração.
+### Só a DEMONSTRAÇÃO está publicada. O produto conectado não.
 
 | Item | Estado |
 | --- | --- |
 | API | **NOT DEPLOYED** — roda local |
-| Web / Portal / Field | **NOT DEPLOYED** — sem Cloudflare Pages, sem Vercel, sem nada |
+| Web — **demonstração** | **PUBLICADA** em https://technecaremeds.voceconecta.com.br (Cloudflare Pages, `VITE_DEMO_MODE=true`, sem API) — ver §27-A |
+| Web conectada / Portal / Field | **NOT DEPLOYED** |
 | Workers | **NOT DEPLOYED** |
 | PostgreSQL | **local**, contêiner `aurora-postgres` (porta 15432) |
 | Supabase | 🔒 bloqueado |
@@ -955,10 +956,107 @@ Detalhes em `docs/AURORA-AMBIENTES.md`.
 | Lojas (Play/App Store) | **READY** (build), **NOT PUBLISHED** |
 | Domínio / DNS | não existe |
 
-**Não há Dockerfile, wrangler.toml, fly.toml nem compose versionados.**
+**Não há Dockerfile, wrangler.toml, fly.toml nem compose versionados.** O Pages
+da demonstração é configurado no painel da Cloudflare (ligado ao GitHub), não
+por arquivo — ver §27-A.
 
 **O que trava:** uma máquina. Opções comparadas com custo em
 `docs/AURORA-AMBIENTES.md`; a que não gasta é a máquina do próprio cliente.
+
+---
+
+## 27-A · DEMO PÚBLICA
+
+**URL:** https://technecaremeds.voceconecta.com.br — é o link que vai para o
+cliente. Funciona **sem API, sem Supabase e sem banco**: dados fictícios, nada
+persiste, nenhuma chamada de rede além dos próprios arquivos do site.
+
+### Como funciona — uma troca, num lugar só
+
+```
+VITE_DEMO_MODE=true  → DemoDataProvider  (apps/web/src/demo/provedor.tsx)
+caso contrário       → ApiDataProvider   (apps/web/src/dados/provedor.tsx)
+```
+
+Os dois entregam à árvore o MESMO `ApiClient` do `@aurora/app-kit`. As telas
+chamam `useApiQuery(operação)` e não sabem qual dos dois está embaixo — **não
+existe `if (demo)` nas telas.** Os únicos pontos que conhecem o modo:
+
+| Arquivo | O que faz |
+| --- | --- |
+| `apps/web/src/dados/ambiente.ts` | `MODO_DEMO` (constante de compilação `__MODO_DEMO__`) e o contexto `useAmbiente` |
+| `apps/web/src/dados/provedor.tsx` | `DataProvider`: escolhe `DemoDataProvider` ou `ApiDataProvider` |
+| `apps/web/src/demo/cliente.ts` | `criarClienteDemo()`: o `ApiClient` que responde com as capturas — sem `fetch` |
+| `apps/web/src/demo/entrar.tsx` | Entrada da demo: logo, "Ambiente de demonstração", botão **Explorar plataforma** (sem senha) |
+| `apps/web/src/demo/sessao.ts` | Marca "já entrou" no `localStorage` com um marcador legível — **não é token**, não vai a lugar nenhum |
+| `apps/web/src/routes/router.tsx` | `/entrar` vira a entrada da demo; link direto para tela interna abre a tela |
+| `apps/web/src/shell/faixa-demonstracao.tsx` | Faixa no topo de toda tela: **DEMONSTRAÇÃO** · "dados fictícios e não persistentes" |
+
+Título da aba: **Téchne Care — Demonstração** (o nome segue `marca.config.json`).
+
+### As fixtures — respostas reais da API, sobre dados fictícios
+
+`apps/web/src/demo/capturas.json` **não é escrito à mão.** Sai de:
+
+```
+npm run demo:capturar
+```
+
+que sobe a API de verdade **em processo**, sobre um PGlite em memória semeado
+por `tools/demo/semeadura.ts` (3 clientes, 15 locais, 22 ativos, 28 OS em todos
+os estados, 10 chamados, 13 itens de estoque com ilustração, 3 contratos, 5
+orçamentos, 3 planos, 8 pessoas), faz as mesmas leituras que as telas fazem
+(`tools/demo/capturar.test.ts`) e grava ~270 respostas. Nada toca rede,
+Supabase ou banco remoto. Campos calculados (SLA, MTTR, saldos) são os que o
+servidor calcula.
+
+Na leitura, o cliente da demo: (1) desloca as datas em dias inteiros até hoje
+— o que era passado na captura continua passado, janelas de agenda andam com
+o calendário; (2) aplica filtros não capturados pelo campo de mesmo nome; (3)
+resolve a busca global (OS, ativo, solicitação, comandos com `>`) localmente.
+
+**Escrita:** todo comando (POST/PATCH/PUT/DELETE) é recusado com "Disponível
+na versão conectada. Esta é uma demonstração: nenhuma alteração é gravada." —
+a tela mostra como mostra qualquer recusa do servidor. "Sair" funciona.
+
+**Mudou um contrato ou uma tela passou a pedir outra operação?** Rode
+`npm run demo:capturar` de novo e versione o `capturas.json`. O teste
+`apps/web/src/demo/__tests__/cliente.test.ts` reprova se uma captura deixar de
+caber no contrato. Rode de manhã: a semeadura empurra "hoje à tarde" para o dia
+seguinte quando roda depois do meio-dia, para nada nascer atrasado.
+
+### Como garantir que a demo não chama API
+
+1. **Build:** `vite.config.ts` **recusa** `VITE_DEMO_MODE=true` junto de
+   `VITE_API_URL`. No build conectado, `../demo/provedor` é resolvido para um
+   módulo vazio — as capturas **não existem** no pacote de produção (conferido:
+   nenhum `capturedAt`/"Explorar plataforma" no `dist` conectado).
+2. **Código:** `criarClienteDemo` não tem `fetch` nem URL base.
+3. **Prova automática:** `npm run demo:e2e` (`e2e/demo/`) — desktop 1440 e
+   Pixel 7 — reprova se houver pedido a `/v1`, `/api`, `*.supabase.co` ou a
+   qualquer domínio externo, resposta ≥ 400, erro de console ou rolagem
+   lateral; cobre entrada, as 9 telas principais, ficha de OS e de ativo
+   recarregadas, rota profunda direta, busca e uma escrita recusada. Contra o
+   site publicado: `DEMO_URL=https://technecaremeds.voceconecta.com.br npm run demo:e2e`.
+
+### Como publicar
+
+O projeto Pages `technecaremeds` (conta Cloudflare voceconecta) é ligado ao
+GitHub e publica **a cada push em `main`**:
+
+| Configuração | Valor |
+| --- | --- |
+| Build command | `npm run build --workspace @aurora/web` |
+| Output | `apps/web/dist` |
+| Variável (produção e preview) | `VITE_DEMO_MODE=true` |
+| `VITE_API_URL` | **não definida** — o build recusaria |
+
+Local: `npm run demo:build` (usa `apps/web/.env.demo`) e
+`npm run preview:demo --workspace @aurora/web`.
+
+**Quando a API existir:** o site conectado precisa de OUTRO projeto Pages (ou
+remover `VITE_DEMO_MODE` deste e definir `VITE_API_URL`). Não misture: o
+build recusa os dois juntos de propósito.
 
 ---
 
@@ -1072,6 +1170,7 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Indicadores de tempo sem formato** | MTTR e afins mostram "formato ainda não apresentado nesta tela" | aberto | trabalho de UI | formatador de duração |
 | **`fn_calendar_window_no_overlap` usa advisory lock** | `EXCLUDE` exigiria `btree_gist` | deliberado | — | comentado na migration |
 | **Retenção de `client_operations`** | Tabela só cresce; sem `DELETE` por desenho | ❓ | decisão de operação | apagar reabre a duplicata que ela fecha |
+| **API diverge do contrato em 4 respostas** (achado pela captura da demo) | `serviceRequests.detail` lista transição para `duplicate` (contrato diz `merged`); `members.list` devolve `seat_type: portal` (contrato: `staff|customer`); `insights.mttr`/`firstResponse`/`byWaitReason` devolvem `data` em outra forma; `numeric` volta como número no PGlite e texto no `pg` | aberto | — | alinhar contrato ou API; o cliente só não reclama porque não valida resposta em produção |
 | **130 organizações-lixo** já apareceram no banco de desenvolvimento, deixadas por suítes | atrapalha listagens administrativas | mitigado | — | `admin:criar` filtra slugs com cara de teste |
 
 ---

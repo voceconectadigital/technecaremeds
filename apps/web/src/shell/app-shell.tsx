@@ -18,7 +18,8 @@ import { Menu as MenuIcon, X } from 'lucide-react';
 import { Button, Breadcrumbs, type Crumb, cn } from '@aurora/ui';
 import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
-import { MARCA } from '@aurora/app-kit';
+import { useAmbiente } from '../dados/ambiente';
+import { FaixaDemonstracao } from './faixa-demonstracao';
 
 export interface AppShellProps {
   /** Título da página. Vira o `<h1>` e o título do documento. */
@@ -35,12 +36,13 @@ export interface AppShellProps {
 
 export function AppShell({ title, subtitle, breadcrumbs, actions, children, bleed = false }: AppShellProps) {
   const [gavetaAberta, setGavetaAberta] = useState(false);
+  const ambiente = useAmbiente();
 
   useEffect(() => {
     // O título do documento é o que aparece na aba e no histórico. Sem ele,
     // dez abas da Aurora ficam indistinguíveis.
-    document.title = `${title} · ${MARCA.produto}`;
-  }, [title]);
+    document.title = `${title} · ${ambiente.tituloProduto}`;
+  }, [title, ambiente.tituloProduto]);
 
   useEffect(() => {
     if (!gavetaAberta) return;
@@ -53,6 +55,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
 
   return (
     <div className="flex h-dvh flex-col bg-bg">
+      {ambiente.demonstracao && <FaixaDemonstracao />}
       {/* Primeira parada do teclado, invisível até receber foco. */}
       <a href="#conteudo" className="aurora-skip-link">
         Pular para o conteúdo

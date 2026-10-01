@@ -18,6 +18,9 @@ import { EntrarPage } from './entrar';
 import { OrganizacoesPage } from './organizacoes';
 import { HojePage } from './hoje';
 import { lerSessaoGuardada } from '@aurora/app-kit';
+import { MODO_DEMO } from '../dados/ambiente';
+import { EntrarDemoPage } from '../demo/entrar';
+import { entrarNaDemonstracao, estaNaDemonstracao } from '../demo/sessao';
 
 /* -------------------------------------------------------------------------- */
 
@@ -135,13 +138,30 @@ const raiz = createRootRoute({ component: Outlet });
  * de entrada em vez de mostrar um esqueleto que vai falhar com 401. Quem
  * ignorar isto e chamar a API direto continua recebendo 401 do servidor.
  */
-function exigirSessao() {
+function exigirSessao({ location }: { location: { pathname: string } }) {
+  /*
+   * Na demonstração, um link direto para uma tela interna ABRE a tela: é o
+   * link que se manda ao cliente ("veja a agenda"), e passar por uma tela de
+   * entrada sem conta não protegeria nada. Só a raiz, sem passagem anterior,
+   * mostra a entrada — que é onde a demonstração se apresenta como tal.
+   */
+  if (MODO_DEMO && !estaNaDemonstracao()) {
+    if (location.pathname === '/') throw redirect({ to: '/entrar' });
+    entrarNaDemonstracao();
+    return;
+  }
   const { token, organizationId } = lerSessaoGuardada();
   if (!token) throw redirect({ to: '/entrar' });
   if (!organizationId) throw redirect({ to: '/organizacoes' });
 }
 
-const entrar = createRoute({ getParentRoute: () => raiz, path: '/entrar', component: EntrarPage });
+// A demonstração troca o formulário de senha por um botão: não há conta para
+// conferir, e um campo de senha que aceita qualquer coisa ensinaria o contrário.
+const entrar = createRoute({
+  getParentRoute: () => raiz,
+  path: '/entrar',
+  component: MODO_DEMO ? EntrarDemoPage : EntrarPage,
+});
 
 /*
  * `/login` existe como APELIDO de `/entrar`.

@@ -10,6 +10,8 @@ out/
 .env
 .env.*
 !.env.example
+# Sem segredo: só liga o modo demonstração (VITE_DEMO_MODE=true).
+!apps/web/.env.demo
 # testes e cobertura
 coverage/
 .vitest/

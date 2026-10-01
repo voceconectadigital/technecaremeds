@@ -3,7 +3,10 @@
  *
  * A ordem dos provedores não é arbitrária:
  *
- *   tema → sessão → cliente da API → cache → avisos → permissões → rotas
+ *   tema → sessão → dados → cache → avisos → permissões → rotas
+ *
+ * "Dados" é o cliente da API — o de verdade, ou o da demonstração quando o
+ * build tem `VITE_DEMO_MODE=true` (ver dados/provedor.tsx).
  *
  * Cada um depende do anterior. O cliente da API precisa da sessão para saber
  * qual credencial mandar; as permissões vêm de uma consulta, que precisa do
@@ -16,7 +19,6 @@ import { useMemo, type ReactNode } from 'react';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
 import {
   ApiError,
-  ApiProvider,
   PermissionsProvider,
   SessionProvider,
   ThemeProvider,
@@ -24,6 +26,7 @@ import {
 } from '@aurora/app-kit';
 import { router } from './routes/router';
 import { ErrorBoundary } from './shell/error-boundary';
+import { DataProvider } from './dados/provedor';
 
 function criarQueryClient() {
   return new QueryClient({
@@ -55,7 +58,7 @@ export function App({ children }: { children?: ReactNode }) {
   return (
     <ThemeProvider>
       <SessionProvider>
-        <ApiProvider>
+        <DataProvider>
           <QueryClientProvider client={queryClient}>
             <TooltipProvider delayDuration={400}>
               <ToastProvider>
@@ -67,7 +70,7 @@ export function App({ children }: { children?: ReactNode }) {
               </ToastProvider>
             </TooltipProvider>
           </QueryClientProvider>
-        </ApiProvider>
+        </DataProvider>
       </SessionProvider>
     </ThemeProvider>
   );
