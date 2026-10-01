@@ -14,6 +14,14 @@ import { test, expect, type Page } from '@playwright/test';
 
 const PROIBIDO = /\/v1(\/|$)|\/api(\/|$)|supabase\.co/i;
 
+/*
+ * A ÚNICA exceção externa: o beacon do Cloudflare Web Analytics, que a BORDA
+ * injeta no domínio próprio (configuração da zona voceconecta.com.br, e não do
+ * nosso código — o `*.pages.dev` não o tem). Não é backend, não carrega dado
+ * nem imagem, e a página funciona sem ele. Desligá-lo é decisão de conta.
+ */
+const BEACON_DA_BORDA = /^https:\/\/static\.cloudflareinsights\.com\/beacon\.min\.js/;
+
 interface Vigia {
   backend: string[];
   externos: string[];
@@ -28,7 +36,7 @@ function vigiar(page: Page, origem: string): Vigia {
     if (url.startsWith('data:') || url.startsWith('blob:')) return;
     const u = new URL(url);
     if (PROIBIDO.test(u.pathname) || PROIBIDO.test(u.hostname)) v.backend.push(`${r.method()} ${url}`);
-    if (u.origin !== origem) v.externos.push(url);
+    if (u.origin !== origem && !BEACON_DA_BORDA.test(url)) v.externos.push(url);
   });
   page.on('response', (r) => {
     if (r.status() >= 400) v.falhas.push(`${r.status()} ${r.url()}`);

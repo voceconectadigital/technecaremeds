@@ -1038,6 +1038,11 @@ seguinte quando roda depois do meio-dia, para nada nascer atrasado.
    lateral; cobre entrada, as 9 telas principais, ficha de OS e de ativo
    recarregadas, rota profunda direta, busca e uma escrita recusada. Contra o
    site publicado: `DEMO_URL=https://technecaremeds.voceconecta.com.br npm run demo:e2e`.
+4. **Única requisição externa no domínio publicado:** o beacon do Cloudflare
+   Web Analytics (`static.cloudflareinsights.com`), injetado pela BORDA porque a
+   zona `voceconecta.com.br` tem o Web Analytics automático ligado — não está
+   no nosso HTML (o `*.pages.dev` não o tem). Não é backend; o teste o tolera
+   nominalmente. Para zerar, desligue o Web Analytics da zona no painel.
 
 ### Como publicar
 
