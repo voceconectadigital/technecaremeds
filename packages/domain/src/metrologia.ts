@@ -121,6 +121,33 @@ export function padraoValidoEm(padrao: PadraoDeMedicao, dataDaMedicao: string): 
 }
 
 /**
+ * O certificado REGISTRADO de um instrumento cobre o dia da medição?
+ *
+ * É a mesma aritmética de calendário de `padraoValidoEm`, com o limite de baixo
+ * que o registro passou a ter (0051): um certificado emitido DEPOIS da medição
+ * não atesta o instrumento naquele dia — naquele dia valia o anterior. O dia da
+ * emissão e o dia do vencimento valem os dois. Revogado não cobre nada.
+ *
+ * Comparação de TEXTO em `YYYY-MM-DD`, pelos mesmos motivos de `padraoValidoEm`.
+ */
+export function certificadoCobreAMedicao(
+  certificado: { emitidoEm: string; venceEm: string; revogado: boolean; nome: string },
+  dataDaMedicao: string
+): boolean {
+  if (certificado.revogado) return false;
+  if (!DATA_CIVIL.test(certificado.emitidoEm)) {
+    throw new Error(
+      `emissão do certificado "${certificado.nome}" precisa ser uma data civil YYYY-MM-DD, e veio "${certificado.emitidoEm}"`
+    );
+  }
+  const valido = padraoValidoEm(
+    { nome: certificado.nome, numeroDoCertificado: '', laboratorio: '', venceEm: certificado.venceEm },
+    dataDaMedicao
+  );
+  return valido && certificado.emitidoEm <= dataDaMedicao;
+}
+
+/**
  * Quais padrões impedem a emissão deste certificado.
  *
  * Devolve TODOS os reprovados, e não o primeiro: quem vai resolver precisa

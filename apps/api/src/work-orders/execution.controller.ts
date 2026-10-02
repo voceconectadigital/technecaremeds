@@ -16,6 +16,7 @@ import {
   attachChecklist,
   answerChecklistItem,
   answerRevisions,
+  registerMeasurement,
   checklistStatus,
   loadChecklistItems,
   startTimer,
@@ -28,7 +29,7 @@ import {
   completionRequirementsFor,
   type Database,
 } from '@aurora/db';
-import { NotFoundError, ValidationError, type AttachmentPurpose } from '@aurora/domain';
+import { NotFoundError, ValidationError, fonteManual, type AttachmentPurpose } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, uuidParam } from '../common/params';
 import { runFieldOperation } from '../common/client-operation';
@@ -311,6 +312,32 @@ export class ExecutionResourcesController {
       'POST /checklist-responses/:responseId/answers',
       body,
       async (s) => {
+        /*
+         * PONTO DE MEDIÇÃO: o corpo vira envelope pela fonte manual e vai ao
+         * mesmo núcleo da rota de sessão. Assim a fila de campo que já usa
+         * esta rota mede sem aprender rota nova — e não existe um segundo
+         * caminho de gravação de medição.
+         */
+        if (Array.isArray(body.readings)) {
+          const m = await registerMeasurement(
+            s,
+            fonteManual.normalizar({
+              response_id: rId,
+              item_id: itemId,
+              readings: body.readings,
+              unit: body.unit,
+              instrument_id: body.instrument_id,
+              measured_at: body.measured_at,
+              correction_reason: body.correction_reason,
+            })
+          );
+          return {
+            verdict: m.verdict,
+            answer_id: m.answerId,
+            revision: m.revision,
+            status: await checklistStatus(s, rId),
+          };
+        }
         const r = await answerChecklistItem(
           s,
           rId,

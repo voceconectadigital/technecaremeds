@@ -34,7 +34,20 @@
  */
 import { ValidationError } from './errors';
 
-export const ATTACHMENT_PURPOSES = ['before', 'after', 'evidence', 'document', 'signature', 'other'] as const;
+export const ATTACHMENT_PURPOSES = [
+  'before',
+  'after',
+  'evidence',
+  'document',
+  'signature',
+  'other',
+  /** Dado bruto de uma sessão de medição (0053 · PLAT §6.2 passo 5). */
+  'raw_data',
+  /** O arquivo do certificado EXTERNO de um instrumento (0051). */
+  'certificate',
+  /** O arquivo original de um lote de importação (0058 · PLAT §12). */
+  'import_source',
+] as const;
 export type AttachmentPurpose = (typeof ATTACHMENT_PURPOSES)[number];
 
 /**
@@ -54,6 +67,31 @@ export const ALLOWED_CONTENT_TYPES: Record<AttachmentPurpose, readonly string[]>
   // A assinatura é a imagem do traço, capturada na tela.
   signature: ['image/png', 'image/jpeg'],
   other: [...IMAGENS, 'application/pdf'],
+  /*
+   * Dado bruto é o que o instrumento ou a pessoa produziu, do jeito que saiu:
+   * planilha, texto, JSON, XML, PDF do relatório do aparelho, ou um binário
+   * proprietário. O binário entra como `application/octet-stream` — guardado,
+   * nunca servido como página. Nenhum tipo aqui é interpretado pelo sistema.
+   */
+  raw_data: [
+    'text/csv',
+    'text/plain',
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'application/pdf',
+    'application/octet-stream',
+  ],
+  certificate: [...IMAGENS, 'application/pdf'],
+  import_source: [
+    'text/csv',
+    'application/json',
+    'application/xml',
+    'text/xml',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+    'application/zip',
+  ],
 });
 
 /**
@@ -71,7 +109,21 @@ export const MAX_BYTES: Record<AttachmentPurpose, number> = Object.freeze({
   // O traço é um PNG pequeno. Um "assinatura" de 5 MB é outra coisa.
   signature: 2 * 1024 * 1024,
   other: 15 * 1024 * 1024,
+  raw_data: 50 * 1024 * 1024,
+  certificate: 40 * 1024 * 1024,
+  // Uma exportação inteira de sistema legado passa fácil de dezenas de MB.
+  import_source: 200 * 1024 * 1024,
 });
+
+/**
+ * Finalidades cujo arquivo é EVIDÊNCIA de integridade: o resumo SHA-256 é
+ * obrigatório no registro. O banco exige o mesmo (`att_evidence_has_sha`).
+ */
+export const PURPOSES_REQUIRING_SHA256: readonly AttachmentPurpose[] = Object.freeze([
+  'raw_data',
+  'certificate',
+  'import_source',
+]);
 
 /** Quantos anexos uma mesma entidade aceita. */
 export const MAX_ATTACHMENTS_PER_ENTITY = 50;
@@ -84,6 +136,15 @@ const EXTENSAO: Record<string, string> = {
   'image/heic': 'heic',
   'image/heif': 'heif',
   'application/pdf': 'pdf',
+  'text/csv': 'csv',
+  'text/plain': 'txt',
+  'application/json': 'json',
+  'application/xml': 'xml',
+  'text/xml': 'xml',
+  'application/octet-stream': 'bin',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.ms-excel': 'xls',
+  'application/zip': 'zip',
 };
 
 /**
@@ -200,7 +261,14 @@ export function validateAttachment(input: AttachmentInput): ValidatedAttachment 
  */
 export function buildStorageKey(input: {
   organizationId: string;
-  entity: 'work-orders' | 'checklist-answers' | 'documents' | 'assets';
+  entity:
+    | 'work-orders'
+    | 'checklist-answers'
+    | 'documents'
+    | 'assets'
+    | 'measurement-sessions'
+    | 'instrument-certificates'
+    | 'import-batches';
   entityId: string;
   attachmentId: string;
   extension: string;

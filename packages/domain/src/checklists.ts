@@ -19,6 +19,15 @@ export const CHECKLIST_ITEM_KINDS = [
   'multi_option',
   'photo',
   'date',
+  /**
+   * Ponto de medição de um protocolo metrológico (0052 · gap V2 P2.3).
+   *
+   * Registra leituras com unidade, ao lado do nominal e das tolerâncias COMO
+   * DADO. O veredito é SEMPRE `na`: comparar a leitura com a tolerância exige
+   * critério de aceitação e regra de arredondamento, duas das cinco decisões
+   * bloqueadas (`AURORA-METROLOGIA-FRONTEIRA.md`).
+   */
+  'measurement',
 ] as const;
 export type ChecklistItemKind = (typeof CHECKLIST_ITEM_KINDS)[number];
 
@@ -44,6 +53,12 @@ export interface ChecklistItem {
   readonly failAction: FailAction;
   readonly conditionItemId?: string | null;
   readonly conditionEquals?: string | null;
+  /** Ponto de medição — só em `measurement`, e só como dado declarado. */
+  readonly nominalValue?: number | null;
+  readonly toleranceMinus?: number | null;
+  readonly tolerancePlus?: number | null;
+  readonly toleranceMode?: 'absolute' | 'percent' | null;
+  readonly readingsRequired?: number | null;
 }
 
 export interface AnswerValue {
@@ -53,6 +68,8 @@ export interface AnswerValue {
   readonly options?: readonly string[] | null;
   readonly date?: string | null;
   readonly photoCount?: number;
+  /** As leituras de um ponto `measurement`, na ordem em que foram feitas. */
+  readonly readings?: readonly number[] | null;
 }
 
 /**
@@ -69,6 +86,7 @@ export function canonicalValue(value: AnswerValue | undefined): string | null {
   if (value.boolean != null) return value.boolean ? 'true' : 'false';
   if (value.options != null && value.options.length > 0) return [...value.options].sort().join(',');
   if (value.date != null) return value.date;
+  if (value.readings != null && value.readings.length > 0) return value.readings.map(String).join(';');
   return null;
 }
 
@@ -129,6 +147,17 @@ export function computeVerdict(item: ChecklistItem, value: AnswerValue): Verdict
       if (value.photoCount == null) return 'na';
       return value.photoCount >= exigidas ? 'pass' : 'fail';
     }
+    case 'measurement':
+      /*
+       * NÃO HÁ VEREDITO AUTOMÁTICO PARA MEDIÇÃO, e isto não é esquecimento.
+       *
+       * Decidir se uma leitura está dentro da tolerância exige escolher se a
+       * incerteza entra, se arredonda antes de comparar e como o percentual
+       * vira limite — o critério de aceitação e o arredondamento da fronteira
+       * metrológica. Até um metrologista validar a regra com casos de
+       * referência no limite, o ponto é registrado e NÃO julgado.
+       */
+      return 'na';
     default:
       return 'na';
   }
@@ -175,6 +204,21 @@ export function validateAnswer(item: ChecklistItem, value: AnswerValue): AnswerI
     case 'photo':
       if ((value.photoCount ?? 0) < 0) add('quantidade de fotos inválida');
       break;
+    case 'measurement': {
+      // Conferência de FORMA, e só de forma: quantas leituras, e se são números.
+      if (value.number != null) add('ponto de medição recebe leituras (readings), não um número solto');
+      const leituras = value.readings;
+      if (leituras == null) break;
+      if (!Array.isArray(leituras) || leituras.some((v) => typeof v !== 'number' || !Number.isFinite(v))) {
+        add('as leituras precisam ser números finitos');
+        break;
+      }
+      const exigidas = item.readingsRequired ?? 1;
+      if (leituras.length !== exigidas) {
+        add(`este ponto exige ${exigidas} leitura(s) e vieram ${leituras.length}`);
+      }
+      break;
+    }
   }
   return issues;
 }

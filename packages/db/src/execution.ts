@@ -19,6 +19,8 @@ import {
   buildStorageKey,
   MAX_ATTACHMENTS_PER_ENTITY,
   type AttachmentPurpose,
+  type MeasurementSource,
+  PURPOSES_REQUIRING_SHA256,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { pendingPartsCount } from './inventory';
@@ -31,6 +33,13 @@ export interface ChecklistTemplateInput {
   key: string;
   title: string;
   description?: string;
+  /**
+   * Tipo de procedimento metrológico (0052). Nulo para o checklist operacional
+   * de sempre — que continua sendo o caso comum.
+   */
+  procedureKind?: 'calibration' | 'electrical_safety' | 'qualification' | 'acceptance' | null;
+  /** Responsável técnico pelo protocolo (vínculo da organização). */
+  technicalManagerId?: string | null;
 }
 
 /** Cria a versão 1 em rascunho. */
@@ -40,8 +49,9 @@ export async function createChecklistTemplate(
 ): Promise<string> {
   const id = newId();
   await session.query(
-    `INSERT INTO aurora.checklist_templates (id, organization_id, key, version, title, description, created_by)
-     VALUES ($1, $2, $3, 1, $4, $5, $6)`,
+    `INSERT INTO aurora.checklist_templates
+       (id, organization_id, key, version, title, description, created_by, procedure_kind, technical_manager_id)
+     VALUES ($1, $2, $3, 1, $4, $5, $6, $7::aurora.procedure_kind, $8)`,
     [
       id,
       session.context.organizationId,
@@ -49,6 +59,8 @@ export async function createChecklistTemplate(
       input.title,
       input.description ?? '',
       session.context.actorId,
+      input.procedureKind ?? null,
+      input.technicalManagerId ?? null,
     ]
   );
   return id;
@@ -71,6 +83,12 @@ export interface ChecklistItemInput {
   failAction?: ChecklistItem['failAction'];
   conditionItemId?: string | null;
   conditionEquals?: string | null;
+  /** Ponto de medição (0052): tudo DADO declarado pelo procedimento, nada calculado. */
+  nominalValue?: number | null;
+  toleranceMinus?: number | null;
+  tolerancePlus?: number | null;
+  toleranceMode?: 'absolute' | 'percent' | null;
+  readingsRequired?: number | null;
 }
 
 export async function addChecklistItem(session: TenantSession, input: ChecklistItemInput): Promise<string> {
@@ -79,9 +97,11 @@ export async function addChecklistItem(session: TenantSession, input: ChecklistI
     `INSERT INTO aurora.checklist_items
        (id, organization_id, template_id, kind, label, required, position, options, failing_options,
         min_value, max_value, unit, expected_boolean, min_photos, requires_photo_when, fail_action,
-        condition_item_id, condition_equals)
+        condition_item_id, condition_equals,
+        nominal_value, tolerance_minus, tolerance_plus, tolerance_mode, readings_required)
      VALUES ($1, $2, $3, $4::aurora.checklist_item_kind, $5, $6, $7, $8, $9,
-             $10, $11, $12, $13, $14, $15::aurora.photo_requirement, $16::aurora.fail_action, $17, $18)`,
+             $10, $11, $12, $13, $14, $15::aurora.photo_requirement, $16::aurora.fail_action, $17, $18,
+             $19, $20, $21, $22, $23)`,
     [
       id,
       session.context.organizationId,
@@ -101,7 +121,28 @@ export async function addChecklistItem(session: TenantSession, input: ChecklistI
       input.failAction ?? 'none',
       input.conditionItemId ?? null,
       input.conditionEquals ?? null,
+      input.nominalValue ?? null,
+      input.toleranceMinus ?? null,
+      input.tolerancePlus ?? null,
+      input.toleranceMode ?? null,
+      input.kind === 'measurement' ? (input.readingsRequired ?? 1) : (input.readingsRequired ?? null),
     ]
+  );
+  return id;
+}
+
+/** Instrumento exigido pelo protocolo, por categoria de ativo (0052). */
+export async function requireInstrumentCategory(
+  session: TenantSession,
+  templateId: string,
+  assetCategoryId: string,
+  note = ''
+): Promise<string> {
+  const id = newId();
+  await session.query(
+    `INSERT INTO aurora.checklist_template_instruments (id, organization_id, template_id, asset_category_id, note)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [id, session.context.organizationId, templateId, assetCategoryId, note]
   );
   return id;
 }
@@ -148,8 +189,16 @@ export async function publishChecklist(session: TenantSession, templateId: strin
  * a um seria mais lento e daria margem a copiar pela metade.
  */
 export async function createNextVersion(session: TenantSession, templateId: string): Promise<string> {
-  const [atual] = await session.query<{ key: string; version: number; title: string; description: string }>(
-    `SELECT key, version, title, description FROM aurora.checklist_templates WHERE id = $1`,
+  const [atual] = await session.query<{
+    key: string;
+    version: number;
+    title: string;
+    description: string;
+    procedure_kind: string | null;
+    technical_manager_id: string | null;
+  }>(
+    `SELECT key, version, title, description, procedure_kind::text AS procedure_kind, technical_manager_id
+       FROM aurora.checklist_templates WHERE id = $1`,
     [templateId]
   );
   if (!atual) throw new NotFoundError('Checklist', templateId);
@@ -163,8 +212,9 @@ export async function createNextVersion(session: TenantSession, templateId: stri
   const novoId = newId();
   await session.query(
     `INSERT INTO aurora.checklist_templates
-       (id, organization_id, key, version, title, description, status, supersedes_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8)`,
+       (id, organization_id, key, version, title, description, status, supersedes_id, created_by,
+        procedure_kind, technical_manager_id)
+     VALUES ($1, $2, $3, $4, $5, $6, 'draft', $7, $8, $9::aurora.procedure_kind, $10)`,
     [
       novoId,
       session.context.organizationId,
@@ -174,6 +224,8 @@ export async function createNextVersion(session: TenantSession, templateId: stri
       atual.description,
       templateId,
       session.context.actorId,
+      atual.procedure_kind,
+      atual.technical_manager_id,
     ]
   );
 
@@ -183,11 +235,21 @@ export async function createNextVersion(session: TenantSession, templateId: stri
     `INSERT INTO aurora.checklist_items
        (id, organization_id, template_id, kind, label, help_text, required, position, options,
         failing_options, min_value, max_value, unit, expected_boolean, min_selections, max_selections,
-        min_photos, requires_photo_when, fail_action)
+        min_photos, requires_photo_when, fail_action,
+        nominal_value, tolerance_minus, tolerance_plus, tolerance_mode, readings_required)
      SELECT gen_random_uuid(), organization_id, $2, kind, label, help_text, required, position, options,
             failing_options, min_value, max_value, unit, expected_boolean, min_selections, max_selections,
-            min_photos, requires_photo_when, fail_action
+            min_photos, requires_photo_when, fail_action,
+            nominal_value, tolerance_minus, tolerance_plus, tolerance_mode, readings_required
        FROM aurora.checklist_items WHERE template_id = $1`,
+    [templateId, novoId]
+  );
+
+  // Os instrumentos exigidos são estrutura do protocolo: vão junto para a versão nova.
+  await session.query(
+    `INSERT INTO aurora.checklist_template_instruments (id, organization_id, template_id, asset_category_id, note)
+     SELECT gen_random_uuid(), organization_id, $2, asset_category_id, note
+       FROM aurora.checklist_template_instruments WHERE template_id = $1`,
     [templateId, novoId]
   );
 
@@ -199,14 +261,24 @@ export async function loadChecklistItems(
   templateId: string
 ): Promise<ChecklistItem[]> {
   const rows = await session.query<Record<string, unknown>>(
-    `SELECT id, kind::text AS kind, label, required, options, failing_options,
-            min_value, max_value, unit, expected_boolean, min_selections, max_selections, min_photos,
-            requires_photo_when::text AS requires_photo_when, fail_action::text AS fail_action,
-            condition_item_id, condition_equals
+    `SELECT ${COLUNAS_DO_ITEM}
        FROM aurora.checklist_items WHERE template_id = $1 ORDER BY position, label`,
     [templateId]
   );
-  return rows.map((r) => ({
+  return rows.map(linhaParaItem);
+}
+
+/** As colunas que descrevem um item — uma lista só, para leitura e resposta não divergirem. */
+const COLUNAS_DO_ITEM = `id, kind::text AS kind, label, required, options, failing_options,
+            min_value, max_value, unit, expected_boolean, min_selections, max_selections, min_photos,
+            requires_photo_when::text AS requires_photo_when, fail_action::text AS fail_action,
+            condition_item_id, condition_equals,
+            nominal_value, tolerance_minus, tolerance_plus, tolerance_mode, readings_required`;
+
+const numeroOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+function linhaParaItem(r: Record<string, unknown>): ChecklistItem {
+  return {
     id: r.id as string,
     kind: r.kind as ChecklistItem['kind'],
     label: r.label as string,
@@ -215,18 +287,23 @@ export async function loadChecklistItems(
     failingOptions: r.failing_options as string[],
     // `numeric` volta como string do driver: converter aqui evita comparar
     // string com número e concluir que 9 está fora da faixa [10, 20].
-    minValue: r.min_value === null ? null : Number(r.min_value),
-    maxValue: r.max_value === null ? null : Number(r.max_value),
+    minValue: numeroOuNulo(r.min_value),
+    maxValue: numeroOuNulo(r.max_value),
     unit: r.unit as string | null,
     expectedBoolean: r.expected_boolean as boolean | null,
-    minSelections: r.min_selections === null ? null : Number(r.min_selections),
-    maxSelections: r.max_selections === null ? null : Number(r.max_selections),
-    minPhotos: r.min_photos === null ? null : Number(r.min_photos),
+    minSelections: numeroOuNulo(r.min_selections),
+    maxSelections: numeroOuNulo(r.max_selections),
+    minPhotos: numeroOuNulo(r.min_photos),
     requiresPhotoWhen: r.requires_photo_when as ChecklistItem['requiresPhotoWhen'],
     failAction: r.fail_action as ChecklistItem['failAction'],
     conditionItemId: r.condition_item_id as string | null,
     conditionEquals: r.condition_equals as string | null,
-  }));
+    nominalValue: numeroOuNulo(r.nominal_value),
+    toleranceMinus: numeroOuNulo(r.tolerance_minus),
+    tolerancePlus: numeroOuNulo(r.tolerance_plus),
+    toleranceMode: (r.tolerance_mode as ChecklistItem['toleranceMode']) ?? null,
+    readingsRequired: numeroOuNulo(r.readings_required),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -281,33 +358,20 @@ export async function answerChecklistItem(
   responseId: string,
   itemId: string,
   value: AnswerValue,
-  opts: { correctionReason?: string | null } = {}
+  opts: {
+    correctionReason?: string | null;
+    /** Proveniência do ponto de medição — só para itens `measurement` (0053). */
+    provenance?: MeasurementProvenance;
+  } = {}
 ): Promise<{ verdict: string; answerId: string; revision: number }> {
   const [item] = await session.query<Record<string, unknown>>(
-    `SELECT id, kind::text AS kind, label, required, options, failing_options,
-            min_value, max_value, expected_boolean, min_selections, max_selections, min_photos,
-            requires_photo_when::text AS requires_photo_when, fail_action::text AS fail_action
-       FROM aurora.checklist_items WHERE id = $1`,
+    `SELECT ${COLUNAS_DO_ITEM} FROM aurora.checklist_items WHERE id = $1`,
     [itemId]
   );
   if (!item) throw new NotFoundError('Item de checklist', itemId);
+  const definicao = linhaParaItem(item);
 
-  const definicao: ChecklistItem = {
-    id: item.id as string,
-    kind: item.kind as ChecklistItem['kind'],
-    label: item.label as string,
-    required: item.required as boolean,
-    options: item.options as string[],
-    failingOptions: item.failing_options as string[],
-    minValue: item.min_value === null ? null : Number(item.min_value),
-    maxValue: item.max_value === null ? null : Number(item.max_value),
-    expectedBoolean: item.expected_boolean as boolean | null,
-    minSelections: item.min_selections === null ? null : Number(item.min_selections),
-    maxSelections: item.max_selections === null ? null : Number(item.max_selections),
-    minPhotos: item.min_photos === null ? null : Number(item.min_photos),
-    requiresPhotoWhen: item.requires_photo_when as ChecklistItem['requiresPhotoWhen'],
-    failAction: item.fail_action as ChecklistItem['failAction'],
-  };
+  const medicao = await provenienciaDoPonto(session, responseId, definicao, value, opts.provenance);
 
   const problemas = validateAnswer(definicao, value);
   if (problemas.length > 0) {
@@ -330,14 +394,21 @@ export async function answerChecklistItem(
   const [linha] = await session.query<{ id: string; revision: number }>(
     `INSERT INTO aurora.checklist_answers
        (id, organization_id, response_id, item_id, value_text, value_number, value_boolean,
-        value_options, value_date, verdict, photo_count, measured_by, correction_reason)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::aurora.checklist_verdict, $11, $12, NULL)
+        value_options, value_date, verdict, photo_count, measured_by, correction_reason,
+        value_readings, unit, source, instrument_id, device_measured_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::aurora.checklist_verdict, $11, $12, NULL,
+             $14::numeric[], $15, $16::aurora.measurement_source, $17, $18)
      ON CONFLICT (response_id, item_id) DO UPDATE
         SET value_text = EXCLUDED.value_text,
             value_number = EXCLUDED.value_number,
             value_boolean = EXCLUDED.value_boolean,
             value_options = EXCLUDED.value_options,
             value_date = EXCLUDED.value_date,
+            value_readings = EXCLUDED.value_readings,
+            unit = EXCLUDED.unit,
+            source = EXCLUDED.source,
+            instrument_id = EXCLUDED.instrument_id,
+            device_measured_at = EXCLUDED.device_measured_at,
             verdict = EXCLUDED.verdict,
             photo_count = EXCLUDED.photo_count,
             measured_by = EXCLUDED.measured_by,
@@ -345,10 +416,13 @@ export async function answerChecklistItem(
             correction_reason = $13
       WHERE (aurora.checklist_answers.value_text, aurora.checklist_answers.value_number,
              aurora.checklist_answers.value_boolean, aurora.checklist_answers.value_options,
-             aurora.checklist_answers.value_date, aurora.checklist_answers.photo_count)
+             aurora.checklist_answers.value_date, aurora.checklist_answers.photo_count,
+             aurora.checklist_answers.value_readings, aurora.checklist_answers.instrument_id,
+             aurora.checklist_answers.unit, aurora.checklist_answers.source)
             IS DISTINCT FROM
             (EXCLUDED.value_text, EXCLUDED.value_number, EXCLUDED.value_boolean,
-             EXCLUDED.value_options, EXCLUDED.value_date, EXCLUDED.photo_count)
+             EXCLUDED.value_options, EXCLUDED.value_date, EXCLUDED.photo_count,
+             EXCLUDED.value_readings, EXCLUDED.instrument_id, EXCLUDED.unit, EXCLUDED.source)
      RETURNING id, revision`,
     [
       newId(),
@@ -364,6 +438,11 @@ export async function answerChecklistItem(
       value.photoCount ?? 0,
       session.context.actorId,
       opts.correctionReason?.trim() || null,
+      medicao?.readings ?? null,
+      medicao?.unit ?? null,
+      medicao?.source ?? null,
+      medicao?.instrumentId ?? null,
+      medicao?.deviceMeasuredAt ?? null,
     ]
   );
 
@@ -377,6 +456,95 @@ export async function answerChecklistItem(
       )
     )[0]!;
   return { verdict, answerId: vigente.id, revision: Number(vigente.revision) };
+}
+
+export interface MeasurementProvenance {
+  /** A unidade em que a fonte entregou as leituras. Precisa ser a do protocolo. */
+  unit?: string | null;
+  source?: MeasurementSource;
+  /** O instrumento do PONTO, quando não é o da sessão. */
+  instrumentId?: string | null;
+  deviceMeasuredAt?: string | null;
+}
+
+/**
+ * O que um ponto `measurement` precisa ter antes de ser gravado — e o que um
+ * item comum NÃO pode ter.
+ *
+ * Tudo aqui é conferência de PROVENIÊNCIA, não de ciência: existe sessão aberta
+ * para a resposta? A unidade é a do protocolo? O instrumento está em operação?
+ * Nenhuma leitura é comparada com tolerância (fronteira metrológica).
+ */
+async function provenienciaDoPonto(
+  session: TenantSession,
+  responseId: string,
+  item: ChecklistItem,
+  value: AnswerValue,
+  prov: MeasurementProvenance | undefined
+): Promise<{
+  readings: number[];
+  unit: string;
+  source: MeasurementSource;
+  instrumentId: string | null;
+  deviceMeasuredAt: string | null;
+} | null> {
+  if (item.kind !== 'measurement') {
+    if (value.readings != null) {
+      throw new ValidationError(`${item.label}: leituras só se registram em ponto de medição`, {
+        field: 'readings',
+      });
+    }
+    return null;
+  }
+
+  if (value.readings == null || value.readings.length === 0) {
+    throw new ValidationError(`${item.label}: informe as leituras do ponto`, { field: 'readings' });
+  }
+
+  const [sessao] = await session.query<{ id: string; instrument_id: string | null; finished_at: unknown }>(
+    `SELECT id, instrument_id, finished_at FROM aurora.measurement_sessions WHERE response_id = $1`,
+    [responseId]
+  );
+  if (!sessao) {
+    throw new ConflictError(
+      'abra a sessão de medição desta resposta antes de registrar leituras: sem ela não há instrumento, certificado nem origem'
+    );
+  }
+  if (sessao.finished_at) {
+    throw new ConflictError(
+      'a sessão de medição já foi encerrada; leituras novas não entram numa sessão fechada'
+    );
+  }
+
+  const unidadeDoProtocolo = item.unit ?? '';
+  if (prov?.unit != null && prov.unit.trim() !== unidadeDoProtocolo) {
+    // Converter seria aritmética com consequência metrológica. Recusar é o
+    // único comportamento que não inventa nada.
+    throw new ValidationError(
+      `${item.label}: o protocolo mede em "${unidadeDoProtocolo}" e as leituras vieram em "${prov.unit}"; o sistema não converte unidades`,
+      { field: 'unit' }
+    );
+  }
+
+  const instrumentId = prov?.instrumentId ?? null;
+  if (instrumentId) {
+    const [inst] = await session.query<{ status: string }>(
+      `SELECT status::text AS status FROM aurora.instruments WHERE asset_id = $1`,
+      [instrumentId]
+    );
+    if (!inst) throw new NotFoundError('Instrumento', instrumentId);
+    if (inst.status !== 'active') {
+      throw new ConflictError(`o instrumento informado está "${inst.status}" e não pode medir`);
+    }
+  }
+
+  return {
+    readings: [...value.readings],
+    unit: unidadeDoProtocolo,
+    source: prov?.source ?? 'manual',
+    instrumentId,
+    deviceMeasuredAt: prov?.deviceMeasuredAt ?? null,
+  };
 }
 
 export interface AnswerRevisionRow {
@@ -580,6 +748,12 @@ export async function attachFile(
   input: {
     workOrderId?: string | null;
     checklistAnswerId?: string | null;
+    /** Dado bruto de uma sessão de medição (0053). */
+    measurementSessionId?: string | null;
+    /** Arquivo do certificado externo de um instrumento (0053). */
+    instrumentCertificateId?: string | null;
+    /** Arquivo original de um lote de importação (0058). */
+    importBatchId?: string | null;
     purpose: AttachmentPurpose;
     fileName: string;
     contentType: string;
@@ -594,10 +768,55 @@ export async function attachFile(
     byteSize: input.byteSize,
   });
 
-  const entityId = input.workOrderId ?? input.checklistAnswerId;
-  if (!entityId) {
+  /*
+   * UM DONO, E A FINALIDADE COMBINA COM ELE.
+   *
+   * O banco confere o mesmo (`att_has_owner`, `att_purpose_matches_owner`);
+   * aqui a recusa chega com o nome do campo, antes de virar código de
+   * restrição. Dado bruto pendurado na OS perderia o ponto medido; certificado
+   * pendurado na OS perderia o instrumento.
+   */
+  const donos = [
+    ['work_order_id', 'work-orders', input.workOrderId],
+    ['checklist_answer_id', 'checklist-answers', input.checklistAnswerId],
+    ['measurement_session_id', 'measurement-sessions', input.measurementSessionId],
+    ['instrument_certificate_id', 'instrument-certificates', input.instrumentCertificateId],
+    ['import_batch_id', 'import-batches', input.importBatchId],
+  ] as const;
+  const informados = donos.filter(([, , v]) => Boolean(v));
+  if (informados.length === 0) {
     throw new ValidationError('o anexo precisa pertencer a uma ordem de serviço ou a uma resposta', {
       field: 'work_order_id',
+    });
+  }
+  const [coluna, entidade, entityIdBruto] = informados[0]!;
+  const entityId = entityIdBruto as string;
+  const exigeDono: Partial<Record<AttachmentPurpose, string>> = {
+    raw_data: 'measurement_session_id',
+    certificate: 'instrument_certificate_id',
+    import_source: 'import_batch_id',
+  };
+  const donoExigido = exigeDono[conferido.purpose];
+  if (
+    donoExigido
+      ? coluna !== donoExigido || informados.length > 1
+      : informados.some(([c]) => Object.values(exigeDono).includes(c))
+  ) {
+    throw new ValidationError(`a finalidade "${conferido.purpose}" não combina com este dono de anexo`, {
+      field: 'purpose',
+    });
+  }
+  if (PURPOSES_REQUIRING_SHA256.includes(conferido.purpose) && !input.sha256) {
+    throw new ValidationError(
+      `"${conferido.purpose}" é evidência: o resumo SHA-256 do arquivo é obrigatório`,
+      {
+        field: 'sha256',
+      }
+    );
+  }
+  if (input.sha256 != null && !/^[0-9a-f]{64}$/.test(input.sha256)) {
+    throw new ValidationError('sha256 precisa ser o resumo em hexadecimal minúsculo (64 caracteres)', {
+      field: 'sha256',
     });
   }
 
@@ -609,7 +828,6 @@ export async function attachFile(
    * transação: duas gravações simultâneas na mesma OS veriam a mesma contagem
    * fora dela.
    */
-  const coluna = input.workOrderId ? 'work_order_id' : 'checklist_answer_id';
   const [quantos] = await session.query<{ total: string }>(
     `SELECT count(*)::text AS total FROM aurora.attachments WHERE ${coluna} = $1`,
     [entityId]
@@ -618,10 +836,14 @@ export async function attachFile(
     throw new ConflictError(`este registro já tem ${MAX_ATTACHMENTS_PER_ENTITY} anexos, que é o limite`);
   }
 
+  // As colunas de dono novas (0053/0058) entram só quando usadas: o nome vem da
+  // lista fechada `donos`, nunca do chamador.
+  const donoNovo = coluna === 'work_order_id' || coluna === 'checklist_answer_id' ? null : coluna;
+
   const id = newId();
   const storageKey = buildStorageKey({
     organizationId: session.context.organizationId,
-    entity: input.workOrderId ? 'work-orders' : 'checklist-answers',
+    entity: entidade,
     entityId,
     attachmentId: id,
     extension: conferido.extension,
@@ -630,8 +852,8 @@ export async function attachFile(
   await session.query(
     `INSERT INTO aurora.attachments
        (id, organization_id, work_order_id, checklist_answer_id, purpose, storage_key,
-        file_name, content_type, byte_size, sha256, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5::aurora.attachment_purpose, $6, $7, $8, $9, $10, $11)`,
+        file_name, content_type, byte_size, sha256, uploaded_by${donoNovo ? `, ${donoNovo}` : ''})
+     VALUES ($1, $2, $3, $4, $5::aurora.attachment_purpose, $6, $7, $8, $9, $10, $11${donoNovo ? ', $12' : ''})`,
     [
       id,
       session.context.organizationId,
@@ -646,6 +868,7 @@ export async function attachFile(
       conferido.byteSize,
       input.sha256 ?? null,
       session.context.actorId,
+      ...(donoNovo ? [entityId] : []),
     ]
   );
   return { id, storageKey };

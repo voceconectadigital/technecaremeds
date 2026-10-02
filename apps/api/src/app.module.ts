@@ -42,6 +42,12 @@ import { ContextResolver } from './common/context.resolver';
 import type { AuthProvider } from './auth/auth-provider.port';
 import { escolherProvedorDeAutenticacao } from './auth/escolher-provedor';
 import { AuthController } from './auth/auth.controller';
+import {
+  InstrumentsController,
+  InstrumentCertificatesController,
+  WorkOrderMeasurementController,
+  MeasurementSessionsController,
+} from './metrology/metrology.controller';
 import { createLogger, type StructuredLogger } from './common/logger';
 import { ARQUIVOS, DATABASE, ENV, LOGGER, AUTH_PROVIDER } from './common/tokens';
 
@@ -99,6 +105,10 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       AutomationsController,
       SearchController,
       AuditController,
+      InstrumentsController,
+      InstrumentCertificatesController,
+      WorkOrderMeasurementController,
+      MeasurementSessionsController,
       FieldUploadController,
     ],
     providers: [

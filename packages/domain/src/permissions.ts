@@ -142,6 +142,15 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('procedure', 'update', 'Editar procedimentos e checklists'),
   p('procedure', 'publish', 'Publicar versão de checklist'),
 
+  // --- engenharia clínica / metrologia N0 (0051–0053) ------------------------
+  //
+  // Instrumento é PAPEL de ativo: ver e cadastrar o ativo continua em `asset.*`.
+  // Estas cobrem o que só instrumento tem — interface, firmware, limitações — e
+  // o registro do certificado EXTERNO, que é ato de quem responde pela
+  // rastreabilidade (metrologista, gestor), não de quem só executa a OS.
+  p('instrument', 'read', 'Ver instrumentos de medição e seus certificados'),
+  p('instrument', 'manage', 'Cadastrar instrumentos e registrar ou revogar certificados externos'),
+
   // --- estoque --------------------------------------------------------------
   p('inventory', 'read', 'Ver estoque'),
   p('inventory', 'create', 'Cadastrar itens'),
@@ -164,6 +173,16 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('contract', 'update', 'Editar contratos'),
   p('contract', 'read_financials', 'Ver valores do contrato', true),
   p('contract', 'close_period', 'Fechar período de medição'),
+
+  // --- oportunidade (núcleo, gap V2 P1.7 · PLAT §4/§5) -----------------------
+  //
+  // AUTORIZAR é separado de criar e editar: a autorização comercial é o ato
+  // que o PLAT §5 nomeia, tem trilha própria, e quem registra a necessidade em
+  // campo não deveria poder autorizá-la sozinho.
+  p('opportunity', 'read', 'Ver oportunidades'),
+  p('opportunity', 'create', 'Registrar oportunidades'),
+  p('opportunity', 'update', 'Editar e encaminhar oportunidades'),
+  p('opportunity', 'authorize', 'Autorizar comercialmente uma oportunidade'),
 
   // --- documentos -----------------------------------------------------------
   p('document', 'read', 'Ver documentos'),
@@ -302,6 +321,10 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'procedure.create',
       'procedure.update',
       'procedure.publish',
+      'instrument.manage',
+      'opportunity.create',
+      'opportunity.update',
+      'opportunity.authorize',
       'document.create',
       'document.issue',
       'document.sign',
@@ -345,6 +368,8 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'asset.print_label',
       'maintenance_plan.generate_cycle',
       'maintenance_plan.skip_item',
+      'opportunity.create',
+      'opportunity.update',
     ],
   },
   {
@@ -372,6 +397,11 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'time_entry.create',
       'time_entry.update',
       'procedure.read',
+      // O técnico escolhe o instrumento da sessão de medição em campo.
+      'instrument.read',
+      // E registra a necessidade que viu no equipamento — autorizar, não.
+      'opportunity.read',
+      'opportunity.create',
       'inventory.read',
       'inventory.move',
       'document.read',
@@ -402,6 +432,8 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'procedure.create',
       'procedure.update',
       'procedure.publish',
+      'instrument.read',
+      'instrument.manage',
       'document.read',
       'document.create',
       'document.issue',
@@ -450,6 +482,8 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'quote.approve',
       'quote.invoice',
       'quote.delete',
+      'opportunity.update',
+      'opportunity.authorize',
       'contract.create',
       'contract.update',
       'contract.read_financials',

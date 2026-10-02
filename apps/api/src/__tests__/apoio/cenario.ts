@@ -28,6 +28,8 @@ import {
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
 import { createApp } from '../../bootstrap';
+import { armazenamentoEmMemoria } from '../../common/arquivos/memoria';
+import type { ArmazenamentoDeObjetos } from '../../common/arquivos/porta';
 
 export const auth = (email: string) => ({ authorization: `Bearer local:${email}:${email}` });
 
@@ -119,13 +121,16 @@ export async function criarPessoa(
 export async function subirApi(db: Database): Promise<{
   app: INestApplication;
   http: ReturnType<typeof request>;
+  arquivos: ArmazenamentoDeObjetos;
 }> {
   const env = loadEnv({
     DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
     NODE_ENV: 'test',
     AURORA_LOG_LEVEL: 'fatal',
   } as NodeJS.ProcessEnv);
-  const app = await createApp({ db, env });
+  // Em memória: a suíte não escreve no disco de quem a roda.
+  const arquivos = armazenamentoEmMemoria();
+  const app = await createApp({ db, env, arquivos });
   await app.init();
-  return { app, http: request(app.getHttpServer()) };
+  return { app, http: request(app.getHttpServer()), arquivos };
 }
