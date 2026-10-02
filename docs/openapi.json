@@ -10714,47 +10714,25 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "count": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "samples": {
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
-                        },
-                        "average": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "median": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "p90": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         }
                       },
                       "required": [
-                        "count",
-                        "average",
-                        "median",
-                        "p90"
+                        "value",
+                        "samples"
                       ]
                     }
                   },
@@ -11641,47 +11619,25 @@
                     "data": {
                       "type": "object",
                       "properties": {
-                        "count": {
+                        "value": {
+                          "anyOf": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "samples": {
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
-                        },
-                        "average": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "median": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
-                        },
-                        "p90": {
-                          "anyOf": [
-                            {
-                              "type": "number"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ]
                         }
                       },
                       "required": [
-                        "count",
-                        "average",
-                        "median",
-                        "p90"
+                        "value",
+                        "samples"
                       ]
                     }
                   },
@@ -13229,11 +13185,40 @@
                       ]
                     },
                     "data": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {}
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "responsible": {
+                            "type": "string"
+                          },
+                          "pausesSla": {
+                            "type": "boolean"
+                          },
+                          "minutes": {
+                            "type": "number"
+                          },
+                          "occurrences": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "responsible",
+                          "pausesSla",
+                          "minutes",
+                          "occurrences"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -23311,7 +23296,7 @@
                             "type": "string",
                             "enum": [
                               "staff",
-                              "customer"
+                              "portal"
                             ]
                           },
                           "is_owner": {
@@ -23452,7 +23437,7 @@
                     "type": "string",
                     "enum": [
                       "staff",
-                      "customer"
+                      "portal"
                     ]
                   },
                   "role_keys": {
@@ -29190,8 +29175,11 @@
                       "triage",
                       "info_needed",
                       "accepted",
+                      "in_service",
+                      "fulfilled",
+                      "closed",
                       "rejected",
-                      "merged",
+                      "duplicate",
                       "cancelled"
                     ]
                   },
@@ -29271,8 +29259,11 @@
                         "triage",
                         "info_needed",
                         "accepted",
+                        "in_service",
+                        "fulfilled",
+                        "closed",
                         "rejected",
-                        "merged",
+                        "duplicate",
                         "cancelled"
                       ]
                     },
@@ -29408,8 +29399,11 @@
                         "triage",
                         "info_needed",
                         "accepted",
+                        "in_service",
+                        "fulfilled",
+                        "closed",
                         "rejected",
-                        "merged",
+                        "duplicate",
                         "cancelled"
                       ]
                     },
@@ -29604,8 +29598,11 @@
                               "triage",
                               "info_needed",
                               "accepted",
+                              "in_service",
+                              "fulfilled",
+                              "closed",
                               "rejected",
-                              "merged",
+                              "duplicate",
                               "cancelled"
                             ]
                           },
@@ -29773,8 +29770,11 @@
                               "triage",
                               "info_needed",
                               "accepted",
+                              "in_service",
+                              "fulfilled",
+                              "closed",
                               "rejected",
-                              "merged",
+                              "duplicate",
                               "cancelled"
                             ]
                           },
@@ -29941,11 +29941,12 @@
                     "type": "string",
                     "enum": [
                       "portal",
+                      "qr_code",
                       "phone",
                       "email",
                       "walk_in",
-                      "qr",
-                      "system"
+                      "api",
+                      "internal"
                     ]
                   },
                   "location_id": {

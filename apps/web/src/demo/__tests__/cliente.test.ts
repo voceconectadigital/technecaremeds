@@ -26,18 +26,8 @@ describe('respostas gravadas', () => {
     for (const c of dados.capturas as unknown as Array<{ op: string; body: unknown }>) {
       const op = findOperation(c.op);
       expect(op, `operação ${c.op} existe`).toBeTruthy();
-      // Divergências conhecidas entre API e contrato, que a captura registra
-      // como a API de verdade responde — ver AI-HANDOFF, "DEMO PÚBLICA".
-      if (
-        [
-          'serviceRequests.detail',
-          'members.list',
-          'insights.mttr',
-          'insights.firstResponse',
-          'insights.byWaitReason',
-        ].includes(c.op)
-      )
-        continue;
+      // Sem lista de exceções: os quatro desvios API × contrato que a captura
+      // registrava foram corrigidos no CONTRATO (a API estava certa).
       const r = op!.response.safeParse(c.body);
       if (!r.success) fora.push(`${c.op}: ${r.error.issues[0]?.message}`);
     }

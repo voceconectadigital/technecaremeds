@@ -18,7 +18,8 @@ import { newId, ValidationError, ConflictError, NotFoundError, isKnownPermission
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 
-export const SEAT_TYPES = ['staff', 'customer'] as const;
+// Os valores do tipo `aurora.seat_type` (0000): `customer` não existe no banco.
+export const SEAT_TYPES = ['staff', 'portal'] as const;
 export type SeatType = (typeof SEAT_TYPES)[number];
 
 export const SCOPE_MODES = ['all', 'listed'] as const;

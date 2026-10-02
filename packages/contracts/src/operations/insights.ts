@@ -73,7 +73,31 @@ const envelope = (data: z.ZodTypeAny) =>
   });
 
 const Contagem = z.object({ count: z.number().int() });
-const Media = z.object({
+
+/**
+ * O que MTTR e primeira resposta DEVOLVEM: o valor (minutos) e quantas amostras
+ * o compuseram. O contrato descrevia `count/average/median/p90`, que a API
+ * nunca mandou — a tela já lia `value/samples`. Corrigido para a forma real.
+ */
+const ValorMedio = z.object({
+  value: z.number().nullable(),
+  samples: z.number().int(),
+});
+
+/** Tempo por motivo de espera: uma linha por motivo, em minutos e ocorrências. */
+const PorMotivo = z.array(
+  z.object({
+    key: z.string(),
+    label: z.string(),
+    responsible: z.string(),
+    pausesSla: z.boolean(),
+    minutes: z.number(),
+    occurrences: z.number().int(),
+  })
+);
+
+/** Mantido para leitura de quem já importava o nome; nenhuma rota o usa. */
+export const MediaEstatistica = z.object({
   count: z.number().int(),
   average: z.number().nullable(),
   /**
@@ -156,7 +180,7 @@ export const insightMttr = defineOperation({
   summary: 'Tempo médio de reparo (corretivas)',
   permissions: ['insight.read'],
   query: recorte,
-  response: envelope(Media),
+  response: envelope(ValorMedio),
 });
 
 export const insightMtbf = defineOperation({
@@ -190,7 +214,7 @@ export const insightTimeByWaitReason = defineOperation({
     'exigia adivinhar quais eram os mesmos.',
   permissions: ['insight.read'],
   query: recorte,
-  response: envelope(z.record(z.string(), z.unknown())),
+  response: envelope(PorMotivo),
 });
 
 export const insightPreventiveVsCorrective = defineOperation({
@@ -220,7 +244,7 @@ export const insightFirstResponse = defineOperation({
   summary: 'Tempo até a primeira resposta',
   permissions: ['insight.read'],
   query: recorte,
-  response: envelope(Media),
+  response: envelope(ValorMedio),
 });
 
 export const insightLaborHours = defineOperation({

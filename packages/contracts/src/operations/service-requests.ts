@@ -9,14 +9,26 @@
 import { defineOperation } from '../registry';
 import { z, Uuid, NonEmpty, Timestamp } from '../primitives';
 
+/**
+ * As situações que o domínio e o banco de fato usam (`REQUEST_STATUSES` em
+ * `@aurora/domain`, tipo `service_request_status`).
+ *
+ * Estava com `merged` no lugar de `duplicate` e sem `in_service`,
+ * `fulfilled` e `closed`: a ficha devolvia a transição para `duplicate` e
+ * o contrato a recusava. A captura da demonstração acusou; a lista agora é a
+ * do domínio, e um teste compara as duas.
+ */
 export const REQUEST_STATUSES = [
   'draft',
   'submitted',
   'triage',
   'info_needed',
   'accepted',
+  'in_service',
+  'fulfilled',
+  'closed',
   'rejected',
-  'merged',
+  'duplicate',
   'cancelled',
 ] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
@@ -35,7 +47,16 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
  */
 export const REQUEST_PRIORITIES = ['emergency', 'very_urgent', 'urgent', 'low', 'none'] as const;
 export type RequestPriority = (typeof REQUEST_PRIORITIES)[number];
-export const SERVICE_REQUEST_SOURCES = ['portal', 'phone', 'email', 'walk_in', 'qr', 'system'] as const;
+/** As origens do domínio. `qr` e `system` não existiam no banco: abrir com elas dava 500. */
+export const SERVICE_REQUEST_SOURCES = [
+  'portal',
+  'qr_code',
+  'phone',
+  'email',
+  'walk_in',
+  'api',
+  'internal',
+] as const;
 
 /** A linha da fila de triagem — o mínimo para decidir o que atender primeiro. */
 export const ServiceRequestRow = z.object({

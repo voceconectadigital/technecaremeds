@@ -4,7 +4,14 @@
 import { defineOperation } from '../registry';
 import { z, Uuid, NonEmpty, Email, Ok } from '../primitives';
 
-export const SEAT_TYPES = ['staff', 'customer'] as const;
+/**
+ * Os assentos do banco (`aurora.seat_type`): equipe e portal.
+ *
+ * Estava `customer` no lugar de `portal` — a lista de membros devolvia
+ * `portal` e o contrato recusava, e um convite com `customer` passava pela
+ * validação e morria no banco com 500.
+ */
+export const SEAT_TYPES = ['staff', 'portal'] as const;
 export const SCOPE_MODES = ['all', 'listed'] as const;
 
 /**
