@@ -113,6 +113,8 @@ describe('migrations (EPIC-001)', () => {
       'notifications',
       'number_sequences',
       'number_series',
+      'opportunities',
+      'opportunity_status_history',
       'organizations',
       'permissions',
       'plan_cycle_items',

@@ -47,3 +47,4 @@ export * from './operations/service-requests';
 export * from './operations/work-orders';
 export * from './operations/schedule';
 export * from './operations/metrology';
+export * from './operations/opportunities';

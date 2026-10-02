@@ -119,6 +119,12 @@ export const EVENT_TYPES = [
   'quote.expired',
   'quote.revised',
   'quote.invoiced',
+  // --- oportunidade (gap V2 P1.7) -----------------------------------------
+  'opportunity.created',
+  'opportunity.authorized',
+  'opportunity.declined',
+  'opportunity.converted',
+  'opportunity.cancelled',
   'contract.activated',
   // "vai vencer" e "venceu" são fatos diferentes: quem assina notificação
   // precisa distinguir o aviso da consequência.
