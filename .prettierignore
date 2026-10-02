@@ -12,3 +12,9 @@ apps/*/ios/
 # execução do prettier — o gerador escreve, o prettier reescreve, e os dois
 # discordam para sempre. Quem manda na forma dele é o gerador.
 packages/app-kit/src/marca.gerada.ts
+
+# Arquivo GERADO por `npm run demo:capturar` (respostas reais da API sobre
+# dados fictícios). Quem decide a forma é o gerador; formatá-lo à mão faria a
+# próxima captura desfazer tudo — e o format:check do CI acusava o arquivo
+# desde que ele nasceu.
+apps/web/src/demo/capturas.json
