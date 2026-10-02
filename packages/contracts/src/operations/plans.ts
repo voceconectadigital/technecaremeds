@@ -74,6 +74,13 @@ export const PlanTask = z.object({
   target_location_id: Uuid.nullable(),
   work_order_type_id: Uuid.nullable(),
   checklist_template_key: z.string().nullable(),
+  /**
+   * Filtros sobre o alvo (0055): modelo, fabricante e criticidade, por E lógico.
+   * Opcionais no contrato porque respostas capturadas antes da 0055 não os têm.
+   */
+  filter_asset_model_id: Uuid.nullable().optional(),
+  filter_manufacturer_id: Uuid.nullable().optional(),
+  filter_criticality_id: Uuid.nullable().optional(),
   trigger: z.string(),
   frequency_unit: z.enum(PLAN_FREQUENCY_UNITS),
   frequency_interval: z.number().int(),

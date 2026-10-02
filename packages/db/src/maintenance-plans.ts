@@ -17,6 +17,7 @@ import {
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { createWorkOrder, transitionWorkOrder } from './work-orders';
+import { attachChecklist } from './execution';
 
 export interface PlanInput {
   name: string;
@@ -66,6 +67,14 @@ export interface PlanTaskInput {
   checklistTemplateKey?: string | null;
   defaultTeamId?: string | null;
   estimatedDurationMin?: number | null;
+  /**
+   * Filtros sobre o alvo (0055): modelo, fabricante e criticidade, somados ao
+   * alvo por E lógico. Criticidade é igualdade — "a partir de" é regra do
+   * cliente que ninguém definiu.
+   */
+  filterAssetModelId?: string | null;
+  filterManufacturerId?: string | null;
+  filterCriticalityId?: string | null;
 }
 
 /**
@@ -81,9 +90,10 @@ export async function addPlanTask(session: TenantSession, input: PlanTaskInput):
     `INSERT INTO aurora.plan_tasks
        (id, organization_id, plan_id, name, target_kind, target_asset_id, target_category_id,
         target_location_id, work_order_type_id, checklist_template_key, frequency_unit,
-        frequency_interval, lead_time_days, tolerance_days, estimated_duration_min, default_team_id)
+        frequency_interval, lead_time_days, tolerance_days, estimated_duration_min, default_team_id,
+        filter_asset_model_id, filter_manufacturer_id, filter_criticality_id)
      VALUES ($1, $2, $3, $4, $5::aurora.plan_target_kind, $6, $7, $8, $9, $10,
-             $11::aurora.frequency_unit, $12, $13, $14, $15, $16)`,
+             $11::aurora.frequency_unit, $12, $13, $14, $15, $16, $17, $18, $19)`,
     [
       id,
       session.context.organizationId,
@@ -101,6 +111,9 @@ export async function addPlanTask(session: TenantSession, input: PlanTaskInput):
       input.toleranceDays ?? 3,
       input.estimatedDurationMin ?? null,
       input.defaultTeamId ?? null,
+      input.filterAssetModelId ?? null,
+      input.filterManufacturerId ?? null,
+      input.filterCriticalityId ?? null,
     ]
   );
   return id;
@@ -203,28 +216,17 @@ export async function generateCycle(
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
       [itemId, session.context.organizationId, cycleId, taskId, assetId, fim.toISOString()]
     );
-
-    if (task.auto_generate) {
-      const [ativo] = await session.query<{ name: string; location_id: string | null }>(
-        `SELECT name, location_id FROM aurora.assets WHERE id = $1`,
-        [assetId]
-      );
-      const os = await createWorkOrder(session, {
-        customerId: task.customer_id,
-        workOrderTypeId: task.work_order_type_id,
-        title: `${task.name} — ${ativo?.name ?? 'ativo'}`,
-        description: `Gerada pelo plano "${task.plan_name}", ciclo ${seq}.`,
-        assetId,
-        locationId: ativo?.location_id ?? null,
-        source: 'plan',
-      });
-      await session.query(
-        `UPDATE aurora.plan_cycle_items SET status = 'generated', work_order_id = $2 WHERE id = $1`,
-        [itemId, os.id]
-      );
-      ordens++;
-    }
   }
+
+  /*
+   * UM CAMINHO SÓ PARA CRIAR A OS DA PREVENTIVA.
+   *
+   * O plano automático criava as OS aqui mesmo, num segundo trecho de código
+   * igual ao de `materializeCycle` — e foi por isso que o checklist da tarefa
+   * nunca chegava às OS geradas pela varredura: a correção entrou num caminho
+   * e não no outro. Agora a geração automática É a materialização.
+   */
+  if (task.auto_generate) ordens = await materializeCycle(session, cycleId);
 
   await emitEvent(session, {
     type: 'plan.cycle_started',
@@ -251,9 +253,10 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
     customer_id: string;
     plan_name: string;
     seq: number;
+    checklist_template_key: string | null;
   }>(
     `SELECT i.id, i.asset_id, t.name AS task_name, t.work_order_type_id,
-            p.customer_id, p.name AS plan_name, c.seq
+            p.customer_id, p.name AS plan_name, c.seq, t.checklist_template_key
        FROM aurora.plan_cycle_items i
        JOIN aurora.plan_cycles c ON c.id = i.cycle_id
        JOIN aurora.plan_tasks t  ON t.id = i.task_id
@@ -262,8 +265,33 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
     [cycleId]
   );
 
+  /*
+   * O CHECKLIST DA TAREFA VAI JUNTO COM A OS.
+   *
+   * `plan_tasks.checklist_template_key` existia desde a 0029 e ninguém o lia:
+   * a preventiva nascia sem o checklist que o plano declarava, e o técnico
+   * executava "de cabeça". Agora a OS sai com a versão PUBLICADA mais recente
+   * daquela chave anexada. Chave sem versão publicada não trava a geração —
+   * a preventiva continua devida —, mas fica escrito na OS que o checklist
+   * não pôde ser anexado, em vez de sumir em silêncio.
+   */
+  const publicados = new Map<string, string | null>();
+  const publicadoDe = async (chave: string): Promise<string | null> => {
+    if (!publicados.has(chave)) {
+      const [tpl] = await session.query<{ id: string }>(
+        `SELECT id FROM aurora.checklist_templates
+          WHERE key = $1 AND status = 'published'
+          ORDER BY version DESC LIMIT 1`,
+        [chave]
+      );
+      publicados.set(chave, tpl?.id ?? null);
+    }
+    return publicados.get(chave)!;
+  };
+
   let criadas = 0;
   for (const item of pendentes) {
+    const checklist = item.checklist_template_key ? await publicadoDe(item.checklist_template_key) : null;
     const [ativo] = await session.query<{ name: string; location_id: string | null }>(
       `SELECT name, location_id FROM aurora.assets WHERE id = $1`,
       [item.asset_id]
@@ -272,11 +300,16 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
       customerId: item.customer_id,
       workOrderTypeId: item.work_order_type_id,
       title: `${item.task_name} — ${ativo?.name ?? 'ativo'}`,
-      description: `Gerada pelo plano "${item.plan_name}", ciclo ${item.seq}.`,
+      description:
+        `Gerada pelo plano "${item.plan_name}", ciclo ${item.seq}.` +
+        (item.checklist_template_key && !checklist
+          ? ` O checklist "${item.checklist_template_key}" do plano não tem versão publicada e não foi anexado.`
+          : ''),
       assetId: item.asset_id,
       locationId: ativo?.location_id ?? null,
       source: 'plan',
     });
+    if (checklist) await attachChecklist(session, os.id, checklist);
     await session.query(
       `UPDATE aurora.plan_cycle_items SET status = 'generated', work_order_id = $2 WHERE id = $1`,
       [item.id, os.id]

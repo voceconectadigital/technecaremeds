@@ -112,6 +112,7 @@ export class PlansController {
         `SELECT t.id, t.name, t.target_kind::text AS target_kind,
                 t.target_asset_id, t.target_category_id, t.target_location_id,
                 t.work_order_type_id, t.checklist_template_key,
+                t.filter_asset_model_id, t.filter_manufacturer_id, t.filter_criticality_id,
                 t.trigger::text AS trigger,
                 t.frequency_unit::text AS frequency_unit, t.frequency_interval,
                 t.lead_time_days, t.tolerance_days, t.estimated_duration_min,
