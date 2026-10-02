@@ -57,7 +57,9 @@ const ABAS = [
 
 export function EstoquePage() {
   const [aba, setAba] = useUrlState<string>('aba', 'faltando');
-  const [busca, setBusca] = useState('');
+  // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
+  // sobrevive ao recarregar e ao link compartilhado.
+  const [busca, setBusca] = useUrlState<string>('q', '');
   const [vendo, setVendo] = useState<StockBalance | null>(null);
 
   const { data, isLoading, isError, error } = useApiQuery(inventoryBalances, {

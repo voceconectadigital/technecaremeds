@@ -23,17 +23,27 @@ const ICONES: Record<SearchScope, typeof Boxes> = {
   person: User,
 };
 
-/** Para onde cada tipo de resultado leva. */
-const ROTAS: Record<SearchScope, (id: string) => string> = {
-  asset: (id) => `/ativos/${id}`,
-  work_order: (id) => `/ordens/${id}`,
-  service_request: (id) => `/solicitacoes/${id}`,
-  customer: (id) => `/clientes/${id}`,
-  location: (id) => `/locais/${id}`,
-  inventory_item: (id) => `/estoque/${id}`,
-  document: (id) => `/documentos/${id}`,
-  quote: (id) => `/orcamentos/${id}`,
-  person: (id) => `/pessoas/${id}`,
+/**
+ * Para onde cada tipo de resultado leva — SEMPRE para uma tela que existe.
+ *
+ * Cinco destinos apontavam para rotas que nunca existiram (`/clientes/:id`,
+ * `/locais/:id`, `/estoque/:id`, `/documentos/:id`, `/pessoas/:id`): o
+ * resultado aparecia e o clique dava "página não encontrada". Agora cada um vai
+ * à tela mais próxima que existe, já filtrada pelo que foi achado. Ficha de
+ * cliente e de pessoa não existem nesta versão (são pedidos registrados à
+ * parte); por isso cliente leva aos contratos e pessoa às configurações.
+ */
+type Destino = { to: string; search?: Record<string, string> };
+const ROTAS: Record<SearchScope, (hit: { id: string; title: string }) => Destino> = {
+  asset: (h) => ({ to: `/ativos/${h.id}` }),
+  work_order: (h) => ({ to: `/ordens/${h.id}` }),
+  service_request: (h) => ({ to: `/solicitacoes/${h.id}` }),
+  customer: () => ({ to: '/contratos' }),
+  location: (h) => ({ to: '/ativos', search: { local: h.id } }),
+  inventory_item: (h) => ({ to: '/estoque', search: { aba: 'tudo', q: h.title } }),
+  document: (h) => ({ to: '/documentos', search: { aba: 'todos', q: h.title } }),
+  quote: (h) => ({ to: `/orcamentos/${h.id}` }),
+  person: () => ({ to: '/configuracoes' }),
 };
 
 export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -93,7 +103,12 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
         group: data.scopeLabels[h.scope] ?? h.scope,
         detail: h.subtitle ?? undefined,
         icon: <Icone className="size-4" />,
-        onSelect: () => void navigate({ to: ROTAS[h.scope](h.id) }),
+        onSelect: () => {
+          const d = ROTAS[h.scope](h);
+          // `search` depende do tipo da rota de destino; a conversão fica aqui,
+          // pelo mesmo motivo do `useUrlState`.
+          void navigate({ to: d.to, search: d.search as never });
+        },
       };
     });
 

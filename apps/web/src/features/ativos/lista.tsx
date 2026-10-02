@@ -61,7 +61,9 @@ const TOM_SITUACAO: Record<AssetStatus, 'neutral' | 'info' | 'warn' | 'good' | '
 export function AtivosPage() {
   const [local, setLocal] = useUrlState<string>('local', '');
   const [situacao, setSituacao] = useUrlState<string>('situacao', '');
-  const [busca, setBusca] = useState('');
+  // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
+  // sobrevive ao recarregar e ao link compartilhado.
+  const [busca, setBusca] = useUrlState<string>('q', '');
 
   const { data: locais } = useApiQuery(locationsList, { query: {} }, { staleTime: 5 * 60_000 }) as {
     data: { items: LocationRow[] } | undefined;

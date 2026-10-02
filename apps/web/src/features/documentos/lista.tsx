@@ -16,7 +16,7 @@
  * Um valor padrão "conforme" num documento que ninguém avaliou é a mentira
  * mais cara que um sistema de documentação técnica pode contar.
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { FileCheck2, FileWarning, Search } from 'lucide-react';
 import { Card, EmptyState, Select, SkeletonList, StatusChip, Tabs, cn, tabIds } from '@aurora/ui';
 import { documentsList, type DocumentRow } from '@aurora/contracts';
@@ -37,7 +37,9 @@ const JANELA_DIAS = 60;
 export function DocumentosPage() {
   const [aba, setAba] = useUrlState<string>('aba', 'vencendo');
   const [tipo, setTipo] = useUrlState<string>('tipo', '');
-  const [busca, setBusca] = useState('');
+  // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
+  // sobrevive ao recarregar e ao link compartilhado.
+  const [busca, setBusca] = useUrlState<string>('q', '');
 
   const { data, isLoading, isError, error } = useApiQuery(documentsList, {
     query: aba === 'vencendo' ? { expiring_within_days: JANELA_DIAS } : {},
