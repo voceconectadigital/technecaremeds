@@ -259,7 +259,14 @@ export async function transferAsset(
 export async function decommissionAsset(
   session: TenantSession,
   assetId: string,
-  reason: string
+  reason: string,
+  opts: {
+    /**
+     * O equipamento que fica no lugar (0056). Opcional: nem todo
+     * descomissionamento tem sucessor.
+     */
+    replacedByAssetId?: string | null;
+  } = {}
 ): Promise<void> {
   if (reason.trim().length < 10) {
     throw new ValidationError('descomissionar exige justificativa de ao menos 10 caracteres', {
@@ -278,12 +285,34 @@ export async function decommissionAsset(
         `${componentes.map((c) => c.name).join(', ')}. Descomissione ou desvincule antes.`
     );
   }
+  const sucessor = opts.replacedByAssetId ?? null;
+  if (sucessor) {
+    if (sucessor === assetId) {
+      throw new ValidationError('um ativo não substitui a si mesmo', { field: 'replaced_by_asset_id' });
+    }
+    const [s] = await session.query<{ status: string }>(
+      `SELECT status::text AS status FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL`,
+      [sucessor]
+    );
+    // Ativo de outra organização não aparece (RLS): "não existe".
+    if (!s) throw new NotFoundError('Ativo sucessor', sucessor);
+    if (s.status === 'decommissioned' || s.status === 'disposed') {
+      throw new ConflictError('o sucessor indicado também está fora de operação');
+    }
+    const [ja] = await session.query<{ name: string }>(
+      `SELECT name FROM aurora.assets WHERE replaced_by_asset_id = $1`,
+      [sucessor]
+    );
+    if (ja) throw new ConflictError(`o sucessor indicado já substitui "${ja.name}"`);
+  }
+
   const rows = await session.query<{ id: string }>(
     `UPDATE aurora.assets
-        SET status = 'decommissioned', decommissioned_at = now(), decommission_reason = $2, updated_by = $3
+        SET status = 'decommissioned', decommissioned_at = now(), decommission_reason = $2, updated_by = $3,
+            replaced_by_asset_id = $4
       WHERE id = $1 AND deleted_at IS NULL AND decommissioned_at IS NULL
       RETURNING id`,
-    [assetId, reason.trim(), session.context.actorId]
+    [assetId, reason.trim(), session.context.actorId, sucessor]
   );
   if (rows.length === 0) throw new NotFoundError('Ativo', assetId);
 }

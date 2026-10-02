@@ -20,8 +20,11 @@ import {
   decommissionAsset,
   importAssets,
   curationQueue,
+  assetTimeline,
   type Database,
 } from '@aurora/db';
+import { assetsTimeline } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
   ForbiddenError,
@@ -33,7 +36,7 @@ import {
   type AssetImportRow,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
-import { uuidParam } from '../common/params';
+import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -137,6 +140,8 @@ export class AssetsController {
                 a.requires_calibration, a.requires_electrical_test,
                 a.manufactured_at, a.acquired_at, a.installed_at, a.warranty_until,
                 a.useful_life_years, a.decommissioned_at, a.decommission_reason,
+                a.replaced_by_asset_id,
+                (SELECT p.id FROM aurora.assets p WHERE p.replaced_by_asset_id = a.id) AS replaces_asset_id,
                 a.owner_supplier_id, a.specs, a.custom, a.show_on_work_order,
                 a.notes, a.sla_policy_id, a.created_at, a.updated_at,
                 CASE WHEN $2::boolean THEN a.internal_notes END AS internal_notes,
@@ -239,17 +244,44 @@ export class AssetsController {
     return { transfer_id: transferId };
   }
 
+  /**
+   * A vida do equipamento numa lista (gap V2 P1.3 · critério 3).
+   *
+   * As permissões de OS e de documento são conferidas AQUI, item a item: quem
+   * só vê ativo não passa a ver OS por esta porta.
+   */
+  @Get(':id/timeline')
+  @RequirePermissions('asset.read')
+  async timeline(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Query() query: unknown
+  ): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const q = parseWith(assetsTimeline.query, query);
+    const items = await withTenant(this.db, ctx, (s) =>
+      assetTimeline(s, uuidParam(id, 'id'), {
+        canReadWorkOrders: ctx.permissions.has('work_order.read'),
+        canReadDocuments: ctx.permissions.has('document.read'),
+        limit: q.limit,
+      })
+    );
+    return { items };
+  }
+
   @Post(':id/decommission')
   @RequirePermissions('asset.decommission')
   async decommission(
     @Req() req: AuroraRequest,
     @Param('id') id: string,
-    @Body() body: { reason?: unknown }
+    @Body() body: { reason?: unknown; replaced_by_asset_id?: unknown }
   ): Promise<{ decommissioned: string }> {
     const ctx = req.auroraContext!;
     const assetId = uuidParam(id, 'id');
     await withTenant(this.db, ctx, (s) =>
-      decommissionAsset(s, assetId, requiredText(body.reason, 'reason', 10))
+      decommissionAsset(s, assetId, requiredText(body.reason, 'reason', 10), {
+        replacedByAssetId: optionalUuid(body.replaced_by_asset_id, 'replaced_by_asset_id'),
+      })
     );
     return { decommissioned: assetId };
   }

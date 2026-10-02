@@ -134,6 +134,12 @@ export const AssetDetail = z.object({
   useful_life_years: z.number().int().nullable(),
   decommissioned_at: Timestamp.nullable(),
   decommission_reason: z.string().nullable(),
+  /**
+   * Substituição (0056): quem ficou no lugar deste, e quem este substituiu.
+   * Opcionais no contrato porque respostas capturadas antes da 0056 não os têm.
+   */
+  replaced_by_asset_id: Uuid.nullable().optional(),
+  replaces_asset_id: Uuid.nullable().optional(),
 
   owner_supplier_id: Uuid.nullable(),
   sla_policy_id: Uuid.nullable(),
@@ -237,4 +243,56 @@ export const locationsList = defineOperation({
     root: Uuid.optional(),
   }),
   response: z.object({ items: z.array(LocationRow) }),
+});
+
+/* -------------------------------------------------------------------------- */
+/* linha do tempo (gap V2 P1.3 · critério 3)                                   */
+/* -------------------------------------------------------------------------- */
+
+export const ASSET_TIMELINE_KINDS = [
+  'registered',
+  'manufactured',
+  'acquired',
+  'installed',
+  'transferred',
+  'work_order_opened',
+  'work_order_completed',
+  'measurement_session',
+  'document_issued',
+  'document_released',
+  'decommissioned',
+  'replaced',
+  'replaces',
+] as const;
+
+export const AssetTimelineEvent = z.object({
+  kind: z.enum(ASSET_TIMELINE_KINDS),
+  /** Instante ISO, ou data civil AAAA-MM-DD quando o fato é de um dia (fabricação, aquisição). */
+  at: z.string(),
+  title: z.string(),
+  detail: z.string().nullable(),
+  ref: z
+    .object({
+      type: z.enum(['work_order', 'document', 'measurement_session', 'asset', 'transfer']),
+      id: Uuid,
+    })
+    .nullable(),
+});
+export type AssetTimelineEvent = z.infer<typeof AssetTimelineEvent>;
+
+export const assetsTimeline = defineOperation({
+  operationId: 'assets.timeline',
+  method: 'GET',
+  path: '/assets/:id/timeline',
+  summary:
+    'A vida do equipamento numa lista: ciclo de vida, transferências, OS, medições, documentos, substituição',
+  description:
+    'Leitura composta, mais recente primeiro. OS e sessões de medição só entram para quem tem ' +
+    '`work_order.read`; documentos, para quem tem `document.read` — a linha do tempo não é atalho ' +
+    'para atravessar permissão. Nenhum valor financeiro.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  query: z.object({ limit: z.coerce.number().int().min(1).max(500).optional() }),
+  response: z.object({ items: z.array(AssetTimelineEvent) }),
+  errors: ['not_found'],
 });
