@@ -1,15 +1,28 @@
 # AI-HANDOFF — o documento canônico de continuidade
 
 > **SE VOCÊ É UMA NOVA IA (OU UMA PESSOA NOVA), COMECE AQUI.**
-> Leia este arquivo inteiro. Depois leia **apenas** os arquivos indicados na
-> seção do módulo que você vai mexer (§34). **Não varra o repositório inteiro** —
-> ele tem ~600 arquivos versionados e a varredura gasta o seu contexto sem
-> ensinar mais do que está escrito aqui.
+>
+> 1. **Leia este arquivo inteiro.** Depois leia **apenas** os arquivos indicados
+>    na seção do módulo que você vai mexer (§34). **Não varra o repositório
+>    inteiro** — ele tem ~590 arquivos versionados e a varredura gasta o seu
+>    contexto sem ensinar mais do que está escrito aqui.
+> 2. **Se a tarefa vier de feedback ou novo pedido do cliente**, leia também
+>    `docs/NOVAS-SOLICITACOES.md` (o backlog incremental — §38).
+> 3. **Não trate item de NOVAS-SOLICITACOES como implementado.** Este arquivo
+>    descreve o que o sistema **é**; aquele descreve o que foi **pedido**.
+> 4. **Antes de implementar um pedido:** audite o código → atualize o status
+>    dele → planeje → implemente → teste → registre a evidência (commit,
+>    migration, rota, testes).
+> 5. **Depois de implementar:** atualize `NOVAS-SOLICITACOES.md` (status
+>    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
+>    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 30/09/2026 (demo pública, §27-A) · **HEAD desta atualização:** ver `git log -1`
+**Atualizado em:** 01/10/2026 (auditoria de consolidação) · **HEAD auditado:** `7e16baa` (o commit
+desta atualização é o seguinte; confira com `git log -1`)
 **Migration mais recente:** `0046_item_imagem_e_categoria.sql` · **47 migrations** ·
-**94 tabelas** · **183 rotas** · **110 permissões** · **11 papéis** ·
-**107 tipos de evento** · **1707 testes de unidade/HTTP + 147 de navegador**
+**94 tabelas** · **183 rotas HTTP** (182 no OpenAPI + `/health`; **109 com contrato Zod**) ·
+**110 permissões** · **11 papéis** · **107 tipos de evento** · **1723 testes de unidade/HTTP**
+(91 arquivos, 32 pulados sem PostgreSQL real) **+ 148 de navegador + 8 da demo**
 
 ---
 
@@ -18,10 +31,12 @@
 | | |
 | --- | --- |
 | **Repositório** | `voceconectadigital/technecaremeds` — **não renomear** |
-| **Branch** | `main` (único) |
+| **Branch** | `main` (único) · remoto `origin` = GitHub |
+| **HEAD** | confira com `git log -1`. Auditoria de 01/10/2026 partiu de `7e16baa` |
 | **Monorepo** | npm workspaces (ADR-021). `packages/*` e `apps/*` |
-| **Nome técnico interno** | **Aurora**. É codinome, namespace (`@aurora/*`, `aurora_app`, `aurora:token`) e nome de trabalho |
-| **Nome comercial** | **indefinido**. O cliente usa "Be Care", "Téchne Care", "Be Care Clinical Platform" nos documentos dele e diz por escrito que o definitivo sai na etapa de marca |
+| **Nome técnico interno** | **Aurora**. É codinome histórico, namespace (`@aurora/*`, `aurora_app`, `aurora:token`) e nome de trabalho. **Não aparece ao cliente** |
+| **Marca pública atual** | **Téchne Care** (grafia de `marca.config.json`), definida pelo cliente em 29/09/2026 com logo e cores — §20-B |
+| **Nome comercial definitivo** | **pode evoluir.** O cliente também usa "Be Care" (a empresa) e "Be Care Clinical Platform" nos documentos dele; `marca.config.json` marca o nome como **A VALIDAR** e o `appId` das lojas como não definitivo |
 
 ### Os três nomes, e o papel de cada um
 
@@ -33,10 +48,11 @@ cometer aqui. Não renomeie nada.
 - **`Aurora`** — o nome técnico. Aparece em pacotes, papéis de banco, prefixos de
   variável e chaves de armazenamento. **Trocá-lo quebraria** sessões guardadas,
   migrations aplicadas e a fila offline de quem já tem trabalho no aparelho.
-- **`Be Care / Téchne Care`** — a marca do cliente, **provisória**. Toda string
-  visível ao usuário mora em `marca.config.json` e é carimbada por
-  `npm run marca`. Trocar a marca é editar **um** arquivo e rodar **um**
-  comando — nunca uma caçada a strings.
+- **`Téchne Care`** — a marca pública **atual**, usada na demonstração e em toda
+  tela. Toda string visível ao usuário mora em `marca.config.json` e é carimbada
+  por `npm run marca`. Trocar a marca é editar **um** arquivo e rodar **um**
+  comando — nunca uma caçada a strings. **"Be Care"** é o nome da empresa do
+  cliente (aparece em pedidos como "estoque Be Care"), não um segundo produto.
 
 > `marca.config.json` explica a separação no próprio arquivo. Leia-o antes de
 > qualquer conversa sobre nome.
@@ -48,9 +64,17 @@ Nasceu de uma auditoria somente-leitura do sistema TechneCare/Arkmeds
 (`docs/01-AUDITORIA-TECHNECARE.md`) e é especificada por
 `docs/AURORA-CMMS-SPEC-v0.2.md`.
 
+**Escopo funcional:** gestão de engenharia clínica · manutenção corretiva e
+preventiva · ativos · chamados · ordens de serviço · agenda · estoque ·
+contratos e orçamentos · documentos técnicos · indicadores · operação de campo
+offline. **Evolução prevista, sem código hoje:** instrumentação/metrologia (§16),
+IA e integrações (§30).
+
 **Públicos previstos** (PLAT §2 dos documentos do cliente): prestadora de
-serviço, hospital, fabricante, consultoria, laboratório de instrumentação. **Uma
-plataforma, configuração diferente** — não cinco sistemas.
+serviço (a Be Care é a primeira), hospital, fabricante, consultoria, laboratório
+de instrumentação. **Uma plataforma, configuração diferente** — não cinco
+sistemas. Dentro de cada organização: coordenação/gestão (web), técnico (field)
+e o cliente final — hospital — pelo portal.
 
 ---
 
@@ -64,11 +88,18 @@ emite documento, mede SLA e produz indicador.
 
 | Canal | O que é | Quem usa |
 | --- | --- | --- |
-| `apps/web` | Aplicação interna, 16 rotas | Coordenação, gestão, administração |
-| `apps/portal` | Portal do cliente, 5 telas | O hospital: abre chamado e acompanha |
+| `apps/web` | Aplicação interna, 25 rotas (22 protegidas). Também é o build da **demonstração pública** (§27-A) | Coordenação, gestão, administração |
+| `apps/portal` | Portal do cliente, 8 rotas (4 na barra inferior) | O hospital: abre chamado e acompanha |
 | `apps/field` | PWA **e** app de loja (Capacitor) | Técnico em campo, offline-first |
 | `apps/api` | NestJS. **Única porta para o banco** | Todos os acima, e integrações |
 | `apps/workers` | pg-boss + publicador de outbox | Varreduras, SLA, expiração |
+
+> **Padrão que se repete e que você precisa saber:** a camada de banco é mais
+> larga que a API, e a API é mais larga que as telas. Muitas tabelas têm
+> função de escrita em `packages/db` usada só por seed e teste, **sem rota**
+> (cliente, ativo — edição, OS — edição, plano, modelo de checklist, papel
+> personalizado, depósito, item de estoque). Não conclua que existe porque a
+> tabela existe — confira o controller.
 
 ---
 
@@ -82,31 +113,35 @@ emite documento, mede SLA e produz indicador.
 | **Autenticação por senha** | ✅ | **Novo em 29/09/2026.** Ver §7 |
 | MFA | ⬜ | `users.mfa_enabled` existe e é sempre `false` |
 | SSO | ⬜ | A porta `AuthProvider` existe para isso |
-| RBAC | ✅ | 110 permissões, 11 papéis de fábrica, `deny` individual, escopos |
+| RBAC | ✅ / 🟡 | 110 permissões, 11 papéis de fábrica, `deny` individual, escopos. **Falta:** criar/editar papel personalizado (schema aceita, sem rota) e tela de escopo |
 | RLS / isolamento | ✅ | `FORCE` em todas as tabelas tenant-scoped; 24 suítes adversariais |
-| Ativos | ✅ | Unicidade configurável, transferência como operação, QR |
+| Clientes (cadastro) | 🟡 | Tabela rica (`customers` + `customer_contacts`, 0008); **API só lista** (`GET /customers`); **sem tela** `/clientes` |
+| Ativos | ✅ / 🟡 | Criar, transferir, baixar, importar, QR, ficha de leitura. **Sem edição** (sem PATCH), **sem depreciação**, **sem disponibilidade** |
+| QR Code do ativo | 🟡 | Token, resolução pública, leitura no Field, rotação, dados de etiqueta. **Sem imagem de QR e sem tela de etiqueta** — §22-A |
 | Chamados (`service_requests`) | ✅ | Entidade separada da OS (ADR-002) |
-| Ordens de serviço | ✅ | Estados × motivos configuráveis (ADR-003) |
+| Ordens de serviço | ✅ / 🟡 | Estados × motivos configuráveis (ADR-003). **Sem edição de campos** (sem PATCH), **sem baixar/imprimir/enviar** |
 | SLA | ✅ | Tempo útil por fuso e feriado, pausa por motivo |
 | Agenda | ✅ | Projeção da OS (ADR-011); confere antes de salvar |
-| Preventivas | ✅ | Frequência por tarefa; **ciclo nunca fecha** — ver §32 |
-| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046) |
-| Contratos | ✅ | Cobertura por expressão, medição congelada |
+| Checklists | ✅ / 🟡 | Motor versionado e imutável, 7 tipos de item, execução no Field. **Sem rota/tela para criar modelo**; vínculo com plano/tipo de OS é chave de texto **não acionada** |
+| Preventivas | 🟡 | Varredura gera ciclo e OS (gatilho **calendário** apenas); **sem rota para criar plano**; **ciclo nunca fecha** — §32 |
+| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046). Sem rota para criar depósito/item |
+| Contratos | ✅ | Cobertura por expressão, medição congelada. Tela só de leitura |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
-| Documentos | 🟡 | Motor completo; 6 tipos provisionados com **payload vazio**; **sem PDF** |
-| Indicadores | ✅ | Toda métrica viaja com a própria definição |
-| Portal | ✅ | Com varredura anti-vazamento (§21) |
+| Documentos | 🟡 | Motor completo; 6 tipos provisionados com **payload vazio**; **sem PDF**; tela só lista — §15 |
+| Indicadores | ✅ / 🟡 | 14 métricas com definição; tela mostra 9, filtro só por período — §15-A |
+| Portal | ✅ | Com varredura anti-vazamento (§21). Leitura + abrir chamado |
 | Field / offline | ✅ | Idempotência provada sob concorrência |
-| Notificações | 🟡 | Fila de saída existe; **nenhum transporte** (e-mail/WhatsApp) |
-| Automações | ✅ | Motor de regras com salvaguardas |
-| Busca global | ✅ | `tsvector` nativo (ADR-027) |
+| Notificações | 🟡 | Tabelas e roteamento existem; **nenhum transporte**, e nada as dispara em produção — §18 |
+| Automações | 🟡 | Motor de regras com salvaguardas, API e tela de simular/ativar. **Não está ligado**: `runAutomations` só é chamado em teste; gatilho `schedule` sem motor — §18 |
+| Busca global | ✅ / 🟡 | `tsvector` nativo (ADR-027). **4 destinos de resultado apontam para rota inexistente** — §32 |
+| Geolocalização / check-in | ⬜ | `locations.geo_lat/geo_lng` existem e ninguém lê nem escreve |
 | Engenharia clínica | 🟡 | Criticidade e ciclo de vida sim; aceite e qualificação não |
 | **Metrologia** | 🔒 | Só a "fronteira". **Cinco decisões bloqueadas** — ver §17 |
 | Instrumentos / certificados / medições | ⬜ | **Não existem como tabela.** Ver §16 |
 | Migração Arkmeds | 🟡 | Só importação de ativos; sem pipeline rastreável |
 | Integrações (Omie, WhatsApp, BI…) | ⬜ | Nada. Ver §30 |
-| IA | ⬜ | Nada. Ver §30 |
-| Deploy | ⬜ | **Nada publicado.** Ver §27 |
+| IA | ⬜ | Nada (nenhuma biblioteca, nenhuma chamada). Ver §30 |
+| Deploy | 🟡 | **Só a demonstração** (web, sem API) está publicada. API, workers, banco, portal e field: não. §27 |
 
 ---
 
@@ -114,6 +149,10 @@ emite documento, mede SLA e produz indicador.
 
 ```mermaid
 graph TB
+  subgraph Demo["Demonstração pública (Cloudflare Pages)"]
+    DEMO["apps/web com VITE_DEMO_MODE=true<br/>DemoDataProvider · capturas.json<br/>SEM API, SEM banco"]
+  end
+
   subgraph Canais
     WEB["apps/web<br/>React · TanStack Router"]
     POR["apps/portal<br/>React · 5 telas"]
@@ -138,6 +177,7 @@ graph TB
   PG[("PostgreSQL 16+<br/>RLS FORCE · 94 tabelas")]
   FS[["ArmazenamentoDeObjetos<br/>disco hoje, S3 amanhã"]]
 
+  DEMO -. "mesmo código de tela" .- WEB
   WEB --> API
   POR --> API
   FLD --> API
@@ -296,6 +336,19 @@ fornecedor.**
 > senha. A escolha agora está em **um** lugar
 > (`apps/api/src/auth/escolher-provedor.ts`) e o caso sem adaptador falha alto.
 
+### Autenticação por ambiente — o estado REAL
+
+| Ambiente | Provedor | Existe hoje? |
+| --- | --- | --- |
+| **Desenvolvimento** (máquina do dev) | `local` (sem senha) ou `password` | ✅ |
+| **Teste / CI / Playwright** | `local` — o login por senha tem provas HTTP, não E2E (§32) | ✅ |
+| **Demonstração pública** | **nenhum.** `VITE_DEMO_MODE` troca a entrada por "Explorar plataforma"; não há API, token nem conta (§27-A) | ✅ publicada |
+| **Homologação conectada** | seria `password` (o boot recusa `local`) | ⬜ sem máquina |
+| **Produção futura** | `password`; MFA/SSO a decidir | ⬜ |
+
+O **`AuthProvider` em uso** é escolhido por `AURORA_AUTH_PROVIDER` em
+`apps/api/src/auth/escolher-provedor.ts`; o login real é o `password`.
+
 ### Como o login por senha funciona
 
 ```mermaid
@@ -377,6 +430,23 @@ novo.
 - **`deny` individual vence** qualquer concessão de papel.
 - **Escopo** é outra coisa: `membership_scopes` limita por cliente, local,
   atribuição e almoxarifado. **Permissão + escopo = autorização.**
+- **Papéis de fábrica:** `owner`, `admin`, `maintenance_manager`, `coordinator`,
+  `technician`, `metrologist`, `storekeeper`, `finance`, `auditor` (equipe) e
+  `requester`, `customer_manager` (portal).
+
+### O que a administração consegue fazer HOJE
+
+| Ação | API | Tela |
+| --- | --- | --- |
+| Listar, convidar, suspender membro | ✅ `members.controller.ts` | ✅ `/configuracoes` (`membros.tsx`) |
+| Atribuir papéis, conceder/negar permissão individual | ✅ `roles.controller.ts` | ✅ `acesso.tsx` |
+| Ajustar escopo de um membro | ✅ `PATCH …/members/:id/scope` | ⬜ **sem tela** (o convite manda "ajustar depois") |
+| Criar/editar/excluir **papel personalizado** | ⬜ **sem rota** (o schema aceita: `roles.copied_from_key`) | ⬜ |
+| "Cargo" / "função" como conceito separado de papel | ⬜ não modelado | ⬜ |
+
+Várias permissões estão **declaradas e nunca exigidas por rota** porque a rota
+não existe (`customer.create/update`, `asset.update`, `work_order.update`,
+`procedure.*`, `insight.manage_dashboards`). Isso é esperado — não as remova.
 
 ### Como adicionar uma permissão
 
@@ -404,6 +474,22 @@ Nenhuma coluna de chave de negócio tem `DEFAULT` de geração no banco.
 
 **Numeração humana** (`SR-2026-0001`, `WO-2026-0001`, `CAL-…`) sai de contador com
 bloqueio de linha — nunca `max(n)+1`, que sob concorrência gera dois iguais.
+
+**Contexto de tenant** — `withTenant` (`packages/db/src/client.ts`) faz
+`set_config(..., is_local => true)` de `aurora.organization_id`, `actor_id`,
+`actor_kind`, `request_id`, `source`, `client_ip` e `user_agent`. A RLS lê
+`aurora.current_organization_id()`; a auditoria lê os demais.
+
+**Auditoria:** gatilho `aurora.fn_audit` grava em `audit_logs` (append-only,
+`aurora_app` só lê). **Eventos:** `domain_events` na mesma transação (§18).
+
+**Funções `SECURITY DEFINER`** — as únicas portas que atravessam a RLS, cada
+uma com propósito estreito: `find_memberships_for_email` e
+`find_user_id_by_email` (resolução de identidade) · `effective_permissions` ·
+`fn_audit` · `resolve_qr_token` (rota pública `/q/:token`) ·
+`credencial_por_email`, `abrir_sessao`, `sessao_por_token`, `encerrar_sessao`,
+`registrar_tentativa_de_senha`, `definir_senha` (autenticação, 0045). Função
+`SECURITY DEFINER` nova exige `SET search_path` fixo e teste adversarial.
 
 ### Papéis de banco
 
@@ -478,18 +564,27 @@ Destino novo entra na lista **por decisão**, editando o JSON — nunca por acid
 
 ## 11 · Supabase
 
-**Estado: 🔒 BLOQUEADO, e nada depende disso.**
+**Estado: 🔒 BLOQUEADO, e nada depende disso. NÃO é o backend do site.**
 
-O CLI está autenticado e lista 28 projetos em ~18 organizações. **Nenhum é
-identificável como o do Aurora.** Nenhuma operação remota foi executada
-(ADR-025, OQ-16). Para destravar: alguém com acesso concede acesso, ou informa o
-*project ref*.
+Existe um projeto Supabase chamado **"Aurora CMMS"** (ref
+`egoajboqzhnvkpenrszw`, sa-east-1). Em 30/08/2026 ele amanheceu com o schema,
+os dados e 9 jobs de cron do **E-commerce Template** — outro produto; o Aurora
+**nunca foi aplicado lá**. Ele está na lista de **bloqueados** de
+`aurora.destinos.json`, e o guard de destino recusa qualquer comando do Aurora
+contra ele. Detalhes: `docs/AUDITORIA-CONTAMINACAO-SUPABASE-2026-08-30.md` e
+`docs/PLANO-RECUPERACAO-SUPABASE-AURORA-2026-08-30.md`.
+
+Os destinos `homologacao` e `producao` de `aurora.destinos.json` estão **sem
+`ref`**: todo destino remoto é recusado. A demonstração pública não fala com
+Supabase (há teste que reprova se falar — §27-A). Para usar um Supabase:
+recuperar ou recriar o projeto **e** registrá-lo por decisão no JSON (ADR-025,
+OQ-16).
 
 **Não confunda quatro coisas:**
 
 | | O que é |
 | --- | --- |
-| **Supabase hospedado** | O projeto remoto. Bloqueado |
+| **Supabase hospedado** | O projeto remoto "Aurora CMMS". Contaminado e bloqueado |
 | **Supabase local** | Stacks de **outros produtos** na máquina do dev (`ecommerce-template`, `pragminas-digital-hub`, `hpproto`). **NÃO TOQUE** |
 | **PostgreSQL da aplicação** | O que o Aurora usa. Hoje, o contêiner `aurora-postgres` |
 | **Supabase Auth** | Provedor de identidade previsto, **sem adaptador** (§7) |
@@ -622,6 +717,72 @@ estrutura comum.
 **`payloadFields: []`** — os campos de cada um dependem de norma técnica não
 confirmada. **Não há geração de PDF**: `pdf_key` existe, o renderizador não.
 
+### Capacidade por item (`migrations/0034` · `documents.controller.ts`)
+
+| Capacidade | Estado | Onde |
+| --- | --- | --- |
+| Tipos de documento | ✅ 6 de fábrica, payload vazio | `packages/domain/src/documents.ts` |
+| Numeração por série | ✅ `number_series`, número queimado no cancelamento | 0034 |
+| Versionamento | ✅ `version` + `supersedes_id`, rota `:id/versions` | API |
+| Revisão / aprovação | ✅ `draft → under_review → issued → released` (`document.issue`) | API |
+| Assinatura | ✅ `document_signatures` (desenho, código por e-mail, portal) com evidência e `signed_content_hash`; `icp_brasil` **recusado** | API |
+| Hash de conteúdo | ✅ SHA-256 canônico, obrigatório ao emitir | domínio |
+| Liberação ao cliente / portal | ✅ `released_to_customer_at`; portal lista só liberados | API + portal |
+| Vencimento | ✅ job `documents.expiry` + aba "Vencendo" | worker + web |
+| **PDF** | ⬜ ausente | — |
+| **Download** | ⬜ ausente (nem web, nem portal) | — |
+| **Impressão** | ⬜ ausente (nenhum `@media print`, nenhum `window.print`) | — |
+| **Envio por e-mail** | ⬜ ausente (sem transporte, §18) | — |
+| Tela web | 🟡 `/documentos` só **lista** (abas, filtro, busca); sem ficha, sem criar/emitir/assinar | `features/documentos/lista.tsx` |
+
+O mesmo vale para a **OS**: ver ✅ (`/ordens/$id`), **editar** ⬜ (sem PATCH; a
+ficha diz que é deliberado), **baixar / imprimir / enviar** ⬜.
+
+---
+
+## 15-A · Indicadores
+
+**Fonte:** `packages/domain/src/metrics.ts` (definições) ·
+`packages/db/src/metrics.ts` (consultas) · `migrations/0035` (tabela de fatos
+`fact_work_order`, mantida por gatilho) · `apps/api/src/insights/insights.controller.ts`
+(`/v1/insights/*`) · tela `apps/web/src/features/indicadores/painel.tsx`.
+
+**Toda métrica viaja com a própria definição** (numerador, denominador,
+exclusões, nota de comparabilidade) — a tela mostra a cobertura, não só o número.
+
+### As 14 métricas e a definição que o CÓDIGO usa
+
+| Métrica | Definição real | Na tela? |
+| --- | --- | --- |
+| Abertas / concluídas | OS com `opened_at` / `completed_at` no período | ✅ |
+| **Backlog** | **Quantidade de OS abertas e ainda não concluídas no instante de corte:** `opened_at` não nulo e ≤ corte, **não canceladas**, e `completed_at` nulo **ou** posterior ao corte. Rascunho não conta (não tem `opened_at`). Vem com faixas de idade 0–7 / 8–30 / 31–90 / 90+ dias (`backlog_age`) | ✅ |
+| **MTTR** | média de `completed_at − opened_at` das OS **corretivas** concluídas no período, não canceladas | ✅ |
+| **MTBF** | por ativo, intervalo entre aberturas consecutivas de corretivas no período; ativo com uma falha só fica fora | ⬜ (API sim) |
+| **SLA** | relógios encerrados no período: cumpridos ÷ (cumpridos + estourados), também por tipo; cobertura conta OS sem relógio | ✅ |
+| Primeira resposta | envio do chamado → primeira triagem | ✅ |
+| Preventiva × corretiva | composição das OS do período (rosca) | ✅ |
+| **Conformidade de plano** | itens de ciclo com vencimento no período: feitos ÷ (esperados − pulados) | ✅ |
+| Tempo por motivo de espera | do histórico de situação | ✅ |
+| Tempo por situação | do histórico de situação | ⬜ (API sim) |
+| **Produtividade** | por responsável: OS concluídas + soma de minutos apontados | ⬜ (API sim, **sem contrato**) |
+| Horas apontadas | soma de `time_entries` | ⬜ (API sim) |
+
+### Limitações reais
+
+- **Filtros:** a API aceita `from`/`to` (≤ 400 dias) e `customerId`,
+  `locationPath`, `assetCategoryId`, `teamId`, `membershipId` — mas
+  conformidade de plano, tempo por situação e por motivo **ignoram todos**, e
+  SLA/primeira resposta só honram `customerId`. **A tela só filtra por período.**
+- **Não existe:** indicador de ativo (ativo × inativo, disponibilidade,
+  tempo parado), indicador por equipamento, série temporal (a API devolve
+  números de período; o `Sparkline` espera a rota), comparação com período
+  anterior, exportação/relatório, perfis de indicador por cliente ou contrato.
+- `work_order_type_settings.causes_asset_downtime` e
+  `countsForAvailability()` existem e **nenhuma métrica os lê**.
+
+**Não invente fórmula diferente desta tabela.** Indicador novo exige definição
+confirmada pelo cliente (§33, regra 8).
+
 ---
 
 ## 16 · Engenharia clínica / metrologia
@@ -641,6 +802,33 @@ requisitos).
 | **Dado bruto** | 🟡 envio retomável existe; falta `purpose='raw_data'` e o dono "sessão" |
 | Calibração / TSE / qualificação | 🟡 tipos provisionados, payload vazio |
 | Aceite de equipamento | ⬜ |
+
+### Checklists, procedimentos e preventivas — o que existe de verdade
+
+- **Motor de checklist** (`migrations/0024`, `packages/domain/src/checklists.ts`,
+  `packages/db/src/execution.ts`): modelo versionado (`draft → published →
+  archived`, publicado é imutável por gatilho); item com `kind` texto, número
+  (com `min_value`/`max_value`/**`unit`**), booleano, opção, múltipla opção,
+  foto, data; `failing_options`, foto obrigatória na falha, visibilidade
+  condicional, `fail_action` (sinalizar, bloquear conclusão, abrir OS).
+  Resposta congela `template_key` + `template_version`; veredito por item
+  `pass/fail/na`.
+- **Execução:** só no Field (`apps/field/src/telas/ordem.tsx`), via
+  `/work-orders/:id/checklists` e `/checklist-responses/:id/answers`.
+- **Ausente:** rota e tela para **criar/editar/publicar modelo** (as permissões
+  `procedure.*` existem sem rota); "tipo" de modelo (calibração, TSE,
+  preventiva); vínculo com cliente, ativo, categoria ou modelo de
+  equipamento. Os dois vínculos que existem são **chave de texto não acionada**:
+  `plan_tasks.checklist_template_key` (o `materializeCycle` cria a OS **sem**
+  anexar o checklist) e `work_order_type_settings.default_checklist_key` (nunca
+  lido).
+- **Procedimento** como entidade: ⬜ não existe (só as permissões e o evento
+  `procedure.published` no catálogo).
+- **Preventivas** (`migrations/0029`): plano → tarefas (alvo ativo, categoria
+  ou subárvore de local; frequência dia…ano; tolerância; equipe) → ciclos →
+  itens com OS. A varredura `plans.sweep` gera ciclo e OS **só para gatilho
+  `calendar`** (`meter`/`condition` são valores de enum sem motor). **Não há
+  rota para criar plano nem tarefa** — entram por seed. Educação continuada: ⬜.
 
 **Não transforme planejamento em feature pronta.** O que está acima como ⬜ não
 existe, mesmo que os documentos do cliente descrevam.
@@ -693,6 +881,34 @@ O mesmo vale para **fórmulas de risco** não validadas.
   `sla.sweep`, `plans.sweep`, `quotes.expire`, `contracts.alerts`,
   `documents.expiry`, `outbox.publish`.
 
+| Job | Agenda | O que faz |
+| --- | --- | --- |
+| `aurora.sla.sweep` | a cada 5 min | avisos e estouros de SLA |
+| `aurora.plans.sweep` | de hora em hora | abre ciclos de preventiva e as OS |
+| `aurora.quotes.expire` | diário | expira orçamentos |
+| `aurora.contracts.alerts` | diário | expira contratos e avisa fim próximo |
+| `aurora.documents.expiry` | diário | avisa documento perto do vencimento |
+| `aurora.outbox.publish` | a cada minuto | publica o outbox |
+
+### ⚠️ O que o worker NÃO faz hoje
+
+- **O `EventSink` em uso é só log** (`REGISTRO` em `apps/workers/src/main.ts`):
+  publicar um evento hoje = escrever uma linha no stdout. Nenhum consumidor
+  real existe.
+- **Automações não rodam em produção.** `runAutomations`
+  (`packages/db/src/automations.ts`) só reage a gatilho `event` e **só é
+  chamado pelos testes** — nem a API nem o worker o invocam. Regras
+  `schedule` (cron) e `condition_watch` podem ser gravadas, mas não há motor
+  (o próprio `jobs/catalog.ts` registra isso). Ações existentes: `notify`,
+  `assign`, `change_status`, `add_comment`, `create_work_order`. Salvaguardas
+  existentes: não reage ao próprio efeito, profundidade ≤ 3, quarentena por
+  taxa, simulação obrigatória antes de ativar, `rule_runs` registra tudo.
+- **Notificações:** `routeEvent` só é chamado pela ação `notify` (que não
+  roda); nenhum transporte; o resumo diário/semanal não é montado.
+
+Ligar o motor de automações ao `EventSink` é o passo que falta para
+automação e notificação existirem em operação.
+
 **Para criar um evento:** declare em `packages/events/src/catalog.ts` (formato
 `agregado.fato_no_passado`) — há um CHECK no banco e o catálogo recusa tipo
 desconhecido. **Para criar um job:** `apps/workers/src/jobs/catalog.ts`.
@@ -708,6 +924,40 @@ Erros no formato **RFC 9457** com `code`, `message`, `request_id`.
 `npm run openapi:check` roda no `verify` e **falha** se: rota perdeu contrato,
 contrato aponta para rota inexistente, contrato e guard discordam de permissão,
 escrita guardada por permissão de leitura, ou rota literal sombreada.
+
+### Estado real (01/10/2026)
+
+- **182 rotas nos controllers** (29 controllers) + `/health` fora do OpenAPI.
+  **109 têm contrato Zod (60%)**; as 73 restantes aparecem no OpenAPI sem
+  esquema de corpo. Contrato novo é obrigatório para rota nova; as antigas
+  ganham contrato quando forem tocadas.
+- **Auth:** `context.middleware` resolve identidade + organização em tudo,
+  exceto a lista **exata** `PUBLIC_PATH`: `health/*`, `auth/config|login|logout`,
+  `me/organizations` (faz a própria verificação de credencial) e `q/*`.
+- **Permissões:** `@RequirePermissions` + `PermissionsGuard` (§8).
+- **Idempotência:** cabeçalho `x-aurora-client-operation`
+  (`apps/api/src/common/client-operation.ts`) nas rotas de campo (§13).
+- **Uploads:** envio retomável por fatia (§14).
+- **Erros:** RFC 9457; `PROBLEM_CODES` é lista fechada, compartilhada com o
+  cliente. O cliente (`packages/contracts/src/client.ts`) reconhece 405/404/501
+  sem JSON e 200 com HTML como "a API não respondeu neste endereço".
+- **Escrita que NÃO existe** (não procure): criar/editar cliente; editar ativo;
+  editar campos de OS; criar/editar plano e tarefa; criar/publicar modelo de
+  checklist; criar papel; criar depósito, item de estoque e lista de preço;
+  criar regra de automação pela tela (a rota `POST /automations` existe, a
+  tela não tem formulário).
+
+### Os 4 desvios API × contrato (achados pela captura da demo, 30/09) — **ainda abertos**
+
+1. `serviceRequests.detail` lista transição para `duplicate`; o contrato diz `merged`.
+2. `members.list` devolve `seat_type: 'portal'`; o contrato aceita `staff | customer`.
+3. `insights.mttr`, `insights.firstResponse` e `insights.byWaitReason` devolvem
+   `data` em forma diferente da declarada.
+4. Colunas `numeric` voltam como **número** no PGlite e como **texto** no `pg`.
+
+O cliente não reclama porque não valida resposta em produção. A demo
+reproduz a API como ela responde. Corrigir = alinhar contrato **ou** API, e
+rodar `npm run demo:capturar` de novo.
 
 ### Caminho para criar um endpoint
 
@@ -772,10 +1022,41 @@ vermelho de crítico faria uma barra alta parecer alarme.
 cor. Todo gráfico tem alternativa textual: um `<svg>` sem ela é informação que
 não existe para metade do painel.
 
-**Imagem de item de estoque:** `inventory_items.image_key` guarda caminho
-**relativo** (restrição de tabela recusa URL absoluta — ver a migration 0046) e
-a borda HTTP monta `image_url`. As ilustrações de catálogo estão em
-`apps/web/public/catalogo`; leia o `LEIA-ME.md` de lá antes de acrescentar uma.
+### Estoque: imagem e categoria (migration 0046)
+
+- `inventory_items.image_key` guarda **caminho relativo** sem barra inicial
+  (`catalogo/filtro-hepa.svg`). A restrição `inventory_items_image_key_relativa`
+  **recusa URL absoluta** — nada é hotlinked de fornecedor.
+- A borda HTTP (`apps/api/src/inventory/inventory.controller.ts`) monta
+  `image_url`; o banco nunca guarda URL.
+- `inventory_items.category` (texto não vazio, indexado) dá à grade o eixo
+  além do nome e alimenta o filtro.
+- **Assets locais:** 13 ilustrações SVG próprias em `apps/web/public/catalogo`
+  (usam `currentColor` + paleta de dados, seguem o tema). Leia o `LEIA-ME.md` de
+  lá antes de acrescentar uma.
+- **Fallback:** item sem `image_key` vira `Thumb` com **iniciais sobre cor
+  estável derivada do nome** — o vazio é desenhado, nunca um ícone quebrado.
+- **Foto real (futuro):** o caminho está pronto (`image_key` pode apontar para
+  um objeto do armazenamento, também relativo). **Falta a tela de upload** —
+  hoje a imagem só entra por seed ou banco. Foto real deve ir para o
+  `ArmazenamentoDeObjetos` (§14), nunca URL externa.
+
+### O redesign implementado (29/09/2026, `docs/RELATORIO-REDESIGN-PREMIUM.md`)
+
+| Tela | O que tem hoje |
+| --- | --- |
+| **Hoje** (`/`) | 5 indicadores com tom e atalho, rosca de distribuição, o que vence, paradas em barras, estoque crítico |
+| **Solicitações** | faixa de 4 números, barra de urgência na borda, alerta de pedido envelhecido |
+| **OS / Kanban** | local, data com destaque de atraso, "sem responsável", ponto de categoria por coluna, contagem; arrastar pede ao servidor |
+| **Agenda** | faixas por urgência, baldes explicados, responsável, horário, duração e remarcações |
+| **Ativos** | colunas alinhadas (nome, fabricante/modelo, local, identificadores monoespaçados, garantia) |
+| **Estoque** | grade de cartões com imagem, categoria, situação em 4 níveis, barra de cobertura do mínimo |
+| **Contratos** | barra de vigência, aviso de vencimento, renovação automática visível |
+| **Indicadores** | 9 métricas com nulo ≠ zero e cobertura à vista; rosca preventiva × corretiva (§15-A) |
+| **Configurações** | pessoas (convite, suspensão), acesso (papéis e exceções), automações — **fora** da lista de telas do redesign; herdaram tokens e componentes |
+
+**Não redesenhados:** Portal, Field e a ficha da OS (`ordens/ficha.tsx`, a
+maior tela) — herdaram tokens e elevação, não uma revisão própria.
 
 ### Três armadilhas que já custaram um teste vermelho
 
@@ -787,17 +1068,63 @@ a borda HTTP monta `image_url`. As ilustrações de catálogo estão em
 3. **Teste amarrado à decoração.** A saudação da tela inicial segue o relógio;
    uma asserção em "Bom dia" falha à tarde, sozinha, na integração contínua.
 
+---
+
+## 20-B · Marca / branding — Téchne Care
+
+> `marca.config.json` e `packages/ui/src/styles/tokens.css` apontam para esta
+> seção como o lugar do procedimento.
+
+**Fonte única:** `marca.config.json` (nome, títulos por aplicação, descrições,
+cores para superfícies que não importam CSS) → `npm run marca`
+(`tools/marca/aplicar.mjs`) carimba títulos de aba, `theme-color`, favicon,
+manifesto do PWA, strings nativas dos projetos de loja e
+`packages/app-kit/src/marca.gerada.ts` (arquivo **gerado**, fora do Prettier).
+`npm run marca:check` roda no `verify` e no CI e reprova divergência.
+
+| Item | Valor / local |
+| --- | --- |
+| Logo horizontal | `apps/web/public/marca/technecare-horizontal.png` (arquivo **real** do cliente, 272 px de largura) |
+| Símbolo | `apps/web/public/marca/technecare-simbolo.png` |
+| Componente | `Logo` em `packages/ui/src/components/logo.tsx`: teto de largura, `alt` = nome do produto, **área clara de respiro no tema escuro** (a logo foi desenhada para papel branco; filtrar a imagem alteraria as cores da marca) |
+| Azul "Care" — cor de **produto** | `#3E69AC` (5,50:1 sobre branco) → escala `--aurora-brand-50…900`, chega às telas pelo token `accent` |
+| Verde-limão "Téchne" — **acento** | `#9DB924` (2,23:1 — **reprova como texto**). Só para FORMA: marcador de navegação ativa, ponto, barra. Texto usa `brand-accent-text` (`#6b7e18`, 4,54:1) |
+| Grafite do símbolo — tinta | `#262937` (14,44:1); os **neutros** derivam dele |
+| Tema claro / escuro (`theme-color`) | `#f3f5f8` / `#0d1017` |
+| Título da aba | "Téchne Care" (web), "Portal — Téchne Care", "Campo — Téchne Care"; na demo, "Téchne Care — Demonstração" |
+
+**Como as cores foram obtidas (refazível):** histograma dos pixels **opacos**
+do arquivo da logo, agrupados em blocos de 8 e ordenados por
+frequência; os três grupos dominantes são as três cores. Não foram estimadas a
+olho. Depois, cada par crítico texto/fundo foi conferido contra WCAG AA — é
+isso que criou `brand-accent-text` e o degrau `550` dos neutros.
+
+**Regras:**
+
+- **Identidade não é estado.** Emergência continua vermelha, atenção âmbar,
+  sucesso verde — e o verde semântico é **outro** verde, de propósito.
+- **"Aurora" não aparece ao cliente** como marca: nem título, favicon,
+  `theme-color`, manifesto ou string nativa. Continua em namespaces técnicos
+  (`@aurora/*`, `aurora_app`, `x-aurora-*`, `aurora:` no `localStorage`) —
+  **não os renomeie** (§1).
+- **Não definitivo:** `appId` `br.com.aurora.field` e o esquema de link
+  profundo `aurora-campo` estão em `$naoDefinitivo` — trocá-los depois de
+  publicar na loja cria um app novo.
+- Prefixo `[HOMOLOGAÇÃO]` no nome da organização é extraído e vira etiqueta
+  própria; em produção não sobra nada.
+
 ## 20 · Frontends
 
 
 | | `apps/web` | `apps/portal` | `apps/field` |
 | --- | --- | --- | --- |
 | **Objetivo** | Operação interna | Autoatendimento do cliente | Execução em campo |
-| **Rotas** | `/entrar` `/login`→`/entrar` `/organizacoes` `/` `/solicitacoes[/nova\|/$id]` `/ordens[/$id]` `/agenda` `/planos[/$id]` `/ativos[/$id]` `/estoque` `/contratos[/$id]` `/orcamentos[/$id]` `/documentos` `/indicadores` `/notificacoes` `/perfil` `/configuracoes[/automacoes]` | `/entrar` `/` `/chamados` `/abrir` `/equipamentos` | HOJE · OS · QR · SINCRONIZAÇÃO · PERFIL |
+| **Rotas** | `/entrar` `/login`→`/entrar` `/organizacoes` `/` `/solicitacoes[/nova\|/$id]` `/ordens[/$id]` `/agenda` `/planos[/$id]` `/ativos[/$id]` `/estoque` `/contratos[/$id]` `/orcamentos[/$id]` `/documentos` `/indicadores` `/notificacoes` `/perfil` `/configuracoes[/automacoes]` | `/entrar` `/` `/chamados[/$id]` `/abrir` `/equipamentos` `/documentos` `/orcamentos` | HOJE · OS · QR · SINCRONIZAÇÃO · PERFIL (+ assinatura e atenção) |
 | **Estado** | TanStack Query + URL-state | idem | **base local é a fonte** |
 | **Auth** | `useSession` + `/auth/login` | idem | idem |
 | **Dados** | `useApiQuery`/`useApiMutation` tipados pelo contrato | idem | `useColecaoLocal` |
-| **Responsivo** | testado em 1440/768/390 | barra embaixo, 4 destinos | polegar, 4 destinos |
+| **Responsivo** | testado em 1440/1280/1024/768/390 (`viewports.spec.ts`), gaveta de menu em 390 | barra embaixo, 4 destinos; E2E em Pixel 7 | polegar, 4 destinos; E2E em Pixel 7 |
+| **Publicado?** | só como **demo** (§27-A) | ⬜ | ⬜ |
 | **Carregamento** | por rota (`lazy`), exceto entrar/organizações/hoje | — | **nenhuma tela preguiçosa** (rota preguiçosa não abre no subsolo) |
 
 **Regras que atravessam as três:** filtro mora na URL · as ações possíveis vêm do
@@ -830,6 +1157,20 @@ Duas coisas o tornam confiável:
 
 O vocabulário do cliente é **dado**: `work_order_statuses.customer_label`.
 
+### O que o portal faz hoje (`apps/portal`, `apps/api/src/portal/portal.controller.ts`)
+
+| Existe | Ainda é futuro |
+| --- | --- |
+| Início: pendências do cliente (orçamento aguardando decisão, OS esperando o cliente), chamados abertos, próximas visitas | Indicadores/KPIs do cliente (nenhuma rota de portal para insights) |
+| Abrir chamado (escolhendo equipamento) e acompanhar, com comentários | **Aprovar/recusar orçamento** pelo portal (hoje é transição interna `quote.approve`) |
+| Equipamentos: nome, tag, série, situação, próxima visita — **sem valores** | Baixar documento / relatório |
+| Documentos **liberados** (só lista) · Orçamentos (só totais) | Ficha de vida do equipamento, QR público com página |
+
+**Cross-tenant e cross-customer:** papéis de portal (`requester`,
+`customer_manager`) têm `seat_type` portal; todo vínculo exige linha de escopo (clientes e locais visíveis)
+(`migrations/0039`); a RLS isola a organização e o escopo isola o cliente
+dentro dela; o PORTAL-011 isola o que é interno da prestadora.
+
 ---
 
 ## 22 · Field
@@ -846,6 +1187,47 @@ O vocabulário do cliente é **dado**: `work_order_statuses.customer_label`.
 - **Lojas estão fora desta fase.** Nada publicado, nada assinado. O que trava
   está em `docs/AURORA-FIELD-LOJAS.md`.
 
+### O que existe no Field, item a item
+
+| Capacidade | Estado | Onde |
+| --- | --- | --- |
+| PWA | ✅ `apps/field/public/manifest.webmanifest` (standalone, retrato, só ícone SVG) + `sw.js` que guarda **só a casca**; dados do dia ficam no IndexedDB | `apps/field/public` |
+| Capacitor | ✅ `apps/field/capacitor.config.ts` (`appId` não definitivo), projetos `android/` e `ios/` presentes; plugins: app, barcode-scanner, camera, filesystem, network, push-notifications | `apps/field` |
+| Base local | ✅ IndexedDB (navegador); SQLite preparado, **não ligado** | `apps/field/src/armazenamento` |
+| Sincronização | ✅ `GET /field/sync` com `since` = relógio do servidor | `sincronizacao.ts`, `packages/db/src/field-sync.ts` |
+| Fila + idempotência | ✅ `client_operation_id`, ordem monotônica, 409 com corpo preservado, nada sai sem resposta do servidor (§13) | `fila.ts` |
+| Retry | ✅ erro de rede mantém na fila; sem descarte por tempo ou contagem | `fila.ts` |
+| Conflitos | ✅ tela **Atenção** com o corpo original; descarte só explícito | `telas/atencao.tsx` |
+| Anexos / fotos | ✅ envio retomável por fatia de 256 kB, `sha256` no fim | `anexos.ts`, `arquivos/` |
+| Assinatura | ✅ captura na tela, enviada como operação idempotente | `telas/assinatura.tsx` |
+| Checklist | ✅ responder item, foto na falha | `telas/ordem.tsx` |
+| QR | 🟡 leitura e resolução local — §22-A | `telas/qr.tsx` |
+| Geolocalização / check-in | ⬜ **não pede localização**; não há entidade de visita | — |
+| Push | ⬜ plugin instalado, sem servidor nem FCM/APNs | — |
+| Publicação | ⬜ PWA não hospedado; lojas não publicadas | §27 |
+
+Prova: `e2e/specs/campo.spec.ts`, incluindo **SOBREVIVÊNCIA** — vinte passos
+sem rede e com o app fechado no meio, sem perda nem duplicata.
+
+---
+
+## 22-A · QR Code do ativo — SOMENTE o que existe
+
+| Capacidade | Estado | Evidência |
+| --- | --- | --- |
+| Token por ativo | ✅ `assets.qr_token` (obrigatório, único) | `migrations/0014` |
+| Resolução pública | ✅ `GET /q/:token` — sem sessão, limitada por origem, via `aurora.resolve_qr_token` (`SECURITY DEFINER`); devolve organização, rótulo e resumo do ativo e se pode abrir chamado; **mesma 404** para token inexistente e organização que não permite acesso anônimo | `apps/api/src/assets/qr.controller.ts`, `migrations/0017` |
+| Rotação | ✅ `POST /v1/assets/:id/rotate-qr` (`aurora.rotate_qr_token`) devolve o anterior e o novo | idem |
+| Dados de etiqueta | ✅ `POST /v1/labels` (até 500 ativos) devolve **JSON** (id, nome, tag, patrimônio, `qr_token`, categoria, local) — **deliberadamente sem PDF/imagem** | idem |
+| Leitura no Field | ✅ câmera (`@capacitor/barcode-scanner` nativo ou `BarcodeDetector` do navegador) + campo manual; resolve **contra a base local** por token, patrimônio, tag ou série | `apps/field/src/telas/qr.tsx`, `dispositivo/` |
+| Exibição na ficha web | 🟡 o token aparece **como texto** | `apps/web/src/features/ativos/ficha.tsx` |
+| **Gerar a imagem do QR** | ⬜ nenhuma biblioteca, nenhum SVG | — |
+| **Visualizar / baixar / imprimir etiqueta** | ⬜ nenhuma tela chama `labels`, `rotate-qr` ou `/q/` | — |
+| Página pública aberta pelo QR | ⬜ a rota de dados existe; **não há tela** que a consuma | — |
+
+Testes: `apps/api/src/__tests__/api-qr.test.ts`. "Gerar etiqueta para colar no
+equipamento" **não está pronto** — é a solicitação NS-015.
+
 ---
 
 ## 23 · Segurança
@@ -860,7 +1242,9 @@ O vocabulário do cliente é **dado**: `work_order_statuses.customer_label`.
 | Desabilitar RLS, ou criar tabela sem `FORCE` | A política vira decoração |
 | Dar `BYPASSRLS`/`SUPERUSER` ao papel da API | O boot recusa subir — e está certo |
 | Service role / chave secreta no frontend | Não existe nenhuma hoje. Mantenha assim |
-| Commitar segredo | `tools/ci/check-secrets.mjs` varre a cada commit |
+| Commitar segredo | `tools/ci/check-secrets.mjs` varre a cada commit — **mas pula `docs/`**: documentação é varrida à mão |
+| Escrever senha, token ou credencial (inclusive de demo) em documentação, teste ou exemplo | Uma senha de demonstração já vazou assim (commit `9398762`, num exemplo de teste). Ela continua no histórico |
+| Apontar a demo para a API, ou ligar `VITE_API_URL` no projeto Pages da demo | O build recusa os dois juntos; mantenha recusando |
 | Criar rota tipo `/admin-sem-login` ou cadastro público | Não existe, e não deve |
 | Chavear limitador em `x-forwarded-for` | O cliente escreve esse cabeçalho. Use o soquete (`req.ip`) |
 | Afirmar validade jurídica de assinatura | O sistema registra **evidência**, não afirma validade |
@@ -875,9 +1259,14 @@ insere; `aurora_app` só lê) · `client_operations` sem `DELETE` · varredura d
 segredos no CI · guard de destino de banco · **24 suítes com caso adversarial**
 de outra organização.
 
+**Uploads:** chave de armazenamento decidida pelo servidor com prefixo por
+organização; tipo e teto por finalidade; `sha256` conferido (§14). **Rota
+pública única** além do login: `/q/:token`, limitada por origem e sem oráculo.
+
 **Faltando:** MFA · permissões por contrato e por ativo · criptografia de campo ·
 rotina de backup/restauração documentada · auditoria em `checklist_answers` e
-`attachments`.
+`attachments` · troca da senha da conta de demonstração local que está no
+histórico do Git (§28).
 
 ---
 
@@ -885,18 +1274,26 @@ rotina de backup/restauração documentada · auditoria em `checklist_answers` e
 
 | Camada | Onde | Quanto |
 | --- | --- | --- |
-| Unidade + HTTP | 88 arquivos `*.test.ts` | **1707 passando**, 32 pulados |
-| PostgreSQL real | mesma suíte, com `AURORA_TEST_PG_URL` | ~30 provas que ficam **puladas** sem a variável — e dizem isso |
-| Navegador | `e2e/specs/*.spec.ts` (18 arquivos) | **147 passando**, 3 perfis |
-| Contratos/OpenAPI | `npm run openapi:check` | conferência estrutural |
-| Segredos | `tools/ci/check-secrets.mjs` | bloqueante |
+| Unidade + HTTP | 91 arquivos (89 rodam, 2 só com PostgreSQL real) | **1723 passando**, 32 pulados — medido em 01/10/2026, `npx vitest run` |
+| PostgreSQL real | mesma suíte, com `AURORA_TEST_PG_URL` | as 32 provas puladas acima — ficam **puladas** sem a variável, e dizem isso |
+| Navegador | `e2e/specs/*.spec.ts` (18 arquivos) | **148 testes listados** (`npx playwright test --list`), perfis desktop, portal e campo (Pixel 7); inclui `acessibilidade.spec.ts` (axe) e `viewports.spec.ts`. Exige banco — não rodado nesta auditoria |
+| Demonstração | `e2e/demo/demonstracao.spec.ts` | **8 testes** (4 × desktop 1440 + Pixel 7); **fora do CI**, roda à mão |
+| Contratos/OpenAPI | `npm run openapi:check` | conferência estrutural — ✅ em 01/10 |
+| Segredos | `tools/ci/check-secrets.mjs` | bloqueante — ✅ em 01/10 (590 arquivos; `docs/` excluído) |
+| Formatação | `npm run format:check` | Prettier; **`docs/` está no `.prettierignore`** |
 
 ```bash
 npm run verify        # spec:audit → typecheck → lint → marca → openapi → test
 npm test              # só a suíte
 npx vitest run <arquivo>
 npx playwright test   # precisa de AURORA_E2E_DATABASE_URL e AURORA_E2E_ADMIN_DATABASE_URL
+npm run demo:e2e      # demo; DEMO_URL=https://… para rodar contra o site publicado
+npm run format:check
+node tools/ci/check-secrets.mjs
 ```
+
+Estado dos portões em 01/10/2026 (HEAD `7e16baa`): `spec:audit`, `typecheck`,
+`lint`, `marca:check`, `openapi:check`, testes e segredos — **verdes**.
 
 **Banco de teste:** PGlite por padrão (ADR-022) — PostgreSQL 16.4 em WASM, em
 processo. **Uma conexão só**: mais severo para vazamento de contexto, mais fraco
@@ -919,7 +1316,9 @@ para concorrência. O que ele não prova tem suíte própria contra PostgreSQL r
 | `navegador` | PostgreSQL 16 de serviço | Playwright com a API sob papel **sem privilégio** |
 
 A `estatico` é separada de propósito: termina em segundos. **Todos os três
-precisam passar** antes de merge.
+precisam passar** antes de merge. **O CI não publica nada** — não há passo de
+deploy; a demo é publicada pela integração Cloudflare Pages ↔ GitHub (§27-A),
+e o `e2e/demo` não roda no CI.
 
 ---
 
@@ -946,15 +1345,17 @@ Detalhes em `docs/AURORA-AMBIENTES.md`.
 
 | Item | Estado |
 | --- | --- |
-| API | **NOT DEPLOYED** — roda local |
-| Web — **demonstração** | **PUBLICADA** em https://technecaremeds.voceconecta.com.br (Cloudflare Pages, `VITE_DEMO_MODE=true`, sem API) — ver §27-A |
-| Web conectada / Portal / Field | **NOT DEPLOYED** |
-| Workers | **NOT DEPLOYED** |
-| PostgreSQL | **local**, contêiner `aurora-postgres` (porta 15432) |
-| Supabase | 🔒 bloqueado |
-| Storage | disco local |
-| Lojas (Play/App Store) | **READY** (build), **NOT PUBLISHED** |
-| Domínio / DNS | não existe |
+| Web — **DEMONSTRAÇÃO** | ✅ **PUBLICADA** em https://technecaremeds.voceconecta.com.br (Cloudflare Pages, `VITE_DEMO_MODE=true`, **sem API**) — §27-A. **Não é ambiente conectado nem produção** |
+| API remota | ⬜ **NÃO PUBLICADA** — roda só local |
+| Workers remotos | ⬜ **NÃO PUBLICADOS** |
+| Web conectada / Portal / Field (PWA) | ⬜ **NÃO PUBLICADOS** |
+| PostgreSQL remoto | ⬜ **não existe** — não presuma. Hoje: contêiner local `aurora-postgres` (porta 15432); `homologacao`/`producao` sem destino em `aurora.destinos.json` |
+| Supabase | 🔒 projeto "Aurora CMMS" existe, **contaminado e bloqueado**; não é backend de nada (§11) |
+| Storage | disco local (`AURORA_ARQUIVOS_DIR`) |
+| Lojas (Play/App Store) | projetos nativos existem; **nada assinado, nada publicado** (`docs/AURORA-FIELD-LOJAS.md`) |
+| Domínio | `technecaremeds.voceconecta.com.br` → projeto Pages da demo (zona `voceconecta.com.br` na Cloudflare). Não há domínio para API |
+| HostPanel | **não gerencia** o Téchne Care (§27-B) |
+| VPS / servidor próprio | ⬜ nenhum deploy existe — não presuma |
 
 **Não há Dockerfile, wrangler.toml, fly.toml nem compose versionados.** O Pages
 da demonstração é configurado no painel da Cloudflare (ligado ao GitHub), não
@@ -1063,6 +1464,27 @@ Local: `npm run demo:build` (usa `apps/web/.env.demo`) e
 remover `VITE_DEMO_MODE` deste e definir `VITE_API_URL`). Não misture: o
 build recusa os dois juntos de propósito.
 
+**O que a demo NÃO cobre:** portal e field (só o `apps/web` tem modo demo),
+qualquer escrita, login real e telas que dependam de operação não capturada.
+Na tela, "Explorar plataforma" entra direto; a faixa **DEMONSTRAÇÃO** fica em
+toda tela interna.
+
+---
+
+## 27-B · HostPanel e infraestrutura — contexto, não requisito
+
+- **HostPanel** (`voceconectadigital/hostpanel`, diretório local `hospedagem`)
+  é outro produto da mesma conta, com projeto Supabase próprio ("Sites Schema
+  Gerais", bloqueado em `aurora.destinos.json`). **Não gerencia o Téchne Care.**
+- Auditoria de infraestrutura feita fora deste repositório (relatada pelo
+  responsável em 01/10/2026): o HostPanel atual **não suporta aplicação Node
+  persistente** como a API (NestJS) e os workers (pg-boss) deste projeto. Isso é
+  **contexto** para a escolha de hospedagem — não é tarefa de implementação.
+- O que a API e os workers precisam para existir remotamente: um processo
+  Node persistente, PostgreSQL 16+ alcançável, armazenamento de objetos
+  persistente (§14) e o destino registrado em `aurora.destinos.json`. Opções
+  comparadas com custo em `docs/AURORA-AMBIENTES.md`.
+
 ---
 
 ## 28 · Homologação
@@ -1088,8 +1510,12 @@ Existe hoje, no banco local, uma conta **`admin.demo@becare.local`** com papel
 
 **Ela é temporária, tem senha fraca aceita deliberadamente
 (`--aceitar-senha-fraca`) e NÃO serve para produção.** A senha foi combinada por
-escrito e **não está no Git**. Antes de qualquer implantação real: remova a conta
-ou redefina a senha com `npm run admin:criar`.
+escrito e **não está nos arquivos atuais** — mas **está no histórico do Git**
+(commit `9398762`, num exemplo de teste já corrigido; ver
+`docs/RELATORIO-REDESIGN-PREMIUM.md` §10-A). Trate-a como conhecida: **troque-a**
+com `npm run admin:criar` antes de qualquer uso fora da máquina local, e nunca
+a escreva em documento. Esta conta **não tem relação** com a demonstração
+pública, que não usa conta nenhuma.
 
 ---
 
@@ -1170,13 +1596,24 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **MFA inexistente** | `mfa_enabled` sempre `false` | aberto | provedor | §7 |
 | **Recuperação de senha por e-mail** | Esquecer a senha exige `admin:criar` | aberto | transporte de e-mail | documentado na tela de login |
 | **E2E do login por senha** | A suíte de navegador roda com provedor `local`; o login por senha tem 17 provas de HTTP e foi verificado à mão no navegador, mas **não tem prova automatizada de ponta a ponta** | aberto | um 4º par api+web no `playwright.config` | próxima rodada |
-| **Supabase remoto** | Nenhuma operação remota possível | 🔒 | *project ref* ou acesso | §11 |
-| **Sem deploy** | Nada publicado | 🔒 | uma máquina | §27 |
-| **Indicadores de tempo sem formato** | MTTR e afins mostram "formato ainda não apresentado nesta tela" | aberto | trabalho de UI | formatador de duração |
+| **Supabase remoto** | Projeto "Aurora CMMS" contaminado; nenhuma operação remota possível | 🔒 | recuperar/recriar + registrar destino | §11 |
+| **Produto conectado sem deploy** | Só a demo está no ar; API, workers, banco, portal e field não | 🔒 | uma máquina com Node persistente | §27, §27-B |
+| **Automações e notificações não ligadas** | `runAutomations` só roda em teste; `EventSink` é log; regra `schedule` sem motor; nenhum transporte | aberto | decisão de ligar + canal | §18 |
+| **Busca global leva a rota inexistente** | Resultado de cliente, local, item de estoque e documento navega para `/clientes/:id`, `/locais/:id`, `/estoque/:id`, `/documentos/:id` — nenhuma existe | aberto | — | `apps/web/src/shell/global-search.tsx` |
+| **Escrita sem rota** | Cliente, edição de ativo e de OS, plano/tarefa, modelo de checklist, papel personalizado, depósito e item de estoque só se criam por seed | aberto | priorização | §19 |
+| **Checklist de plano não é anexado** | `materializeCycle` cria a OS sem o checklist de `plan_tasks.checklist_template_key` | aberto | — | §16 |
+| **73 rotas sem contrato Zod** | OpenAPI sem esquema de corpo nessas rotas | aberto | — | §19 |
+| **Escopo de membro sem tela** | `PATCH …/members/:id/scope` existe; a tela manda ajustar e não oferece onde | aberto | — | §8 |
+| **E2E da demo fora do CI** | Regressão na demo só aparece quando alguém roda `npm run demo:e2e` | aberto | — | §27-A |
+| **Senha da conta de demo local no histórico do Git** | Commit `9398762` | aberto | quem tem a conta | trocar com `admin:criar` (§28) |
 | **`fn_calendar_window_no_overlap` usa advisory lock** | `EXCLUDE` exigiria `btree_gist` | deliberado | — | comentado na migration |
 | **Retenção de `client_operations`** | Tabela só cresce; sem `DELETE` por desenho | ❓ | decisão de operação | apagar reabre a duplicata que ela fecha |
 | **API diverge do contrato em 4 respostas** (achado pela captura da demo) | `serviceRequests.detail` lista transição para `duplicate` (contrato diz `merged`); `members.list` devolve `seat_type: portal` (contrato: `staff|customer`); `insights.mttr`/`firstResponse`/`byWaitReason` devolvem `data` em outra forma; `numeric` volta como número no PGlite e texto no `pg` | aberto | — | alinhar contrato ou API; o cliente só não reclama porque não valida resposta em produção |
 | **130 organizações-lixo** já apareceram no banco de desenvolvimento, deixadas por suítes | atrapalha listagens administrativas | mitigado | — | `admin:criar` filtra slugs com cara de teste |
+
+> **Só pendência TÉCNICA do sistema existente mora aqui.** Pedido novo do
+> cliente (funcionalidade que ele quer e o sistema não tem) mora em
+> `docs/NOVAS-SOLICITACOES.md` — §38.
 
 ---
 
@@ -1198,6 +1635,13 @@ Não conclua que existe porque os documentos do cliente descrevem.
    Marque **A VALIDAR** e siga para trabalho independente.
 9. **Diga o que não fez.** Este projeto tem o hábito de registrar a lacuna por
    extenso — mantenha-o.
+10. **Pedido do cliente → `docs/NOVAS-SOLICITACOES.md` primeiro.** Audite o
+    código, atualize o status do pedido (`EM ANÁLISE` → `APROVADA`/`PLANEJADA`
+    → `EM IMPLEMENTAÇÃO`), implemente e teste, registre a evidência (commit,
+    migration, rota, testes), marque `IMPLEMENTADA` e **só então** promova a
+    capacidade para este arquivo. Nunca apague um pedido do histórico.
+11. **Não trate item `NOVA`/`PARCIAL` como pronto**, nem descreva ao cliente
+    como existente o que está lá.
 
 ---
 
@@ -1232,7 +1676,22 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Destino de banco** | `aurora.destinos.json` · `packages/config/src/destino.ts` · `tools/db/destino.mjs` |
 | **Configuração / env** | `packages/config/src/env.ts` · `.env.example` |
 | **Design system** | `packages/ui/src/styles/tokens.css` · §20-A deste documento |
-| **Requisitos do cliente** | `docs/AUDITORIA-GAP-BECARE-TECHNECARE-V2-2026-09.md` |
+| **Clientes** | `packages/db/src/directory.ts` · `apps/api/src/directory/customers.controller.ts` · `packages/contracts/src/operations/directory.ts` · `migrations/0008`, `0027` (SLA padrão) |
+| **QR Code** | §22-A · `apps/api/src/assets/qr.controller.ts` · `migrations/0017` · `apps/field/src/telas/qr.tsx` · `apps/field/src/dispositivo/*` |
+| **Checklists (modelos)** | §16 · `packages/domain/src/checklists.ts` · `packages/db/src/execution.ts` · `migrations/0024` · `apps/field/src/telas/ordem.tsx` |
+| **Preventivas (geração)** | `packages/db/src/maintenance-plans.ts` (`materializeCycle`, `sweepPlans`) · `apps/api/src/plans/plans.controller.ts` · `apps/web/src/features/planos/*` |
+| **Agenda (tela)** | `apps/api/src/schedule/schedule.controller.ts` · `apps/web/src/features/agenda/*` |
+| **Automações** | §18 · `packages/domain/src/automations.ts` · `packages/db/src/automations.ts` · `migrations/0037` · `apps/workers/src/main.ts` (o `EventSink`) |
+| **Notificações** | `packages/db/src/notifications.ts` · `migrations/0036` |
+| **Indicadores (tela)** | §15-A · `apps/api/src/insights/insights.controller.ts` · `apps/web/src/features/indicadores/painel.tsx` |
+| **Estoque (imagem)** | `migrations/0046` · `apps/api/src/inventory/inventory.controller.ts` · `apps/web/public/catalogo/LEIA-ME.md` |
+| **Field (app)** | §13, §22 · `apps/field/src/*` · `apps/field/capacitor.config.ts` · `docs/AURORA-FIELD-LOJAS.md` · `docs/adr/ADR-029-aurora-field-pwa-e-lojas.md` |
+| **Demo pública** | §27-A · `apps/web/src/demo/*` · `apps/web/src/dados/*` · `apps/web/vite.config.ts` · `tools/demo/*` · `e2e/demo/*` |
+| **Branding** | §20-B · `marca.config.json` · `tools/marca/aplicar.mjs` · `packages/ui/src/components/logo.tsx` · `apps/web/public/marca/*` |
+| **Deploy / infra** | §27, §27-B · `docs/AURORA-AMBIENTES.md` · `aurora.destinos.json` · `.github/workflows/ci.yml` |
+| **Busca global** | `packages/domain/src/search.ts` · `apps/api/src/search/search.controller.ts` · `apps/web/src/shell/global-search.tsx` |
+| **Requisitos do cliente (base)** | `docs/AUDITORIA-GAP-BECARE-TECHNECARE-V2-2026-09.md` |
+| **Pedidos novos do cliente** | `docs/NOVAS-SOLICITACOES.md` (§38) |
 
 ---
 
@@ -1247,7 +1706,12 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | Eventos | `packages/events/src/catalog.ts` | — |
 | Decisões de arquitetura | ADRs na SPEC §45 + `docs/adr/` | — |
 | **Estado de implementação** | **o código e os testes** | qualquer documento, inclusive este |
-| Requisitos do cliente | os dois PDFs + a auditoria de gap | — |
+| Offline / field | `apps/field/src` + `packages/db/src/client-operations.ts` + `e2e/specs/campo.spec.ts` | — |
+| Demonstração pública | `apps/web/src/demo` + `apps/web/vite.config.ts` + `e2e/demo` | o site no ar (pode estar num commit anterior) |
+| Marca | `marca.config.json` + `tokens.css` | strings soltas em tela |
+| Destinos de banco | `aurora.destinos.json` | qualquer `DATABASE_URL` |
+| Requisitos do cliente (escopo base) | os dois PDFs + a auditoria de gap | — |
+| **Novas solicitações** | **`docs/NOVAS-SOLICITACOES.md`** | — e **nunca** como prova de que algo existe |
 | Regras de negócio | `docs/AURORA-CMMS-SPEC-v0.2.md` | — |
 | Histórico real | `git log` | relatórios de sessão |
 
@@ -1262,7 +1726,8 @@ Não conclua que existe porque os documentos do cliente descrevem.
 
 arquitetura · autenticação · banco (migration nova) · multitenancy/RLS ·
 offline · convenção de API · infraestrutura · deploy · estado de uma feature
-importante (⬜→🟡→✅) · uma pendência conhecida (§32) · o mapa de código (§34).
+importante (⬜→🟡→✅) · uma pendência conhecida (§32) · o mapa de código (§34) ·
+uma solicitação passou a `IMPLEMENTADA` (§38).
 
 **Não atualize** para mudança cosmética, refatoração interna sem efeito externo,
 ou correção de bug que não muda contrato nem comportamento documentado.
@@ -1297,3 +1762,33 @@ npx playwright test               # exige AURORA_E2E_DATABASE_URL e ..._ADMIN_..
 # contratos
 npm run openapi | openapi:check
 ```
+
+---
+
+## 38 · NOVAS SOLICITAÇÕES DO CLIENTE
+
+As solicitações recebidas após a consolidação do escopo são controladas em
+**`docs/NOVAS-SOLICITACOES.md`**.
+
+Esse documento é o **source of truth do backlog incremental** e **NÃO deve ser
+usado como prova de funcionalidade implementada**. Quando uma solicitação for
+implementada, atualize primeiro a evidência e o status dela em
+NOVAS-SOLICITACOES e então promova a capacidade correspondente para o estado
+real descrito neste AI-HANDOFF.
+
+**Resumo em 01/10/2026** (manual — confira o documento, que manda):
+
+| Status | Quantidade |
+| --- | --- |
+| **TOTAL** | **17** (NS-001 a NS-017) |
+| NOVA | 5 |
+| PARCIAL | 9 |
+| JÁ EXISTE | 0 |
+| EM IMPLEMENTAÇÃO | 0 |
+| IMPLEMENTADA | 0 |
+| BLOQUEADA (cliente ou especialista) | 1 |
+| FUTURA FASE | 2 |
+
+"PARCIAL" significa que **parte da base existe no código** (descrita nas seções
+acima) e o pedido do cliente ainda não está atendido. Nenhum pedido novo foi
+implementado nesta rodada.
