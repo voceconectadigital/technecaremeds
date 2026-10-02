@@ -409,6 +409,19 @@ export function OrdemPage() {
                         </button>
                       ))}
                     </div>
+                  ) : item.kind === 'measurement' ? (
+                    /*
+                     * PONTO DE MEDIÇÃO (metrologia N0) NÃO SE RESPONDE COMO TEXTO.
+                     *
+                     * Ele exige sessão de medição aberta, com instrumento e
+                     * certificado, e leituras numéricas — e o servidor recusaria
+                     * um texto solto, deixando um conflito na fila. Nesta versão
+                     * o registro é feito pela sessão de medição; aqui o ponto
+                     * aparece identificado, sem campo que geraria recusa.
+                     */
+                    <p className="mt-2 rounded-control bg-surface-sunken px-3 py-2 text-xs text-muted">
+                      Ponto de medição: registre as leituras pela sessão de medição desta OS.
+                    </p>
                   ) : (
                     <input
                       aria-label={item.label}
