@@ -186,6 +186,14 @@ describe('decisão sobre orçamento', () => {
     expect(q!.s).toBe('sent');
   });
 
+  it('o gestor de OUTRO cliente não decide o orçamento deste (404)', async () => {
+    const r = await http
+      .post(`/v1/portal/quotes/${orcamentoA2}/decision`)
+      .set(auth(outroCliente.email))
+      .send({ decision: 'approve' });
+    expect(r.status).toBe(404);
+  });
+
   it('orçamento de OUTRA organização: 404', async () => {
     const r = await http
       .post(`/v1/portal/quotes/${orcamentoB}/decision`)
