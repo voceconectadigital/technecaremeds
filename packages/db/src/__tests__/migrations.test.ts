@@ -94,6 +94,8 @@ describe('migrations (EPIC-001)', () => {
       'documents',
       'domain_events',
       'fact_work_order',
+      'import_batches',
+      'import_rows',
       'instrument_certificates',
       'instruments',
       'inventory_items',

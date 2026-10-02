@@ -42,6 +42,7 @@ import { ContextResolver } from './common/context.resolver';
 import type { AuthProvider } from './auth/auth-provider.port';
 import { escolherProvedorDeAutenticacao } from './auth/escolher-provedor';
 import { AuthController } from './auth/auth.controller';
+import { ImportsController } from './imports/imports.controller';
 import { OpportunitiesController } from './opportunities/opportunities.controller';
 import {
   InstrumentsController,
@@ -111,6 +112,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       WorkOrderMeasurementController,
       MeasurementSessionsController,
       OpportunitiesController,
+      ImportsController,
       FieldUploadController,
     ],
     providers: [
