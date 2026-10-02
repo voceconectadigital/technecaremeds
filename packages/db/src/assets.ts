@@ -11,6 +11,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  normalizeExternalRef,
   type AssetImportRow,
   type ImportIssue,
   type AssetStatus,
@@ -187,17 +188,22 @@ export interface AssetInput {
   purchaseValue?: number | null;
   replacementValue?: number | null;
   specs?: Record<string, unknown>;
+  /** Origem e identificador no sistema legado (0048). Opcionais, e sempre juntos. */
+  externalSource?: string | null;
+  externalId?: string | null;
 }
 
 export async function createAsset(session: TenantSession, input: AssetInput): Promise<string> {
   const id = newId();
+  const externo = normalizeExternalRef(input.externalSource, input.externalId);
   await session.query(
     `INSERT INTO aurora.assets
        (id, organization_id, name, customer_id, asset_category_id, location_id, asset_model_id,
         criticality_id, parent_asset_id, tag, serial_number, asset_number, qr_token, status,
-        acquired_at, purchase_value, replacement_value, specs, created_by)
+        acquired_at, purchase_value, replacement_value, specs, created_by,
+        external_source, external_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::aurora.asset_status,
-             $15, $16, $17, $18, $19)`,
+             $15, $16, $17, $18, $19, $20, $21)`,
     [
       id,
       session.context.organizationId,
@@ -218,6 +224,8 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
       input.replacementValue ?? null,
       JSON.stringify(input.specs ?? {}),
       session.context.actorId,
+      externo?.source ?? null,
+      externo?.id ?? null,
     ]
   );
   return id;
@@ -305,6 +313,8 @@ export async function assetsUnderLocation(
 
 export interface ImportResult {
   imported: number;
+  /** Linha da planilha → ativo criado. É o que o pipeline rastreável (0058) persiste. */
+  created: Array<{ line: number; id: string }>;
   failed: number;
   issues: ImportIssue[];
   createdManufacturers: number;
@@ -332,10 +342,11 @@ export interface ImportResult {
 export async function importAssets(
   session: TenantSession,
   rows: readonly AssetImportRow[],
-  defaults: { customerId: string }
+  defaults: { customerId: string; externalSource?: string | null }
 ): Promise<ImportResult> {
   const inicio = Date.now();
   const issues: ImportIssue[] = [];
+  const created: Array<{ line: number; id: string }> = [];
   let imported = 0;
   let createdManufacturers = 0;
   let createdModels = 0;
@@ -424,7 +435,7 @@ export async function importAssets(
         }
       }
 
-      await createAsset(session, {
+      const novoId = await createAsset(session, {
         name: row.name!.trim(),
         customerId: defaults.customerId,
         assetCategoryId: catId,
@@ -438,10 +449,14 @@ export async function importAssets(
           row.purchase_value === undefined || row.purchase_value === null || row.purchase_value === ''
             ? null
             : Number(row.purchase_value),
+        // O identificador do sistema de origem, com a origem do lote (0048).
+        externalSource: row.external_id ? (defaults.externalSource ?? null) : null,
+        externalId: row.external_id ?? null,
       });
 
       await session.query(`RELEASE SAVEPOINT ${savepoint}`);
       imported++;
+      created.push({ line: row.line, id: novoId });
     } catch (err) {
       await session.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
       await session.query(`RELEASE SAVEPOINT ${savepoint}`);
@@ -455,6 +470,7 @@ export async function importAssets(
 
   return {
     imported,
+    created,
     failed: rows.length - imported,
     issues,
     createdManufacturers,

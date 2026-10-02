@@ -164,6 +164,8 @@ export interface AssetImportRow {
   readonly location_code?: string | null;
   readonly acquired_at?: string | null;
   readonly purchase_value?: string | number | null;
+  /** Identificador no sistema de origem; a origem vem do lote, não da linha. */
+  readonly external_id?: string | null;
 }
 
 export interface ImportIssue {

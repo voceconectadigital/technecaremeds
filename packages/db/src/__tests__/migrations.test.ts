@@ -69,6 +69,7 @@ describe('migrations (EPIC-001)', () => {
       'catalog_definitions',
       'catalog_items',
       'catalog_references',
+      'checklist_answer_revisions',
       'checklist_answers',
       'checklist_items',
       'checklist_responses',

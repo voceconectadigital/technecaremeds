@@ -3534,6 +3534,264 @@
         ]
       }
     },
+    "/v1/checklist-responses/{responseId}/revisions": {
+      "get": {
+        "operationId": "execution.answerRevisions",
+        "summary": "Todas as versões das respostas de um checklist, a vigente e as corrigidas",
+        "description": "Responder de novo um item não apaga o valor anterior: ele é arquivado inteiro, com quem e quando o substituiu. Esta rota devolve as duas coisas, ordenadas por item e revisão.",
+        "tags": [
+          "ExecutionResources"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/execution.controller.ts",
+        "parameters": [
+          {
+            "name": "responseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "answer_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "item_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "value_text": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value_number": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value_boolean": {
+                            "anyOf": [
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value_options": {
+                            "anyOf": [
+                              {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value_date": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "verdict": {
+                            "type": "string"
+                          },
+                          "photo_count": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "correction_reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "measured_by": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "measured_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "superseded_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "superseded_by": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "current": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "answer_id",
+                          "item_id",
+                          "revision",
+                          "value_text",
+                          "value_number",
+                          "value_boolean",
+                          "value_options",
+                          "value_date",
+                          "verdict",
+                          "photo_count",
+                          "correction_reason",
+                          "measured_by",
+                          "measured_at",
+                          "superseded_at",
+                          "superseded_by",
+                          "current"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/contracts/{id}/activate": {
       "post": {
         "operationId": "ContractsController.activate",
@@ -16762,6 +17020,175 @@
         "security": []
       }
     },
+    "/v1/organizations/current/configuration": {
+      "patch": {
+        "operationId": "organizations.updateConfiguration",
+        "summary": "Muda o modo de uso e os recursos habilitados da organização do contexto",
+        "description": "`enabled_features: null` volta ao padrão (tudo habilitado). Lista vazia é recusada. Recurso habilitado não é permissão: o RBAC continua decidindo quem pode o quê.",
+        "tags": [
+          "Organizations"
+        ],
+        "x-aurora-permissions": [
+          "organization.update"
+        ],
+        "x-aurora-source": "apps/api/src/platform/organizations.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "usage_mode": {
+                    "type": "string",
+                    "enum": [
+                      "service_provider",
+                      "hospital",
+                      "manufacturer",
+                      "consultancy",
+                      "laboratory"
+                    ]
+                  },
+                  "enabled_features": {
+                    "anyOf": [
+                      {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "assets",
+                            "service_requests",
+                            "work_orders",
+                            "maintenance_plans",
+                            "metrology",
+                            "documents",
+                            "inventory",
+                            "contracts",
+                            "quotes",
+                            "portal",
+                            "insights",
+                            "opportunities",
+                            "imports",
+                            "automations"
+                          ]
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "usage_mode": {
+                      "type": "string",
+                      "enum": [
+                        "service_provider",
+                        "hospital",
+                        "manufacturer",
+                        "consultancy",
+                        "laboratory"
+                      ]
+                    },
+                    "enabled_features": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "assets",
+                          "service_requests",
+                          "work_orders",
+                          "maintenance_plans",
+                          "metrology",
+                          "documents",
+                          "inventory",
+                          "contracts",
+                          "quotes",
+                          "portal",
+                          "insights",
+                          "opportunities",
+                          "imports",
+                          "automations"
+                        ]
+                      }
+                    },
+                    "features_customized": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "usage_mode",
+                    "enabled_features",
+                    "features_customized"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/organizations/current/members/{id}/scope": {
       "patch": {
         "operationId": "members.setScope",
@@ -17459,6 +17886,41 @@
                         "suspended",
                         "archived"
                       ]
+                    },
+                    "usage_mode": {
+                      "type": "string",
+                      "enum": [
+                        "service_provider",
+                        "hospital",
+                        "manufacturer",
+                        "consultancy",
+                        "laboratory"
+                      ]
+                    },
+                    "enabled_features": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "assets",
+                          "service_requests",
+                          "work_orders",
+                          "maintenance_plans",
+                          "metrology",
+                          "documents",
+                          "inventory",
+                          "contracts",
+                          "quotes",
+                          "portal",
+                          "insights",
+                          "opportunities",
+                          "imports",
+                          "automations"
+                        ]
+                      }
+                    },
+                    "features_customized": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -17471,7 +17933,10 @@
                     "plan",
                     "seat_limit",
                     "seats_used",
-                    "status"
+                    "status",
+                    "usage_mode",
+                    "enabled_features",
+                    "features_customized"
                   ]
                 }
               }

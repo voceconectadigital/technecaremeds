@@ -15,6 +15,7 @@ import {
   withTenant,
   attachChecklist,
   answerChecklistItem,
+  answerRevisions,
   checklistStatus,
   loadChecklistItems,
   startTimer,
@@ -300,7 +301,7 @@ export class ExecutionResourcesController {
     @Req() req: AuroraRequest,
     @Param('responseId') responseId: string,
     @Body() body: Record<string, unknown>
-  ): Promise<{ verdict: string; status: unknown }> {
+  ): Promise<{ verdict: string; answer_id: string; revision: number; status: unknown }> {
     const rId = uuidParam(responseId, 'responseId');
     const itemId = uuidParam(body.item_id, 'item_id');
 
@@ -310,17 +311,51 @@ export class ExecutionResourcesController {
       'POST /checklist-responses/:responseId/answers',
       body,
       async (s) => {
-        const { verdict } = await answerChecklistItem(s, rId, itemId, {
-          text: typeof body.text === 'string' ? body.text : null,
-          number: typeof body.number === 'number' ? body.number : null,
-          boolean: typeof body.boolean === 'boolean' ? body.boolean : null,
-          options: Array.isArray(body.options) ? (body.options as string[]) : null,
-          date: typeof body.date === 'string' ? body.date : null,
-          photoCount: typeof body.photo_count === 'number' ? body.photo_count : 0,
-        });
-        return { verdict, status: await checklistStatus(s, rId) };
+        const r = await answerChecklistItem(
+          s,
+          rId,
+          itemId,
+          {
+            text: typeof body.text === 'string' ? body.text : null,
+            number: typeof body.number === 'number' ? body.number : null,
+            boolean: typeof body.boolean === 'boolean' ? body.boolean : null,
+            options: Array.isArray(body.options) ? (body.options as string[]) : null,
+            date: typeof body.date === 'string' ? body.date : null,
+            photoCount: typeof body.photo_count === 'number' ? body.photo_count : 0,
+          },
+          {
+            // Opcional: o fluxo de campo existente não manda, e continua valendo.
+            correctionReason: typeof body.correction_reason === 'string' ? body.correction_reason : null,
+          }
+        );
+        return {
+          verdict: r.verdict,
+          answer_id: r.answerId,
+          revision: r.revision,
+          status: await checklistStatus(s, rId),
+        };
       }
     );
+  }
+
+  /**
+   * Todas as versões das respostas de um checklist — a vigente e as corrigidas.
+   *
+   * Existe porque a 0047 parou de sobrescrever: "o que foi medido primeiro, e
+   * quem corrigiu depois?" passou a ter resposta, e uma resposta que só o
+   * banco conhece não serve para auditoria.
+   */
+  @Get('checklist-responses/:responseId/revisions')
+  @RequirePermissions('work_order.read')
+  async revisions(
+    @Req() req: AuroraRequest,
+    @Param('responseId') responseId: string
+  ): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const items = await withTenant(this.db, ctx, (s) =>
+      answerRevisions(s, uuidParam(responseId, 'responseId'))
+    );
+    return { items };
   }
 
   @Post('time-entries/:entryId/stop')

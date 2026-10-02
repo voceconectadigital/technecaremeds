@@ -32,3 +32,4 @@ export * from './client-operations';
 export * from './attachment-uploads';
 export * from './field-sync';
 export * from './credenciais';
+export * from './organization-config';

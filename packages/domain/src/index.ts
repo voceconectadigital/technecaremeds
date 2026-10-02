@@ -22,3 +22,5 @@ export * from './automations';
 export * from './search';
 export * from './metrologia';
 export * from './senha';
+export * from './external-ref';
+export * from './organization-features';

@@ -60,6 +60,65 @@ export const meOrganizations = defineOperation({
   errors: ['unauthenticated'],
 });
 
+/**
+ * Modo de uso e recursos habilitados (gap V2 P0.4 · PLAT §2 e §4).
+ *
+ * Uma plataforma, configuração diferente. O padrão é TUDO habilitado: quais
+ * módulos cada modo usa por padrão é decisão do cliente ainda não tomada, e
+ * ninguém deve perder uma tela por uma escolha que não fez.
+ */
+export const ORGANIZATION_USAGE_MODES = [
+  'service_provider',
+  'hospital',
+  'manufacturer',
+  'consultancy',
+  'laboratory',
+] as const;
+export const ORGANIZATION_FEATURES = [
+  'assets',
+  'service_requests',
+  'work_orders',
+  'maintenance_plans',
+  'metrology',
+  'documents',
+  'inventory',
+  'contracts',
+  'quotes',
+  'portal',
+  'insights',
+  'opportunities',
+  'imports',
+  'automations',
+] as const;
+
+const OrganizationConfigurationShape = {
+  usage_mode: z.enum(ORGANIZATION_USAGE_MODES),
+  /** A lista EFETIVA: quando nunca configurada, vem com todos os módulos. */
+  enabled_features: z.array(z.enum(ORGANIZATION_FEATURES)),
+  /** `false` enquanto ninguém escolheu — tudo habilitado por padrão. */
+  features_customized: z.boolean(),
+};
+export const OrganizationConfiguration = z.object(OrganizationConfigurationShape);
+
+export const organizationsUpdateConfiguration = defineOperation({
+  operationId: 'organizations.updateConfiguration',
+  method: 'PATCH',
+  path: '/organizations/current/configuration',
+  summary: 'Muda o modo de uso e os recursos habilitados da organização do contexto',
+  description:
+    '`enabled_features: null` volta ao padrão (tudo habilitado). Lista vazia é recusada. ' +
+    'Recurso habilitado não é permissão: o RBAC continua decidindo quem pode o quê.',
+  permissions: ['organization.update'],
+  body: z
+    .object({
+      usage_mode: z.enum(ORGANIZATION_USAGE_MODES).optional(),
+      enabled_features: z.array(z.enum(ORGANIZATION_FEATURES)).min(1).nullable().optional(),
+    })
+    .strict(),
+  response: OrganizationConfiguration,
+  status: 200,
+});
+
 export const Organization = z.object({
   id: Uuid,
   slug: NonEmpty,
@@ -76,6 +135,7 @@ export const Organization = z.object({
   seat_limit: z.number().int(),
   seats_used: z.number().int(),
   status: z.enum(['active', 'suspended', 'archived']),
+  ...OrganizationConfigurationShape,
 });
 export type Organization = z.infer<typeof Organization>;
 

@@ -280,8 +280,9 @@ export async function answerChecklistItem(
   session: TenantSession,
   responseId: string,
   itemId: string,
-  value: AnswerValue
-): Promise<{ verdict: string }> {
+  value: AnswerValue,
+  opts: { correctionReason?: string | null } = {}
+): Promise<{ verdict: string; answerId: string; revision: number }> {
   const [item] = await session.query<Record<string, unknown>>(
     `SELECT id, kind::text AS kind, label, required, options, failing_options,
             min_value, max_value, expected_boolean, min_selections, max_selections, min_photos,
@@ -316,11 +317,21 @@ export async function answerChecklistItem(
   }
 
   const verdict = computeVerdict(definicao, value);
-  await session.query(
+
+  /*
+   * RESPONDER DE NOVO É CORRIGIR, E CORRIGIR NÃO APAGA (0047).
+   *
+   * O `DO UPDATE` continua aqui por compatibilidade com o fluxo de campo — a
+   * fila reenvia, o técnico corrige —, mas deixou de ser sobrescrita: o
+   * gatilho `checklist_answers_revision` arquiva a versão anterior inteira no
+   * histórico, na mesma instrução, e conta a revisão. O `WHERE` evita o
+   * trabalho quando o valor reenviado é o mesmo: eco não é correção.
+   */
+  const [linha] = await session.query<{ id: string; revision: number }>(
     `INSERT INTO aurora.checklist_answers
        (id, organization_id, response_id, item_id, value_text, value_number, value_boolean,
-        value_options, value_date, verdict, photo_count, measured_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::aurora.checklist_verdict, $11, $12)
+        value_options, value_date, verdict, photo_count, measured_by, correction_reason)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::aurora.checklist_verdict, $11, $12, NULL)
      ON CONFLICT (response_id, item_id) DO UPDATE
         SET value_text = EXCLUDED.value_text,
             value_number = EXCLUDED.value_number,
@@ -330,7 +341,15 @@ export async function answerChecklistItem(
             verdict = EXCLUDED.verdict,
             photo_count = EXCLUDED.photo_count,
             measured_by = EXCLUDED.measured_by,
-            measured_at = now()`,
+            measured_at = now(),
+            correction_reason = $13
+      WHERE (aurora.checklist_answers.value_text, aurora.checklist_answers.value_number,
+             aurora.checklist_answers.value_boolean, aurora.checklist_answers.value_options,
+             aurora.checklist_answers.value_date, aurora.checklist_answers.photo_count)
+            IS DISTINCT FROM
+            (EXCLUDED.value_text, EXCLUDED.value_number, EXCLUDED.value_boolean,
+             EXCLUDED.value_options, EXCLUDED.value_date, EXCLUDED.photo_count)
+     RETURNING id, revision`,
     [
       newId(),
       session.context.organizationId,
@@ -344,9 +363,89 @@ export async function answerChecklistItem(
       verdict,
       value.photoCount ?? 0,
       session.context.actorId,
+      opts.correctionReason?.trim() || null,
     ]
   );
-  return { verdict };
+
+  // Valor idêntico ao vigente: nada foi gravado, e a resposta vigente é a que vale.
+  const vigente =
+    linha ??
+    (
+      await session.query<{ id: string; revision: number }>(
+        `SELECT id, revision FROM aurora.checklist_answers WHERE response_id = $1 AND item_id = $2`,
+        [responseId, itemId]
+      )
+    )[0]!;
+  return { verdict, answerId: vigente.id, revision: Number(vigente.revision) };
+}
+
+export interface AnswerRevisionRow {
+  answer_id: string;
+  item_id: string;
+  revision: number;
+  value_text: string | null;
+  value_number: number | null;
+  value_boolean: boolean | null;
+  value_options: string[] | null;
+  value_date: string | null;
+  verdict: string;
+  photo_count: number;
+  correction_reason: string | null;
+  measured_by: string | null;
+  measured_at: string;
+  superseded_at: string | null;
+  superseded_by: string | null;
+  current: boolean;
+}
+
+/**
+ * Todas as versões das respostas de um checklist, da mais antiga à vigente.
+ *
+ * É a pergunta "o que foi medido, e o que foi corrigido depois?" — e ela só
+ * tem resposta porque a 0047 parou de sobrescrever.
+ */
+export async function answerRevisions(
+  session: TenantSession,
+  responseId: string
+): Promise<AnswerRevisionRow[]> {
+  const [resp] = await session.query(`SELECT 1 FROM aurora.checklist_responses WHERE id = $1`, [responseId]);
+  if (!resp) throw new NotFoundError('Resposta de checklist', responseId);
+
+  const rows = await session.query<Record<string, unknown>>(
+    `SELECT answer_id, item_id, revision, value_text, value_number, value_boolean, value_options,
+            value_date::text AS value_date, verdict::text AS verdict, photo_count, correction_reason,
+            measured_by, measured_at, superseded_at, superseded_by, false AS current
+       FROM aurora.checklist_answer_revisions WHERE response_id = $1
+     UNION ALL
+     SELECT id, item_id, revision, value_text, value_number, value_boolean, value_options,
+            value_date::text, verdict::text, photo_count, correction_reason,
+            measured_by, measured_at, NULL, NULL, true
+       FROM aurora.checklist_answers WHERE response_id = $1
+     ORDER BY 2, 3`,
+    [responseId]
+  );
+  return rows.map((r) => ({
+    answer_id: r.answer_id as string,
+    item_id: r.item_id as string,
+    revision: Number(r.revision),
+    value_text: (r.value_text as string | null) ?? null,
+    // `numeric` volta texto no `pg` e número no PGlite: normalizado aqui.
+    value_number: r.value_number === null ? null : Number(r.value_number),
+    value_boolean: (r.value_boolean as boolean | null) ?? null,
+    value_options: (r.value_options as string[] | null) ?? null,
+    value_date: (r.value_date as string | null) ?? null,
+    verdict: r.verdict as string,
+    photo_count: Number(r.photo_count ?? 0),
+    correction_reason: (r.correction_reason as string | null) ?? null,
+    measured_by: (r.measured_by as string | null) ?? null,
+    measured_at: String(r.measured_at instanceof Date ? r.measured_at.toISOString() : r.measured_at),
+    superseded_at:
+      r.superseded_at === null
+        ? null
+        : String(r.superseded_at instanceof Date ? r.superseded_at.toISOString() : r.superseded_at),
+    superseded_by: (r.superseded_by as string | null) ?? null,
+    current: Boolean(r.current),
+  }));
 }
 
 /** Estado do checklist de uma OS: completude e consequências. */

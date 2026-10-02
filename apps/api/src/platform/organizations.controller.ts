@@ -9,14 +9,22 @@
  * parâmetro. Uma rota por id convidaria a tratar o id como autorização — o
  * antipadrão que §37 existe para impedir.
  */
-import { Controller, Get, Inject, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Patch, Req } from '@nestjs/common';
 import { RequirePermissions } from '../common/permissions.guard';
-import { withTenant, type Database } from '@aurora/db';
+import {
+  withTenant,
+  loadOrganizationConfiguration,
+  updateOrganizationConfiguration,
+  type Database,
+  type OrganizationConfiguration,
+} from '@aurora/db';
 import { NotFoundError } from '@aurora/domain';
+import { organizationsUpdateConfiguration } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
 
-interface OrganizationView {
+interface OrganizationView extends OrganizationConfiguration {
   id: string;
   slug: string;
   name: string;
@@ -39,7 +47,7 @@ export class OrganizationsController {
   async current(@Req() req: AuroraRequest): Promise<OrganizationView> {
     const ctx = req.auroraContext!;
     return withTenant(this.db, ctx, async (s) => {
-      const rows = await s.query<Omit<OrganizationView, 'seats_used'>>(
+      const rows = await s.query<Omit<OrganizationView, 'seats_used' | keyof OrganizationConfiguration>>(
         `SELECT id, slug, name, locale, timezone, asset_label, plan, seat_limit, status::text
            FROM aurora.organizations
           WHERE deleted_at IS NULL`
@@ -51,7 +59,27 @@ export class OrganizationsController {
         `SELECT count(*)::int AS used FROM aurora.memberships
           WHERE seat_type = 'staff' AND status = 'active' AND deleted_at IS NULL`
       );
-      return { ...org, seats_used: seats?.used ?? 0 };
+      return { ...org, seats_used: seats?.used ?? 0, ...(await loadOrganizationConfiguration(s)) };
     });
+  }
+
+  /**
+   * Modo de uso e recursos habilitados (gap V2 P0.4).
+   *
+   * Recurso habilitado não é permissão: diz o que a organização USA, e quem
+   * pode o quê continua no RBAC. Por isso a rota pede `organization.update`, e
+   * não uma permissão por módulo.
+   */
+  @Patch('current/configuration')
+  @RequirePermissions('organization.update')
+  async configure(@Req() req: AuroraRequest, @Body() body: unknown): Promise<OrganizationConfiguration> {
+    const ctx = req.auroraContext!;
+    const entrada = parseWith(organizationsUpdateConfiguration.body, body);
+    return withTenant(this.db, ctx, (s) =>
+      updateOrganizationConfiguration(s, {
+        usageMode: entrada.usage_mode,
+        enabledFeatures: entrada.enabled_features,
+      })
+    );
   }
 }
