@@ -16,6 +16,12 @@ entrega.
 conversas de setembro/2026 repassadas pelo responsável do projeto. Datas exatas de cada pedido: **A VALIDAR** — registrado
 como "set/2026" quando não informado.
 
+> **Revisão de 02/10/2026 (rodada do escopo atual contratado).** Nenhuma
+> solicitação NS foi implementada nesta rodada, e nenhum status mudou. A rodada
+> fechou só requisitos ANTERIORES (auditoria de gap V2, PDFs do cliente); onde
+> isso mudou a base de uma NS, a linha **Revisão 02/10/2026** da solicitação diz
+> o quê — e o que continua faltando. Detalhes: `RELATORIO-ESCOPO-ATUAL.md`.
+
 ---
 
 ## Status permitidos
@@ -100,6 +106,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | NS-008 (perfil de indicadores) para a parte de indicadores |
 | **Fase sugerida** | Próxima |
 | **Arquivos / domínios** | `packages/db/src/directory.ts` · `apps/api/src/directory/customers.controller.ts` · `packages/contracts/src/operations/directory.ts` · `apps/web/src/shell/global-search.tsx` · `migrations/0008`, `0027`, `0031` |
+| **Revisão 02/10/2026** | Busca global: resultado de cliente deixou de levar a `/clientes/:id` (rota inexistente) e leva a `/contratos`; a ficha de cliente continua **não existindo**. `customers.external_source/external_id` (0048) existem para migração. Status **inalterado**. |
 | **Evidência de implementação** | — |
 | **Observações** | "Tipo de contrato" deve continuar morando no **contrato** (um cliente pode ter mais de um); a ficha mostra, não duplica |
 
@@ -120,6 +127,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | Definição de disponibilidade (o que conta como parado) e do método de depreciação, pelo cliente |
 | **Fase sugerida** | Próxima para histórico/indicadores; depreciação após definição |
 | **Arquivos / domínios** | `apps/web/src/features/ativos/ficha.tsx` · `apps/api/src/assets/assets.controller.ts` · `packages/domain/src/assets.ts` · `packages/db/src/metrics.ts` · `migrations/0013`, `0014`, `0026`, `0035` |
+| **Revisão 02/10/2026** | Base nova do escopo atual (gap V2 P1.3/P1.5): `GET /v1/assets/:id/timeline` — linha do tempo unificada (ciclo de vida, transferências, OS, sessões de medição, documentos, substituição), e `assets.replaced_by_asset_id` (0056). A **ficha web não usa** a linha do tempo ainda; depreciação, disponibilidade e indicadores por ativo continuam **não existindo**. Status **inalterado (PARCIAL)**. |
 | **Evidência de implementação** | — |
 | **Observações** | "Em tempo real" = calculado na leitura, não gravado; não é processamento contínuo |
 
@@ -140,6 +148,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | Itens de calibração/TSE com limites → NS-004 e fronteira metrológica (AI-HANDOFF §17) |
 | **Fase sugerida** | Próxima |
 | **Arquivos / domínios** | `packages/domain/src/checklists.ts` · `packages/db/src/execution.ts` · `packages/db/src/maintenance-plans.ts` · `apps/api/src/work-orders/execution.controller.ts` · `migrations/0024`, `0026`, `0029` |
+| **Revisão 02/10/2026** | Base nova do escopo atual: a OS da preventiva passa a nascer com o checklist da tarefa do plano anexado (`materializeCycle`, P1.4); modelos ganharam `procedure_kind` só para protocolos metrológicos (calibração, TSE, qualificação, aceite). Continuam **não existindo**: rota/tela de criar e publicar modelo, tipo preventiva/preditiva, vínculo com cliente/equipamento, `default_checklist_key`. Status **inalterado (PARCIAL)**. |
 | **Evidência de implementação** | — |
 | **Observações** | Não criar um segundo motor: estender o existente |
 
@@ -160,6 +169,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | NS-003. **Regras metrológicas (incerteza, critério de aceitação, correção, arredondamento, limites TSE) → `BLOQUEADA — ESPECIALISTA`** até procedimento escrito + casos de referência + metrologista (AI-HANDOFF §17) |
 | **Fase sugerida** | Após NS-003; a parte metrológica só após o especialista |
 | **Arquivos / domínios** | `packages/domain/src/maintenance-plans.ts` · `packages/domain/src/metrologia.ts` · `docs/AURORA-METROLOGIA-FRONTEIRA.md` · `packages/domain/src/documents.ts` · `migrations/0029`, `0034` |
+| **Revisão 02/10/2026** | Base nova do escopo atual (metrologia N0, 0050–0053): protocolo = checklist versionado com tipo de procedimento, responsável técnico, instrumentos exigidos por categoria e ponto `measurement` (unidade, nominal, tolerâncias e leituras **como dado**, sem veredito); instrumentos, certificados externos e sessão de medição. Preventiva por modelo/fabricante/criticidade (0055). Continuam **não existindo**: entidade/tela de procedimento, rota de criar plano/tarefa, educação continuada, cronograma por procedimento, regras metrológicas (BLOQUEADA — ESPECIALISTA). Status **inalterado (PARCIAL)**. |
 | **Evidência de implementação** | — |
 | **Observações** | Há um teste que **falha** se alguém adicionar função de cálculo a `metrologia.ts`. Não inventar fórmula |
 
@@ -180,6 +190,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | Escolha de renderizador de PDF; canal de envio (pendências técnicas do AI-HANDOFF §32) |
 | **Fase sugerida** | Próxima (editar, imprimir); PDF e envio em seguida |
 | **Arquivos / domínios** | `apps/web/src/features/ordens/ficha.tsx` · `apps/api/src/work-orders/work-orders.controller.ts` · `packages/domain/src/documents.ts` · `packages/db/src/notifications.ts` |
+| **Revisão 02/10/2026** | Base nova do escopo atual (P2.8): PDF de **documento técnico** (`GET /v1/documents/:id/pdf`, renderizador próprio, determinístico). O PDF/impressão/envio **da OS** continuam **não existindo**. Status **inalterado (PARCIAL)**. |
 | **Evidência de implementação** | — |
 | **Observações** | Edição deve respeitar a máquina de estados e a auditoria; OS fechada só com `work_order.edit_closed` |
 

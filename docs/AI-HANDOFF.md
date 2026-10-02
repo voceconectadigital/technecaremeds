@@ -17,12 +17,12 @@
 >    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
 >    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 01/10/2026 (auditoria de consolidação) · **HEAD auditado:** `7e16baa` (o commit
-desta atualização é o seguinte; confira com `git log -1`)
-**Migration mais recente:** `0046_item_imagem_e_categoria.sql` · **47 migrations** ·
-**94 tabelas** · **183 rotas HTTP** (182 no OpenAPI + `/health`; **109 com contrato Zod**) ·
-**110 permissões** · **11 papéis** · **107 tipos de evento** · **1723 testes de unidade/HTTP**
-(91 arquivos, 32 pulados sem PostgreSQL real) **+ 148 de navegador + 8 da demo**
+**Atualizado em:** 02/10/2026 (rodada "escopo atual contratado") · **HEAD de partida da rodada:**
+`45476ba` (o HEAD final está em `RELATORIO-ESCOPO-ATUAL.md`; confira com `git log -1`)
+**Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** ·
+**103 tabelas** · **215 rotas HTTP** (214 no OpenAPI + `/health`; **141 com contrato Zod**) ·
+**116 permissões** · **11 papéis** · **112 tipos de evento** · **1883 testes de unidade/HTTP**
+(104 arquivos, 32 pulados sem PostgreSQL real) **+ 148 de navegador + 8 da demo**
 
 ---
 
@@ -67,7 +67,7 @@ Nasceu de uma auditoria somente-leitura do sistema TechneCare/Arkmeds
 **Escopo funcional:** gestão de engenharia clínica · manutenção corretiva e
 preventiva · ativos · chamados · ordens de serviço · agenda · estoque ·
 contratos e orçamentos · documentos técnicos · indicadores · operação de campo
-offline. **Evolução prevista, sem código hoje:** instrumentação/metrologia (§16),
+offline · **metrologia N0 manual estruturada** (registro e proveniência, §16). **Evolução prevista, sem código hoje:** integração física com instrumentos (N1–N4),
 IA e integrações (§30).
 
 **Públicos previstos** (PLAT §2 dos documentos do cliente): prestadora de
@@ -116,29 +116,31 @@ emite documento, mede SLA e produz indicador.
 | RBAC | ✅ / 🟡 | 110 permissões, 11 papéis de fábrica, `deny` individual, escopos. **Falta:** criar/editar papel personalizado (schema aceita, sem rota) e tela de escopo |
 | RLS / isolamento | ✅ | `FORCE` em todas as tabelas tenant-scoped; 24 suítes adversariais |
 | Clientes (cadastro) | 🟡 | Tabela rica (`customers` + `customer_contacts`, 0008); **API só lista** (`GET /customers`); **sem tela** `/clientes` |
-| Ativos | ✅ / 🟡 | Criar, transferir, baixar, importar, QR, ficha de leitura. **Sem edição** (sem PATCH), **sem depreciação**, **sem disponibilidade** |
+| Ativos | ✅ / 🟡 | Criar, transferir, baixar, importar, QR, ficha de leitura, **linha do tempo unificada** (`GET /assets/:id/timeline`) e **substituição** (0056). **Sem edição** (sem PATCH), **sem depreciação**, **sem disponibilidade**; a ficha web ainda não mostra a linha do tempo |
 | QR Code do ativo | 🟡 | Token, resolução pública, leitura no Field, rotação, dados de etiqueta. **Sem imagem de QR e sem tela de etiqueta** — §22-A |
 | Chamados (`service_requests`) | ✅ | Entidade separada da OS (ADR-002) |
 | Ordens de serviço | ✅ / 🟡 | Estados × motivos configuráveis (ADR-003). **Sem edição de campos** (sem PATCH), **sem baixar/imprimir/enviar** |
 | SLA | ✅ | Tempo útil por fuso e feriado, pausa por motivo |
 | Agenda | ✅ | Projeção da OS (ADR-011); confere antes de salvar |
-| Checklists | ✅ / 🟡 | Motor versionado e imutável, 7 tipos de item, execução no Field. **Sem rota/tela para criar modelo**; vínculo com plano/tipo de OS é chave de texto **não acionada** |
-| Preventivas | 🟡 | Varredura gera ciclo e OS (gatilho **calendário** apenas); **sem rota para criar plano**; **ciclo nunca fecha** — §32 |
+| Checklists | ✅ / 🟡 | Motor versionado e imutável, 8 tipos de item (`measurement` desde a 0052), execução no Field. **Resposta não se sobrescreve** (histórico `checklist_answer_revisions`, 0047). **Sem rota/tela para criar modelo**; o checklist da tarefa do plano **passou a ser anexado** à OS da preventiva; `default_checklist_key` continua não lido |
+| Preventivas | 🟡 | Varredura gera ciclo e OS (gatilho **calendário** apenas), com o checklist da tarefa anexado; alvo por categoria/local/ativo **+ filtros de modelo, fabricante e criticidade** (0055), sempre recortado pelo cliente do plano; **sem rota para criar plano**; **ciclo nunca fecha** — §32 |
 | Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046). Sem rota para criar depósito/item |
 | Contratos | ✅ | Cobertura por expressão, medição congelada. Tela só de leitura |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
-| Documentos | 🟡 | Motor completo; 6 tipos provisionados com **payload vazio**; **sem PDF**; tela só lista — §15 |
+| Documentos | ✅ / 🟡 | Motor completo; 7 tipos (aceite desde esta rodada) com `payloadFields` técnicos **vazios** (norma); **rascunho a partir da sessão de medição** por cópia; **PDF** (interno e portal); tela web só lista — §15 |
 | Indicadores | ✅ / 🟡 | 14 métricas com definição; tela mostra 9, filtro só por período — §15-A |
-| Portal | ✅ | Com varredura anti-vazamento (§21). Leitura + abrir chamado |
+| Portal | ✅ | Com varredura anti-vazamento (§21). Leitura + abrir chamado + **decidir orçamento** + **avaliar atendimento** + **baixar PDF** do documento liberado |
 | Field / offline | ✅ | Idempotência provada sob concorrência |
 | Notificações | 🟡 | Tabelas e roteamento existem; **nenhum transporte**, e nada as dispara em produção — §18 |
 | Automações | 🟡 | Motor de regras com salvaguardas, API e tela de simular/ativar. **Não está ligado**: `runAutomations` só é chamado em teste; gatilho `schedule` sem motor — §18 |
-| Busca global | ✅ / 🟡 | `tsvector` nativo (ADR-027). **4 destinos de resultado apontam para rota inexistente** — §32 |
+| Busca global | ✅ | `tsvector` nativo (ADR-027). Todo resultado leva a uma tela que existe (cliente → contratos, pessoa → configurações: não há ficha própria) |
 | Geolocalização / check-in | ⬜ | `locations.geo_lat/geo_lng` existem e ninguém lê nem escreve |
-| Engenharia clínica | 🟡 | Criticidade e ciclo de vida sim; aceite e qualificação não |
-| **Metrologia** | 🔒 | Só a "fronteira". **Cinco decisões bloqueadas** — ver §17 |
-| Instrumentos / certificados / medições | ⬜ | **Não existem como tabela.** Ver §16 |
-| Migração Arkmeds | 🟡 | Só importação de ativos; sem pipeline rastreável |
+| Engenharia clínica | 🟡 | Criticidade, ciclo de vida, substituição, tipo de documento de aceite, protocolos de calibração/TSE/qualificação/aceite como dado; **campos técnicos por norma e critérios: BLOQUEADO — ESPECIALISTA** |
+| **Metrologia N0** | ✅ (registro) / 🔒 (ciência) | Instrumento, certificado externo, protocolo, sessão, leituras, dado bruto, envelope neutro — §16. **Cinco decisões continuam bloqueadas** — §17 |
+| Oportunidade (núcleo) | ✅ API / ⬜ tela | Necessidade, origem, prazo, prioridade, fornecedor, autorização comercial com trilha (0057) |
+| Modo de uso / recursos por organização | ✅ API / ⬜ tela | `usage_mode` + `enabled_features` (0049); padrão: tudo habilitado |
+| Identificador externo | ✅ | `external_source/external_id` em 6 entidades, único por organização e origem (0048) |
+| Migração Arkmeds | 🟡 | **Pipeline rastreável genérico existe** (0058: lote, linha crua, arquivo original, amostra/oficial, relatório). **Parser do formato Arkmeds: BLOQUEADO — CLIENTE** |
 | Integrações (Omie, WhatsApp, BI…) | ⬜ | Nada. Ver §30 |
 | IA | ⬜ | Nada (nenhuma biblioteca, nenhuma chamada). Ver §30 |
 | Deploy | 🟡 | **Só a demonstração** (web, sem API) está publicada. API, workers, banco, portal e field: não. §27 |
@@ -488,7 +490,9 @@ uma com propósito estreito: `find_memberships_for_email` e
 `find_user_id_by_email` (resolução de identidade) · `effective_permissions` ·
 `fn_audit` · `resolve_qr_token` (rota pública `/q/:token`) ·
 `credencial_por_email`, `abrir_sessao`, `sessao_por_token`, `encerrar_sessao`,
-`registrar_tentativa_de_senha`, `definir_senha` (autenticação, 0045). Função
+`registrar_tentativa_de_senha`, `definir_senha` (autenticação, 0045) ·
+`fn_checklist_answer_revision` (histórico de medição, 0047/0053) ·
+`fn_opportunity_history` (trilha da oportunidade, 0057). Função
 `SECURITY DEFINER` nova exige `SET search_path` fixo e teste adversarial.
 
 ### Papéis de banco
@@ -515,7 +519,7 @@ uma com propósito estreito: `find_memberships_for_email` e
 | **Catálogos** | `catalog_definitions` · `catalog_items` · `custom_field_definitions` |
 | **Ativos** | `assets` · `asset_categories` · `asset_models` · `manufacturers` · `criticality_levels` · `asset_identifiers` (projeção de unicidade) · `asset_transfers` · `meters` · `meter_readings` |
 | **Chamados/OS** | `service_requests` · `work_orders` · `work_order_statuses` · `work_order_status_transitions` · `wait_reasons` · `work_order_comments` · `*_status_history` |
-| **Execução** | `checklist_templates/_sections/_items` · `checklist_responses/_answers` · `time_entries` · `attachments` · `signatures` · `completion_requirements` |
+| **Execução** | `checklist_templates/_sections/_items` · `checklist_responses/_answers` (+ `_answer_revisions`) · `time_entries` · `attachments` (dono: OS, resposta, sessão, certificado ou lote) · `signatures` · `completion_requirements` |
 | **SLA** | `sla_policies` · `sla_targets` · `sla_clocks` · `sla_pauses` |
 | **Preventivas** | `maintenance_plans` · `plan_tasks` · `plan_cycles` · `plan_cycle_items` |
 | **Estoque** | `warehouses` · `inventory_items` · `stock_movements` (razão imutável) · `stock_balances` (projeção) · `stock_reservations` · `stock_lots` · `price_lists` |
@@ -525,6 +529,9 @@ uma com propósito estreito: `find_memberships_for_email` e
 | **Notificações** | `notifications` · `notification_preferences` · `notification_deliveries` |
 | **Automações** | `automation_rules` · `automation_actions` · `rule_runs` |
 | **Offline** | `client_operations` (idempotência de campo) |
+| **Metrologia N0** | `instruments` (1:1 com `assets`) · `instrument_certificates` (externo, imutável) · `checklist_template_instruments` · `measurement_sessions` (1:1 com `checklist_responses`) · `checklist_answer_revisions` (append-only) |
+| **Comercial (núcleo)** | `opportunities` · `opportunity_status_history` |
+| **Migração** | `import_batches` · `import_rows` |
 
 ---
 
@@ -684,7 +691,11 @@ mesma fatia entregue duas vezes escreve por cima de si mesma.
 - Registro em `aurora.attachments`; **bytes fora do banco**.
 - `sha256` conferido no fim do envio.
 - Chave de armazenamento **decidida pelo servidor**, com prefixo por organização.
-- Dono: OS **ou** resposta de checklist (`att_has_owner`).
+- Dono: OS, resposta de checklist, **sessão de medição** (`raw_data`), **certificado
+  externo** (`certificate`) ou **lote de importação** (`import_source`) — `att_has_owner`
+  e `att_purpose_matches_owner` (0053/0058). Essas três finalidades exigem SHA-256.
+- Identidade do anexo (dono, finalidade, chave, tipo, tamanho, resumo) é **imutável**
+  depois de registrado; criação e remoção entram em `audit_logs` (0053).
 - Tipos e tetos por finalidade em `packages/domain/src/attachments.ts`.
 
 **Para adicionar um tipo novo de anexo:** acrescente o valor em
@@ -711,32 +722,36 @@ estrutura comum.
 - **O sistema não afirma validade jurídica de assinatura.** `icp_brasil` está
   modelado e é **recusado** enquanto a cadeia não for verificada.
 
-🟡 **Parcial, e diga isso a quem perguntar:** os 6 tipos (`work_order_report`,
+🟡 **Parcial, e diga isso a quem perguntar:** os **7** tipos (`work_order_report`,
 `calibration_certificate`, `electrical_safety_test`, `standard_certificate`,
-`obsolescence_report`, `thermal_qualification`) estão provisionados com
-**`payloadFields: []`** — os campos de cada um dependem de norma técnica não
-confirmada. **Não há geração de PDF**: `pdf_key` existe, o renderizador não.
+`obsolescence_report`, `thermal_qualification` e, desde 02/10, `acceptance_report`)
+continuam com **`payloadFields: []`** — os campos TÉCNICOS de cada um dependem de
+norma não confirmada (há teste que garante isso). O que mudou: o documento pode
+**nascer da sessão de medição**, com um instantâneo COPIADO na chave reservada
+`payload.measurement_session` (protocolo, instrumento, certificado, pontos,
+leituras, dado bruto, aviso de que não há veredito automático) — sem média,
+incerteza, correção ou veredito por ponto.
 
-### Capacidade por item (`migrations/0034` · `documents.controller.ts`)
+### Capacidade por item (`migrations/0034`, `0054` · `documents.controller.ts`)
 
 | Capacidade | Estado | Onde |
 | --- | --- | --- |
-| Tipos de documento | ✅ 6 de fábrica, payload vazio | `packages/domain/src/documents.ts` |
+| Tipos de documento | ✅ 7 de fábrica (aceite: RT + assinatura como padrão **A VALIDAR**), payload técnico vazio | `packages/domain/src/documents.ts` |
 | Numeração por série | ✅ `number_series`, número queimado no cancelamento | 0034 |
-| Versionamento | ✅ `version` + `supersedes_id`, rota `:id/versions` | API |
-| Revisão / aprovação | ✅ `draft → under_review → issued → released` (`document.issue`) | API |
-| Assinatura | ✅ `document_signatures` (desenho, código por e-mail, portal) com evidência e `signed_content_hash`; `icp_brasil` **recusado** | API |
-| Hash de conteúdo | ✅ SHA-256 canônico, obrigatório ao emitir | domínio |
-| Liberação ao cliente / portal | ✅ `released_to_customer_at`; portal lista só liberados | API + portal |
-| Vencimento | ✅ job `documents.expiry` + aba "Vencendo" | worker + web |
-| **PDF** | ⬜ ausente | — |
-| **Download** | ⬜ ausente (nem web, nem portal) | — |
-| **Impressão** | ⬜ ausente (nenhum `@media print`, nenhum `window.print`) | — |
-| **Envio por e-mail** | ⬜ ausente (sem transporte, §18) | — |
-| Tela web | 🟡 `/documentos` só **lista** (abas, filtro, busca); sem ficha, sem criar/emitir/assinar | `features/documentos/lista.tsx` |
+| Versionamento | ✅ `version` + `supersedes_id` (a versão nova leva o vínculo com a sessão) | API |
+| Revisão / aprovação | ✅ `draft → under_review → issued → released` | API |
+| Assinatura | ✅ evidência + `signed_content_hash`; `icp_brasil` **recusado** | API |
+| Hash de conteúdo | ✅ SHA-256 canônico | domínio |
+| **Rascunho a partir da sessão** | ✅ `POST /documents/from-session/:sessionId`: só sessão encerrada; tipo precisa combinar com o procedimento do protocolo (`DOCUMENT_TYPES_BY_PROCEDURE`) | `packages/db/src/session-documents.ts`, `packages/domain/src/documento-da-sessao.ts` |
+| **Emissão confere a sessão** | ✅ certificado do instrumento vencido antes da medição impede; cadeia vazia impede certificado de calibração; instantâneo adulterado impede | `documentIssueCheck` |
+| Liberação ao cliente / portal | ✅ | API + portal |
+| Vencimento | ✅ job `documents.expiry` | worker + web |
+| **PDF** | ✅ `GET /documents/:id/pdf` e `GET /portal/documents/:id/pdf` — PDF 1.4 escrito à mão (`apps/api/src/documents/pdf.ts`), determinístico, texto sempre escapado, faixa "NÃO EMITIDO" em rascunho, hash no corpo e em `x-aurora-content-hash`, `no-store`. Gerado na hora; `pdf_key` continua sem uso | API |
+| **Download** | ✅ portal (botão por documento); web: só pela API (a tela `/documentos` não tem botão) | |
+| Impressão / envio por e-mail | ⬜ (sem transporte, §18) | — |
+| Tela web | 🟡 `/documentos` só **lista** | `features/documentos/lista.tsx` |
 
-O mesmo vale para a **OS**: ver ✅ (`/ordens/$id`), **editar** ⬜ (sem PATCH; a
-ficha diz que é deliberado), **baixar / imprimir / enviar** ⬜.
+O mesmo vale para a **OS**: ver ✅, **editar / baixar / imprimir / enviar** ⬜ (NS-005).
 
 ---
 
@@ -791,17 +806,21 @@ confirmada pelo cliente (§33, regra 8).
 (auditoria de gap contra os dois PDFs do cliente, 40 seções + matriz de 68
 requisitos).
 
-| Conceito | Estado |
-| --- | --- |
-| Criticidade, ciclo de vida do ativo | ✅ |
-| Risco | 🟡 `risk_class`/`operational_risk` como texto livre; sem regra |
-| **Instrumento** | ⬜ **não existe tabela.** `grep -ri instrument` só acha texto |
-| **Certificado de instrumento/padrão** | ⬜ não existe |
-| **Procedimento/protocolo metrológico** | 🟡 `checklist_templates` é o esqueleto certo (versionado e imutável), mas falta ponto de medição (nominal, tolerância, leituras), tipo de teste e responsável técnico |
-| **Sessão de medição** | 🟡 `checklist_responses` já é ~60%: OS, protocolo congelado, técnico, data. Falta instrumento, certificado, origem, dado bruto |
-| **Dado bruto** | 🟡 envio retomável existe; falta `purpose='raw_data'` e o dono "sessão" |
-| Calibração / TSE / qualificação | 🟡 tipos provisionados, payload vazio |
-| Aceite de equipamento | ⬜ |
+| Conceito | Estado | Onde |
+| --- | --- | --- |
+| Criticidade, ciclo de vida, substituição | ✅ | `assets`, 0056 |
+| Risco | 🟡 `risk_class`/`operational_risk` texto livre; **fórmula: BLOQUEADO — ESPECIALISTA** | |
+| **Instrumento** | ✅ extensão 1:1 de `assets` (interface, protocolo, firmware, adaptador, última validação, limitações, status, posse). Sem driver | 0051 · `packages/db/src/metrology.ts` · `/instruments` |
+| **Certificado externo** | ✅ número, laboratório, emissão, validade, escopo (TEXTO declarado), rastreabilidade (`traceable_to_id` + declaração), arquivo (anexo `certificate`). Imutável; revoga-se com motivo | 0051 · `/instruments/:id/certificates`, `/instrument-certificates/:id/*` |
+| **Protocolo** | ✅ checklist versionado + `procedure_kind` (calibração, TSE, qualificação, aceite) + responsável técnico + instrumentos exigidos por categoria + item `measurement` (unidade, nominal, tolerâncias −/+, modo absoluto/percentual, leituras exigidas) **como dado** | 0052 |
+| **Sessão de medição** | ✅ 1:1 com a resposta de checklist: OS, ativo, instrumento, certificado (precisa COBRIR o dia: `certificadoCobreAMedicao`), técnico, origem, data civil, início/fim, ambiente declarado, notas. Proveniência imutável | 0053 · `/work-orders/:id/measurement-sessions`, `/measurement-sessions/*` |
+| **Leituras** | ✅ `value_readings`, unidade copiada do protocolo (unidade diferente é **recusada** — sem conversão), origem, instrumento do ponto, relógio do aparelho; correção preserva o original (0047) | `registerMeasurement` |
+| **Dado bruto** | ✅ anexo `raw_data` da sessão (CSV, JSON, XML, texto, PDF, binário), SHA-256 obrigatório, envio retomável. **Não é lido nem interpretado** | 0053 |
+| **Envelope neutro + porta `FonteDeMedicao`** | ✅ só a fonte **manual** (N0); arquivo/gateway/SDK/instrumento estão no vocabulário e `fonteDe` recusa por falta de adaptador | `packages/domain/src/medicao.ts` |
+| Veredito do ponto de medição | 🔒 **sempre `na`** — critério de aceitação e arredondamento bloqueados (§17); há teste que prova "na" dentro, no limite e fora | `checklists.ts` |
+| Calibração / TSE / qualificação / aceite (documento) | ✅ fluxo; campos técnicos por norma 🔒 | §15 |
+| Field | 🟡 o ponto `measurement` aparece identificado no app, **sem entrada de leituras** (registro pela API/sessão) | `apps/field/src/telas/ordem.tsx` |
+| Telas web de instrumento/sessão | ⬜ | — |
 
 ### Checklists, procedimentos e preventivas — o que existe de verdade
 
@@ -819,11 +838,11 @@ requisitos).
   `procedure.*` existem sem rota); "tipo" de modelo (calibração, TSE,
   preventiva); vínculo com cliente, ativo, categoria ou modelo de
   equipamento. Os dois vínculos que existem são **chave de texto não acionada**:
-  `plan_tasks.checklist_template_key` (o `materializeCycle` cria a OS **sem**
-  anexar o checklist) e `work_order_type_settings.default_checklist_key` (nunca
-  lido).
-- **Procedimento** como entidade: ⬜ não existe (só as permissões e o evento
-  `procedure.published` no catálogo).
+  `plan_tasks.checklist_template_key` (desde 02/10 o `materializeCycle` **anexa** a
+  versão publicada mais recente; sem versão publicada, a OS diz isso na descrição)
+  e `work_order_type_settings.default_checklist_key` (nunca lido).
+- **Procedimento** como entidade própria: ⬜ não existe — o protocolo metrológico é
+  o checklist com `procedure_kind` (0052); não há rota/tela para criá-lo.
 - **Preventivas** (`migrations/0029`): plano → tarefas (alvo ativo, categoria
   ou subárvore de local; frequência dia…ano; tolerância; equipe) → ciclos →
   itens com OS. A varredura `plans.sweep` gera ciclo e OS **só para gatilho
@@ -925,10 +944,10 @@ Erros no formato **RFC 9457** com `code`, `message`, `request_id`.
 contrato aponta para rota inexistente, contrato e guard discordam de permissão,
 escrita guardada por permissão de leitura, ou rota literal sombreada.
 
-### Estado real (01/10/2026)
+### Estado real (02/10/2026)
 
-- **182 rotas nos controllers** (29 controllers) + `/health` fora do OpenAPI.
-  **109 têm contrato Zod (60%)**; as 73 restantes aparecem no OpenAPI sem
+- **214 rotas nos controllers** (37 controllers) + `/health` fora do OpenAPI.
+  **141 têm contrato Zod (66%)** — toda rota nova desta rodada tem; as 73 restantes aparecem no OpenAPI sem
   esquema de corpo. Contrato novo é obrigatório para rota nova; as antigas
   ganham contrato quando forem tocadas.
 - **Auth:** `context.middleware` resolve identidade + organização em tudo,
@@ -943,21 +962,21 @@ escrita guardada por permissão de leitura, ou rota literal sombreada.
   sem JSON e 200 com HTML como "a API não respondeu neste endereço".
 - **Escrita que NÃO existe** (não procure): criar/editar cliente; editar ativo;
   editar campos de OS; criar/editar plano e tarefa; criar/publicar modelo de
-  checklist; criar papel; criar depósito, item de estoque e lista de preço;
-  criar regra de automação pela tela (a rota `POST /automations` existe, a
-  tela não tem formulário).
+  checklist (inclusive protocolo metrológico); criar papel; criar depósito, item
+  de estoque e lista de preço; criar regra de automação pela tela.
+- **Resposta binária:** contrato com `produces` (ex.: `application/pdf`); o
+  cliente devolve `Blob` e a demo recusa com a mensagem de "versão conectada".
 
-### Os 4 desvios API × contrato (achados pela captura da demo, 30/09) — **ainda abertos**
+### Os desvios API × contrato — **corrigidos em 02/10/2026**
 
-1. `serviceRequests.detail` lista transição para `duplicate`; o contrato diz `merged`.
-2. `members.list` devolve `seat_type: 'portal'`; o contrato aceita `staff | customer`.
-3. `insights.mttr`, `insights.firstResponse` e `insights.byWaitReason` devolvem
-   `data` em forma diferente da declarada.
-4. Colunas `numeric` voltam como **número** no PGlite e como **texto** no `pg`.
-
-O cliente não reclama porque não valida resposta em produção. A demo
-reproduz a API como ela responde. Corrigir = alinhar contrato **ou** API, e
-rodar `npm run demo:capturar` de novo.
+Os quatro registrados em 30/09 eram erro do CONTRATO (a API estava certa):
+situações de solicitação (`duplicate`, não `merged`), `seat_type` (`staff|portal`
+— um convite com `customer` dava 500), origens de solicitação (`qr`/`system` não
+existiam no banco) e a forma de `insights.mttr`/`firstResponse` (`{value, samples}`)
+e `byWaitReason` (lista por motivo). O teste da demo não tem mais lista de
+exceções, e `apps/api/src/__tests__/paridade-contratos.test.ts` compara cada lista
+repetida com o domínio. O item "numeric volta número no PGlite e texto no `pg`" é
+diferença do motor de TESTE, não da API de produção.
 
 ### Caminho para criar um endpoint
 
@@ -1161,10 +1180,17 @@ O vocabulário do cliente é **dado**: `work_order_statuses.customer_label`.
 
 | Existe | Ainda é futuro |
 | --- | --- |
-| Início: pendências do cliente (orçamento aguardando decisão, OS esperando o cliente), chamados abertos, próximas visitas | Indicadores/KPIs do cliente (nenhuma rota de portal para insights) |
-| Abrir chamado (escolhendo equipamento) e acompanhar, com comentários | **Aprovar/recusar orçamento** pelo portal (hoje é transição interna `quote.approve`) |
-| Equipamentos: nome, tag, série, situação, próxima visita — **sem valores** | Baixar documento / relatório |
-| Documentos **liberados** (só lista) · Orçamentos (só totais) | Ficha de vida do equipamento, QR público com página |
+| Início: pendências do cliente, chamados abertos, próximas visitas | Indicadores/KPIs do cliente |
+| Abrir chamado e acompanhar, com comentários | Ficha de vida do equipamento, QR público com página |
+| **Avaliar o atendimento** (1–5 + comentário, uma vez, depois de atendido) — `POST /portal/requests/:id/rating` | Conta de NPS (definição não dada) |
+| Equipamentos: nome, tag, série, situação, próxima visita — **sem valores** | Co-branding |
+| Documentos **liberados** + **baixar PDF** (`GET /portal/documents/:id/pdf`) | Notificação entregue (sem transporte) |
+| Orçamentos (totais) + **aprovar/recusar** com motivo do catálogo (`POST /portal/quotes/:id/decision`, `GET /portal/quotes/rejection-reasons`), mesma transição interna, evidência de aceite | |
+
+As escritas do portal são três: abrir solicitação, decidir orçamento, avaliar
+atendimento. `api-portal-decisoes.test.ts` cobre outro cliente da mesma
+prestadora, outra organização, rascunho, já decidido, sem `quote.approve`, e usa
+lista de PERMISSÃO de chaves nas respostas novas.
 
 **Cross-tenant e cross-customer:** papéis de portal (`requester`,
 `customer_manager`) têm `seat_type` portal; todo vínculo exige linha de escopo (clientes e locais visíveis)
@@ -1200,7 +1226,7 @@ dentro dela; o PORTAL-011 isola o que é interno da prestadora.
 | Conflitos | ✅ tela **Atenção** com o corpo original; descarte só explícito | `telas/atencao.tsx` |
 | Anexos / fotos | ✅ envio retomável por fatia de 256 kB, `sha256` no fim | `anexos.ts`, `arquivos/` |
 | Assinatura | ✅ captura na tela, enviada como operação idempotente | `telas/assinatura.tsx` |
-| Checklist | ✅ responder item, foto na falha | `telas/ordem.tsx` |
+| Checklist | ✅ responder item, foto na falha; ponto `measurement` aparece identificado, **sem entrada** (registro pela sessão de medição) | `telas/ordem.tsx` |
 | QR | 🟡 leitura e resolução local — §22-A | `telas/qr.tsx` |
 | Geolocalização / check-in | ⬜ **não pede localização**; não há entidade de visita | — |
 | Push | ⬜ plugin instalado, sem servidor nem FCM/APNs | — |
@@ -1274,8 +1300,8 @@ histórico do Git (§28).
 
 | Camada | Onde | Quanto |
 | --- | --- | --- |
-| Unidade + HTTP | 91 arquivos (89 rodam, 2 só com PostgreSQL real) | **1723 passando**, 32 pulados — medido em 01/10/2026, `npx vitest run` |
-| PostgreSQL real | mesma suíte, com `AURORA_TEST_PG_URL` | as 32 provas puladas acima — ficam **puladas** sem a variável, e dizem isso |
+| Unidade + HTTP | 104 arquivos (102 rodam, 2 só com PostgreSQL real) | **1883 passando**, 32 pulados — medido em 02/10/2026, `npx vitest run --maxWorkers=3` |
+| PostgreSQL real | mesma suíte, com `AURORA_TEST_PG_URL` | as 32 provas puladas acima. **Não rodadas em 02/10**: o Docker Desktop desta máquina não sobe (socket `sailor-ingest.sock` inacessível) — ver §32 |
 | Navegador | `e2e/specs/*.spec.ts` (18 arquivos) | **148 testes listados** (`npx playwright test --list`), perfis desktop, portal e campo (Pixel 7); inclui `acessibilidade.spec.ts` (axe) e `viewports.spec.ts`. Exige banco — não rodado nesta auditoria |
 | Demonstração | `e2e/demo/demonstracao.spec.ts` | **8 testes** (4 × desktop 1440 + Pixel 7); **fora do CI**, roda à mão |
 | Contratos/OpenAPI | `npm run openapi:check` | conferência estrutural — ✅ em 01/10 |
@@ -1292,8 +1318,12 @@ npm run format:check
 node tools/ci/check-secrets.mjs
 ```
 
-Estado dos portões em 01/10/2026 (HEAD `7e16baa`): `spec:audit`, `typecheck`,
-`lint`, `marca:check`, `openapi:check`, testes e segredos — **verdes**.
+Estado dos portões em 02/10/2026: `spec:audit`, `typecheck`, `lint`, `marca:check`,
+`openapi:check`, testes, segredos, builds (web conectado, demo, portal, field) e
+`demo:e2e` (local e publicado) — **verdes**. `format:check` verde em checkout LF
+(o checkout Windows com `autocrlf` acusa CRLF em arquivos que não mudaram; o CI
+roda em Linux). **Rode a suíte com `--maxWorkers=3` numa máquina de 16 GB**: com
+o padrão (um worker por núcleo) os PGlite estouram a memória e workers morrem.
 
 **Banco de teste:** PGlite por padrão (ADR-022) — PostgreSQL 16.4 em WASM, em
 processo. **Uma conexão só**: mais severo para vazamento de contexto, mais fraco
@@ -1529,15 +1559,19 @@ histórico → mapear ativos, locais, fabricantes, preventivas, OS, documentos,
 contratos, usuários → deduplicar e padronizar → importar amostra → validar →
 lote oficial com relatório de inconsistências → operar em paralelo no piloto.
 
-**O que existe:** `importAssets` (só ativos), com erro **por linha** via
-`SAVEPOINT`, e curadoria de fabricante/modelo (`normalized_name`, `verified`,
-`merge`).
+**O que existe (02/10/2026):** o **pipeline rastreável genérico** (0058,
+`packages/db/src/imports.ts`, `/imports`): lote com origem, amostra/oficial,
+cliente de destino, arquivo original como anexo `import_source` (SHA-256) e
+relatório persistido; linhas cruas com identificador externo, desfecho
+(validada/importada/falhou), erro com campo e registro criado. **Amostra** roda
+num savepoint que volta atrás — valida sem gravar ativo nem fabricante.
+**Oficial** grava com `external_source/external_id` (0048); reimportar o mesmo
+registro de origem falha na linha. Lote processado não se reprocessa; linha crua
+não se reescreve. Só o destino **ativos** existe (é o importador que havia).
 
-**O que falta, e é a recomendação:** transformar em **pipeline rastreável** —
-`import_batches` (arquivo original como anexo com SHA-256, origem, quem, quando,
-amostra/oficial) + `import_rows` (linha crua, destino, id criado, `external_id`,
-erro) + **`external_id`/`external_source`** nas entidades de destino. Sem isso o
-critério de aceite 8 do cliente não passa.
+**O que falta:** o **leitor do formato do Arkmeds** (BLOQUEADO — CLIENTE: sem o
+arquivo real de exportação, seria adivinhação) e destinos além de ativos
+(locais, OS, planos, documentos, contratos, usuários).
 
 ---
 
@@ -1590,25 +1624,24 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | Problema | Impacto | Estado | Depende de | Próxima ação |
 | --- | --- | --- | --- | --- |
 | **Ciclo de plano nunca fecha** | `plan_cycles.status` nunca vira `closed`; consulta por `status='open'` duplica a tarefa a partir do 2º ciclo | contornado (consultas pegam o maior `seq`, com teste) | **decisão do cliente** | Definir: fecha no fim da janela, no 1º item concluído, ou na abertura do seguinte? |
-| **Sem PDF de documento** | `pdf_key` existe, nada renderiza | aberto | escolha de renderizador | — |
-| **Payload dos 6 tipos de documento vazio** | Calibração/TSE/qualificação não têm campos | aberto | **norma técnica** | §17 |
+| **Payload técnico dos 7 tipos de documento vazio** | Calibração/TSE/qualificação/aceite não têm campos técnicos (o instantâneo da sessão é cópia, não campo de norma) | 🔒 | **norma técnica / especialista** | §17 |
+| **Veredito do ponto de medição** | Sempre `na`: critério de aceitação e arredondamento não validados | 🔒 | metrologista + casos de referência | §17 |
+| **PostgreSQL real e E2E conectado não rodados em 02/10** | As 32 provas de PostgreSQL real e os 148 testes de navegador do produto conectado exigem banco; o Docker Desktop local falha ao iniciar (`sailor-ingest.sock`) | aberto | consertar o Docker local ou rodar no CI | o CI (tarefas `banco` e `navegador`) roda os dois |
+| **Telas web das capacidades novas** | Instrumento, sessão de medição, oportunidade, importação, modo da organização e linha do tempo do ativo existem na API, sem tela web | aberto | priorização | §16, §29 |
 | **Sem transporte de notificação** | Fila de saída nunca entrega; entrega fica `pending` | deliberado | decisão de canal | Um "enviado" falso some sem rastro — por isso não foi simulado |
-| **MFA inexistente** | `mfa_enabled` sempre `false` | aberto | provedor | §7 |
+| **MFA inexistente** | `mfa_enabled` sempre `false` | 🔒 BLOQUEADO — CLIENTE/INFRA | escolha do provedor de identidade | §7 — não inventar TOTP próprio sem a decisão |
 | **Recuperação de senha por e-mail** | Esquecer a senha exige `admin:criar` | aberto | transporte de e-mail | documentado na tela de login |
 | **E2E do login por senha** | A suíte de navegador roda com provedor `local`; o login por senha tem 17 provas de HTTP e foi verificado à mão no navegador, mas **não tem prova automatizada de ponta a ponta** | aberto | um 4º par api+web no `playwright.config` | próxima rodada |
 | **Supabase remoto** | Projeto "Aurora CMMS" contaminado; nenhuma operação remota possível | 🔒 | recuperar/recriar + registrar destino | §11 |
 | **Produto conectado sem deploy** | Só a demo está no ar; API, workers, banco, portal e field não | 🔒 | uma máquina com Node persistente | §27, §27-B |
 | **Automações e notificações não ligadas** | `runAutomations` só roda em teste; `EventSink` é log; regra `schedule` sem motor; nenhum transporte | aberto | decisão de ligar + canal | §18 |
-| **Busca global leva a rota inexistente** | Resultado de cliente, local, item de estoque e documento navega para `/clientes/:id`, `/locais/:id`, `/estoque/:id`, `/documentos/:id` — nenhuma existe | aberto | — | `apps/web/src/shell/global-search.tsx` |
 | **Escrita sem rota** | Cliente, edição de ativo e de OS, plano/tarefa, modelo de checklist, papel personalizado, depósito e item de estoque só se criam por seed | aberto | priorização | §19 |
-| **Checklist de plano não é anexado** | `materializeCycle` cria a OS sem o checklist de `plan_tasks.checklist_template_key` | aberto | — | §16 |
 | **73 rotas sem contrato Zod** | OpenAPI sem esquema de corpo nessas rotas | aberto | — | §19 |
 | **Escopo de membro sem tela** | `PATCH …/members/:id/scope` existe; a tela manda ajustar e não oferece onde | aberto | — | §8 |
 | **E2E da demo fora do CI** | Regressão na demo só aparece quando alguém roda `npm run demo:e2e` | aberto | — | §27-A |
 | **Senha da conta de demo local no histórico do Git** | Commit `9398762` | aberto | quem tem a conta | trocar com `admin:criar` (§28) |
 | **`fn_calendar_window_no_overlap` usa advisory lock** | `EXCLUDE` exigiria `btree_gist` | deliberado | — | comentado na migration |
 | **Retenção de `client_operations`** | Tabela só cresce; sem `DELETE` por desenho | ❓ | decisão de operação | apagar reabre a duplicata que ela fecha |
-| **API diverge do contrato em 4 respostas** (achado pela captura da demo) | `serviceRequests.detail` lista transição para `duplicate` (contrato diz `merged`); `members.list` devolve `seat_type: portal` (contrato: `staff|customer`); `insights.mttr`/`firstResponse`/`byWaitReason` devolvem `data` em outra forma; `numeric` volta como número no PGlite e texto no `pg` | aberto | — | alinhar contrato ou API; o cliente só não reclama porque não valida resposta em produção |
 | **130 organizações-lixo** já apareceram no banco de desenvolvimento, deixadas por suítes | atrapalha listagens administrativas | mitigado | — | `admin:criar` filtra slugs com cara de teste |
 
 > **Só pendência TÉCNICA do sistema existente mora aqui.** Pedido novo do
@@ -1692,6 +1725,18 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Busca global** | `packages/domain/src/search.ts` · `apps/api/src/search/search.controller.ts` · `apps/web/src/shell/global-search.tsx` |
 | **Requisitos do cliente (base)** | `docs/AUDITORIA-GAP-BECARE-TECHNECARE-V2-2026-09.md` |
 | **Pedidos novos do cliente** | `docs/NOVAS-SOLICITACOES.md` (§38) |
+| **Medição imutável** | `migrations/0047`, `0053` · `answerChecklistItem`/`answerRevisions` em `packages/db/src/execution.ts` · `medicao-imutavel.test.ts` |
+| **Instrumento / certificado / sessão** | `migrations/0050–0053` · `packages/db/src/metrology.ts` · `apps/api/src/metrology/metrology.controller.ts` · `packages/contracts/src/operations/metrology.ts` · `api-metrologia.test.ts` |
+| **Envelope de medição** | `packages/domain/src/medicao.ts` (só leia junto com §17) |
+| **Documento da sessão / PDF** | `migrations/0054` · `packages/domain/src/documento-da-sessao.ts` · `packages/db/src/session-documents.ts` · `apps/api/src/documents/pdf.ts` + `documento-pdf.ts` |
+| **Linha do tempo / substituição** | `packages/db/src/asset-timeline.ts` · `migrations/0056` · `api-ativo-vida.test.ts` |
+| **Preventiva por modelo/fabricante/criticidade** | `migrations/0055` · `packages/db/src/maintenance-plans.ts` · `preventiva-alvo.test.ts` |
+| **Oportunidade** | `migrations/0057` · `packages/domain/src/opportunities.ts` · `packages/db/src/opportunities.ts` · `apps/api/src/opportunities/*` |
+| **Importação rastreável** | `migrations/0058` · `packages/db/src/imports.ts` · `apps/api/src/imports/*` |
+| **Modo / recursos da organização** | `migrations/0049` · `packages/domain/src/organization-features.ts` · `packages/db/src/organization-config.ts` |
+| **Identificador externo** | `migrations/0048` · `packages/domain/src/external-ref.ts` |
+| **Portal: decisão, avaliação, PDF** | `apps/api/src/portal/portal.controller.ts` · `packages/db/src/portal.ts` · `apps/portal/src/telas/decisoes.tsx` |
+| **Relatório desta rodada** | `RELATORIO-ESCOPO-ATUAL.md` (raiz) |
 
 ---
 
