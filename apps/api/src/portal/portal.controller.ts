@@ -22,7 +22,8 @@
  * endereço mostra o hospital do concorrente — e é assim que esse defeito
  * acontece, sempre.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   withTenant,
   portalRequests,
@@ -33,8 +34,10 @@ import {
   portalQuotes,
   portalSchedule,
   createServiceRequest,
+  documentForPdf,
   type Database,
 } from '@aurora/db';
+import { enviarPdf } from '../documents/documents.controller';
 import { ForbiddenError, ValidationError, requestStatusForCustomer } from '@aurora/domain';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
@@ -262,6 +265,22 @@ export class PortalController {
     const eu = meuVinculo(req);
     const items = await withTenant(this.db, ctx, (s) => portalDocuments(s, eu));
     return { items };
+  }
+
+  /**
+   * Um documento liberado, em PDF.
+   *
+   * O recorte é o MESMO da lista: liberado, não cancelado, do cliente e dos
+   * locais do vínculo. Emitido-e-não-liberado é 404 aqui, como é ausente lá.
+   */
+  @Get('documents/:id/pdf')
+  async documentPdf(@Req() req: AuroraRequest, @Res() res: Response, @Param('id') id: string): Promise<void> {
+    const ctx = req.auroraContext!;
+    const eu = meuVinculo(req);
+    const doc = await withTenant(this.db, ctx, (s) =>
+      documentForPdf(s, uuidParam(id, 'id'), { portalMembershipId: eu })
+    );
+    enviarPdf(res, doc);
   }
 
   /** Os orçamentos que chegaram. O total sai; a composição de custo não. */

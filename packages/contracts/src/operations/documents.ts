@@ -94,3 +94,55 @@ export const documentTypes = defineOperation({
   permissions: ['document.read'],
   response: z.object({ items: z.array(z.record(z.string(), z.unknown())) }),
 });
+
+/* -------------------------------------------------------------------------- */
+/* a partir da sessão de medição, e PDF (gap V2 P2.6–P2.8)                     */
+/* -------------------------------------------------------------------------- */
+
+export const DOCUMENT_TYPE_KEYS = [
+  'work_order_report',
+  'calibration_certificate',
+  'electrical_safety_test',
+  'standard_certificate',
+  'obsolescence_report',
+  'thermal_qualification',
+  'acceptance_report',
+] as const;
+
+export const documentsFromSession = defineOperation({
+  operationId: 'documents.fromSession',
+  method: 'POST',
+  path: '/documents/from-session/:sessionId',
+  summary: 'Cria o RASCUNHO de documento técnico a partir de uma sessão de medição encerrada',
+  description:
+    'O conteúdo é CÓPIA da sessão (protocolo, instrumento, certificado, pontos, leituras, dado ' +
+    'bruto) — sem média, incerteza, correção ou veredito por ponto. O tipo precisa combinar com o ' +
+    'procedimento do protocolo. Daí em diante vale o motor de sempre: revisão, assinatura, emissão.',
+  permissions: ['document.create'],
+  params: z.object({ sessionId: Uuid }),
+  body: z
+    .object({
+      document_type_key: z.enum(DOCUMENT_TYPE_KEYS).optional(),
+      title: z.string().trim().min(1).max(300).optional(),
+      technical_manager_id: Uuid.optional(),
+    })
+    .strict(),
+  response: z.object({ id: Uuid, document_type_key: z.enum(DOCUMENT_TYPE_KEYS) }),
+  errors: ['not_found', 'conflict'],
+});
+
+export const documentsPdf = defineOperation({
+  operationId: 'documents.pdf',
+  method: 'GET',
+  path: '/documents/:id/pdf',
+  summary: 'O documento em PDF',
+  description:
+    'Gerado na hora, determinístico (mesmo conteúdo, mesmos bytes). Documento não emitido sai com ' +
+    'faixa "NÃO EMITIDO" e sem número. O cabeçalho `x-aurora-content-hash` traz o hash do ' +
+    'conteúdo: é ele, e não o arquivo, que a assinatura cobre.',
+  permissions: ['document.read'],
+  params: z.object({ id: Uuid }),
+  response: z.string().describe('Arquivo PDF'),
+  produces: 'application/pdf',
+  errors: ['not_found'],
+});

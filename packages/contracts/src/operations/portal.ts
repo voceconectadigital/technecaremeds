@@ -258,3 +258,18 @@ export const portalSchedule = defineOperation({
   public: false,
   response: z.object({ items: z.array(PortalVisit) }),
 });
+
+export const portalDocumentPdf = defineOperation({
+  operationId: 'portal.documentPdf',
+  method: 'GET',
+  path: '/portal/documents/:id/pdf',
+  summary: 'Um documento LIBERADO, em PDF',
+  description:
+    'Só o que a lista do portal mostra: liberado ao cliente, não cancelado, do cliente e dos ' +
+    'locais do vínculo. Qualquer outro documento — inclusive emitido e não liberado — é 404.',
+  public: false,
+  params: z.object({ id: Uuid }),
+  response: z.string().describe('Arquivo PDF'),
+  produces: 'application/pdf',
+  errors: ['not_found'],
+});

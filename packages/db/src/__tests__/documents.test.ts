@@ -109,13 +109,13 @@ async function novoRelatorio(over: Record<string, unknown> = {}): Promise<string
 /* -------------------------------------------------------------------------- */
 
 describe('provisionamento', () => {
-  it('cria os seis tipos, com série própria para cada um', async () => {
-    expect(tipos.size).toBe(6);
+  it('cria os sete tipos (seis da SPEC §18 + aceite, gap V2 P2.7), com série própria para cada um', async () => {
+    expect(tipos.size).toBe(7);
 
     const series = await withTenant(t.db, ctx, (s) =>
       s.query<{ prefix: string }>(`SELECT prefix FROM aurora.number_series ORDER BY prefix`)
     );
-    expect(series.map((x) => x.prefix)).toEqual(['CAL', 'LOB', 'PAD', 'QT', 'REL', 'TSE']);
+    expect(series.map((x) => x.prefix)).toEqual(['ACE', 'CAL', 'LOB', 'PAD', 'QT', 'REL', 'TSE']);
   });
 
   it('provisionar duas vezes não duplica nada', async () => {
@@ -125,7 +125,7 @@ describe('provisionamento', () => {
     const [{ total }] = await withTenant(t.db, ctx, (s) =>
       s.query<{ total: string }>(`SELECT count(*)::text AS total FROM aurora.number_series`)
     );
-    expect(Number(total)).toBe(6);
+    expect(Number(total)).toBe(7);
   });
 });
 

@@ -25,3 +25,4 @@ export * from './senha';
 export * from './external-ref';
 export * from './organization-features';
 export * from './medicao';
+export * from './documento-da-sessao';

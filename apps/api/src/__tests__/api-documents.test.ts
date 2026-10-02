@@ -99,7 +99,7 @@ afterAll(async () => {
 describe('provisionamento e catálogo', () => {
   it('provisiona os tipos de fábrica', async () => {
     const r = await http.post('/v1/documents/types/provision').set(auth(EMAIL_GESTOR)).expect(201);
-    expect(Object.keys(r.body.types)).toHaveLength(6);
+    expect(Object.keys(r.body.types)).toHaveLength(7); // seis da SPEC §18 + o termo de aceite (gap V2 P2.7)
 
     const tipos = await http.get('/v1/documents/types').set(auth(EMAIL_GESTOR)).expect(200);
     tipoRelatorio = tipos.body.items.find((x: { key: string }) => x.key === 'work_order_report').id;

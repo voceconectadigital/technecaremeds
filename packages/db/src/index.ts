@@ -34,3 +34,4 @@ export * from './field-sync';
 export * from './credenciais';
 export * from './organization-config';
 export * from './metrology';
+export * from './session-documents';

@@ -20,6 +20,10 @@ import {
   type DocumentTypeDefinition,
   type SignatureMethod,
   type CustomFieldDefinition,
+  padroesQueImpedemEmissao,
+  furosNaRastreabilidade,
+  instantaneoIntegro,
+  SESSION_SNAPSHOT_KEY,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
@@ -130,6 +134,8 @@ export interface DocumentInput {
   technicalManagerId?: string | null;
   payload?: Record<string, unknown>;
   verdict?: DocumentVerdict | null;
+  /** A sessão de medição de onde o conteúdo foi copiado (0054). */
+  measurementSessionId?: string | null;
 }
 
 export async function createDocument(session: TenantSession, input: DocumentInput): Promise<string> {
@@ -137,8 +143,8 @@ export async function createDocument(session: TenantSession, input: DocumentInpu
   await session.query(
     `INSERT INTO aurora.documents
        (id, organization_id, document_type_id, title, asset_id, work_order_id, customer_id,
-        technical_manager_id, payload, verdict, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::aurora.document_verdict, $11)`,
+        technical_manager_id, payload, verdict, created_by, measurement_session_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::aurora.document_verdict, $11, $12)`,
     [
       id,
       session.context.organizationId,
@@ -151,6 +157,7 @@ export async function createDocument(session: TenantSession, input: DocumentInpu
       JSON.stringify(input.payload ?? {}),
       input.verdict ?? null,
       session.context.actorId,
+      input.measurementSessionId ?? null,
     ]
   );
   return id;
@@ -171,12 +178,14 @@ export interface DocumentRow {
   customer_id: string | null;
   valid_until: Date | null;
   issued_at: Date | null;
+  measurement_session_id: string | null;
 }
 
 export async function loadDocument(session: TenantSession, id: string): Promise<DocumentRow> {
   const [row] = await session.query<DocumentRow>(
     `SELECT id, document_type_id, number, version, status, payload, verdict, content_hash,
-            technical_manager_id, asset_id, work_order_id, customer_id, valid_until, issued_at
+            technical_manager_id, asset_id, work_order_id, customer_id, valid_until, issued_at,
+            measurement_session_id
        FROM aurora.documents WHERE id = $1`,
     [id]
   );
@@ -290,18 +299,95 @@ export async function documentIssueCheck(session: TenantSession, id: string): Pr
     [id]
   );
 
+  // O instantâneo da sessão é proveniência COPIADA, não campo do tipo: a
+  // validação de `payload_fields` olha só o resto (0054).
+  const camposDoTipo = doc.measurement_session_id ? semInstantaneo(doc.payload) : doc.payload;
+
   const r = checkIssue({
     type: asDefinition(tipo),
-    payload: doc.payload,
+    payload: camposDoTipo,
     technicalManagerId: doc.technical_manager_id,
     verdict: doc.verdict,
     signatureCount: Number(assinaturas!.total),
   });
 
+  const daSessao = doc.measurement_session_id
+    ? await bloqueiosDaSessao(session, doc.measurement_session_id, tipo.key, doc.payload)
+    : [];
+
   return {
-    ok: r.ok,
-    blockers: [...r.blockers, ...r.payloadIssues.map((i) => `${i.key}: ${i.message}`)],
+    ok: r.ok && daSessao.length === 0,
+    blockers: [...r.blockers, ...r.payloadIssues.map((i) => `${i.key}: ${i.message}`), ...daSessao],
   };
+}
+
+function semInstantaneo(payload: Record<string, unknown>): Record<string, unknown> {
+  const { [SESSION_SNAPSHOT_KEY]: _instantaneo, ...resto } = payload;
+  return resto;
+}
+
+/**
+ * O que a SESSÃO de onde o documento saiu impede (0054).
+ *
+ * Só a fronteira de calendário já validada (US-DOC-002) e conferências de
+ * preenchimento — nenhuma regra científica:
+ *  · o certificado do instrumento cobria o dia da medição? (padrão vencido
+ *    antes da medição impede; vencido DEPOIS, não);
+ *  · certificado de calibração sem padrão declarado quebra a rastreabilidade;
+ *  · o conteúdo ainda diz de qual sessão veio;
+ *  · a sessão foi encerrada (documento de sessão aberta copiaria metade).
+ */
+async function bloqueiosDaSessao(
+  session: TenantSession,
+  sessionId: string,
+  typeKey: string,
+  payload: Record<string, unknown>
+): Promise<string[]> {
+  const [s] = await session.query<{
+    measured_on: unknown;
+    finished_at: unknown;
+    certificate_number: string | null;
+    laboratory: string | null;
+    valid_until: unknown;
+    instrument_name: string | null;
+  }>(
+    `SELECT ms.measured_on::text AS measured_on, ms.finished_at, c.certificate_number, c.laboratory,
+            c.valid_until::text AS valid_until,
+            a.name AS instrument_name
+       FROM aurora.measurement_sessions ms
+       LEFT JOIN aurora.instrument_certificates c ON c.id = ms.instrument_certificate_id
+       LEFT JOIN aurora.assets a ON a.id = ms.instrument_id
+      WHERE ms.id = $1`,
+    [sessionId]
+  );
+  if (!s) return ['a sessão de medição de origem não está acessível'];
+
+  const civil = (v: unknown): string => {
+    if (v instanceof Date) {
+      return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+    }
+    return String(v).slice(0, 10);
+  };
+
+  const faltas: string[] = [];
+  if (!s.finished_at) faltas.push('a sessão de medição de origem ainda não foi encerrada');
+  if (!instantaneoIntegro(payload, sessionId)) {
+    faltas.push('o conteúdo perdeu o vínculo com a sessão de medição de onde foi copiado');
+  }
+
+  const padroes = s.certificate_number
+    ? [
+        {
+          nome: s.instrument_name ?? 'instrumento da sessão',
+          numeroDoCertificado: s.certificate_number,
+          laboratorio: s.laboratory ?? '',
+          venceEm: civil(s.valid_until),
+        },
+      ]
+    : [];
+  for (const p of padroesQueImpedemEmissao(padroes, civil(s.measured_on))) faltas.push(p.motivo);
+  if (typeKey === 'calibration_certificate') faltas.push(...furosNaRastreabilidade(padroes));
+  return faltas;
 }
 
 /**
@@ -517,9 +603,11 @@ export async function superseDocument(session: TenantSession, id: string): Promi
   await session.query(
     `INSERT INTO aurora.documents
        (id, organization_id, document_type_id, version, supersedes_id, title,
-        asset_id, work_order_id, customer_id, technical_manager_id, payload, verdict, created_by)
+        asset_id, work_order_id, customer_id, technical_manager_id, payload, verdict, created_by,
+        measurement_session_id)
      SELECT $1, organization_id, document_type_id, version + 1, id, title,
-            asset_id, work_order_id, customer_id, technical_manager_id, payload, verdict, $2
+            asset_id, work_order_id, customer_id, technical_manager_id, payload, verdict, $2,
+            measurement_session_id
        FROM aurora.documents WHERE id = $3`,
     [novo, session.context.actorId, id]
   );
@@ -727,4 +815,92 @@ export async function documentsForAsset(session: TenantSession, assetId: string)
       ORDER BY d.issued_at DESC NULLS LAST, d.created_at DESC`,
     [assetId]
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* PDF (gap V2 P2.8)                                                           */
+/* -------------------------------------------------------------------------- */
+
+export interface DocumentPdfRow {
+  id: string;
+  organization_name: string;
+  type_label: string;
+  number: string | null;
+  version: number;
+  status: string;
+  title: string | null;
+  verdict: string | null;
+  issued_at: string | null;
+  valid_until: string | null;
+  asset_name: string | null;
+  work_order_number: string | null;
+  technical_manager_name: string | null;
+  content_hash: string | null;
+  payload: Record<string, unknown>;
+  signatures: Array<{ signer_name: string; method: string; signed_at: string; valid: boolean }>;
+}
+
+const isoOuNulo = (v: unknown): string | null =>
+  v === null || v === undefined ? null : v instanceof Date ? v.toISOString() : String(v);
+
+/**
+ * Tudo o que o PDF imprime, numa leitura — sob a RLS do contexto.
+ *
+ * `portalMembershipId` restringe ao que o PORTAL pode ver: liberado ao cliente,
+ * não cancelado, do cliente e dos locais do escopo daquele vínculo. Fora disso
+ * a resposta é "não existe", igual à lista do portal.
+ */
+export async function documentForPdf(
+  session: TenantSession,
+  id: string,
+  opts: { portalMembershipId?: string } = {}
+): Promise<DocumentPdfRow> {
+  const portal = opts.portalMembershipId ?? null;
+  const [d] = await session.query<Record<string, unknown>>(
+    `SELECT d.id, o.name AS organization_name, dt.label AS type_label, d.number, d.version,
+            d.status::text AS status, d.title, d.verdict::text AS verdict, d.issued_at, d.valid_until,
+            a.name AS asset_name, w.number AS work_order_number, u.name AS technical_manager_name,
+            d.content_hash, d.payload
+       FROM aurora.documents d
+       JOIN aurora.organizations o ON o.id = d.organization_id
+       JOIN aurora.document_types dt ON dt.id = d.document_type_id
+       LEFT JOIN aurora.assets a ON a.id = d.asset_id
+       LEFT JOIN aurora.work_orders w ON w.id = d.work_order_id
+       LEFT JOIN aurora.memberships m ON m.id = d.technical_manager_id
+       LEFT JOIN aurora.users u ON u.id = m.user_id
+      WHERE d.id = $1
+        AND ($2::uuid IS NULL OR (
+              d.released_to_customer_at IS NOT NULL
+          AND d.cancelled_at IS NULL
+          AND d.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+          AND (d.asset_id IS NULL OR a.location_id IS NULL
+               OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))))`,
+    [id, portal]
+  );
+  if (!d) throw new NotFoundError('documento não encontrado');
+
+  const assinaturas = await verifyDocumentSignatures(session, id);
+  return {
+    id: d.id as string,
+    organization_name: d.organization_name as string,
+    type_label: d.type_label as string,
+    number: (d.number as string | null) ?? null,
+    version: Number(d.version),
+    status: d.status as string,
+    title: (d.title as string | null) ?? null,
+    verdict: (d.verdict as string | null) ?? null,
+    issued_at: isoOuNulo(d.issued_at),
+    valid_until: isoOuNulo(d.valid_until),
+    asset_name: (d.asset_name as string | null) ?? null,
+    work_order_number: (d.work_order_number as string | null) ?? null,
+    technical_manager_name: (d.technical_manager_name as string | null) ?? null,
+    content_hash: (d.content_hash as string | null) ?? null,
+    payload: (typeof d.payload === 'string' ? JSON.parse(d.payload) : d.payload) as Record<string, unknown>,
+    signatures: assinaturas.map((s) => ({
+      signer_name: s.signerName,
+      method: s.method,
+      signed_at: s.signedAt.toISOString(),
+      valid: s.valid,
+    })),
+  };
 }

@@ -52,6 +52,11 @@ export interface OperationDefinition {
   status?: number;
   /** Erros de negócio previstos, além dos universais (401, 403, 422, 500). */
   errors?: readonly ProblemCode[];
+  /**
+   * Tipo de mídia da resposta quando ela NÃO é JSON (ex.: `application/pdf`).
+   * O corpo é binário; `response` fica só como descrição.
+   */
+  produces?: string;
 }
 
 /** Códigos de erro do RFC 9457 usados pela Aurora (§35). */

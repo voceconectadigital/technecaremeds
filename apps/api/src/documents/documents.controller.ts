@@ -5,7 +5,8 @@
  * do grafo declarado no domínio. Emitir, liberar ao cliente e cancelar pedem
  * permissões diferentes, e a tabela que diz qual é mora num lugar só.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, Req, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   withTenant,
   provisionDocumentTypes,
@@ -19,8 +20,13 @@ import {
   verifyDocumentSignatures,
   sweepDocumentExpiry,
   documentsForAsset,
+  documentForPdf,
+  createDocumentFromSession,
   type Database,
 } from '@aurora/db';
+import { documentsFromSession } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
+import { pdfDoDocumento, nomeDoArquivo } from './documento-pdf';
 import {
   ValidationError,
   ForbiddenError,
@@ -191,6 +197,44 @@ export class DocumentsController {
     return { alerts };
   }
 
+  /**
+   * Rascunho a partir da sessão de medição (gap V2 P2.6).
+   *
+   * CÓPIA, não cálculo. O veredito do documento continua sendo ato humano na
+   * revisão; nada aqui o deriva das leituras.
+   */
+  @Post('from-session/:sessionId')
+  @RequirePermissions('document.create')
+  async fromSession(
+    @Req() req: AuroraRequest,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown
+  ): Promise<{ id: string; document_type_key: string }> {
+    const b = parseWith(documentsFromSession.body, body);
+    const r = await withTenant(this.db, req.auroraContext!, (s) =>
+      createDocumentFromSession(s, uuidParam(sessionId, 'sessionId'), {
+        documentTypeKey: b.document_type_key,
+        title: b.title ?? null,
+        technicalManagerId: b.technical_manager_id ?? null,
+      })
+    );
+    return { id: r.id, document_type_key: r.documentTypeKey };
+  }
+
+  /**
+   * O documento em PDF (gap V2 P2.8).
+   *
+   * Gerado na hora, sem guardar arquivo: o conteúdo é o registro, e o PDF é
+   * só a forma de entregá-lo. `no-store` porque um rascunho baixado hoje não
+   * pode ser servido de cache amanhã como se fosse o emitido.
+   */
+  @Get(':id/pdf')
+  @RequirePermissions('document.read')
+  async pdf(@Req() req: AuroraRequest, @Res() res: Response, @Param('id') id: string): Promise<void> {
+    const doc = await withTenant(this.db, req.auroraContext!, (s) => documentForPdf(s, uuidParam(id, 'id')));
+    enviarPdf(res, doc);
+  }
+
   @Get(':id')
   @RequirePermissions('document.read')
   async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
@@ -320,4 +364,16 @@ export class DocumentsController {
     );
     return { id: sigId };
   }
+}
+
+/** Escreve o PDF com os cabeçalhos certos — usado pela rota interna e pela do portal. */
+export function enviarPdf(res: Response, doc: Parameters<typeof pdfDoDocumento>[0]): void {
+  const bytes = pdfDoDocumento(doc);
+  res.status(200);
+  res.setHeader('content-type', 'application/pdf');
+  res.setHeader('content-disposition', `attachment; filename="${nomeDoArquivo(doc)}"`);
+  res.setHeader('cache-control', 'no-store');
+  res.setHeader('x-content-type-options', 'nosniff');
+  if (doc.content_hash) res.setHeader('x-aurora-content-hash', doc.content_hash);
+  res.end(bytes);
 }

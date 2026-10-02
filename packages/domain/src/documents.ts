@@ -33,6 +33,7 @@ export const DOCUMENT_TYPE_KEYS = [
   'standard_certificate',
   'obsolescence_report',
   'thermal_qualification',
+  'acceptance_report',
 ] as const;
 export type DocumentTypeKey = (typeof DOCUMENT_TYPE_KEYS)[number];
 
@@ -121,6 +122,26 @@ export const DOCUMENT_TYPES: readonly DocumentTypeDefinition[] = Object.freeze([
     requiresSignature: true,
     payloadFields: [],
     phase: 'F3',
+  },
+  /*
+   * Aceite de equipamento (PLAT §13, fase 2 "aceitação" · gap V2 P2.7).
+   *
+   * Sem validade: o aceite registra um fato da chegada do equipamento, não um
+   * estado que vence. Exigir RT e assinatura é o padrão CONSERVADOR dos demais
+   * documentos de engenharia clínica — A VALIDAR com o cliente, e ajustável por
+   * organização em `document_types` sem tocar em código. Os campos técnicos do
+   * aceite dependem do procedimento de cada família e ficam vazios, como os
+   * dos outros tipos.
+   */
+  {
+    key: 'acceptance_report',
+    label: 'Termo de aceite de equipamento',
+    series: 'ACE',
+    defaultValidityDays: null,
+    requiresTechnicalManager: true,
+    requiresSignature: true,
+    payloadFields: [],
+    phase: 'F2',
   },
 ]);
 

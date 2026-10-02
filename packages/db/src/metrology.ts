@@ -186,7 +186,7 @@ export async function listInstruments(
     `SELECT i.asset_id, a.name, a.tag, a.serial_number,
             mf.name AS manufacturer_name, am.name AS model_name, ac.name AS category_name,
             i.status::text AS status, i.ownership::text AS ownership, i.interface, i.protocol,
-            i.firmware_version, i.adapter, i.last_validated_on, i.known_limitations, i.notes,
+            i.firmware_version, i.adapter, i.last_validated_on::text AS last_validated_on, i.known_limitations, i.notes,
             c.id AS cert_id, c.certificate_number, c.laboratory, c.issued_on, c.valid_until
        FROM aurora.instruments i
        JOIN aurora.assets a ON a.id = i.asset_id
@@ -194,7 +194,7 @@ export async function listInstruments(
        LEFT JOIN aurora.manufacturers mf ON mf.id = am.manufacturer_id
        LEFT JOIN aurora.asset_categories ac ON ac.id = a.asset_category_id
        LEFT JOIN LATERAL (
-         SELECT id, certificate_number, laboratory, issued_on, valid_until
+         SELECT id, certificate_number, laboratory, issued_on::text AS issued_on, valid_until::text AS valid_until
            FROM aurora.instrument_certificates
           WHERE instrument_id = i.asset_id AND revoked_at IS NULL
           ORDER BY valid_until DESC, issued_on DESC
@@ -364,7 +364,7 @@ export async function listInstrumentCertificates(
   if (!inst) throw new NotFoundError('Instrumento', instrumentId);
 
   const rows = await session.query<Record<string, unknown>>(
-    `SELECT c.id, c.instrument_id, c.certificate_number, c.laboratory, c.issued_on, c.valid_until,
+    `SELECT c.id, c.instrument_id, c.certificate_number, c.laboratory, c.issued_on::text AS issued_on, c.valid_until::text AS valid_until,
             c.scope, c.traceability_statement, c.traceable_to_id, c.revoked_at, c.revoked_reason,
             COALESCE(
               (SELECT json_agg(json_build_object(
@@ -497,7 +497,7 @@ export async function openMeasurementSession(
       valid_until: unknown;
       revoked_at: unknown;
     }>(
-      `SELECT instrument_id, certificate_number, issued_on, valid_until, revoked_at
+      `SELECT instrument_id, certificate_number, issued_on::text AS issued_on, valid_until::text AS valid_until, revoked_at
          FROM aurora.instrument_certificates WHERE id = $1`,
       [input.instrumentCertificateId]
     );
@@ -675,7 +675,7 @@ export async function measurementSessionDetail(
   id: string
 ): Promise<MeasurementSessionDetail> {
   const [s] = await session.query<Record<string, unknown>>(
-    `SELECT ms.*, ms.source::text AS source_text,
+    `SELECT ms.*, ms.source::text AS source_text, ms.measured_on::text AS measured_on_text,
             w.number AS work_order_number, a.name AS asset_name,
             u.name AS technician_name,
             r.template_id, t.key, t.version, t.title, t.procedure_kind::text AS procedure_kind,
@@ -719,7 +719,7 @@ export async function measurementSessionDetail(
   let certificate: MeasurementSessionDetail['certificate'] = null;
   if (s.instrument_certificate_id) {
     const [c] = await session.query<Record<string, unknown>>(
-      `SELECT id, certificate_number, laboratory, issued_on, valid_until, traceability_statement, revoked_at
+      `SELECT id, certificate_number, laboratory, issued_on::text AS issued_on, valid_until::text AS valid_until, traceability_statement, revoked_at
          FROM aurora.instrument_certificates WHERE id = $1`,
       [s.instrument_certificate_id]
     );
@@ -759,7 +759,7 @@ export async function measurementSessionDetail(
     asset_id: (s.asset_id as string | null) ?? null,
     asset_name: (s.asset_name as string | null) ?? null,
     source: s.source_text as string,
-    measured_on: textoDeData(s.measured_on)!,
+    measured_on: s.measured_on_text as string,
     started_at: instante(s.started_at)!,
     finished_at: instante(s.finished_at),
     ambient: (typeof s.ambient === 'string' ? JSON.parse(s.ambient) : s.ambient) as Record<string, unknown>,
@@ -823,7 +823,7 @@ export async function measurementSessionsForWorkOrder(
   workOrderId: string
 ): Promise<Array<{ id: string; response_id: string; measured_on: string; finished_at: string | null }>> {
   const rows = await session.query<Record<string, unknown>>(
-    `SELECT id, response_id, measured_on, finished_at FROM aurora.measurement_sessions
+    `SELECT id, response_id, measured_on::text AS measured_on, finished_at FROM aurora.measurement_sessions
       WHERE work_order_id = $1 ORDER BY started_at`,
     [workOrderId]
   );

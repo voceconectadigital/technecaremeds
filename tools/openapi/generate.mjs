@@ -181,9 +181,11 @@ function respostas(op) {
   const r = {
     [String(op?.status ?? (op?.method === 'POST' ? 201 : 200))]: {
       description: 'Sucesso',
-      content: op
-        ? { 'application/json': { schema: toJsonSchema(op.response) } }
-        : { 'application/json': { schema: {} } },
+      content: op?.produces
+        ? { [op.produces]: { schema: { type: 'string', format: 'binary' } } }
+        : op
+          ? { 'application/json': { schema: toJsonSchema(op.response) } }
+          : { 'application/json': { schema: {} } },
     },
   };
 
