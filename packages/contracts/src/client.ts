@@ -200,7 +200,7 @@ export function createApiClient(options: ClientOptions): ApiClient {
 
     async call<O extends OperationDefinition>(op: O, args?: CallArgs<O>): Promise<Infer<O['response']>> {
       const a = args as Record<string, unknown> | undefined;
-      const headers: Record<string, string> = { accept: 'application/json' };
+      const headers: Record<string, string> = { accept: op.produces ?? 'application/json' };
 
       const token = options.token?.();
       if (token) headers.authorization = `Bearer ${token}`;
@@ -255,6 +255,12 @@ export function createApiClient(options: ClientOptions): ApiClient {
       if (html) {
         throw new ApiError(resposta.status, comEndereco(problemaDeApiAusente(resposta, html), endereco));
       }
+
+      /*
+       * Resposta binária (PDF): devolve o `Blob` como veio. Não há o que
+       * validar contra esquema — o contrato só descreve o tipo de mídia.
+       */
+      if (op.produces) return (await resposta.blob()) as never;
 
       const dados = (await resposta.json()) as Infer<O['response']>;
       if (!validar) return dados;

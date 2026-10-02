@@ -1,12 +1,13 @@
 /**
  * Aurora — o portal do cliente pela HTTP (SPEC v0.2 §19 · EPIC-020).
  *
- * TODAS AS ROTAS SÃO DE LEITURA, MENOS UMA.
+ * TODAS AS ROTAS SÃO DE LEITURA, MENOS TRÊS.
  *
  * A SPEC §19 é explícita: o portal escreve em `service_requests`,
- * `quote_approvals` e `signatures` — e mais nada. Este controller expõe a
- * primeira; as outras duas moram nos seus próprios controllers, com as suas
- * próprias regras de aceite.
+ * `quote_approvals` e `signatures` — e mais nada. Este controller expõe:
+ * abrir solicitação, decidir sobre orçamento (a mesma transição interna, com
+ * evidência de aceite) e avaliar um atendimento terminado (a nota já era
+ * coluna de `service_requests`). Assinatura continua no seu próprio fluxo.
  *
  * A superfície mínima não é economia de trabalho: é o que torna a auditoria de
  * segurança do portal possível de fazer numa tarde. Na referência auditada o
@@ -22,7 +23,7 @@
  * endereço mostra o hospital do concorrente — e é assim que esse defeito
  * acontece, sempre.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   withTenant,
@@ -35,8 +36,17 @@ import {
   portalSchedule,
   createServiceRequest,
   documentForPdf,
+  portalQuoteDecision,
+  portalRejectionReasons,
+  portalRateRequest,
   type Database,
 } from '@aurora/db';
+import {
+  portalQuoteDecision as contratoDecisao,
+  portalRateRequest as contratoAvaliacao,
+} from '@aurora/contracts';
+import { RequirePermissions } from '../common/permissions.guard';
+import { parseWith } from '../common/contract-validation';
 import { enviarPdf } from '../documents/documents.controller';
 import { ForbiddenError, ValidationError, requestStatusForCustomer } from '@aurora/domain';
 import { optionalUuid, text, uuidParam } from '../common/params';
@@ -181,7 +191,7 @@ export class PortalController {
   }
 
   /**
-   * Abrir solicitação — a ÚNICA escrita deste controller.
+   * Abrir solicitação — a primeira das três escritas deste controller.
    *
    * O cliente não escolhe cliente: o vínculo já diz de quem ele é. Aceitar
    * `customer_id` do corpo seria deixar alguém abrir chamado em nome de outro.
@@ -281,6 +291,60 @@ export class PortalController {
       documentForPdf(s, uuidParam(id, 'id'), { portalMembershipId: eu })
     );
     enviarPdf(res, doc);
+  }
+
+  /** Os motivos de recusa que o cliente pode escolher. */
+  @Get('quotes/rejection-reasons')
+  async rejectionReasons(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
+    meuVinculo(req);
+    const items = await withTenant(this.db, req.auroraContext!, (s) => portalRejectionReasons(s));
+    return { items };
+  }
+
+  /**
+   * O cliente decide sobre o orçamento (gap V2 P1.1).
+   *
+   * Segunda escrita do portal, e a SPEC §19 já a previa (`quote_approvals`).
+   * O orçamento é o do VÍNCULO — o id vem da URL, mas só vale se cair no
+   * recorte; a transição é a mesma do lado interno, com a evidência de aceite
+   * tirada do soquete, nunca de cabeçalho que o cliente escreve.
+   */
+  @Post('quotes/:id/decision')
+  @HttpCode(200)
+  @RequirePermissions('quote.approve')
+  async quoteDecision(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ status: string }> {
+    const eu = meuVinculo(req);
+    const b = parseWith(contratoDecisao.body, body);
+    return withTenant(this.db, req.auroraContext!, (s) =>
+      portalQuoteDecision(s, eu, uuidParam(id, 'id'), {
+        decision: b.decision,
+        note: b.note ?? null,
+        rejectionReasonId: b.rejection_reason_id ?? null,
+        ip: req.ip ?? null,
+        userAgent: req.header('user-agent') ?? null,
+      })
+    );
+  }
+
+  /** O cliente avalia o atendimento de uma solicitação atendida (gap V2 P1.2). */
+  @Post('requests/:id/rating')
+  @HttpCode(200)
+  @RequirePermissions('service_request.create')
+  async rate(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const eu = meuVinculo(req);
+    const b = parseWith(contratoAvaliacao.body, body);
+    await withTenant(this.db, req.auroraContext!, (s) =>
+      portalRateRequest(s, eu, uuidParam(id, 'id'), b.rating, b.comment ?? null)
+    );
+    return { ok: true };
   }
 
   /** Os orçamentos que chegaram. O total sai; a composição de custo não. */

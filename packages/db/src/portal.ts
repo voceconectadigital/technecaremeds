@@ -33,7 +33,9 @@
  * cliente lê. `COALESCE` com o rótulo interno: quem não configurou vê a palavra
  * da equipe, que é pior do que uma tradução e melhor do que uma frase vazia.
  */
+import { NotFoundError, ConflictError, ValidationError } from '@aurora/domain';
 import type { TenantSession } from './client';
+import { transitionQuote } from './quotes';
 
 /* -------------------------------------------------------------------------- */
 /* O recorte                                                                  */
@@ -78,6 +80,8 @@ export interface PortalRequestRow {
   asset_name: string | null;
   location_name: string | null;
   created_at: Date;
+  /** A nota que o próprio cliente deu ao atendimento (1–5), quando já deu. */
+  rating: number | null;
   /** Quantas ordens de serviço nasceram desta solicitação. */
   work_order_count: number;
 }
@@ -101,7 +105,7 @@ export async function portalRequests(
             r.status::text AS status,
             r.priority::text AS priority,
             r.asset_id, a.name AS asset_name, l.name AS location_name,
-            r.created_at,
+            r.created_at, r.rating,
             (SELECT count(*)::int FROM aurora.work_orders w2
               WHERE w2.service_request_id = r.id) AS work_order_count
        FROM aurora.service_requests r
@@ -413,4 +417,130 @@ export async function portalSchedule(
       LIMIT 200`,
     [membershipId]
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Decisão sobre orçamento (gap V2 P1.1 · PLAT §4 Portal "aprovações")          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O cliente aprova ou recusa, pelo portal, o orçamento que chegou a ele.
+ *
+ * O recorte é o da lista (`portalQuotes`): do cliente do vínculo, enviado ou
+ * visualizado, dentro da validade. Fora disso é "não existe" — inclusive o
+ * rascunho, que o cliente nunca viu.
+ *
+ * A transição é a MESMA do lado interno (`transitionQuote`): reserva de peça,
+ * retomada da OS, evento e evidência de aceite (IP do soquete, navegador,
+ * nota). Um segundo caminho de aprovação esqueceria um desses efeitos.
+ */
+export async function portalQuoteDecision(
+  session: TenantSession,
+  membershipId: string,
+  quoteId: string,
+  input: {
+    decision: 'approve' | 'reject';
+    note?: string | null;
+    rejectionReasonId?: string | null;
+    ip?: string | null;
+    userAgent?: string | null;
+  }
+): Promise<{ status: string }> {
+  const [q] = await session.query<{ id: string; awaiting: boolean }>(
+    `SELECT q.id,
+            (q.status IN ('sent', 'viewed') AND (q.valid_until IS NULL OR q.valid_until >= current_date)) AS awaiting
+       FROM aurora.quotes q
+      WHERE q.id = $2
+        AND q.status <> 'draft'
+        AND q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))`,
+    [membershipId, quoteId]
+  );
+  if (!q) throw new NotFoundError('Orçamento', quoteId);
+  if (!q.awaiting) {
+    throw new ConflictError(
+      'este orçamento não está aguardando a sua decisão (já decidido, vencido ou retirado)'
+    );
+  }
+
+  if (input.decision === 'approve') {
+    await transitionQuote(session, quoteId, 'approved', {
+      acceptance: { ip: input.ip ?? null, userAgent: input.userAgent ?? null, note: input.note ?? null },
+    });
+    return { status: 'approved' };
+  }
+
+  if (!input.rejectionReasonId) {
+    throw new ValidationError('recusar exige o motivo', { field: 'rejection_reason_id' });
+  }
+  const [motivo] = await session.query(
+    `SELECT 1 FROM aurora.catalog_items ci
+      WHERE ci.id = $1 AND ci.catalog_key = 'rejection_reason' AND ci.archived_at IS NULL`,
+    [input.rejectionReasonId]
+  );
+  if (!motivo) {
+    throw new ValidationError('motivo de recusa desconhecido', { field: 'rejection_reason_id' });
+  }
+  await transitionQuote(session, quoteId, 'rejected', {
+    rejectionReasonId: input.rejectionReasonId,
+    note: input.note ?? undefined,
+  });
+  return { status: 'rejected' };
+}
+
+/** Os motivos de recusa que o cliente pode escolher. */
+export async function portalRejectionReasons(
+  session: TenantSession
+): Promise<Array<{ id: string; label: string }>> {
+  return session.query<{ id: string; label: string }>(
+    `SELECT ci.id, ci.label FROM aurora.catalog_items ci
+      WHERE ci.catalog_key = 'rejection_reason' AND ci.archived_at IS NULL
+      ORDER BY ci.position, ci.label`
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Avaliação do atendimento (gap V2 P1.2 · PLAT §4 Portal "NPS")                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O cliente avalia o atendimento de uma solicitação (1 a 5, com comentário).
+ *
+ * Só depois de atendida (`fulfilled` ou `closed`): avaliar o que ainda está em
+ * andamento é avaliar a fila, não o serviço. Uma vez só — reavaliar até o
+ * número "melhorar" é o que transforma indicador em negociação.
+ *
+ * A escala é a que a coluna já tinha (1–5). Como ela vira um NPS (promotores,
+ * neutros, detratores) é definição de indicador que o cliente não deu, e por
+ * isso nenhuma conta é feita aqui.
+ */
+export async function portalRateRequest(
+  session: TenantSession,
+  membershipId: string,
+  requestId: string,
+  rating: number,
+  comment?: string | null
+): Promise<void> {
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ValidationError('a avaliação vai de 1 a 5', { field: 'rating' });
+  }
+  const [r] = await session.query<{ status: string; rating: number | null }>(
+    `SELECT sr.status::text AS status, sr.rating
+       FROM aurora.service_requests sr
+      WHERE sr.id = $2
+        AND sr.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
+        AND (sr.location_id IS NULL
+             OR sr.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($1)))`,
+    [membershipId, requestId]
+  );
+  if (!r) throw new NotFoundError('Solicitação', requestId);
+  if (r.status !== 'fulfilled' && r.status !== 'closed') {
+    throw new ConflictError('a avaliação abre quando o atendimento termina');
+  }
+  if (r.rating !== null) throw new ConflictError('este atendimento já foi avaliado');
+
+  await session.query(`UPDATE aurora.service_requests SET rating = $2, rating_comment = $3 WHERE id = $1`, [
+    requestId,
+    rating,
+    comment?.trim() || null,
+  ]);
 }

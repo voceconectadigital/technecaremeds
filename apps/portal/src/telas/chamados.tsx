@@ -28,6 +28,7 @@ import {
 } from '@aurora/contracts';
 import { Casca } from '../casca';
 import { quando } from '../formato';
+import { AvaliacaoDoAtendimento } from './decisoes';
 
 export function ChamadosPage() {
   const { data, isLoading } = useApiQuery(portalRequests) as {
@@ -132,6 +133,7 @@ export function ChamadoPage() {
               {r.location_name && <span className="text-sm text-muted">· {r.location_name}</span>}
             </div>
             {r.description && <p className="text-sm whitespace-pre-wrap text-text">{r.description}</p>}
+            <AvaliacaoDoAtendimento request={r} />
           </div>
         </Card>
 

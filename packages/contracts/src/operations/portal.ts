@@ -31,6 +31,11 @@ export const PortalRequest = z.object({
   created_at: Timestamp,
   /** Quantas ordens de serviço nasceram deste chamado. */
   work_order_count: z.number().int(),
+  /**
+   * A nota que o próprio cliente deu (1–5). Opcional no contrato porque
+   * respostas anteriores à avaliação pelo portal não a têm.
+   */
+  rating: z.number().int().nullable().optional(),
 });
 export type PortalRequest = z.infer<typeof PortalRequest>;
 
@@ -272,4 +277,56 @@ export const portalDocumentPdf = defineOperation({
   response: z.string().describe('Arquivo PDF'),
   produces: 'application/pdf',
   errors: ['not_found'],
+});
+
+export const portalQuoteDecision = defineOperation({
+  operationId: 'portal.quoteDecision',
+  method: 'POST',
+  path: '/portal/quotes/:id/decision',
+  summary: 'O cliente aprova ou recusa um orçamento que aguarda a decisão dele',
+  description:
+    'Mesma transição do lado interno (reserva de peça, retomada da OS, evento), com evidência de ' +
+    'aceite: IP do soquete, navegador e nota. Recusar exige motivo do catálogo. Orçamento fora do ' +
+    'escopo do vínculo, ou que não aguarda decisão, é 404/409.',
+  public: false,
+  permissions: ['quote.approve'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      decision: z.enum(['approve', 'reject']),
+      note: z.string().trim().max(2000).optional(),
+      rejection_reason_id: Uuid.optional(),
+    })
+    .strict(),
+  response: z.object({ status: z.enum(['approved', 'rejected']) }),
+  status: 200,
+  errors: ['not_found', 'conflict'],
+});
+
+export const portalRejectionReasons = defineOperation({
+  operationId: 'portal.rejectionReasons',
+  method: 'GET',
+  path: '/portal/quotes/rejection-reasons',
+  summary: 'Os motivos de recusa que o cliente pode escolher',
+  public: false,
+  response: z.object({ items: z.array(z.object({ id: Uuid, label: z.string() })) }),
+});
+
+export const portalRateRequest = defineOperation({
+  operationId: 'portal.rateRequest',
+  method: 'POST',
+  path: '/portal/requests/:id/rating',
+  summary: 'O cliente avalia o atendimento (1 a 5), uma vez, depois de atendido',
+  description:
+    'A escala é a que o registro já tinha. Como ela vira NPS (promotores, neutros, detratores) é ' +
+    'definição de indicador que o cliente não deu — nenhuma conta é feita aqui.',
+  public: false,
+  permissions: ['service_request.create'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({ rating: z.number().int().min(1).max(5), comment: z.string().trim().max(2000).optional() })
+    .strict(),
+  response: z.object({ ok: z.literal(true) }),
+  status: 200,
+  errors: ['not_found', 'conflict'],
 });

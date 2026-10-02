@@ -27,6 +27,7 @@ import {
 } from '@aurora/contracts';
 import { Casca } from '../casca';
 import { data as formatarData, quando, reais } from '../formato';
+import { BaixarDocumento, DecisaoDoOrcamento } from './decisoes';
 
 export function EquipamentosPage() {
   const { data, isLoading } = useApiQuery(portalAssets) as {
@@ -141,6 +142,8 @@ export function DocumentosPage() {
                     {ROTULO_VEREDITO[d.verdict] ?? d.verdict}
                   </StatusChip>
                 )}
+
+                <BaixarDocumento doc={d} />
               </li>
             ))}
           </ul>
@@ -177,7 +180,7 @@ export function OrcamentosPage() {
                 <li
                   key={q.id}
                   className={cn(
-                    'flex min-h-14 items-center gap-3 bg-warn-soft px-4 py-3',
+                    'flex min-h-14 flex-wrap items-center gap-3 bg-warn-soft px-4 py-3',
                     i > 0 && 'border-t border-border-subtle'
                   )}
                 >
@@ -192,6 +195,7 @@ export function OrcamentosPage() {
                   <span className="shrink-0 text-base font-semibold text-warn-text tabular-nums" data-numeric>
                     {reais(q.total_cents)}
                   </span>
+                  <DecisaoDoOrcamento quote={q} />
                 </li>
               ))}
             </ul>

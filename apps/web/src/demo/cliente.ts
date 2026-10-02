@@ -288,7 +288,9 @@ export function criarClienteDemo(espera = 120): ApiClient {
       // Sair sempre dá certo: não há sessão no servidor para encerrar.
       if (op.operationId === 'auth.logout') return responder(() => ({ ok: true }) as never);
 
-      if (op.method !== 'GET') {
+      // Arquivo gerado na hora (PDF) não existe na demonstração: não há
+      // servidor para gerá-lo. A recusa é a mesma de qualquer escrita.
+      if (op.method !== 'GET' || op.produces) {
         return responder(() => {
           throw new ApiError(403, {
             code: 'forbidden',
