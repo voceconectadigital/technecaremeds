@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  "postgres": {
+    "major": 16,
+    "database": "aurora",
+    "appLogin": "aurora_api_login",
+    "grantRoles": ["aurora_app"],
+    "grantCreateOnDatabase": false,
+    "memoryMb": 2048
+  },
+  "dbUrlVariable": "DATABASE_URL",
+  "migrate": {
+    "command": ["node", "tools/db/run.mjs", "migrate"]
+  },
+  "services": [
+    {
+      "name": "api",
+      "command": ["node", "apps/api/dist/main.js"],
+      "port": 3000,
+      "memoryMb": 1024,
+      "cpus": 1,
+      "mounts": [
+        {
+          "volume": "arquivos",
+          "path": "/data/arquivos"
+        }
+      ],
+      "public": true,
+      "healthPath": "/v1/health/ready",
+      "healthBodyIncludes": "\"status\":\"ok\""
+    },
+    {
+      "name": "workers",
+      "command": ["node", "apps/workers/dist/main.js"],
+      "memoryMb": 768,
+      "cpus": 0.5,
+      "database": {
+        "grantRoles": ["aurora_app", "aurora_publisher", "aurora_scheduler"],
+        "grantCreateOnDatabase": true
+      }
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "AURORA_AMBIENTE": "producao",
+    "AURORA_AUTH_PROVIDER": "password",
+    "AURORA_DB_APP_ROLE": "aurora_app",
+    "AURORA_LOG_LEVEL": "info",
+    "AURORA_ARQUIVOS_DIR": "/data/arquivos",
+    "AURORA_CORS_ORIGINS": "https://technecaremeds.voceconecta.com.br,https://portal-technecaremeds.voceconecta.com.br,https://campo-technecaremeds.voceconecta.com.br",
+    "AURORA_PROXY_CONFIAVEL": "rede-privada"
+  },
+  "secretsGeneratedOnNode": [],
+  "volumes": ["arquivos"]
+}

@@ -26,9 +26,10 @@
     "producao": {
       "descricao": "O trabalho de verdade.",
       "hosts": [],
-      "bancos": [],
+      "hostsInternos": ["db"],
+      "bancos": ["aurora"],
       "ref": null,
-      "situacao": "BLOQUEADO. Produção não está autorizada."
+      "situacao": "SÓ o PostgreSQL DEDICADO do runtime de produção no HostPanel (PostgreSQL VPS): serviço `db` na rede interna do compose, sem porta pública, banco `aurora`, com AURORA_AMBIENTE=producao. Nenhum host remoto: `ref` nulo recusa qualquer destino com ponto."
     }
   },
   "bloqueados": {

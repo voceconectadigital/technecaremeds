@@ -305,7 +305,7 @@ describe('destino interno de container (hostsInternos)', () => {
     ).toThrow(/interno fora da lista/);
   });
 
-  it('a lista versionada libera só `db`/`aurora` em homologação e nada em produção', async () => {
+  it('a lista versionada libera só `db`/`aurora` em homologação e em produção, nada remoto', async () => {
     const { readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const real = JSON.parse(
@@ -314,7 +314,28 @@ describe('destino interno de container (hostsInternos)', () => {
     expect(real.ambientes.homologacao!.hostsInternos).toEqual(['db']);
     expect(real.ambientes.homologacao!.bancos).toEqual(['aurora']);
     expect(real.ambientes.homologacao!.ref).toBeNull();
-    expect(real.ambientes.producao!.hosts).toEqual([]);
-    expect(real.ambientes.producao!.hostsInternos ?? []).toEqual([]);
+    for (const amb of ['homologacao', 'producao'] as const) {
+      expect(real.ambientes[amb]!.hosts).toEqual([]);
+      expect(real.ambientes[amb]!.hostsInternos).toEqual(['db']);
+      expect(real.ambientes[amb]!.bancos).toEqual(['aurora']);
+      expect(real.ambientes[amb]!.ref).toBeNull();
+    }
+    // Produção: só o interno, só com o ambiente declarado; remoto e outro banco recusados.
+    expect(
+      conferirDestino({ url: 'postgresql://u:x@db:5432/aurora', ambiente: 'producao', lista: real }).ambiente
+    ).toBe('producao');
+    expect(() => conferirDestino({ url: 'postgresql://u:x@db:5432/aurora', lista: real })).toThrow(
+      DestinoRecusadoError
+    );
+    expect(() =>
+      conferirDestino({ url: 'postgresql://u:x@db:5432/postgres', ambiente: 'producao', lista: real })
+    ).toThrow(DestinoRecusadoError);
+    expect(() =>
+      conferirDestino({
+        url: 'postgresql://u:x@db.exemplo.com:5432/aurora',
+        ambiente: 'producao',
+        lista: real,
+      })
+    ).toThrow(DestinoRecusadoError);
   });
 });

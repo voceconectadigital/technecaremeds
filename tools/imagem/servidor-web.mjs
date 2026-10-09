@@ -69,7 +69,16 @@ function repassar(req, res) {
       port: API.port,
       method: req.method,
       path: req.url,
-      headers: { ...req.headers, host: API.host },
+      // Anexa o salto VERDADEIRO (quem abriu este soquete — o Traefik) à direita.
+      // A API só confia em saltos de rede privada e lê da direita para a esquerda:
+      // o primeiro endereço público é o cliente; nada à esquerda dele é usado.
+      headers: {
+        ...req.headers,
+        host: API.host,
+        'x-forwarded-for': [req.headers['x-forwarded-for'], req.socket.remoteAddress]
+          .filter(Boolean)
+          .join(', '),
+      },
     },
     (resposta) => {
       res.writeHead(resposta.statusCode ?? 502, resposta.headers);

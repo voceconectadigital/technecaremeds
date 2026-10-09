@@ -58,7 +58,8 @@
     "AURORA_DB_APP_ROLE": "aurora_app",
     "AURORA_LOG_LEVEL": "info",
     "AURORA_ARQUIVOS_DIR": "/data/arquivos",
-    "AURORA_CORS_ORIGINS": ""
+    "AURORA_CORS_ORIGINS": "",
+    "AURORA_PROXY_CONFIAVEL": "rede-privada"
   },
   "secretsGeneratedOnNode": [],
   "volumes": ["arquivos"]
