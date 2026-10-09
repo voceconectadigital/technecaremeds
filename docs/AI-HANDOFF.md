@@ -1076,6 +1076,44 @@ diferença do motor de TESTE, não da API de produção.
 
 ## 20-A · Design system — o que saber antes de desenhar uma tela
 
+### ⚠️ Redesign enterprise (09/10/2026) — a direção visual ATUAL
+
+Objetivo: SaaS B2B enterprise, não "admin genérico". Só camada visual — rotas,
+permissões, contratos e regras intocados.
+
+- **Estilo padrão `techne`** (claro). `ESTILOS` em `packages/app-kit/src/theme.tsx`
+  e o script de cada `index.html` (web, portal, campo) já começam nele;
+  `futuristico`, `mindfulness` e `wellness` continuam selecionáveis. O `techne`
+  é o `:root` de `tokens.css` (não tem bloco `[data-estilo]` próprio).
+- **Cor:** rampa `brand` a partir de `marca.config.json` (`#4a7fc4` = 500 real;
+  botão = 600 `#3b6db3` 5,22:1; texto = 700 `#335f9e`); verde `#78c018` só como
+  forma (marcador da navegação, ícones do painel de marca), texto verde = lime-700.
+  Neutros frios (`bg #f5f6f8`, borda `#e3e6ec`).
+- **Navegação azul-marinho** (`--aurora-brand-950 #102038`) via papéis
+  `nav-*` (`bg-nav`, `text-nav-text`, `text-nav-label`, `bg-nav-active`,
+  `bg-nav-marker`…). Nos outros estilos os papéis apontam para a superfície
+  rebaixada. Dentro de `.aurora-nav` o estilo `techne` usa a logo escura.
+- **Tipografia:** Plus Jakarta Sans variável, **hospedada no pacote**
+  (`@fontsource-variable/plus-jakarta-sans`, importada em `apps/web` e
+  `apps/portal`; o Campo segue na pilha do sistema). Escala: caption 11 · label 12
+  · tabela 13 · corpo 14 · leitura 16 · título de cartão (`lg`) 15 · seção (`xl`) 18
+  · página (`2xl`) 24 bold · KPI (`3xl`) 30 bold · herói (`4xl`) 40.
+- **Ritmo:** múltiplos de 8 (8/12/16/24/32/40); `--aurora-content-max` 1600px;
+  raio controle 8 · cartão 12 · folha 16; sombra quase só de contato.
+- **Moldura** (`shell/app-shell.tsx`): cabeçalho da página no mesmo plano do
+  conteúdo e rolando junto (exceto tela `bleed`, o quadro de OS); topbar sólida
+  com a conta à direita; título + subtítulo à esquerda, ações à direita.
+- **Componentes novos/unificados:** `AlternadorDeTelas` (`shell/alternador.tsx`,
+  controle segmentado para telas-irmãs — use em vez de copiar links);
+  `SegmentGroup` + `FilterChip segment` (escolha exclusiva: período, janela);
+  `MolduraDeEntrada` (`routes/entrar-vitrine.tsx`, login real e da demo).
+  `Metric`/KPI: rótulo em frase, número na cor do texto (só atenção/problema
+  pintam o número), estado no ícone; tendência só com série real.
+- **Listas-tabela:** cabeçalho de colunas discreto (`aria-hidden`, as linhas são
+  links) e colunas de largura fixa para chips (Ativos, OS em lista).
+- **Prova:** `e2e/demo/redesign-auditoria.spec.ts` roda axe nos 4 estilos e
+  confere overflow/`h1` em 390/768/1024/1280/1440, sem API (`npm run demo:e2e`).
+
 Redesenhado em 29/09/2026. A fundação (tokens semânticos, contraste conferido,
 foco visível, estado nunca só por cor) **não mudou**; o que mudou foi
 calibração e o catálogo de componentes.
@@ -1191,10 +1229,10 @@ manifesto do PWA, strings nativas dos projetos de loja e
 | Logo horizontal | `apps/web/public/marca/technecare-horizontal.png` (arquivo **real** do cliente, 272 px de largura) |
 | Símbolo | `apps/web/public/marca/technecare-simbolo.png` |
 | Componente | `Logo` em `packages/ui/src/components/logo.tsx`: teto de largura, `alt` = nome do produto, **área clara de respiro no tema escuro** (a logo foi desenhada para papel branco; filtrar a imagem alteraria as cores da marca) |
-| Azul "Care" — cor de **produto** | `#3E69AC` (5,50:1 sobre branco) → escala `--aurora-brand-50…900`, chega às telas pelo token `accent` |
-| Verde-limão "Téchne" — **acento** | `#9DB924` (2,23:1 — **reprova como texto**). Só para FORMA: marcador de navegação ativa, ponto, barra. Texto usa `brand-accent-text` (`#6b7e18`, 4,54:1) |
-| Grafite do símbolo — tinta | `#262937` (14,44:1); os **neutros** derivam dele |
-| Tema claro / escuro (`theme-color`) | `#f3f5f8` / `#0d1017` |
+| Azul — cor de **produto** (desde 09/10) | `#4a7fc4` (`corPrimaria`) → escala `--aurora-brand-50…950`; `accent` = 600 `#3b6db3` (5,22:1), texto = 700 |
+| Verde — **acento** (desde 09/10) | `#78c018` (`corAcento`, 2,25:1 — **reprova como texto**). Só FORMA. Texto usa `brand-accent-text` (lime-700 `#4a7a12`, 5,14:1) |
+| Tinta | neutros frios de `#161a23` a `#f5f6f8` |
+| Tema claro / escuro (`theme-color`) | `#f5f6f8` / `#070a10` |
 | Título da aba | "Téchne Care" (web), "Portal — Téchne Care", "Campo — Téchne Care"; na demo, "Téchne Care — Demonstração" |
 
 **Como as cores foram obtidas (refazível):** histograma dos pixels **opacos**
