@@ -786,7 +786,25 @@ describe('CAMPO-009 · a marca do dia carrega milissegundos', () => {
     const r = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
 
     expect(r.body.synced_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-    expect(r.body.synced_at).not.toMatch(/\.000Z$/);
+
+    /*
+     * UMA marca terminada em `.000Z` não prova o defeito: um instante real cai
+     * no milissegundo zero uma vez em mil — e foi assim que esta prova falhou
+     * sozinha na CI do main (09/10/2026, `23:10:56.000Z`). O arredondamento
+     * produz `.000` SEMPRE; o acaso, quase nunca duas vezes. Por isso a prova
+     * olha várias marcas e exige que ao menos uma tenha milissegundos: com o
+     * defeito, todas são `.000`; sem ele, a chance de falso alarme é 10⁻¹².
+     */
+    const marcas = [r.body.synced_at as string];
+    for (let i = 0; i < 3; i++) {
+      await new Promise((ok) => setTimeout(ok, 7));
+      const outra = await http.get('/v1/field/sync').set(auth(EMAIL_TEC)).expect(200);
+      marcas.push(outra.body.synced_at as string);
+    }
+    expect(
+      marcas.some((m) => !m.endsWith('.000Z')),
+      `todas as marcas saíram arredondadas para o segundo: ${marcas.join(', ')}`
+    ).toBe(true);
   });
 
   it('a marca devolvida exclui de verdade o que já veio', async () => {
