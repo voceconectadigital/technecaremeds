@@ -1,8 +1,13 @@
 /**
- * Aurora — barra superior: busca, avisos, organização e conta (SPEC §34, §40).
+ * Aurora — barra superior (SPEC v0.2 §34, §40).
+ *
+ * Desde o redesign v2 (09/10/2026) ela mora DENTRO do canvas de conteúdo, no
+ * mesmo plano da página: busca à esquerda, tema e notificações à direita. A
+ * conta da pessoa desceu para a base da barra lateral (`ContaNaNavegacao`) —
+ * no celular, onde a barra lateral é gaveta, o avatar continua aqui.
  */
 import { useNavigate } from '@tanstack/react-router';
-import { Bell, Building2, Check, LogOut, Palette, Search, User } from 'lucide-react';
+import { Bell, Building2, Check, ChevronsUpDown, LogOut, Palette, Search, User } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Avatar, Button, CountBadge, Menu, cn, type MenuItem as MenuItemUi } from '@aurora/ui';
 import { meOrganizations } from '@aurora/contracts';
@@ -14,18 +19,84 @@ export interface TopbarProps {
   menuButton: ReactNode;
 }
 
-export function Topbar({ menuButton }: TopbarProps) {
-  const { data: sessao } = useSessionQuery();
+/** Os itens do menu da conta — os mesmos na barra lateral e no celular. */
+function useItensDaConta(): (MenuItemUi | 'separator')[] {
   const encerrarSessao = useEncerrarSessao();
   const navigate = useNavigate();
+  const { data: organizacoes } = useApiQuery(meOrganizations, undefined, { staleTime: 5 * 60_000 }) as {
+    data: { items: { organization_id: string; name: string }[] } | undefined;
+  };
+  const varias = (organizacoes?.items.length ?? 0) > 1;
+
+  const itens: (MenuItemUi | 'separator')[] = [
+    {
+      label: 'Meu perfil',
+      icon: <User className="size-4" />,
+      onSelect: () => void navigate({ to: '/perfil' }),
+    },
+  ];
+  if (varias) {
+    itens.push('separator', {
+      label: 'Trocar de organização',
+      icon: <Building2 className="size-4" />,
+      // Explícita, nunca implícita por URL (§05): a troca leva a uma tela de
+      // escolha, e não acontece como efeito colateral de um link.
+      onSelect: () => void navigate({ to: '/organizacoes' }),
+    });
+  }
+  itens.push('separator', {
+    label: 'Sair',
+    icon: <LogOut className="size-4" />,
+    destructive: true,
+    // Encerra NO SERVIDOR e depois navega. Ver `encerrar-sessao.ts`: limpar só
+    // o armazenamento local deixaria o token válido até expirar.
+    onSelect: () => void encerrarSessao().then(() => navigate({ to: '/entrar' })),
+  });
+  return itens;
+}
+
+/**
+ * A conta na base da barra lateral: avatar, nome e organização num bloco só,
+ * que abre o menu. É o "quem sou eu e onde estou" que a referência de SaaS
+ * enterprise põe no rodapé da navegação.
+ */
+export function ContaNaNavegacao({ organizacao }: { organizacao: string }) {
+  const { data: sessao } = useSessionQuery();
+  const itens = useItensDaConta();
+  const nome = sessao?.user.name || sessao?.user.email || 'Usuário';
+  return (
+    <Menu
+      label="Conta e preferências"
+      align="start"
+      items={itens}
+      trigger={
+        <button
+          type="button"
+          aria-label={`Conta de ${sessao?.user.name ?? 'usuário'}`}
+          className="flex w-full items-center gap-3 rounded-[12px] bg-nav-raised px-2.5 py-2 text-left transition-colors hover:bg-nav-hover"
+        >
+          <Avatar name={nome} size="md" />
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-sm font-semibold text-nav-text-active">{nome}</span>
+            <span className="mt-0.5 block truncate text-xs text-nav-label">{organizacao}</span>
+          </span>
+          <ChevronsUpDown aria-hidden="true" className="size-4 shrink-0 text-nav-label" />
+        </button>
+      }
+    />
+  );
+}
+
+export function Topbar({ menuButton }: TopbarProps) {
+  const { data: sessao } = useSessionQuery();
   const { estilo, definir } = useTheme();
   const [buscaAberta, setBuscaAberta] = useState(false);
+  const itensDaConta = useItensDaConta();
 
   /*
-   * Ctrl/Cmd+K abre a busca de qualquer lugar.
-   *
-   * Ignorado enquanto o foco está num campo de texto: quem está escrevendo a
-   * descrição de uma OS e digita "k" não quer que a tela troque.
+   * Ctrl/Cmd+K abre a busca de qualquer lugar. Ignorado enquanto o foco está
+   * num campo de texto: quem escreve a descrição de uma OS e digita "k" não
+   * quer que a tela troque.
    */
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
@@ -40,90 +111,37 @@ export function Topbar({ menuButton }: TopbarProps) {
     return () => document.removeEventListener('keydown', aoTeclar);
   }, []);
 
-  const { data: organizacoes } = useApiQuery(meOrganizations, undefined, { staleTime: 5 * 60_000 }) as {
-    data: { items: { organization_id: string; name: string }[] } | undefined;
-  };
-  const varias = (organizacoes?.items.length ?? 0) > 1;
-
-  const itensDaConta: (MenuItemUi | 'separator')[] = [
-    {
-      label: 'Meu perfil',
-      icon: <User className="size-4" />,
-      onSelect: () => void navigate({ to: '/perfil' }),
-    },
-  ];
-
-  /*
-   * Tema à vista, e não escondido no perfil: trocar o estilo é parte da
-   * apresentação do produto. A escolha fica guardada neste navegador.
-   */
+  // Tema à vista, e não escondido no perfil: trocar o estilo é parte da
+  // apresentação do produto. A escolha fica guardada neste navegador.
   const itensDeTema: MenuItemUi[] = ESTILOS.map((e) => ({
     label: `${e.nome} — ${e.descricao}`,
     icon: e.id === estilo ? <Check className="size-4" /> : <span className="size-4" aria-hidden="true" />,
     onSelect: () => definir(e.id),
   }));
 
-  if (varias) {
-    itensDaConta.push('separator', {
-      label: 'Trocar de organização',
-      icon: <Building2 className="size-4" />,
-      // Explícita, nunca implícita por URL (§05): a troca leva a uma tela de
-      // escolha, e não acontece como efeito colateral de um link.
-      onSelect: () => void navigate({ to: '/organizacoes' }),
-    });
-  }
-
-  itensDaConta.push('separator', {
-    label: 'Sair',
-    icon: <LogOut className="size-4" />,
-    destructive: true,
-    onSelect: () => {
-      // Encerra NO SERVIDOR e depois navega. Ver `encerrar-sessao.ts`:
-      // limpar só o armazenamento local deixaria o token válido até expirar.
-      void encerrarSessao().then(() => navigate({ to: '/entrar' }));
-    },
-  });
-
   return (
-    <header className="relative z-[var(--aurora-z-sticky)] flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-6">
+    <header className="relative z-[var(--aurora-z-sticky)] flex h-16 shrink-0 items-center gap-3 border-b border-border-subtle bg-bg/80 px-3 backdrop-blur-md md:px-8">
       {menuButton}
 
-      {/*
-       * A busca é um BOTÃO, e não um campo na barra.
-       *
-       * Campo na barra ocupa espaço permanente para uma ação ocasional, e no
-       * celular empurra tudo. O botão diz o atalho, que é como a pessoa
-       * aprende a não usar o mouse.
-       */}
+      {/* A busca é um BOTÃO: campo na barra ocupa espaço permanente para uma
+          ação ocasional, e o botão ensina o atalho. */}
       <button
         type="button"
         onClick={() => setBuscaAberta(true)}
         className={cn(
-          'flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-control border border-border bg-surface-subtle px-3 text-left',
-          'text-sm text-subtle transition-colors hover:border-border-strong hover:bg-surface hover:text-muted',
-          'md:max-w-md'
+          'flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-control bg-surface px-3.5 text-left shadow-card',
+          'text-sm text-subtle transition-shadow hover:text-muted hover:shadow-raised',
+          'md:max-w-lg'
         )}
       >
         <Search aria-hidden="true" className="size-4 shrink-0" />
         <span className="flex-1 truncate">Buscar OS, ativo, solicitação…</span>
-        <kbd className="hidden rounded-[5px] border border-border bg-surface px-1.5 py-0.5 font-sans text-2xs font-medium text-subtle md:inline">
+        <kbd className="hidden rounded-[6px] bg-surface-sunken px-1.5 py-0.5 font-sans text-2xs font-semibold text-subtle md:inline">
           Ctrl K
         </kbd>
       </button>
 
       <div className="flex shrink-0 items-center justify-end gap-1 md:flex-1">
-        {varias && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            icon={<Building2 className="size-4" />}
-            onClick={() => void navigate({ to: '/organizacoes' })}
-          >
-            {sessao?.organization.name ?? '—'}
-          </Button>
-        )}
-
         <Menu
           label="Tema visual"
           align="end"
@@ -142,27 +160,23 @@ export function Topbar({ menuButton }: TopbarProps) {
 
         <NotificationsButton />
 
-        <Menu
-          label="Conta e preferências"
-          align="end"
-          items={itensDaConta}
-          trigger={
-            <button
-              type="button"
-              aria-label={`Conta de ${sessao?.user.name ?? 'usuário'}`}
-              className="flex items-center gap-2.5 rounded-control py-1 pr-2 pl-1 transition-colors hover:bg-surface-hover md:ml-1 md:border-l md:border-border md:pl-3"
-            >
-              <Avatar name={sessao?.user.name || sessao?.user.email || '?'} size="md" />
-              {/* O nome à vista a partir de 1280px: quem divide o computador
-                  da sala técnica confere de quem é a sessão sem abrir menu. */}
-              {sessao?.user.name && (
-                <span className="hidden max-w-40 truncate text-sm font-semibold text-text xl:inline">
-                  {sessao.user.name}
-                </span>
-              )}
-            </button>
-          }
-        />
+        {/* No celular a barra lateral é gaveta: a conta fica aqui. */}
+        <div className="md:hidden">
+          <Menu
+            label="Conta e preferências"
+            align="end"
+            items={itensDaConta}
+            trigger={
+              <button
+                type="button"
+                aria-label={`Conta de ${sessao?.user.name ?? 'usuário'}`}
+                className="rounded-pill transition-opacity hover:opacity-80"
+              >
+                <Avatar name={sessao?.user.name || sessao?.user.email || '?'} size="md" />
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <GlobalSearch open={buscaAberta} onOpenChange={setBuscaAberta} />
@@ -170,13 +184,6 @@ export function Topbar({ menuButton }: TopbarProps) {
   );
 }
 
-/**
- * O sino.
- *
- * O contador é o número de NÃO LIDAS, e o rótulo diz isso por extenso: um "3"
- * solto ao lado de um sino não informa três do quê para quem usa leitor de
- * tela.
- */
 function NotificationsButton() {
   const navigate = useNavigate();
   // A contagem virá da rota de notificações quando ela tiver contrato; até lá
@@ -188,7 +195,7 @@ function NotificationsButton() {
       type="button"
       onClick={() => void navigate({ to: '/notificacoes' })}
       aria-label={naoLidas > 0 ? `Notificações: ${naoLidas} não lidas` : 'Notificações: nenhuma não lida'}
-      className="relative grid size-9 place-items-center rounded-control text-muted transition-colors hover:bg-surface-hover hover:text-text"
+      className="relative grid size-9 place-items-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-text"
     >
       <Bell aria-hidden="true" className="size-[18px]" />
       {naoLidas > 0 && (

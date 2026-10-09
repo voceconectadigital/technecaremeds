@@ -105,7 +105,7 @@ export function Metric({
   return (
     <div
       className={cn(
-        'group relative flex flex-col gap-2 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
+        'group relative flex flex-col gap-2 overflow-hidden rounded-card border border-card-border bg-surface p-4 shadow-card',
         className
       )}
     >

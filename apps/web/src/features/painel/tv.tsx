@@ -362,7 +362,7 @@ function Numero({
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-card border border-border bg-surface px-4 py-3 shadow-card lg:px-5',
+        'relative overflow-hidden rounded-card border border-card-border bg-surface px-4 py-3 shadow-card lg:px-5',
         'before:absolute before:inset-x-0 before:top-0 before:h-1',
         COR[tom]
       )}
@@ -390,7 +390,7 @@ function Painel({
   return (
     <section
       className={cn(
-        'flex min-h-0 flex-col gap-2 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
+        'flex min-h-0 flex-col gap-2 overflow-hidden rounded-card border border-card-border bg-surface p-4 shadow-card',
         className
       )}
     >

@@ -84,37 +84,36 @@ export function ContratosPage() {
       <div className="flex flex-col gap-4">
         <AlternadorComercial />
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search
-              aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
-            />
-            <input
-              type="search"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Filtrar por número ou título"
-              aria-label="Filtrar contratos"
-              className="h-8 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
-            />
+        <Card className="overflow-hidden">
+          <div className="flex flex-col gap-2 border-b border-border-subtle p-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
+              />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Filtrar por número ou título"
+                aria-label="Filtrar contratos"
+                className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
+              />
+            </div>
+            <Select
+              value={situacao}
+              aria-label="Situação"
+              onChange={(e) => setSituacao(e.target.value)}
+              className="sm:w-48"
+            >
+              <option value="">Todas as situações</option>
+              {CONTRACT_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {ROTULO[s]}
+                </option>
+              ))}
+            </Select>
           </div>
-          <Select
-            value={situacao}
-            aria-label="Situação"
-            onChange={(e) => setSituacao(e.target.value)}
-            className="sm:w-48"
-          >
-            <option value="">Todas as situações</option>
-            {CONTRACT_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {ROTULO[s]}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <Card>
           {isLoading ? (
             <div className="p-3">
               <SkeletonList rows={6} label="contratos" />
@@ -180,14 +179,14 @@ function LinhaDeContrato({ contrato: c }: { contrato: ContractRow }) {
     <Link
       to="/contratos/$id"
       params={{ id: c.id }}
-      className="flex flex-col gap-2.5 px-4 py-3.5 transition-colors hover:bg-surface-hover"
+      className="flex flex-col gap-2.5 px-5 py-4 transition-colors hover:bg-surface-hover"
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           {/* Título nulo é permitido: há contrato identificado só pelo número,
               e mostrar "—" seria pior do que mostrar o número, que é o que a
               pessoa procura. */}
-          <p className="truncate text-base font-medium text-text">{c.title || c.number}</p>
+          <p className="truncate text-base font-semibold text-text">{c.title || c.number}</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted" data-numeric>
             <span className="font-medium">{c.number}</span>
             {c.auto_renew && (

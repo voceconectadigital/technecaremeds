@@ -326,7 +326,7 @@ function CartaoDeOs({
       onDragEnd={onDragEnd}
       aria-busy={ocupada || undefined}
       className={cn(
-        'relative block overflow-hidden rounded-card border border-border bg-surface p-3 pl-4 shadow-card transition-all hover:border-border-strong hover:shadow-raised',
+        'relative block overflow-hidden rounded-card border border-card-border bg-surface p-3 pl-4 shadow-card transition-all hover:border-border-strong hover:shadow-raised',
         ocupada && 'opacity-60'
       )}
     >
@@ -415,20 +415,28 @@ function Lista() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Tabs
-        aria-label="Categoria"
-        value={categoria}
-        onChange={setCategoria}
-        items={[
-          { id: 'todas', label: 'Todas' },
-          { id: 'open', label: 'Abertas' },
-          { id: 'in_progress', label: 'Em execução' },
-          { id: 'waiting', label: 'Paradas' },
-          { id: 'done', label: 'Concluídas' },
-        ]}
-      />
-
-      <Card>
+      <Card className="overflow-hidden">
+        {/* As abas são a barra de ferramentas do painel, e não uma faixa solta. */}
+        <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 pt-1">
+          <Tabs
+            aria-label="Categoria"
+            value={categoria}
+            onChange={setCategoria}
+            className="border-b-0"
+            items={[
+              { id: 'todas', label: 'Todas' },
+              { id: 'open', label: 'Abertas' },
+              { id: 'in_progress', label: 'Em execução' },
+              { id: 'waiting', label: 'Paradas' },
+              { id: 'done', label: 'Concluídas' },
+            ]}
+          />
+          {!isLoading && (
+            <span className="hidden shrink-0 text-xs text-subtle sm:block" data-numeric>
+              {itens.length} {itens.length === 1 ? 'ordem' : 'ordens'}
+            </span>
+          )}
+        </div>
         {isLoading ? (
           <div className="p-3">
             <SkeletonList rows={8} label="ordens de serviço" />
@@ -456,44 +464,56 @@ function Lista() {
             }
           />
         ) : (
-          <ul>
-            {itens.map((os, i) => (
-              <li key={os.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
-                <Link
-                  to="/ordens/$id"
-                  params={{ id: os.id }}
-                  className="flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-hover"
-                >
-                  <span
-                    className="w-24 shrink-0 font-mono text-xs whitespace-nowrap text-muted tabular-nums"
-                    data-numeric
+          <>
+            <div
+              aria-hidden="true"
+              className="hidden items-center gap-4 border-b border-border-subtle bg-surface-subtle px-4 py-2 text-2xs font-semibold tracking-label text-subtle uppercase md:flex"
+            >
+              <span className="w-24 shrink-0">Número</span>
+              <span className="min-w-0 flex-1">Ordem de serviço</span>
+              <span className="w-20 shrink-0 text-right">Aberta</span>
+              <span className="w-28 shrink-0 text-right">Prioridade</span>
+              <span className="w-28 shrink-0 text-right">Situação</span>
+            </div>
+            <ul>
+              {itens.map((os, i) => (
+                <li key={os.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
+                  <Link
+                    to="/ordens/$id"
+                    params={{ id: os.id }}
+                    className="flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-hover"
                   >
-                    {os.number ?? '—'}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-semibold text-text">{os.title}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {[os.asset_name_snapshot, os.location_name_snapshot].filter(Boolean).join(' · ') ||
-                        'sem equipamento'}
+                    <span
+                      className="w-24 shrink-0 font-mono text-xs whitespace-nowrap text-muted tabular-nums"
+                      data-numeric
+                    >
+                      {os.number ?? '—'}
                     </span>
-                  </span>
-                  <span className="hidden w-20 shrink-0 text-right text-xs text-muted md:block">
-                    {formatarDataRelativa(os.created_at)}
-                  </span>
-                  {/* Colunas de largura fixa: prioridade e situação caem no
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-base font-semibold text-text">{os.title}</span>
+                      <span className="block truncate text-xs text-muted">
+                        {[os.asset_name_snapshot, os.location_name_snapshot].filter(Boolean).join(' · ') ||
+                          'sem equipamento'}
+                      </span>
+                    </span>
+                    <span className="hidden w-20 shrink-0 text-right text-xs text-muted md:block">
+                      {formatarDataRelativa(os.created_at)}
+                    </span>
+                    {/* Colunas de largura fixa: prioridade e situação caem no
                       mesmo lugar em toda linha, e o olho varre de cima a baixo. */}
-                  <span className="flex shrink-0 justify-end md:w-28">
-                    <PrioridadeChip prioridade={os.priority} />
-                  </span>
-                  <span className="flex shrink-0 justify-end md:w-28">
-                    <StatusChip tone={tomDaCategoria(os.category)} size="sm">
-                      {os.status_label}
-                    </StatusChip>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <span className="flex shrink-0 justify-end md:w-28">
+                      <PrioridadeChip prioridade={os.priority} />
+                    </span>
+                    <span className="flex shrink-0 justify-end md:w-28">
+                      <StatusChip tone={tomDaCategoria(os.category)} size="sm">
+                        {os.status_label}
+                      </StatusChip>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </Card>
     </div>

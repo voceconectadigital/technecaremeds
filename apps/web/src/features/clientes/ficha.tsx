@@ -194,7 +194,7 @@ export function ClientePage() {
                   return (
                     <li
                       key={s.id}
-                      className="flex flex-col gap-3 rounded-card border border-border bg-surface p-4 shadow-card"
+                      className="flex flex-col gap-3 rounded-card border border-card-border bg-surface p-4 shadow-card"
                     >
                       <div className="flex items-start gap-3">
                         <Thumb name={s.name} size="md" />

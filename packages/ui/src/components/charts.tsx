@@ -70,6 +70,11 @@ export interface BarChartProps {
   format?: (v: number) => string;
   /** Acima disso, agrupa o resto em "outros". */
   maxItems?: number;
+  /**
+   * `stacked`: rótulo e valor numa linha, barra fina embaixo — para cartão
+   * de painel com altura para preencher. `inline` (padrão) é o compacto.
+   */
+  layout?: 'inline' | 'stacked';
   className?: string;
 }
 
@@ -81,7 +86,14 @@ export interface BarChartProps {
  * de 45 graus, que ninguém lê, ou reticências, que escondem justamente o que
  * distingue uma barra da outra.
  */
-export function BarChart({ data, label, format = String, maxItems = 8, className }: BarChartProps) {
+export function BarChart({
+  data,
+  label,
+  format = String,
+  maxItems = 8,
+  layout = 'inline',
+  className,
+}: BarChartProps) {
   const ordenado = [...data].sort((a, b) => b.value - a.value);
   const visiveis = ordenado.slice(0, maxItems);
   const resto = ordenado.slice(maxItems);
@@ -96,6 +108,35 @@ export function BarChart({ data, label, format = String, maxItems = 8, className
   // O máximo é o da maior barra, nunca a soma: com a soma, uma distribuição
   // equilibrada vira oito barras minúsculas e o gráfico não diz nada.
   const maximo = Math.max(...visiveis.map((d) => d.value), 1);
+
+  if (layout === 'stacked') {
+    return (
+      <div className={cn('flex flex-col gap-4', className)} role="img" aria-label={label}>
+        {visiveis.map((d, i) => (
+          <div key={d.label} className="flex flex-col gap-1.5">
+            <span className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="truncate font-medium text-text" title={d.label}>
+                {d.label}
+              </span>
+              <span data-numeric className="shrink-0 font-bold tabular-nums text-text">
+                {format(d.value)}
+              </span>
+            </span>
+            <span className="relative h-2 overflow-hidden rounded-pill bg-surface-sunken">
+              <span
+                className="absolute inset-y-0 left-0 rounded-pill transition-[width] duration-normal"
+                style={{
+                  width: `${Math.max((d.value / maximo) * 100, d.value > 0 ? 2 : 0)}%`,
+                  backgroundColor: corDe(d, i),
+                }}
+              />
+            </span>
+          </div>
+        ))}
+        <TabelaParaLeitor label={label} data={visiveis} format={format} />
+      </div>
+    );
+  }
 
   return (
     <div className={cn('flex flex-col gap-2', className)} role="img" aria-label={label}>

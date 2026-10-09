@@ -96,6 +96,45 @@ function escalaDoEixo(max: number): { topo: number; marcas: number[] } {
   return { topo, marcas };
 }
 
+/**
+ * Curva monotônica (Fritsch–Carlson): suaviza sem "inventar" — nunca passa
+ * acima do maior vizinho nem abaixo de zero, que é o defeito da Catmull-Rom
+ * comum num gráfico de contagem.
+ */
+function caminhoSuave(p: Array<[number, number]>): string {
+  if (p.length < 3) return p.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const n = p.length;
+  const d: number[] = [];
+  const m: number[] = [];
+  for (let i = 0; i < n - 1; i++) d.push((p[i + 1]![1] - p[i]![1]) / (p[i + 1]![0] - p[i]![0]));
+  m.push(d[0]!);
+  for (let i = 1; i < n - 1; i++) m.push(d[i - 1]! * d[i]! <= 0 ? 0 : (d[i - 1]! + d[i]!) / 2);
+  m.push(d[n - 2]!);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i]! / d[i]!;
+    const b = m[i + 1]! / d[i]!;
+    const s = a * a + b * b;
+    if (s > 9) {
+      const t = 3 / Math.sqrt(s);
+      m[i] = t * a * d[i]!;
+      m[i + 1] = t * b * d[i]!;
+    }
+  }
+  let out = `M${p[0]![0].toFixed(1)},${p[0]![1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = p[i]!;
+    const [x1, y1] = p[i + 1]!;
+    const h = (x1 - x0) / 3;
+    out += ` C${(x0 + h).toFixed(1)},${(y0 + m[i]! * h).toFixed(1)} ${(x1 - h).toFixed(1)},${(y1 - m[i + 1]! * h).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`;
+  }
+  return out;
+}
+
 function Legenda({ itens }: { itens: Array<{ label: string; cor: string; dashed?: boolean }> }) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
@@ -103,13 +142,13 @@ function Legenda({ itens }: { itens: Array<{ label: string; cor: string; dashed?
         <li key={i.label} className="flex items-center gap-1.5">
           <span
             aria-hidden="true"
-            className="inline-block h-0.5 w-4 rounded-full"
+            className={cn('inline-block', i.dashed ? 'h-0.5 w-3.5' : 'size-2 rounded-full')}
             style={{
               backgroundColor: i.dashed ? 'transparent' : i.cor,
               borderTop: i.dashed ? `2px dashed ${i.cor}` : undefined,
             }}
           />
-          {i.label}
+          <span className="font-medium">{i.label}</span>
         </li>
       ))}
     </ul>
@@ -197,9 +236,10 @@ export function TrendChart({
 }: TrendChartProps) {
   const [ref, largura] = useLargura<HTMLDivElement>();
   const [foco, setFoco] = useState<number | null>(null);
+  const idBase = useId().replace(/:/g, '');
   const tv = scale === 'tv';
   const fonte = tv ? 15 : 11;
-  const margem = { top: 12, right: 12, bottom: tv ? 30 : 22, left: tv ? 48 : 36 };
+  const margem = { top: 12, right: 12, bottom: tv ? 30 : 24, left: tv ? 48 : 32 };
   const n = labels.length;
   const numeros = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
   const { topo: max, marcas: grades } = escalaDoEixo(Math.max(0, ...numeros));
@@ -220,7 +260,7 @@ export function TrendChart({
       )}
       <div ref={ref} className="relative w-full" style={{ height }}>
         {vazio ? (
-          <div className="flex h-full items-center justify-center rounded-control border border-dashed border-border-subtle text-sm text-muted">
+          <div className="flex h-full items-center justify-center rounded-control bg-surface-subtle text-sm text-muted">
             {emptyMessage}
           </div>
         ) : largura > 0 ? (
@@ -237,6 +277,14 @@ export function TrendChart({
               setFoco(Math.min(n - 1, Math.max(0, i)));
             }}
           >
+            <defs>
+              {series.map((s, si) => (
+                <linearGradient key={s.key} id={`${idBase}-g${si}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={corDaSerie(s, si)} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={corDaSerie(s, si)} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
             {grades.map((g) => (
               <g key={g}>
                 <line
@@ -244,8 +292,9 @@ export function TrendChart({
                   x2={margem.left + w}
                   y1={y(g)}
                   y2={y(g)}
-                  stroke="var(--color-border-subtle)"
+                  stroke={g === 0 ? 'var(--color-border)' : 'var(--color-border-subtle)'}
                   strokeWidth={1}
+                  strokeDasharray={g === 0 ? undefined : '2 4'}
                 />
                 <text
                   x={margem.left - 6}
@@ -289,26 +338,37 @@ export function TrendChart({
               return (
                 <g key={s.key}>
                   {trechos.map((t) => {
-                    const pts = t.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+                    const curva = caminhoSuave(t.map(([i, v]) => [x(i), y(v)] as [number, number]));
+                    const ultimo = t[t.length - 1]!;
                     return (
                       <g key={t[0]![0]}>
                         {s.area && t.length > 1 && (
-                          <polygon
-                            points={`${x(t[0]![0])},${y(0)} ${pts} ${x(t[t.length - 1]![0])},${y(0)}`}
-                            fill={cor}
-                            opacity={0.12}
+                          <path
+                            d={`${curva} L${x(ultimo[0]).toFixed(1)},${y(0)} L${x(t[0]![0]).toFixed(1)},${y(0)} Z`}
+                            fill={`url(#${idBase}-g${si})`}
                           />
                         )}
                         {t.length > 1 ? (
-                          <polyline
-                            points={pts}
-                            fill="none"
-                            stroke={cor}
-                            strokeWidth={tv ? 3 : 2}
-                            strokeLinejoin="round"
-                            strokeLinecap="round"
-                            strokeDasharray={s.dashed ? '5 4' : undefined}
-                          />
+                          <>
+                            <path
+                              d={curva}
+                              fill="none"
+                              stroke={cor}
+                              strokeWidth={tv ? 3 : 2.25}
+                              strokeLinejoin="round"
+                              strokeLinecap="round"
+                              strokeDasharray={s.dashed ? '5 4' : undefined}
+                            />
+                            {/* O último ponto marcado: "onde estamos agora". */}
+                            <circle
+                              cx={x(ultimo[0])}
+                              cy={y(ultimo[1])}
+                              r={tv ? 4.5 : 3.5}
+                              fill={cor}
+                              stroke="var(--color-surface)"
+                              strokeWidth={2}
+                            />
+                          </>
                         ) : (
                           // Ponto isolado: sem vizinho, a linha não teria comprimento.
                           <circle cx={x(t[0]![0])} cy={y(t[0]![1])} r={3.5} fill={cor} />
@@ -328,6 +388,7 @@ export function TrendChart({
                   y2={margem.top + h}
                   stroke="var(--color-border-strong)"
                   strokeWidth={1}
+                  strokeDasharray="3 3"
                 />
                 {series.map((s, si) =>
                   s.values[foco] === null || s.values[foco] === undefined ? null : (
@@ -349,21 +410,29 @@ export function TrendChart({
         {foco !== null && !vazio && largura > 0 && (
           <div
             role="presentation"
-            className="pointer-events-none absolute top-1 z-10 min-w-36 rounded-control border border-border bg-surface-raised px-3 py-2 text-xs shadow-raised"
+            className="pointer-events-none absolute top-1 z-10 min-w-40 rounded-[10px] px-3 py-2.5 text-xs shadow-overlay"
             style={{
-              left: Math.min(Math.max(x(foco) + 10, 0), Math.max(largura - 160, 0)),
+              left: Math.min(Math.max(x(foco) + 12, 0), Math.max(largura - 172, 0)),
+              backgroundColor: 'var(--aurora-neutral-900)',
+              color: 'var(--aurora-neutral-0)',
             }}
           >
-            <p className="mb-1 font-semibold text-text">{labels[foco]}</p>
+            <p className="mb-1.5 font-semibold" style={{ color: 'var(--aurora-neutral-0)' }}>
+              {labels[foco]}
+            </p>
             {series.map((s, si) => (
-              <p key={s.key} className="flex items-center gap-2 text-muted">
+              <p
+                key={s.key}
+                className="flex items-center gap-2"
+                style={{ color: 'var(--aurora-neutral-300)' }}
+              >
                 <span
                   aria-hidden="true"
                   className="size-2 shrink-0 rounded-full"
                   style={{ backgroundColor: corDaSerie(s, si) }}
                 />
                 <span className="flex-1">{s.label}</span>
-                <span className="font-semibold text-text tabular-nums">
+                <span className="font-semibold tabular-nums" style={{ color: 'var(--aurora-neutral-0)' }}>
                   {s.values[foco] === null || s.values[foco] === undefined
                     ? 'sem dados'
                     : format(s.values[foco] as number)}
@@ -441,7 +510,7 @@ export function ColumnChart({
       <Legenda itens={segments.map((s, i) => ({ label: s.label, cor: corDaSerie(s, i) }))} />
       <div ref={ref} className="relative w-full" style={{ height }}>
         {vazio ? (
-          <div className="flex h-full items-center justify-center rounded-control border border-dashed border-border-subtle text-sm text-muted">
+          <div className="flex h-full items-center justify-center rounded-control bg-surface-subtle text-sm text-muted">
             {emptyMessage}
           </div>
         ) : largura > 0 ? (

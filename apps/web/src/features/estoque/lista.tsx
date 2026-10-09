@@ -115,7 +115,7 @@ export function EstoquePage() {
           <div className="relative sm:w-72">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
+              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
             />
             <input
               type="search"
@@ -123,7 +123,7 @@ export function EstoquePage() {
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Filtrar por item, código ou almoxarifado"
               aria-label="Filtrar saldos"
-              className="h-8 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
+              className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
             />
           </div>
         </div>
@@ -132,7 +132,10 @@ export function EstoquePage() {
           {isLoading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }, (_, i) => (
-                <div key={i} className="h-28 animate-pulse rounded-card border border-border bg-surface" />
+                <div
+                  key={i}
+                  className="h-28 animate-pulse rounded-card border border-card-border bg-surface"
+                />
               ))}
             </div>
           ) : filtrados.length === 0 ? (
@@ -248,7 +251,7 @@ function CartaoDeItem({ saldo, onAbrir }: { saldo: StockBalance; onAbrir: () => 
     <button
       type="button"
       onClick={onAbrir}
-      className="group flex w-full flex-col gap-3 rounded-card border border-border bg-surface p-3 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised"
+      className="group flex w-full flex-col gap-3 rounded-card border border-card-border bg-surface p-3 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised"
     >
       <div className="flex items-start gap-3">
         <Thumb src={saldo.image_url} name={saldo.item_name} size="lg" />

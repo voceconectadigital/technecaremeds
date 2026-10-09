@@ -32,7 +32,7 @@ export function Card({ children, className, raised = false, as: Tag = 'div' }: C
         // retângulos de 1px não tem. `raised` continua existindo para o que
         // precisa se destacar DENTRE cartões — e aí a diferença volta a ser
         // perceptível, porque o piso subiu junto.
-        'rounded-card border border-border bg-surface shadow-card',
+        'rounded-card border border-card-border bg-surface shadow-card',
         raised && 'shadow-raised',
         className
       )}
@@ -125,7 +125,7 @@ export function EmptyState({
       {icon && (
         <div
           aria-hidden="true"
-          className="flex size-10 items-center justify-center rounded-card border border-border bg-surface-subtle text-muted shadow-card"
+          className="flex size-10 items-center justify-center rounded-card border border-card-border bg-surface-subtle text-muted shadow-card"
         >
           {icon}
         </div>

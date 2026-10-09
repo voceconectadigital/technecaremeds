@@ -26,6 +26,7 @@ import {
   Inbox,
   Package,
   PackagePlus,
+  Plus,
   Receipt,
   Repeat,
   UserPlus,
@@ -134,21 +135,22 @@ export function atalhosPara(can: Pode): Atalho[] {
 
 export function AtalhosRapidos() {
   const { can } = usePermissions();
-  const atalhos = atalhosPara(can);
+  // Criar primeiro: são as ações; o resto é atalho de navegação.
+  const atalhos = [...atalhosPara(can)].sort((a, b) => Number(b.criar) - Number(a.criar));
   if (atalhos.length === 0) return null;
 
+  /*
+   * AÇÕES RÁPIDAS BAIXAS, e não uma fileira de cartões: 44px de altura, sem
+   * moldura em volta. Criar tem o quadrado azul com "+" — é a única cor da
+   * faixa —; navegar tem o ícone em traço neutro. O título fica só para o
+   * leitor de tela: os rótulos já dizem o que cada uma faz.
+   */
   return (
-    <nav
-      aria-labelledby="atalhos-rapidos"
-      className="flex flex-col gap-2 rounded-card border border-border bg-surface p-2 shadow-card lg:flex-row lg:items-center lg:gap-3"
-    >
-      <h2
-        id="atalhos-rapidos"
-        className="shrink-0 px-2 text-2xs font-semibold tracking-[0.08em] text-subtle uppercase lg:border-r lg:border-border-subtle lg:pr-4"
-      >
+    <nav aria-labelledby="atalhos-rapidos">
+      <h2 id="atalhos-rapidos" className="aurora-sr-only">
         Atalhos rápidos
       </h2>
-      <ul className="flex gap-1 overflow-x-auto [scrollbar-width:none] lg:flex-wrap lg:overflow-visible">
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {atalhos.map((a) => {
           const Icone = a.icone;
           return (
@@ -157,21 +159,25 @@ export function AtalhosRapidos() {
                 to={a.para}
                 search={(a.busca ?? {}) as never}
                 className={cn(
-                  'group inline-flex h-9 items-center gap-2 rounded-control px-2.5 text-sm whitespace-nowrap transition-colors',
-                  a.criar
-                    ? 'font-semibold text-accent-text hover:bg-accent-soft'
-                    : 'font-medium text-muted hover:bg-surface-hover hover:text-text'
+                  'group flex h-11 items-center gap-2.5 rounded-[12px] bg-surface px-3 text-sm shadow-card transition-[box-shadow,background-color] hover:shadow-raised',
+                  a.criar ? 'font-semibold text-text' : 'font-medium text-muted hover:text-text'
                 )}
               >
-                <Icone
-                  aria-hidden="true"
-                  strokeWidth={1.75}
-                  className={cn(
-                    'size-4 shrink-0',
-                    a.criar ? 'text-accent-text' : 'text-subtle group-hover:text-text'
-                  )}
-                />
-                {a.rotulo}
+                {a.criar ? (
+                  <span
+                    aria-hidden="true"
+                    className="grid size-6 shrink-0 place-items-center rounded-[7px] bg-accent text-on-accent"
+                  >
+                    <Plus className="size-3.5" strokeWidth={2.5} />
+                  </span>
+                ) : (
+                  <Icone
+                    aria-hidden="true"
+                    strokeWidth={1.75}
+                    className="size-[18px] shrink-0 text-subtle transition-colors group-hover:text-accent-text"
+                  />
+                )}
+                <span className="line-clamp-2 leading-tight">{a.rotulo}</span>
               </Link>
             </li>
           );

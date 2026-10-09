@@ -200,7 +200,7 @@ function CartaoDaAgenda({ os, onProgramar }: { os: Balde; onProgramar: () => voi
       type="button"
       onClick={onProgramar}
       className={cn(
-        'relative w-full overflow-hidden rounded-card border border-border bg-surface p-3 pl-4 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised',
+        'relative w-full overflow-hidden rounded-card border border-card-border bg-surface p-3 pl-4 text-left shadow-card transition-all hover:border-border-strong hover:shadow-raised',
         os.window_invalidated_at && 'border-warn'
       )}
     >

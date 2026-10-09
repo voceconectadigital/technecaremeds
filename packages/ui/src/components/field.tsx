@@ -133,7 +133,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export function Input({ className, ...rest }: InputProps) {
   const campo = useFieldControl();
-  return <input {...campo} {...rest} className={cn(CONTROLE_BASE, 'h-9 border-border-strong', className)} />;
+  return <input {...campo} {...rest} className={cn(CONTROLE_BASE, 'h-10 border-border-strong', className)} />;
 }
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -172,7 +172,7 @@ export function Select({ className, children, ...rest }: SelectProps) {
       {...rest}
       className={cn(
         CONTROLE_BASE,
-        'aurora-select h-9 cursor-pointer appearance-none border-border-strong pr-9',
+        'aurora-select h-10 cursor-pointer appearance-none border-border-strong pr-9',
         className
       )}
     >

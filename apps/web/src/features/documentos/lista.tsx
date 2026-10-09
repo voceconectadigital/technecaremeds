@@ -92,7 +92,7 @@ export function DocumentosPage() {
             <div className="relative flex-1 sm:w-64">
               <Search
                 aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
               />
               <input
                 type="search"
@@ -100,7 +100,7 @@ export function DocumentosPage() {
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder="Número, título ou equipamento"
                 aria-label="Filtrar documentos"
-                className="h-8 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
+                className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
               />
             </div>
             {tipos.length > 1 && (
