@@ -14,8 +14,10 @@ no commit fixado e sobe, num node dedicado:
   (`tools/imagem/apontar-dist.mjs`) → `npm prune --omit=dev`. Em runtime não há `tsx`: as ferramentas de banco
   carregam `dist/` com `AURORA_COMPILADO=1` (`tools/lib/fonte.mjs`).
 - **Banco:** as migrations criam as 8 roles, FORCE RLS, triggers e SECURITY DEFINER exatamente como no repositório.
-  O HostPanel cria só o login `aurora_api_login` — `NOSUPERUSER NOBYPASSRLS`, herdando `aurora_app`, com `CREATE`
-  no database (o pg-boss cria o schema `aurora_jobs`). A API recusa subir com papel privilegiado (§37).
+  O HostPanel cria só os LOGINS, todos `NOSUPERUSER NOBYPASSRLS`: `aurora_api_login` (API) herda apenas
+  `aurora_app`; `aurora_api_login_workers` (workers) herda `aurora_app`, `aurora_publisher` e `aurora_scheduler` —
+  os papéis de varredura entre organizações ficam fora do alcance da API — e tem `CREATE` no database (o pg-boss
+  cria o schema `aurora_jobs`). A API recusa subir com papel privilegiado (§37).
 - **Destino:** `aurora.destinos.json` libera em `homologacao` só o serviço interno `db` / banco `aurora`
   (`hostsInternos`). Host com ponto continua exigindo `ref`; produção continua fechada.
 - **Arquivos:** volume persistente `arquivos` em `/data/arquivos` (`AURORA_ARQUIVOS_DIR`), dentro do backup.
