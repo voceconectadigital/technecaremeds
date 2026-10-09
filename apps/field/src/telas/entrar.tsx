@@ -17,7 +17,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Field, Input } from '@aurora/ui';
+import { Button, Card, Field, Input, Logo } from '@aurora/ui';
 import { useSession, MARCA } from '@aurora/app-kit';
 
 export function EntrarPage() {
@@ -54,6 +54,13 @@ export function EntrarPage() {
           }}
         >
           <header className="flex flex-col items-center gap-2 text-center">
+            <Logo
+              src={MARCA.logoHorizontal}
+              srcEscuro={MARCA.logoHorizontalEscuro}
+              nome={MARCA.produto}
+              largura={168}
+              className="mx-auto mb-2"
+            />
             <h1 className="text-xl font-semibold text-text">{MARCA.campo.nomeNaTela}</h1>
             <p className="text-sm text-muted">
               Entre uma vez, com rede. Depois disso o aplicativo funciona o dia inteiro sem sinal.
