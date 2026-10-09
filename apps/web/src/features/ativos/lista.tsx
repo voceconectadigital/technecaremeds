@@ -65,7 +65,10 @@ export function AtivosPage() {
   // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
   // sobrevive ao recarregar e ao link compartilhado.
   const [busca, setBusca] = useUrlState<string>('q', '');
-  const [criando, setCriando] = useState(false);
+  // Na URL: o atalho "Novo equipamento" do Painel de Controle abre o diálogo direto (?novo=sim).
+  const [novo, setNovo] = useUrlState<string>('novo', '');
+  const criando = novo === 'sim';
+  const setCriando = (abrir: boolean) => setNovo(abrir ? 'sim' : '');
 
   const { data: locais } = useApiQuery(locationsList, { query: {} }, { staleTime: 5 * 60_000 }) as {
     data: { items: LocationRow[] } | undefined;

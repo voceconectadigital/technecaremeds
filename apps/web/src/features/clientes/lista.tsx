@@ -16,13 +16,16 @@ import { Link } from '@tanstack/react-router';
 import { Boxes, Building2, ChevronRight, MapPin, Plus, Search } from 'lucide-react';
 import { Button, Card, EmptyState, Metric, MetricGrid, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { customersList, type Customer } from '@aurora/contracts';
-import { Can, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { Can, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { DialogoNovoCliente, rotuloDoSegmento } from './novo-cliente';
 
 export function ClientesPage() {
-  const [criando, setCriando] = useState(false);
+  // Na URL: o atalho "Novo cliente" do Painel de Controle abre o diálogo direto (?novo=sim).
+  const [novo, setNovo] = useUrlState<string>('novo', '');
+  const criando = novo === 'sim';
+  const setCriando = (abrir: boolean) => setNovo(abrir ? 'sim' : '');
   const [busca, setBusca] = useState('');
   const { can } = usePermissions();
 

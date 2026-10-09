@@ -61,6 +61,7 @@ import {
   type Periodo,
 } from './rotulos';
 import { AlternadorDoPainel } from './alternador';
+import { AtalhosRapidos } from './atalhos';
 
 const SEM_DADOS = 'Sem dados suficientes para este período.';
 
@@ -87,6 +88,7 @@ export function PainelPage() {
     >
       <div className="flex flex-col gap-5">
         <AlternadorDoPainel />
+        <AtalhosRapidos />
         <BarraDeFiltros d={data} f={filtros} atualizando={isFetching && !isLoading} />
         {problema ? (
           <Card>

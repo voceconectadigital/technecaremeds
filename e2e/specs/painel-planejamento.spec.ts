@@ -46,6 +46,36 @@ test.describe('Painel de Controle', () => {
     await expect(page.getByLabel('Início do período')).toHaveValue(inicio);
   });
 
+  test('atalhos rápidos: cada um abre a rota real; "novo" abre o cadastro; teclado alcança', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/painel');
+    const atalhos = page.getByRole('navigation', { name: 'Atalhos rápidos' });
+    await expect(atalhos).toBeVisible();
+    const destinos = await atalhos
+      .getByRole('link')
+      .evaluateAll((els) =>
+        els.map((e) => [e.textContent?.trim() ?? '', (e as HTMLAnchorElement).getAttribute('href') ?? ''])
+      );
+    expect(destinos.length).toBeGreaterThanOrEqual(8);
+    for (const [, href] of destinos) {
+      await page.goto(href);
+      // Rota existente: a tela tem título; a página de "não encontrado" não teria a moldura.
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    }
+
+    await page.goto('/painel');
+    await page.getByRole('link', { name: 'Novo cliente' }).click();
+    await expect(page).toHaveURL(/\/clientes\?novo=sim/);
+    await expect(page.getByRole('dialog', { name: 'Novo cliente' })).toBeVisible();
+
+    await page.goto('/painel');
+    await page.getByRole('link', { name: 'Novo equipamento' }).focus();
+    await expect(page.getByRole('link', { name: 'Novo equipamento' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Novo equipamento' })).toBeVisible();
+  });
+
   test('o cartão leva à lista correspondente já filtrada', async ({ comoCoordenadorA: page }) => {
     await page.goto('/painel');
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });

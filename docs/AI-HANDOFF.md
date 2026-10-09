@@ -21,7 +21,7 @@
 `dc4c6c4` (`origin/main`, PR #9) · branch `feat/overdelivery-painel` — confira com `git log -1`
 **Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** (nenhuma nova nesta rodada) ·
 **103 tabelas** · **230 rotas HTTP** (229 no OpenAPI + `/health`; **160 com contrato Zod**) ·
-**116 permissões** · **11 papéis** · **112 tipos de evento** · **1947 testes de unidade/HTTP**
+**116 permissões** · **11 papéis** · **112 tipos de evento** · **1952 testes de unidade/HTTP**
 (106 arquivos, 32 pulados sem PostgreSQL real) **+ 175 de navegador + 8 da demo**
 
 > **Rodada 09/10/2026 — o que mudou (resumo; detalhes nas seções):** Painel de Controle
@@ -827,6 +827,12 @@ personalizado: `?periodo=custom&de=AAAA-MM-DD&ate=AAAA-MM-DD` (incompleto,
 invertido ou acima de 400 dias vira aviso, sem consulta). Cartões levam à lista
 filtrada: `/ordens?vista=lista&categoria=…`, `/ativos?situacao=under_maintenance`,
 `/planos?aba=cronograma&estado=late`.
+
+**Atalhos rápidos** (`features/painel/atalhos.tsx`): dez atalhos no topo do painel, só para
+rotas que existem, filtrados por permissão ("Novo X" exige a permissão de criar; sem ela,
+a listagem; sem ver, nada). Não há "Nova OS" na web — o atalho é a lista de Ordens.
+`/clientes?novo=sim` e `/ativos?novo=sim` abrem os diálogos de cadastro existentes
+(`sim`, e não `1`: o roteador lê `1` da URL como número e `useUrlState` só aceita texto).
 
 **Escopo (corrigido nesta rodada):** toda rota `/insights/*` passa a recortar por
 `membership_scopes` (cliente e subárvore de local) via `membershipScope` →
