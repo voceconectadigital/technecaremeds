@@ -34,6 +34,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import {
+  BarChart,
   Card,
   CardHeader,
   ColumnChart,
@@ -41,6 +42,7 @@ import {
   EmptyState,
   FilterChip,
   Input,
+  SegmentGroup,
   Select,
   Skeleton,
   Sparkline,
@@ -74,22 +76,22 @@ export function PainelPage() {
   return (
     <AppShell
       title="Painel de Controle"
-      subtitle="Manutenção, prazos e parque — cada número com a definição ao lado."
+      subtitle="Visão consolidada da operação clínica: manutenção, prazos e parque."
       actions={
         <Link
           to="/painel/tv"
           search={buscaDoPainel(filtros) as never}
-          className="inline-flex h-9 items-center gap-2 rounded-control bg-accent px-3 text-sm font-semibold text-on-accent shadow-card transition-colors hover:bg-accent-hover"
+          className="inline-flex h-9 items-center gap-2 rounded-control border border-border-strong bg-surface px-3.5 text-sm font-semibold text-text shadow-card transition-colors hover:bg-surface-hover"
         >
           <Monitor className="size-4" aria-hidden="true" />
           Modo Exibição
         </Link>
       }
     >
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-6">
         <AlternadorDoPainel />
-        <AtalhosRapidos />
         <BarraDeFiltros d={data} f={filtros} atualizando={isFetching && !isLoading} />
+        <AtalhosRapidos />
         {problema ? (
           <Card>
             <EmptyState
@@ -124,20 +126,23 @@ function BarraDeFiltros({
     [d, f.cliente]
   );
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-border bg-surface p-3 shadow-card lg:flex-row lg:items-center">
-      <div role="group" aria-label="Período" className="flex flex-wrap items-center gap-1.5">
-        {PERIODOS.map((p) => (
-          <FilterChip
-            key={p.valor}
-            active={f.periodo === p.valor}
-            onClick={() => f.setPeriodo(p.valor as Periodo)}
-          >
-            {p.rotulo}
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="flex flex-wrap items-center gap-2">
+        <SegmentGroup label="Período">
+          {PERIODOS.map((p) => (
+            <FilterChip
+              key={p.valor}
+              segment
+              active={f.periodo === p.valor}
+              onClick={() => f.setPeriodo(p.valor as Periodo)}
+            >
+              {p.rotulo}
+            </FilterChip>
+          ))}
+          <FilterChip segment active={f.periodo === 'custom'} onClick={() => f.setPeriodo('custom')}>
+            Personalizado
           </FilterChip>
-        ))}
-        <FilterChip active={f.periodo === 'custom'} onClick={() => f.setPeriodo('custom')}>
-          Personalizado
-        </FilterChip>
+        </SegmentGroup>
         {f.periodo === 'custom' && (
           <span className="flex items-center gap-1.5">
             <Input
@@ -220,8 +225,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
     v === null ? 'neutral' : v >= bom ? 'good' : v >= medio ? 'warn' : 'bad';
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="flex flex-col gap-6">
+      <section aria-label="Indicadores-chave" className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Kpi
           rotulo="MTTR"
           valor={mttr.valor}
@@ -303,7 +308,7 @@ function Conteudo({ d }: { d: ControlPanel }) {
           vazio={SEM_DADOS}
           link="/planos?aba=cronograma&estado=late"
         />
-      </div>
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Grafico
@@ -322,19 +327,24 @@ function Conteudo({ d }: { d: ControlPanel }) {
           />
         </Grafico>
 
-        <Grafico titulo="OS por situação" descricao="O trabalho em aberto agora, e onde ele está parado.">
+        <Grafico
+          titulo="OS por situação"
+          descricao="O trabalho em aberto agora, e onde ele está parado."
+          destaque={totalAbertas > 0 ? `${totalAbertas.toLocaleString('pt-BR')} em aberto` : undefined}
+        >
           {totalAbertas === 0 ? (
             <Vazio texto="Nenhuma OS em aberto." />
           ) : (
-            <div className="flex flex-col gap-3">
-              <DonutChart
+            <div className="flex flex-col gap-4">
+              {/* Barras, e não rosca: são situações a COMPARAR ("onde está
+                  parado?"), e comprimento se compara; ângulo, não. Uma cor só —
+                  a diferença é a grandeza, não a categoria. */}
+              <BarChart
                 label="OS abertas por situação"
-                centerValue={totalAbertas}
-                centerLabel="em aberto"
-                data={abertasAgora.map(([s, v], i) => ({
+                data={abertasAgora.map(([s, v]) => ({
                   label: ROTULO_SITUACAO_OS[s] ?? s,
                   value: v,
-                  series: ((i % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6,
+                  series: 1,
                 }))}
               />
               <div className="flex flex-wrap gap-1.5">
@@ -351,8 +361,9 @@ function Conteudo({ d }: { d: ControlPanel }) {
         </Grafico>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <Grafico
+          className="lg:col-span-2"
           titulo="Preventivas"
           descricao="Programadas no período: realizadas, pendentes e vencidas (com a tolerância de cada plano)."
           acao={<IrPara para="/planos?aba=cronograma">Ver cronograma</IrPara>}
@@ -360,8 +371,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
           {!prev || prev.totals.scheduled === 0 ? (
             <Vazio texto={SEM_DADOS} />
           ) : (
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-control border border-border-subtle bg-border-subtle sm:grid-cols-4">
                 <Mini rotulo="Programadas" valor={prev.totals.scheduled} />
                 <Mini rotulo="Realizadas" valor={prev.totals.done} tom="good" />
                 <Mini rotulo="Pendentes" valor={prev.totals.pending} tom="info" />
@@ -458,7 +469,7 @@ function Conteudo({ d }: { d: ControlPanel }) {
         </Grafico>
       </div>
 
-      <p className="flex flex-wrap items-center gap-1.5 text-xs text-subtle">
+      <p className="flex flex-wrap items-center gap-1.5 border-t border-border-subtle pt-4 text-xs text-subtle">
         <Gauge className="size-3.5" aria-hidden="true" />
         Definição de cada indicador em
         <Link
@@ -509,34 +520,61 @@ function Kpi({
   link?: string;
 }) {
   const nulo = valor === null || valor === undefined;
+  /*
+   * O KPI COMUNICA, NESTA ORDEM: métrica, valor, contexto e estado.
+   * O número é o maior elemento do cartão e fica na cor do texto; só atenção
+   * e problema o pintam. O estado mora no ícone (cor + forma) e na frase de
+   * contexto — tendência só aparece onde há série real (sparkline), nunca
+   * inventada.
+   */
+  const pintaNumero = tom === 'warn' || tom === 'bad';
   const corpo = (
-    <div className="flex h-full flex-col gap-1.5 p-4">
+    <div className="flex h-full flex-col gap-2 p-4 lg:p-5">
       <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted">{rotulo}</span>
         <span
-          className={cn('flex size-7 items-center justify-center rounded-control', ACENTO[tom])}
+          className={cn('flex size-7 shrink-0 items-center justify-center rounded-control', ACENTO[tom])}
           aria-hidden="true"
         >
           {icone}
         </span>
-        <span className="flex-1 text-xs font-medium tracking-wide text-muted uppercase">{rotulo}</span>
-        {link && <ChevronRight className="size-4 text-subtle" aria-hidden="true" />}
       </div>
       <p className="flex items-baseline gap-1">
-        <span data-numeric className="text-3xl font-semibold tracking-display text-text tabular-nums">
+        <span
+          data-numeric
+          className={cn(
+            'text-3xl leading-none font-bold tracking-display tabular-nums',
+            nulo
+              ? 'text-subtle'
+              : pintaNumero
+                ? tom === 'bad'
+                  ? 'text-bad-text'
+                  : 'text-warn-text'
+                : 'text-text'
+          )}
+        >
           {nulo ? '—' : typeof valor === 'number' ? valor.toLocaleString('pt-BR') : valor}
         </span>
-        {!nulo && unidade && <span className="text-sm text-muted">{unidade}</span>}
+        {!nulo && unidade && <span className="text-base font-semibold text-subtle">{unidade}</span>}
       </p>
       {serie && serie.length > 1 && serie.some((v) => v > 0) && (
         <Sparkline values={serie} label={`Tendência de ${rotulo}`} goodDirection={direcaoBoa} height={24} />
       )}
-      <p className="mt-auto text-xs text-subtle">{nulo && vazio ? vazio : dica}</p>
+      <p className="mt-auto flex items-center gap-1 text-xs text-subtle">
+        <span className="min-w-0 flex-1">{nulo && vazio ? vazio : dica}</span>
+        {link && (
+          <ChevronRight
+            className="size-3.5 shrink-0 text-subtle transition-transform group-hover:translate-x-0.5 motion-reduce:transform-none"
+            aria-hidden="true"
+          />
+        )}
+      </p>
     </div>
   );
   return (
     <Card className="overflow-hidden">
       {link ? (
-        <Link to={link} className="block h-full transition-colors hover:bg-surface-hover">
+        <Link to={link} className="group block h-full transition-colors hover:bg-surface-hover">
           {corpo}
         </Link>
       ) : (
@@ -549,20 +587,34 @@ function Kpi({
 function Grafico({
   titulo,
   descricao,
+  destaque,
   acao,
   className,
   children,
 }: {
   titulo: string;
   descricao: string;
+  /** Um número de contexto ao lado do título (ex.: o total). */
+  destaque?: string;
   acao?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <Card className={className}>
-      <CardHeader title={titulo} description={descricao} />
-      <div className="px-4 pb-4">
+    <Card className={cn('flex flex-col', className)}>
+      <CardHeader
+        title={titulo}
+        description={descricao}
+        className="border-b-0 px-5 pt-5 pb-3"
+        actions={
+          destaque ? (
+            <span data-numeric className="text-sm font-semibold text-text tabular-nums">
+              {destaque}
+            </span>
+          ) : undefined
+        }
+      />
+      <div className="flex-1 px-5 pb-5">
         {children}
         {/* No rodapé, e não no cabeçalho: no celular o cabeçalho não tem largura para ele. */}
         {acao && <div className="mt-2 flex justify-end">{acao}</div>}
@@ -593,18 +645,18 @@ function Mini({ rotulo, valor, tom }: { rotulo: string; valor: number; tom?: 'go
           ? 'text-bad-text'
           : 'text-text';
   return (
-    <div className="rounded-control bg-surface-subtle px-2 py-1.5">
-      <p data-numeric className={cn('text-xl font-semibold tabular-nums', cor)}>
+    <div className="bg-surface px-3 py-2.5">
+      <p className="text-xs text-muted">{rotulo}</p>
+      <p data-numeric className={cn('text-xl font-bold tabular-nums', cor)}>
         {valor}
       </p>
-      <p className="text-2xs text-muted">{rotulo}</p>
     </div>
   );
 }
 
 function Vazio({ texto }: { texto: string }) {
   return (
-    <div className="flex min-h-40 items-center justify-center rounded-control border border-dashed border-border-subtle px-4 text-center text-sm text-muted">
+    <div className="flex min-h-40 items-center justify-center rounded-control bg-surface-subtle px-4 text-center text-sm text-muted">
       {texto}
     </div>
   );
@@ -614,9 +666,9 @@ function Esqueleto() {
   return (
     <div aria-busy="true" className="flex flex-col gap-4">
       <span className="sr-only">Carregando o painel</span>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-32 rounded-card" />
+          <Skeleton key={i} className="h-36 rounded-card" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">

@@ -82,13 +82,16 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               <Sidebar
                 onNavigate={() => setGavetaAberta(false)}
                 header={
-                  <Button
+                  // Cores da navegação, e não do conteúdo: no estilo Téchne a
+                  // gaveta é azul-marinho e o botão fantasma sumiria nela.
+                  <button
+                    type="button"
                     aria-label="Fechar menu"
-                    variant="ghost"
-                    size="sm"
                     onClick={() => setGavetaAberta(false)}
-                    icon={<X className="size-4" />}
-                  />
+                    className="ml-auto grid size-9 shrink-0 place-items-center rounded-control text-nav-text transition-colors hover:bg-nav-hover hover:text-nav-text-active"
+                  >
+                    <X className="size-4" aria-hidden="true" />
+                  </button>
                 }
               />
             </div>
@@ -113,6 +116,22 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
           />
 
           {/*
+            O CABEÇALHO DA PÁGINA ROLA JUNTO COM O CONTEÚDO (09/10/2026).
+
+            Antes ele era uma faixa branca fixa, com borda, acima de `<main>` —
+            e era metade da razão de o título parecer "jogado" sobre a tela.
+            Agora título e conteúdo vivem no mesmo plano (o fundo da janela),
+            dentro da mesma largura máxima, e rolam juntos. A exceção é a tela
+            SANGRADA (quadro de OS): ali o conteúdo mede a altura que sobra, e
+            o arranjo antigo — cabeçalho fixo, `<main>` rolando — continua.
+          */}
+          <div
+            className={cn(
+              'min-h-0 flex-1',
+              bleed ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'
+            )}
+          >
+            {/*
             `<section>` NOMEADA, e não `<div>` nem `<header>`.
             
             Um `<div>` não é marco, e todo conteúdo de uma página precisa estar
@@ -132,9 +151,9 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             `<section>` com nome acessível é marco `region` — que é exatamente
             o que isto é: uma região da página, nomeada pelo próprio título.
           */}
-          <section
-            aria-labelledby="titulo-da-pagina"
-            /*
+            <section
+              aria-labelledby="titulo-da-pagina"
+              /*
               EMPILHA ATÉ 1024px, e o limiar subiu por um defeito medido DUAS
               vezes.
 
@@ -160,9 +179,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               primeiro item do índice de quem usa leitor de tela e a única
               confirmação de onde a pessoa está.
             */
-            className="flex flex-col gap-3 border-b border-border bg-surface px-4 py-5 md:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-6"
-          >
-            {/*
+              className={cn(
+                'mx-auto flex w-full max-w-[var(--aurora-content-max)] shrink-0 flex-col gap-3 px-4 pt-5 pb-5 md:px-6 md:pt-7 lg:flex-row lg:items-end lg:justify-between lg:gap-6 lg:px-8',
+                bleed && 'max-w-none border-b border-border-subtle'
+              )}
+            >
+              {/*
               O TÍTULO TEM PISO DE LARGURA, e o piso é a correção de um defeito
               que voltou.
 
@@ -184,19 +206,21 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               da página, o primeiro item do índice de quem usa leitor de tela e a
               única confirmação de onde a pessoa está.
             */}
-            <div className="min-w-40 flex-1">
-              {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumbs items={breadcrumbs} className="mb-1" />}
-              {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
+              <div className="min-w-40 flex-1">
+                {breadcrumbs && breadcrumbs.length > 0 && (
+                  <Breadcrumbs items={breadcrumbs} className="mb-2" />
+                )}
+                {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
                   não vê a tela. */}
-              <h1
-                id="titulo-da-pagina"
-                className="truncate text-2xl font-semibold tracking-display text-text"
-              >
-                {title}
-              </h1>
-              {subtitle && <p className="mt-1 text-base text-muted">{subtitle}</p>}
-            </div>
-            {/*
+                <h1
+                  id="titulo-da-pagina"
+                  className="truncate text-2xl leading-tight font-bold tracking-display text-text"
+                >
+                  {title}
+                </h1>
+                {subtitle && <p className="mt-1.5 max-w-3xl text-base text-muted">{subtitle}</p>}
+              </div>
+              {/*
               `flex-wrap` e SEM `shrink-0` em nenhuma largura.
 
               O `sm:shrink-0` que existia aqui era a outra metade do defeito: ele
@@ -205,12 +229,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               em linhas quando o espaço aperta, que é o que uma barra de ações
               deve fazer.
             */}
-            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-          </section>
+              {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+            </section>
 
-          <main
-            id="conteudo"
-            /*
+            <main
+              id="conteudo"
+              /*
               `tabIndex={0}`, e não `-1`.
               
               O `-1` já servia ao pulo do teclado: sem ele o link "pular para o
@@ -228,11 +252,18 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               O preço é uma parada a mais na tabulação, que é exatamente o que
               se quer numa região rolável.
             */
-            tabIndex={0}
-            className={cn('min-h-0 flex-1 overflow-auto outline-none', !bleed && 'p-4 md:p-6 lg:p-8')}
-          >
-            {children}
-          </main>
+              tabIndex={0}
+              className={cn('outline-none', bleed && 'min-h-0 flex-1 overflow-auto')}
+            >
+              {bleed ? (
+                children
+              ) : (
+                <div className="mx-auto w-full max-w-[var(--aurora-content-max)] px-4 pb-10 md:px-6 lg:px-8">
+                  {children}
+                </div>
+              )}
+            </main>
+          </div>
         </div>
       </div>
     </div>

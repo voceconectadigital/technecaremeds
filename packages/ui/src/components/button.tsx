@@ -29,9 +29,10 @@ const VARIANTES: Record<ButtonVariant, string> = {
    * hex escrito nesta linha. Trocar a marca reaponta um token e este arquivo
    * não muda.
    */
-  primary: 'bg-accent text-on-accent hover:bg-accent-hover active:brightness-95 border border-transparent',
+  primary:
+    'bg-accent text-on-accent hover:bg-accent-hover active:brightness-95 border border-transparent shadow-[0_1px_2px_rgb(16_24_40/0.12)]',
   secondary:
-    'bg-surface text-text border border-border-strong hover:border-accent hover:bg-accent-soft hover:text-accent-text active:bg-surface-active',
+    'bg-surface text-text border border-border-strong shadow-card hover:bg-surface-hover active:bg-surface-active',
   ghost: 'bg-transparent text-muted border border-transparent hover:bg-surface-hover hover:text-text',
   /*
    * ACENTO DE MARCA — o verde-limão, e SÓ onde a ação é da identidade e não da
@@ -51,10 +52,10 @@ const VARIANTES: Record<ButtonVariant, string> = {
 };
 
 const TAMANHOS: Record<ButtonSize, string> = {
-  sm: 'h-7 px-2.5 text-xs gap-1.5',
-  md: 'h-[34px] px-3.5 text-base gap-2',
+  sm: 'h-8 px-3 text-xs gap-1.5',
+  md: 'h-9 px-3.5 text-sm gap-2',
   // No toque, 44px — o mínimo da WCAG 2.2 (2.5.8). O técnico está de luva.
-  lg: 'h-11 px-5 text-md gap-2',
+  lg: 'h-11 px-5 text-base gap-2',
 };
 
 interface Base extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -117,14 +118,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         onClick?.(e);
       }}
       className={cn(
-        'inline-flex items-center justify-center rounded-control font-medium whitespace-nowrap',
+        'inline-flex items-center justify-center rounded-control font-semibold whitespace-nowrap',
         'transition-colors duration-[130ms] ease-out',
         'disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTES[variant],
         variant !== 'link' && TAMANHOS[size],
         soIcone &&
           variant !== 'link' &&
-          (size === 'sm' ? 'w-7 px-0' : size === 'lg' ? 'w-11 px-0' : 'w-[34px] px-0'),
+          (size === 'sm' ? 'w-8 px-0' : size === 'lg' ? 'w-11 px-0' : 'w-9 px-0'),
         fullWidth && 'w-full',
         className
       )}

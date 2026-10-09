@@ -10,10 +10,11 @@
  * vê a demonstração vê o produto, e não uma página de marketing.
  */
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Logo } from '@aurora/ui';
+import { Button } from '@aurora/ui';
 import { MARCA, useSession } from '@aurora/app-kit';
 import { useEffect } from 'react';
 import { MARCADOR, ORGANIZACAO_DEMO } from './sessao';
+import { MolduraDeEntrada } from '../routes/entrar-vitrine';
 
 export function EntrarDemoPage() {
   const { signIn, chooseOrganization } = useSession();
@@ -30,52 +31,32 @@ export function EntrarDemoPage() {
   }
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-bg p-4">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            'radial-gradient(60rem 30rem at 15% -10%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 60%),' +
-            'radial-gradient(45rem 26rem at 95% 110%, color-mix(in oklab, var(--color-brand-accent) 13%, transparent), transparent 62%)',
-        }}
-      />
+    <MolduraDeEntrada>
+      <div className="flex flex-col gap-6">
+        <header>
+          <span
+            className="inline-flex rounded-[6px] bg-accent-soft px-2 py-0.5 text-2xs font-semibold tracking-label text-accent-text"
+            data-testid="selo-demonstracao"
+          >
+            DEMONSTRAÇÃO
+          </span>
+          <h1 className="mt-3 text-2xl font-bold tracking-display text-text">Ambiente de demonstração</h1>
+          <p className="mt-1.5 text-base text-muted">{MARCA.descricao}</p>
+        </header>
 
-      <Card raised className="relative w-full max-w-md">
-        <div className="flex flex-col gap-6 p-7 sm:p-8">
-          <header className="flex flex-col items-center gap-4 text-center">
-            <Logo
-              src={MARCA.logoHorizontal}
-              srcEscuro={MARCA.logoHorizontalEscuro}
-              nome={MARCA.produto}
-              largura={208}
-            />
-            <span
-              className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-semibold tracking-wider text-muted"
-              data-testid="selo-demonstracao"
-            >
-              DEMONSTRAÇÃO
-            </span>
-            <div>
-              <h1 className="text-xl font-semibold tracking-display text-text">Ambiente de demonstração</h1>
-              <p className="mt-1 text-sm text-muted">{MARCA.descricao}</p>
-            </div>
-          </header>
+        <p className="text-sm text-muted">
+          Navegue pela plataforma com uma operação fictícia de engenharia clínica: chamados, ordens de
+          serviço, agenda, ativos, estoque, contratos e indicadores.
+        </p>
 
-          <p className="text-center text-sm text-muted">
-            Navegue pela plataforma com uma operação fictícia de engenharia clínica: chamados, ordens de
-            serviço, agenda, ativos, estoque, contratos e indicadores.
-          </p>
+        <Button variant="primary" size="lg" fullWidth onClick={explorar} autoFocus>
+          Explorar plataforma
+        </Button>
 
-          <Button variant="primary" size="lg" fullWidth onClick={explorar} autoFocus>
-            Explorar plataforma
-          </Button>
-
-          <p className="rounded-control bg-surface-sunken px-3 py-2 text-center text-xs text-muted">
-            Dados fictícios e não persistentes. Nenhuma informação digitada aqui é enviada ou gravada.
-          </p>
-        </div>
-      </Card>
-    </div>
+        <p className="border-t border-border-subtle pt-4 text-xs text-subtle">
+          Dados fictícios e não persistentes. Nenhuma informação digitada aqui é enviada ou gravada.
+        </p>
+      </div>
+    </MolduraDeEntrada>
   );
 }

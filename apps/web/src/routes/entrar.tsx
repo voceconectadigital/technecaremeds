@@ -31,10 +31,10 @@
  */
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Field, Input, Logo } from '@aurora/ui';
+import { Button, Field, Input } from '@aurora/ui';
 import { useSession, useApiQuery, useApiMutation, MARCA, ApiError } from '@aurora/app-kit';
 import { authConfig, authLogin, type AuthConfig, type LoginResult } from '@aurora/contracts';
-import { VitrineDeEntrada } from './entrar-vitrine';
+import { MolduraDeEntrada } from './entrar-vitrine';
 
 export function EntrarPage() {
   const { signIn } = useSession();
@@ -109,147 +109,103 @@ export function EntrarPage() {
 
   return (
     /*
-     * O FUNDO NÃO É UM CINZA CHAPADO.
-     *
-     * Esta é a primeira tela que o cliente vê, e um retângulo cinza com um
-     * cartão no meio é o que todo template entrega. Dois brilhos radiais muito
-     * fracos — um azul, um verde-limão, as duas cores da marca — dão
-     * profundidade sem virar gradiente de página de marketing.
-     *
-     * Eles são `radial-gradient` em opacidade baixíssima, e não uma imagem:
-     * nada a baixar, nada que falte quando a rede falha, e acompanham o tema
-     * porque saem dos tokens.
+     * Painel de marca + formulário (ver `MolduraDeEntrada`). O formulário não
+     * mora num cartão de vidro: sobre o fundo limpo, ele é o único objeto da
+     * metade direita, e é isso que o faz parecer produto e não template.
      */
-    <div className="relative grid min-h-dvh overflow-hidden bg-bg lg:grid-cols-[1.15fr_1fr]">
-      <VitrineDeEntrada />
-      <div className="relative flex items-center justify-center p-4 sm:p-8">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              'radial-gradient(60rem 30rem at 15% -10%, color-mix(in oklab, var(--color-accent) 16%, transparent), transparent 60%),' +
-              'radial-gradient(45rem 26rem at 95% 110%, color-mix(in oklab, var(--color-brand-accent) 13%, transparent), transparent 62%)',
-          }}
-        />
+    <MolduraDeEntrada>
+      {/*
+       * `noValidate`: a validação NOSSA é a que roda.
+       *
+       * Sem isto, o navegador recusa o envio antes de o React ver o clique e
+       * mostra a bolha dele — no idioma do sistema operacional, sem relação
+       * com o campo, e invisível para leitor de tela. A nossa mensagem fica
+       * no campo, é anunciada, e está em português.
+       */}
+      <form onSubmit={entrar} noValidate className="flex flex-col gap-5">
+        <header className="mb-2">
+          <h1 className="text-2xl font-bold tracking-display text-text">Entrar</h1>
+          <p className="mt-1.5 text-base text-muted">{MARCA.descricao}</p>
+        </header>
 
-        <Card raised className="relative w-full max-w-md bg-surface/80 backdrop-blur-xl">
-          {/*
-           * `noValidate`: a validação NOSSA é a que roda.
-           *
-           * Sem isto, o navegador recusa o envio antes de o React ver o clique e
-           * mostra a bolha dele — no idioma do sistema operacional, sem relação
-           * com o campo, e invisível para leitor de tela. A nossa mensagem fica
-           * no campo, é anunciada, e está em português.
-           */}
-          <form onSubmit={entrar} noValidate className="flex flex-col gap-5 p-7 sm:p-8">
-            <header className="flex flex-col items-center gap-4 text-center">
-              {/*
-               * A LOGO REAL, no tamanho em que o arquivo ainda é nítido.
-               *
-               * O original tem 272px de largura; 208px deixa margem para a
-               * reamostragem em tela de alta densidade. Maior que o original
-               * seria esticar um asset que já é pequeno — o vetor continua
-               * sendo necessário, e está registrado no LEIA-ME da pasta.
-               */}
-              <Logo
-                src={MARCA.logoHorizontal}
-                srcEscuro={MARCA.logoHorizontalEscuro}
-                nome={MARCA.produto}
-                largura={208}
-              />
-              <div>
-                <h1 className="text-xl font-semibold tracking-display text-text">Entrar</h1>
-                <p className="mt-1 text-sm text-muted">{MARCA.descricao}</p>
-              </div>
-            </header>
+        {/*
+         * O ERRO FICA ACIMA DOS CAMPOS E É ANUNCIADO.
+         *
+         * `role="alert"` faz o leitor de tela ler a recusa no instante em que
+         * ela chega. Sem isso, quem não vê a tela aperta "Entrar" e não recebe
+         * notícia nenhuma — o formulário simplesmente continua ali.
+         */}
+        {erro && (
+          <p
+            role="alert"
+            className="rounded-control border border-bad/30 bg-bad-soft px-3 py-2.5 text-sm font-medium text-bad-text"
+            data-testid="erro-de-entrada"
+          >
+            {erro}
+          </p>
+        )}
 
-            {/*
-             * O ERRO FICA ACIMA DOS CAMPOS E É ANUNCIADO.
-             *
-             * `role="alert"` faz o leitor de tela ler a recusa no instante em que
-             * ela chega. Sem isso, quem não vê a tela aperta "Entrar" e não recebe
-             * notícia nenhuma — o formulário simplesmente continua ali.
-             */}
-            {erro && (
-              <p
-                role="alert"
-                className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger-text"
-                data-testid="erro-de-entrada"
-              >
-                {erro}
-              </p>
-            )}
+        <Field label="E-mail" required hint="O mesmo endereço com que você foi convidado.">
+          <Input
+            type="email"
+            name="email"
+            autoComplete="username"
+            autoFocus
+            value={email}
+            disabled={entrando}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setErro(null);
+            }}
+            placeholder="voce@empresa.com.br"
+          />
+        </Field>
 
-            <Field label="E-mail" required hint="O mesmo endereço com que você foi convidado.">
-              <Input
-                type="email"
-                name="email"
-                autoComplete="username"
-                autoFocus
-                value={email}
-                disabled={entrando}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  setErro(null);
-                }}
-                placeholder="voce@empresa.com.br"
-              />
-            </Field>
+        {pedeSenha && (
+          <Field label="Senha" error={erroSenha} required>
+            <Input
+              type="password"
+              name="senha"
+              /*
+               * `current-password`: é o que faz o gerenciador de senhas do
+               * navegador oferecer a senha guardada em vez de propor uma nova.
+               * Com `new-password`, todo login viraria uma oferta de troca.
+               */
+              autoComplete="current-password"
+              value={senha}
+              disabled={entrando}
+              onChange={(e) => {
+                setSenha(e.target.value);
+                setErro(null);
+                setErroSenha(null);
+              }}
+            />
+          </Field>
+        )}
 
-            {pedeSenha && (
-              <Field label="Senha" error={erroSenha} required>
-                <Input
-                  type="password"
-                  name="senha"
-                  /*
-                   * `current-password`: é o que faz o gerenciador de senhas do
-                   * navegador oferecer a senha guardada em vez de propor uma nova.
-                   * Com `new-password`, todo login viraria uma oferta de troca.
-                   */
-                  autoComplete="current-password"
-                  value={senha}
-                  disabled={entrando}
-                  onChange={(e) => {
-                    setSenha(e.target.value);
-                    setErro(null);
-                    setErroSenha(null);
-                  }}
-                />
-              </Field>
-            )}
+        <Button type="submit" variant="primary" size="lg" fullWidth disabled={entrando || carregandoConfig}>
+          {entrando ? 'Entrando…' : 'Entrar'}
+        </Button>
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              fullWidth
-              disabled={entrando || carregandoConfig}
-            >
-              {entrando ? 'Entrando…' : 'Entrar'}
-            </Button>
+        {/*
+         * O aviso aparece SOMENTE quando o servidor está de fato no provedor
+         * de desenvolvimento. Deixá-lo fixo faria a homologação exibir um
+         * aviso falso, e aviso falso treina a pessoa a ignorar os verdadeiros.
+         */}
+        {provedor === 'local' && (
+          <p className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
+            Ambiente de desenvolvimento: a entrada não pede senha e aceita qualquer e-mail com vínculo. A API
+            recusa este provedor em homologação e em produção.
+          </p>
+        )}
 
-            {/*
-             * O aviso aparece SOMENTE quando o servidor está de fato no provedor
-             * de desenvolvimento. Deixá-lo fixo faria a homologação exibir um
-             * aviso falso, e aviso falso treina a pessoa a ignorar os verdadeiros.
-             */}
-            {provedor === 'local' && (
-              <p className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-                Ambiente de desenvolvimento: a entrada não pede senha e aceita qualquer e-mail com vínculo. A
-                API recusa este provedor em homologação e em produção.
-              </p>
-            )}
-
-            {pedeSenha && (
-              <p className="text-center text-xs text-subtle">
-                Esqueceu a senha? Ela é redefinida por um administrador — a recuperação por e-mail ainda não
-                está disponível.
-              </p>
-            )}
-          </form>
-        </Card>
-      </div>
-    </div>
+        {pedeSenha && (
+          <p className="border-t border-border-subtle pt-4 text-xs text-subtle">
+            Esqueceu a senha? Ela é redefinida por um administrador — a recuperação por e-mail ainda não está
+            disponível.
+          </p>
+        )}
+      </form>
+    </MolduraDeEntrada>
   );
 }

@@ -185,10 +185,10 @@ export function Tabs({ items, value, onChange, className, idPrefix, ...rest }: T
             tabIndex={ativo ? 0 : -1}
             onClick={() => onChange(t.id)}
             className={cn(
-              'relative -mb-px flex items-center gap-2 px-3 py-2 text-base font-medium transition-colors',
+              'relative -mb-px flex min-h-10 items-center gap-2 px-3 text-sm font-medium transition-colors',
               'border-b-2',
               ativo
-                ? 'border-accent text-text'
+                ? 'border-accent font-semibold text-text'
                 : 'border-transparent text-muted hover:border-border-strong hover:text-text'
             )}
           >

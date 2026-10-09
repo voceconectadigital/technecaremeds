@@ -11,31 +11,20 @@
  * se mexe uma vez por mês, e misturá-la com as oito faz a pessoa passar por
  * ela oito horas por dia sem precisar.
  */
-import { Link, useRouterState } from '@tanstack/react-router';
-import { cn } from '@aurora/ui';
+import { useRouterState } from '@tanstack/react-router';
+import { AlternadorDeTelas } from '../../shell/alternador';
 
 export function AlternadorDeConfiguracoes() {
   const caminho = useRouterState({ select: (s) => s.location.pathname });
   const emAutomacoes = caminho.startsWith('/configuracoes/automacoes');
 
   return (
-    <nav aria-label="Configurações" className="flex gap-1">
-      {[
+    <AlternadorDeTelas
+      label="Configurações"
+      itens={[
         { para: '/configuracoes', rotulo: 'Pessoas', ativo: !emAutomacoes },
         { para: '/configuracoes/automacoes', rotulo: 'Automações', ativo: emAutomacoes },
-      ].map((x) => (
-        <Link
-          key={x.para}
-          to={x.para}
-          aria-current={x.ativo ? 'page' : undefined}
-          className={cn(
-            'rounded-control px-3 py-1.5 text-sm transition-colors',
-            x.ativo ? 'bg-accent-soft text-accent-text' : 'text-muted hover:bg-surface-hover hover:text-text'
-          )}
-        >
-          {x.rotulo}
-        </Link>
-      ))}
-    </nav>
+      ]}
+    />
   );
 }

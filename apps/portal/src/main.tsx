@@ -4,6 +4,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app';
+import '@fontsource-variable/plus-jakarta-sans';
 import './styles.css';
 
 const raiz = document.getElementById('root');

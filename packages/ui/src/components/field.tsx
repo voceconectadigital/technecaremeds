@@ -80,7 +80,7 @@ export function Field({
       <div className={cn('flex flex-col gap-1.5', className)}>
         <label
           htmlFor={ctx.id}
-          className={cn('text-sm font-medium text-text', labelHidden && 'aurora-sr-only')}
+          className={cn('text-sm font-semibold text-text', labelHidden && 'aurora-sr-only')}
         >
           {label}
           {required && (
@@ -121,8 +121,9 @@ export function Field({
 /* -------------------------------------------------------------------------- */
 
 const CONTROLE_BASE =
-  'w-full rounded-control border bg-surface px-3 text-base text-text placeholder:text-subtle ' +
-  'transition-colors duration-[130ms] ' +
+  'w-full rounded-control border bg-surface px-3 text-base text-text placeholder:text-subtle shadow-card ' +
+  'transition-[border-color,box-shadow] duration-[130ms] hover:border-[color:var(--aurora-neutral-400)] ' +
+  'focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)] ' +
   'disabled:cursor-not-allowed disabled:bg-surface-sunken disabled:text-subtle ' +
   'aria-[invalid=true]:border-bad aria-[invalid=true]:bg-bad-soft/30';
 
@@ -132,9 +133,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 export function Input({ className, ...rest }: InputProps) {
   const campo = useFieldControl();
-  return (
-    <input {...campo} {...rest} className={cn(CONTROLE_BASE, 'h-[34px] border-border-strong', className)} />
-  );
+  return <input {...campo} {...rest} className={cn(CONTROLE_BASE, 'h-9 border-border-strong', className)} />;
 }
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -171,7 +170,11 @@ export function Select({ className, children, ...rest }: SelectProps) {
     <select
       {...campo}
       {...rest}
-      className={cn(CONTROLE_BASE, 'h-[34px] cursor-pointer border-border-strong pr-8', className)}
+      className={cn(
+        CONTROLE_BASE,
+        'aurora-select h-9 cursor-pointer appearance-none border-border-strong pr-9',
+        className
+      )}
     >
       {children}
     </select>

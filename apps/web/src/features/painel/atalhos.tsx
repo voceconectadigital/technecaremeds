@@ -138,11 +138,17 @@ export function AtalhosRapidos() {
   if (atalhos.length === 0) return null;
 
   return (
-    <nav aria-labelledby="atalhos-rapidos" className="flex flex-col gap-2">
-      <h2 id="atalhos-rapidos" className="text-xs font-semibold tracking-wide text-muted uppercase">
+    <nav
+      aria-labelledby="atalhos-rapidos"
+      className="flex flex-col gap-2 rounded-card border border-border bg-surface p-2 shadow-card lg:flex-row lg:items-center lg:gap-3"
+    >
+      <h2
+        id="atalhos-rapidos"
+        className="shrink-0 px-2 text-2xs font-semibold tracking-[0.08em] text-subtle uppercase lg:border-r lg:border-border-subtle lg:pr-4"
+      >
         Atalhos rápidos
       </h2>
-      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <ul className="flex gap-1 overflow-x-auto [scrollbar-width:none] lg:flex-wrap lg:overflow-visible">
         {atalhos.map((a) => {
           const Icone = a.icone;
           return (
@@ -151,27 +157,21 @@ export function AtalhosRapidos() {
                 to={a.para}
                 search={(a.busca ?? {}) as never}
                 className={cn(
-                  'group flex min-h-12 items-center gap-2.5 rounded-card border bg-surface px-3 py-2 text-sm shadow-card transition-colors',
-                  'hover:border-border-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
-                  a.criar ? 'border-accent/40' : 'border-border'
+                  'group inline-flex h-9 items-center gap-2 rounded-control px-2.5 text-sm whitespace-nowrap transition-colors',
+                  a.criar
+                    ? 'font-semibold text-accent-text hover:bg-accent-soft'
+                    : 'font-medium text-muted hover:bg-surface-hover hover:text-text'
                 )}
               >
-                <span
+                <Icone
                   aria-hidden="true"
+                  strokeWidth={1.75}
                   className={cn(
-                    'flex size-8 shrink-0 items-center justify-center rounded-control transition-colors',
-                    a.criar
-                      ? 'bg-accent-soft text-accent-text group-hover:bg-accent group-hover:text-on-accent'
-                      : 'bg-surface-hover text-muted group-hover:text-text'
+                    'size-4 shrink-0',
+                    a.criar ? 'text-accent-text' : 'text-subtle group-hover:text-text'
                   )}
-                >
-                  <Icone className="size-4" />
-                </span>
-                <span
-                  className={cn('min-w-0 leading-tight', a.criar ? 'font-semibold text-text' : 'text-text')}
-                >
-                  {a.rotulo}
-                </span>
+                />
+                {a.rotulo}
               </Link>
             </li>
           );

@@ -65,27 +65,27 @@ const TAMANHOS = {
 const PALETA = [
   {
     bg: 'color-mix(in oklab, var(--color-data-1) 14%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-1) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-1) 42%, var(--color-text))',
   },
   {
     bg: 'color-mix(in oklab, var(--color-data-2) 14%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-2) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-2) 42%, var(--color-text))',
   },
   {
     bg: 'color-mix(in oklab, var(--color-data-3) 16%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-3) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-3) 42%, var(--color-text))',
   },
   {
     bg: 'color-mix(in oklab, var(--color-data-4) 14%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-4) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-4) 42%, var(--color-text))',
   },
   {
     bg: 'color-mix(in oklab, var(--color-data-5) 14%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-5) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-5) 42%, var(--color-text))',
   },
   {
     bg: 'color-mix(in oklab, var(--color-data-6) 14%, var(--color-surface))',
-    fg: 'color-mix(in oklab, var(--color-data-6) 55%, var(--color-text))',
+    fg: 'color-mix(in oklab, var(--color-data-6) 42%, var(--color-text))',
   },
 ];
 
