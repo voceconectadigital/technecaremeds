@@ -18,9 +18,10 @@
     "homologacao": {
       "descricao": "O cliente avaliando.",
       "hosts": [],
-      "bancos": [],
+      "hostsInternos": ["db"],
+      "bancos": ["aurora"],
       "ref": null,
-      "situacao": "SEM DESTINO. Nenhum projeto Supabase do Aurora existe. Enquanto `ref` for nulo, todo destino remoto é recusado — que é o comportamento desejado."
+      "situacao": "SEM DESTINO REMOTO. Só o PostgreSQL DEDICADO do runtime PostgreSQL VPS do HostPanel: serviço `db` na rede interna do compose (sem porta pública), banco `aurora`. Qualquer host com ponto continua exigindo `ref` e é recusado."
     },
     "producao": {
       "descricao": "O trabalho de verdade.",

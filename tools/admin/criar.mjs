@@ -41,7 +41,10 @@ import { readFileSync } from 'node:fs';
 import { stdin, stdout } from 'node:process';
 
 const require = createRequire(import.meta.url);
-require('tsx/cjs');
+// Fonte TypeScript via tsx em desenvolvimento; `dist/` na imagem (tools/lib/fonte.mjs).
+const { carregarFonte } = await import('../lib/fonte.mjs');
+const { fileURLToPath } = await import('node:url');
+const raiz = fileURLToPath(new URL('../..', import.meta.url));
 
 /* -------------------------------------------------------------- o destino */
 
@@ -50,9 +53,9 @@ const url = process.env.DATABASE_URL;
 conferirOuSair(url);
 
 const { Pool } = require('pg');
-const db = require('../../packages/db/src/index.ts');
-const { pgPoolAdapter } = require('../../packages/db/src/adapters.ts');
-const dominio = require('../../packages/domain/src/index.ts');
+const db = carregarFonte(raiz, 'packages', 'db', 'src', 'index.ts');
+const { pgPoolAdapter } = carregarFonte(raiz, 'packages', 'db', 'src', 'adapters.ts');
+const dominio = carregarFonte(raiz, 'packages', 'domain', 'src', 'index.ts');
 
 /* ------------------------------------------------------------- a conversa */
 

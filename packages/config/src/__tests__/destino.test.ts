@@ -233,3 +233,88 @@ describe('DESTINO-005 · não existe porta dos fundos', () => {
     }
   });
 });
+
+/*
+ * HOMOLOGAÇÃO NO HOSTPANEL (PostgreSQL VPS): o banco é o serviço `db` da rede
+ * interna do compose. O nome interno vale SÓ no ambiente que o declara, SÓ com
+ * banco da lista e SÓ como nome de uma palavra — nada disso abre host arbitrário.
+ */
+describe('destino interno de container (hostsInternos)', () => {
+  const COM_INTERNO: ListaDeDestinos = {
+    ...LISTA,
+    ambientes: {
+      ...LISTA.ambientes,
+      homologacao: { hosts: [], hostsInternos: ['db'], bancos: ['aurora'], ref: null },
+    },
+  };
+
+  it('aceita o serviço `db` com o ambiente e o banco declarados', () => {
+    const r = conferirDestino({
+      url: 'postgresql://u:x@db:5432/aurora',
+      ambiente: 'homologacao',
+      lista: COM_INTERNO,
+    });
+    expect(r.ambiente).toBe('homologacao');
+    expect(r.destino.host).toBe('db');
+  });
+
+  it('recusa `db` sem AURORA_AMBIENTE, em outro ambiente ou com outro banco', () => {
+    expect(() => conferirDestino({ url: 'postgresql://u:x@db:5432/aurora', lista: COM_INTERNO })).toThrow(
+      DestinoRecusadoError
+    );
+    expect(() =>
+      conferirDestino({ url: 'postgresql://u:x@db:5432/aurora', ambiente: 'producao', lista: COM_INTERNO })
+    ).toThrow(DestinoRecusadoError);
+    expect(() =>
+      conferirDestino({
+        url: 'postgresql://u:x@db:5432/postgres',
+        ambiente: 'homologacao',
+        lista: COM_INTERNO,
+      })
+    ).toThrow(/fora da lista/);
+  });
+
+  it('não abre host com ponto nem outro nome curto', () => {
+    expect(() =>
+      conferirDestino({
+        url: 'postgresql://u:x@db.exemplo.com:5432/aurora',
+        ambiente: 'homologacao',
+        lista: COM_INTERNO,
+      })
+    ).toThrow(DestinoRecusadoError);
+    expect(() =>
+      conferirDestino({
+        url: 'postgresql://u:x@outro:5432/aurora',
+        ambiente: 'homologacao',
+        lista: COM_INTERNO,
+      })
+    ).toThrow(DestinoRecusadoError);
+    const comPonto: ListaDeDestinos = {
+      ...LISTA,
+      ambientes: {
+        ...LISTA.ambientes,
+        homologacao: { hosts: [], hostsInternos: ['db.exemplo.com'], bancos: ['aurora'], ref: null },
+      },
+    };
+    expect(() =>
+      conferirDestino({
+        url: 'postgresql://u:x@db.exemplo.com:5432/aurora',
+        ambiente: 'homologacao',
+        lista: comPonto,
+      })
+    ).toThrow(/interno fora da lista/);
+  });
+
+  it('a lista versionada libera só `db`/`aurora` em homologação e nada em produção', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const real = JSON.parse(
+      readFileSync(join(__dirname, '..', '..', '..', '..', 'aurora.destinos.json'), 'utf8')
+    ) as ListaDeDestinos;
+    expect(real.ambientes.homologacao!.hostsInternos).toEqual(['db']);
+    expect(real.ambientes.homologacao!.bancos).toEqual(['aurora']);
+    expect(real.ambientes.homologacao!.ref).toBeNull();
+    expect(real.ambientes.producao!.hosts).toEqual([]);
+    expect(real.ambientes.producao!.hostsInternos ?? []).toEqual([]);
+  });
+});
