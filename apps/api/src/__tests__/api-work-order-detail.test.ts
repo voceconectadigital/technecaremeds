@@ -235,7 +235,26 @@ describe('horas apontadas', () => {
     expect(doTecnico.body.items).toHaveLength(1);
     expect(doTecnico.body.items[0].cost).toBeNull();
     expect(doTecnico.body.items[0].currency).toBeNull();
-    expect(JSON.stringify(doTecnico.body)).not.toContain('180');
+    /*
+     * O VALOR não pode aparecer em campo nenhum — nem com outro nome.
+     *
+     * A versão anterior procurava o TEXTO "180" no JSON inteiro, e falhou
+     * sozinha na CI do main (09/10/2026): UUIDs e datas da resposta contêm
+     * "180" por acaso. A prova agora olha os VALORES, um a um, e reprova o
+     * custo por hora (180) e o custo da entrada que a coordenação recebeu,
+     * em número ou em texto ("180", "270.00").
+     */
+    const proibidos = [180, Number(daCoordenacao.body.items[0].cost)];
+    const valores: unknown[] = [];
+    const coletar = (v: unknown): void => {
+      if (v && typeof v === 'object') Object.values(v).forEach(coletar);
+      else valores.push(v);
+    };
+    coletar(doTecnico.body);
+    const numericos = valores.filter(
+      (v) => typeof v === 'number' || (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v))
+    );
+    expect(numericos.filter((v) => proibidos.includes(Number(v)))).toEqual([]);
   });
 
   it('o total vem somado do servidor, e diz quantas entradas ficaram abertas', async () => {
