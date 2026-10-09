@@ -30,17 +30,19 @@ test.describe('EPIC-013 · planos preventivos', () => {
     comoCoordenadorA: page,
   }) => {
     await page.goto('/planos');
-    await expect(page.getByRole('link', { name: /Preventiva trimestral Alfa/ })).toBeVisible({
-      timeout: 15_000,
-    });
+    // Pelo PLANO da massa, e não pela tela inteira: outras suítes (o assistente
+    // de criação) acrescentam planos à mesma organização, e "o único '1 tarefa'
+    // da página" deixa de ser uma afirmação sobre este plano.
+    const plano = page.getByRole('link', { name: /Preventiva trimestral Alfa/ });
+    await expect(plano).toBeVisible({ timeout: 15_000 });
 
     // A massa tem uma tarefa; o chip de aviso não deve aparecer.
-    await expect(page.getByText('1 tarefa')).toBeVisible();
-    await expect(page.getByText('Sem tarefa')).toBeHidden();
+    await expect(plano.getByText('1 tarefa')).toBeVisible();
+    await expect(plano.getByText('Sem tarefa')).toBeHidden();
 
     // O plano da massa é manual de propósito: a tela precisa dizer isso, senão
     // alguém espera ordens que nunca vão aparecer sozinhas.
-    await expect(page.getByText('Manual')).toBeVisible();
+    await expect(plano.getByText('Manual')).toBeVisible();
   });
 
   test('a ficha mostra o cumprimento do ciclo com os itens, e não só o percentual', async ({
@@ -77,7 +79,8 @@ test.describe('EPIC-013 · planos preventivos', () => {
     // que alguém teve vontade de fazer.
     const planos = await page.request.get(`${apiUrl()}/maintenance-plans`, { headers: cab });
     const { items } = await planos.json();
-    const plano = items[0];
+    // Pelo nome: a lista é ordenada por nome e outras suítes criam planos.
+    const plano = items.find((p: { name: string }) => p.name === 'Preventiva trimestral Alfa');
 
     const detalhe = await page.request.get(`${apiUrl()}/maintenance-plans/${plano.id}`, {
       headers: cab,
