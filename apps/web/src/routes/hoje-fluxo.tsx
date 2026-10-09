@@ -142,7 +142,16 @@ export function FluxoDaOperacao() {
                 'transition-all duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:bg-surface-hover motion-reduce:transform-none'
               )}
             >
-              <div className="flex items-center justify-between">
+              {/* O número real da etapa à esquerda e o ícone à direita: o
+                  valor é o que se lê primeiro, e a ordem já é dada pelas setas. */}
+              <div className="flex items-start justify-between gap-2">
+                <span
+                  data-display
+                  data-numeric
+                  className="text-3xl leading-none font-semibold text-text tabular-nums"
+                >
+                  {e.valor ?? '—'}
+                </span>
                 <span
                   aria-hidden="true"
                   className={cn(
@@ -155,15 +164,7 @@ export function FluxoDaOperacao() {
                 >
                   {e.icone}
                 </span>
-                <span className="text-2xs font-semibold tracking-[0.14em] text-subtle">0{i + 1}</span>
               </div>
-              <span
-                data-display
-                data-numeric
-                className="text-3xl leading-none font-semibold text-text tabular-nums"
-              >
-                {e.valor ?? '—'}
-              </span>
               <span>
                 <span className="block text-sm font-semibold text-text">{e.titulo}</span>
                 <span className="block text-xs text-muted">{e.descricao}</span>

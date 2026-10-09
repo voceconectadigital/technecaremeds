@@ -75,7 +75,7 @@ test.describe('redesign: acessibilidade', () => {
 
 test.describe('redesign: larguras', () => {
   for (const largura of [390, 768, 1024, 1280, 1440]) {
-    test(`${largura}px: nada rola de lado e o título aparece`, async ({ page }) => {
+    test(`${largura}px: nada rola de lado, sem rolagem dupla, e o título aparece`, async ({ page }) => {
       test.setTimeout(240_000);
       await page.setViewportSize({ width: largura, height: 900 });
       await entrar(page);
@@ -84,6 +84,9 @@ test.describe('redesign: larguras', () => {
         await pronta(page, caminho);
         const largo = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
         if (largo > 1) falhas.push(`${caminho}: ${largo}px a mais`);
+        // Rolagem dupla: só a área de conteúdo rola, nunca o documento.
+        const alto = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+        if (alto > 1) falhas.push(`${caminho}: documento rola ${alto}px (rolagem dupla)`);
         if (!(await page.getByRole('heading', { level: 1 }).isVisible()))
           falhas.push(`${caminho}: h1 oculto`);
       }

@@ -572,19 +572,23 @@ function Disponibilidade({
 
           <div className="relative mt-auto pt-6">
             <div
-              className="flex h-2.5 overflow-hidden rounded-pill bg-nav-raised"
+              className="h-2.5 overflow-hidden rounded-pill bg-nav-raised"
               role="img"
               aria-label={partes.map((p) => `${p.rotulo}: ${p.valor}`).join(', ')}
             >
-              {partes.map((p) =>
-                p.valor > 0 ? (
-                  <span
-                    key={p.rotulo}
-                    className={cn('h-full border-r-2 border-[var(--aurora-nav-bg)] last:border-r-0', p.cor)}
-                    style={{ width: `${(p.valor / disp.base) * 100}%` }}
-                  />
-                ) : null
-              )}
+              {/* Cresce ao abrir e tem um brilho interno lento: é a única peça
+                  "viva" do painel, e é o número que mais importa. */}
+              <div className="aurora-anim-crescer-x aurora-anim-brilho flex h-full rounded-pill">
+                {partes.map((p) =>
+                  p.valor > 0 ? (
+                    <span
+                      key={p.rotulo}
+                      className={cn('h-full border-r-2 border-[var(--aurora-nav-bg)] last:border-r-0', p.cor)}
+                      style={{ width: `${(p.valor / disp.base) * 100}%` }}
+                    />
+                  ) : null
+                )}
+              </div>
             </div>
             <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-nav-text">
               {partes.map((p) => (
@@ -695,8 +699,11 @@ function Kpi({
           aria-label={`${progresso.feito} de ${progresso.total} realizadas`}
         >
           <span
-            className="block h-full rounded-pill bg-good"
-            style={{ width: `${Math.round((progresso.feito / progresso.total) * 100)}%` }}
+            className="aurora-anim-crescer-x block h-full rounded-pill bg-good"
+            style={{
+              width: `${Math.round((progresso.feito / progresso.total) * 100)}%`,
+              animationDelay: '200ms',
+            }}
           />
         </span>
       )}

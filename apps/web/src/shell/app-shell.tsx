@@ -106,7 +106,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
         {/* ------------------------------------------------------- conteúdo */}
 
         <div className="flex min-w-0 flex-1 flex-col md:py-2.5 md:pr-2.5">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg md:rounded-[20px] md:shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_10px_40px_-12px_rgb(0_0_0/0.35)]">
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-bg md:rounded-[20px] md:shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_10px_40px_-12px_rgb(0_0_0/0.35)]">
             <Topbar
               onOpenMenu={() => setGavetaAberta(true)}
               menuButton={
@@ -130,10 +130,16 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             dentro da mesma largura máxima, e rolam juntos. A exceção é a tela
             SANGRADA (quadro de OS): ali o conteúdo mede a altura que sobra, e
             o arranjo antigo — cabeçalho fixo, `<main>` rolando — continua.
+
+            A ÁREA QUE ROLA É `relative`, e isso corrige a rolagem dupla.
+            As tabelas só-para-leitor dos gráficos (`aurora-sr-only`, posição
+            absoluta) não tinham ancestral posicionado: o bloco que as contém
+            virava a janela, e a posição delas — lá embaixo do conteúdo —
+            esticava o documento, criando uma segunda barra de rolagem.
           */}
             <div
               className={cn(
-                'min-h-0 flex-1',
+                'relative min-h-0 flex-1',
                 bleed ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'
               )}
             >

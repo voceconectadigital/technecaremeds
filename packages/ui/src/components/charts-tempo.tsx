@@ -344,6 +344,7 @@ export function TrendChart({
                       <g key={t[0]![0]}>
                         {s.area && t.length > 1 && (
                           <path
+                            className="aurora-anim-surgir"
                             d={`${curva} L${x(ultimo[0]).toFixed(1)},${y(0)} L${x(t[0]![0]).toFixed(1)},${y(0)} Z`}
                             fill={`url(#${idBase}-g${si})`}
                           />
@@ -351,6 +352,11 @@ export function TrendChart({
                         {t.length > 1 ? (
                           <>
                             <path
+                              // Traça a linha ao abrir; a tracejada fica como está,
+                              // porque o traço da animação apagaria o tracejado.
+                              className={s.dashed ? undefined : 'aurora-anim-tracar'}
+                              pathLength={s.dashed ? undefined : 1}
+                              style={s.dashed ? undefined : { animationDelay: `${si * 150}ms` }}
                               d={curva}
                               fill="none"
                               stroke={cor}
@@ -361,6 +367,7 @@ export function TrendChart({
                             />
                             {/* O último ponto marcado: "onde estamos agora". */}
                             <circle
+                              className="aurora-anim-surgir"
                               cx={x(ultimo[0])}
                               cy={y(ultimo[1])}
                               r={tv ? 4.5 : 3.5}
@@ -551,7 +558,13 @@ export function ColumnChart({
               const cx = margem.left + banda * i + banda / 2;
               let acumulado = 0;
               return (
-                <g key={l + i} onMouseEnter={() => setFoco(i)}>
+                <g
+                  key={l + i}
+                  onMouseEnter={() => setFoco(i)}
+                  className="aurora-anim-crescer-y"
+                  // A coluna inteira cresce a partir da base, em sequência.
+                  style={{ transformOrigin: `${cx}px ${margem.top + h}px`, animationDelay: `${i * 70}ms` }}
+                >
                   {/* Alvo maior que a barra: passar o mouse não exige pontaria. */}
                   <rect
                     x={margem.left + banda * i}

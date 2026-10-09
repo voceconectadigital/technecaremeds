@@ -21,15 +21,11 @@ import {
   Building2,
   CalendarDays,
   ClipboardList,
-  FilePlus2,
   FileText,
   Inbox,
   Package,
-  PackagePlus,
-  Plus,
   Receipt,
   Repeat,
-  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 import { usePermissions } from '@aurora/app-kit';
@@ -67,7 +63,7 @@ export function atalhosPara(can: Pode): Atalho[] {
         chave: 'solicitacao',
         rotulo: 'Nova solicitação',
         para: '/solicitacoes/nova',
-        icone: FilePlus2,
+        icone: Inbox,
         permissao: 'service_request.create',
       },
       {
@@ -88,7 +84,7 @@ export function atalhosPara(can: Pode): Atalho[] {
         rotulo: 'Novo cliente',
         para: '/clientes',
         busca: { novo: 'sim' },
-        icone: UserPlus,
+        icone: Building2,
         permissao: 'customer.create',
       },
       {
@@ -106,7 +102,7 @@ export function atalhosPara(can: Pode): Atalho[] {
         rotulo: 'Novo equipamento',
         para: '/ativos',
         busca: { novo: 'sim' },
-        icone: PackagePlus,
+        icone: Boxes,
         permissao: 'asset.create',
       },
       { chave: 'ativo', rotulo: 'Equipamentos', para: '/ativos', icone: Boxes, permissao: 'asset.read' }
@@ -141,7 +137,7 @@ export function AtalhosRapidos() {
 
   /*
    * AÇÕES RÁPIDAS BAIXAS, e não uma fileira de cartões: 44px de altura, sem
-   * moldura em volta. Criar tem o quadrado azul com "+" — é a única cor da
+   * moldura em volta. Criar tem o quadrado azul com o ícone do cadastro — é a única cor da
    * faixa —; navegar tem o ícone em traço neutro. O título fica só para o
    * leitor de tela: os rótulos já dizem o que cada uma faz.
    */
@@ -168,7 +164,7 @@ export function AtalhosRapidos() {
                     aria-hidden="true"
                     className="grid size-6 shrink-0 place-items-center rounded-[7px] bg-accent text-on-accent"
                   >
-                    <Plus className="size-3.5" strokeWidth={2.5} />
+                    <Icone className="size-3.5" strokeWidth={2} />
                   </span>
                 ) : (
                   <Icone

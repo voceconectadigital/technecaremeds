@@ -124,10 +124,11 @@ export function BarChart({
             </span>
             <span className="relative h-2 overflow-hidden rounded-pill bg-surface-sunken">
               <span
-                className="absolute inset-y-0 left-0 rounded-pill transition-[width] duration-normal"
+                className="aurora-anim-crescer-x absolute inset-y-0 left-0 rounded-pill transition-[width] duration-normal"
                 style={{
                   width: `${Math.max((d.value / maximo) * 100, d.value > 0 ? 2 : 0)}%`,
                   backgroundColor: corDe(d, i),
+                  animationDelay: `${i * 90}ms`,
                 }}
               />
             </span>
@@ -147,10 +148,11 @@ export function BarChart({
           </span>
           <span className="relative h-5 min-w-0 flex-1 overflow-hidden rounded-control bg-surface-sunken">
             <span
-              className="absolute inset-y-0 left-0 rounded-control transition-[width] duration-normal"
+              className="aurora-anim-crescer-x absolute inset-y-0 left-0 rounded-control transition-[width] duration-normal"
               style={{
                 width: `${Math.max((d.value / maximo) * 100, d.value > 0 ? 2 : 0)}%`,
                 backgroundColor: corDe(d, i),
+                animationDelay: `${i * 90}ms`,
               }}
             />
           </span>
@@ -317,8 +319,15 @@ export function Sparkline({ values, label, goodDirection = 'up', height = 36, cl
       aria-label={`${label}: ${values.join(', ')}`}
       className={cn('block', className)}
     >
-      <polygon points={`0,${height} ${pontos.join(' ')} ${largura},${height}`} fill={cor} opacity="0.1" />
+      <polygon
+        className="aurora-anim-surgir"
+        points={`0,${height} ${pontos.join(' ')} ${largura},${height}`}
+        fill={cor}
+        fillOpacity={0.1}
+      />
       <polyline
+        className="aurora-anim-tracar"
+        pathLength={1}
         points={pontos.join(' ')}
         fill="none"
         stroke={cor}
