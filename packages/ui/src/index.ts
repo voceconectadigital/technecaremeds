@@ -96,6 +96,16 @@ export {
   type DonutChartProps,
   type SparklineProps,
 } from './components/charts';
+export {
+  TrendChart,
+  ColumnChart,
+  RateRing,
+  type TimeSeries,
+  type TrendChartProps,
+  type ColumnSegment,
+  type ColumnChartProps,
+  type RateRingProps,
+} from './components/charts-tempo';
 export { Thumb, type ThumbProps } from './components/thumb';
 export { Logo, type LogoProps } from './components/logo';
 export {

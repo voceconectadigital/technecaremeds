@@ -44,6 +44,7 @@ import {
 } from '@aurora/contracts';
 import { useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
+import { AlternadorDoPainel } from '../painel/alternador';
 
 interface Envelope {
   metric: string;
@@ -63,7 +64,7 @@ export function IndicadoresPage() {
 
   return (
     <AppShell
-      title="Indicadores"
+      title="Indicadores detalhados"
       subtitle="Como estamos indo — com a definição de cada número ao lado dele."
       actions={
         <div className="flex items-center gap-2">
@@ -90,6 +91,9 @@ export function IndicadoresPage() {
         </div>
       }
     >
+      <div className="mb-4">
+        <AlternadorDoPainel />
+      </div>
       {invalido ? (
         <Card>
           <EmptyState

@@ -15,9 +15,13 @@
  *   "que equipamento é esse?"            → Ativos
  *   "tem a peça?"                        → Estoque
  *   "quanto custa, e o que foi acordado?"→ Contratos
- *   "como estamos indo?"                 → Indicadores
+ *   "o que se repete, e está em dia?"    → Planos de manutenção
+ *   "como estamos indo?"                 → Painel de Controle
  *
- * Nove itens. O nono é Clientes, e entrou por uma pergunta que chegava ao
+ * Dez itens. O décimo é Planos de manutenção (09/10/2026): preventiva,
+ * calibração, TSE e qualificação deixaram de ser uma aba escondida atrás de
+ * Ordens de serviço e viraram módulo — com criação orientada, cronograma e
+ * gráficos. Clientes entrou antes, por uma pergunta que chegava ao
  * suporte em toda implantação: "onde eu cadastro o hospital?". O cliente é a
  * raiz de ativos, solicitações e contratos; escondê-lo em Configurações fazia
  * a primeira tarefa de quem chega ser a mais difícil de achar. Acima disso a
@@ -29,6 +33,8 @@
  * errou o caminho ou se o sistema quebrou.
  */
 import {
+  Gauge,
+  Repeat,
   Sun,
   Building2,
   Inbox,
@@ -37,7 +43,6 @@ import {
   Boxes,
   Package,
   FileText,
-  BarChart3,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -52,6 +57,8 @@ export interface NavItem {
   hint: string;
   /** Seção do menu: a ordem conta a história — o que acontece, com o quê, e o resultado. */
   grupo: NavGrupo;
+  /** Outros caminhos que acendem este item (a tela vizinha do alternador). */
+  tambem?: readonly string[];
 }
 
 export type NavGrupo = 'Operação' | 'Cadastros' | 'Inteligência';
@@ -93,6 +100,14 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     grupo: 'Operação',
   },
   {
+    to: '/planos',
+    label: 'Planos de manutenção',
+    icon: Repeat,
+    permissions: ['maintenance_plan.read'],
+    hint: 'Preventiva, calibração, TSE e qualificação — cronograma e acompanhamento',
+    grupo: 'Operação',
+  },
+  {
     to: '/clientes',
     label: 'Clientes',
     icon: Building2,
@@ -127,12 +142,13 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     grupo: 'Cadastros',
   },
   {
-    to: '/indicadores',
-    label: 'Indicadores',
-    icon: BarChart3,
+    to: '/painel',
+    label: 'Painel de Controle',
+    icon: Gauge,
     permissions: ['insight.read'],
-    hint: 'Como estamos indo',
+    hint: 'Como estamos indo: indicadores, gráficos e Modo Exibição',
     grupo: 'Inteligência',
+    tambem: ['/indicadores'],
   },
 ]);
 

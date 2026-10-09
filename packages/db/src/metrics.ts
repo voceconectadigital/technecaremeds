@@ -37,6 +37,16 @@ export interface MetricFilters {
   assetCategoryId?: string | null;
   teamId?: string | null;
   membershipId?: string | null;
+  /**
+   * O ESCOPO de quem pergunta, e não um filtro que a pessoa escolheu.
+   *
+   * Clientes e subárvores de local que o vínculo alcança (`membership_scopes`).
+   * Nulo é "sem restrição" — vínculo com escopo `all`. Fica fora de
+   * `filterRecord` de propósito: não é recorte da tela, é a borda do que a
+   * pessoa pode ver, e a resposta não precisa ecoá-la.
+   */
+  scopeCustomerIds?: readonly string[] | null;
+  scopeLocationPaths?: readonly string[] | null;
 }
 
 function filterRecord(f: MetricFilters): Record<string, string | null> {
@@ -63,14 +73,36 @@ function factFilter(f: MetricFilters, from = 1): { sql: string; params: unknown[
     f.assetCategoryId ?? null,
     f.teamId ?? null,
     f.membershipId ?? null,
+    ...scopeParams(f),
   ];
   const sql = `
       AND ($${from}::uuid IS NULL OR f.customer_id = $${from})
       AND ($${from + 1}::text IS NULL OR f.location_path LIKE $${from + 1} || '%')
       AND ($${from + 2}::uuid IS NULL OR f.asset_category_id = $${from + 2})
       AND ($${from + 3}::uuid IS NULL OR f.team_id = $${from + 3})
-      AND ($${from + 4}::uuid IS NULL OR f.assignee_membership_id = $${from + 4})`;
+      AND ($${from + 4}::uuid IS NULL OR f.assignee_membership_id = $${from + 4})
+      AND ${scopeSql('f.customer_id', 'f.location_path', from + 5)}`;
   return { sql, params: p };
+}
+
+/**
+ * A condição de escopo, para qualquer tabela que tenha cliente e caminho de local.
+ *
+ * Registro SEM local (OS sem equipamento) passa no recorte por local — o mesmo
+ * critério de `GET /assets`, que lista o ativo sem local para quem vê o
+ * cliente. O recorte por cliente vale sempre.
+ */
+export function scopeSql(customerCol: string, pathCol: string, from: number): string {
+  return `($${from}::uuid[] IS NULL OR ${customerCol} = ANY($${from}::uuid[]))
+      AND ($${from + 1}::text[] IS NULL OR ${pathCol} = ''
+           OR EXISTS (SELECT 1 FROM unnest($${from + 1}::text[]) AS sp(p) WHERE ${pathCol} LIKE sp.p || '%'))`;
+}
+
+export function scopeParams(f: MetricFilters): [string[] | null, string[] | null] {
+  return [
+    f.scopeCustomerIds ? [...f.scopeCustomerIds] : null,
+    f.scopeLocationPaths ? [...f.scopeLocationPaths] : null,
+  ];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -268,8 +300,12 @@ export async function slaCompliance(
         AND ($3::uuid IS NULL OR EXISTS (
               SELECT 1 FROM aurora.fact_work_order f
                WHERE f.work_order_id = c.document_id AND f.customer_id = $3))
+        AND (($4::uuid[] IS NULL AND $5::text[] IS NULL) OR EXISTS (
+              SELECT 1 FROM aurora.fact_work_order f
+               WHERE f.work_order_id = c.document_id
+                 AND ${scopeSql('f.customer_id', 'f.location_path', 4)}))
       GROUP BY 1, 2`,
-    [period.from, period.to, filters.customerId ?? null]
+    [period.from, period.to, filters.customerId ?? null, ...scopeParams(filters)]
   );
 
   const porAlvo: SlaData['byKind'] = {};
@@ -349,7 +385,8 @@ export interface StatusTime {
  */
 export async function timeByStatus(
   session: TenantSession,
-  period: Period
+  period: Period,
+  filters: MetricFilters = {}
 ): Promise<MetricResult<StatusTime[]>> {
   const rows = await session.query<{
     key: string;
@@ -362,11 +399,13 @@ export async function timeByStatus(
             count(*)::text AS occurrences
        FROM aurora.work_order_status_history h
        JOIN aurora.work_order_statuses s ON s.id = h.from_status_id
+       JOIN aurora.fact_work_order f ON f.work_order_id = h.work_order_id
       WHERE h.changed_at >= $1 AND h.changed_at < $2
         AND h.from_status_id IS NOT NULL
+        AND ${scopeSql('f.customer_id', 'f.location_path', 3)}
       GROUP BY s.key, s.label
       ORDER BY 3 DESC`,
-    [period.from, period.to]
+    [period.from, period.to, ...scopeParams(filters)]
   );
 
   return withDefinition(
@@ -394,7 +433,8 @@ export async function timeByStatus(
  */
 export async function timeByWaitReason(
   session: TenantSession,
-  period: Period
+  period: Period,
+  filters: MetricFilters = {}
 ): Promise<MetricResult<Array<StatusTime & { responsible: string; pausesSla: boolean }>>> {
   const rows = await session.query<{
     key: string;
@@ -409,11 +449,13 @@ export async function timeByWaitReason(
             count(*)::text AS occurrences
        FROM aurora.work_order_status_history h
        JOIN aurora.wait_reasons r ON r.id = h.wait_reason_id
+       JOIN aurora.fact_work_order f ON f.work_order_id = h.work_order_id
       WHERE h.changed_at >= $1 AND h.changed_at < $2
         AND h.wait_reason_id IS NOT NULL
+        AND ${scopeSql('f.customer_id', 'f.location_path', 3)}
       GROUP BY r.key, r.label, r.responsible, r.pauses_sla
       ORDER BY 5 DESC`,
-    [period.from, period.to]
+    [period.from, period.to, ...scopeParams(filters)]
   );
 
   return withDefinition(
@@ -477,7 +519,8 @@ export async function preventiveVsCorrective(
 
 export async function planCompliance(
   session: TenantSession,
-  period: Period
+  period: Period,
+  filters: MetricFilters = {}
 ): Promise<MetricResult<{ expected: number; done: number; skipped: number; rate: number | null }>> {
   const [row] = await session.query<{
     expected: string;
@@ -485,11 +528,14 @@ export async function planCompliance(
     skipped: string;
   }>(
     `SELECT count(*)::text AS expected,
-            count(*) FILTER (WHERE status = 'done')::text AS done,
-            count(*) FILTER (WHERE status = 'skipped')::text AS skipped
-       FROM aurora.plan_cycle_items
-      WHERE due_at >= $1 AND due_at < $2`,
-    [period.from, period.to]
+            count(*) FILTER (WHERE i.status = 'done')::text AS done,
+            count(*) FILTER (WHERE i.status = 'skipped')::text AS skipped
+       FROM aurora.plan_cycle_items i
+       JOIN aurora.assets a ON a.id = i.asset_id
+      WHERE i.due_at >= $1 AND i.due_at < $2
+        AND ($3::uuid IS NULL OR a.customer_id = $3)
+        AND ${scopeSql('a.customer_id', 'a.location_path', 4)}`,
+    [period.from, period.to, filters.customerId ?? null, ...scopeParams(filters)]
   );
 
   const previstos = Number(row!.expected);
@@ -500,7 +546,7 @@ export async function planCompliance(
   return withDefinition(
     'plan_compliance',
     period,
-    {},
+    filterRecord(filters),
     {
       expected: previstos,
       done: concluidos,
@@ -614,14 +660,17 @@ export async function firstResponseTime(
        JOIN aurora.service_requests r ON r.id = t.request_id
       WHERE t.triaged_at >= $1 AND t.triaged_at < $2
         AND r.submitted_at IS NOT NULL
-        AND ($3::uuid IS NULL OR r.customer_id = $3)`,
-    [period.from, period.to, filters.customerId ?? null]
+        AND ($3::uuid IS NULL OR r.customer_id = $3)
+        AND ($4::uuid[] IS NULL OR r.customer_id = ANY($4::uuid[]))`,
+    [period.from, period.to, filters.customerId ?? null, scopeParams(filters)[0]]
   );
 
   const [naoTriadas] = await session.query<{ total: string }>(
     `SELECT count(*)::text AS total FROM aurora.service_requests
-      WHERE submitted_at >= $1 AND submitted_at < $2 AND status = 'submitted'`,
-    [period.from, period.to]
+      WHERE submitted_at >= $1 AND submitted_at < $2 AND status = 'submitted'
+        AND ($3::uuid IS NULL OR customer_id = $3)
+        AND ($4::uuid[] IS NULL OR customer_id = ANY($4::uuid[]))`,
+    [period.from, period.to, filters.customerId ?? null, scopeParams(filters)[0]]
   );
 
   const minutos = rows.map((r) => Math.max(0, Number(r.minutes)));

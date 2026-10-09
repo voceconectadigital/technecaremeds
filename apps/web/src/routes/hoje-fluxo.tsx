@@ -93,7 +93,7 @@ export function FluxoDaOperacao() {
       descricao: 'Resolvidas e registradas',
       valor: soma('done', 'closed', 'review'),
       icone: <CheckCircle2 className="size-4" />,
-      to: '/indicadores',
+      to: '/painel',
       destaque: 'good',
     },
   ];
