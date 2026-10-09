@@ -50,8 +50,8 @@ export function Logo({ src, srcEscuro, nome, largura = 180, className }: LogoPro
       )}
     >
       {img(src, 'aurora-logo-claro', nome)}
-      {/* A variante escura é decorativa para leitores de tela: o nome já foi dito. */}
-      {srcEscuro && img(srcEscuro, 'aurora-logo-escuro', '')}
+      {/* As duas têm o nome: a oculta (display:none) sai da árvore de acessibilidade. */}
+      {srcEscuro && img(srcEscuro, 'aurora-logo-escuro', nome)}
     </span>
   );
 }

@@ -99,7 +99,7 @@ export function Topbar({ menuButton }: TopbarProps) {
         type="button"
         onClick={() => setBuscaAberta(true)}
         className={cn(
-          'flex h-8 flex-1 items-center gap-2 rounded-control border border-border px-2.5 text-left',
+          'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control border border-border px-2.5 text-left',
           'text-sm text-subtle transition-colors hover:border-border-strong hover:text-muted',
           'md:max-w-md'
         )}
@@ -111,7 +111,7 @@ export function Topbar({ menuButton }: TopbarProps) {
         </kbd>
       </button>
 
-      <div className="flex flex-1 items-center justify-end gap-1">
+      <div className="flex shrink-0 items-center justify-end gap-1 md:flex-1">
         {varias && (
           <Button
             variant="ghost"
