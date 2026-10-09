@@ -232,7 +232,7 @@ foi removido do node em seguida.
 | Apontamentos de horas | 8 |
 | Pessoas ativas | 6 |
 
-**Pessoas demo** (fictícias, e-mail no domínio reservado `@demo.technecare.invalid`, **sem senha/credencial**):
+**Pessoas demo** (fictícias, e-mail no domínio reservado `@demo.technecare.invalid`, **sem senha/credencial** — exceto Rafael Souza, que ganhou senha depois, ver §17):
 Fernanda Alves (coordenação), Rafael Souza, Juliana Prado e Marcos Lima (técnicos), Beatriz Costa (solicitante do
 portal), além da conta titular de demonstração criada no cutover.
 
@@ -315,7 +315,8 @@ Nenhuma migration foi criada ou alterada nesta rodada.
 | #6 | `c74fd2f` | Correções dos E2E: `alt` na logo escura; busca da barra encolhe no celular. |
 | #6 | merge `99b42f2` | Entrada na `main`. |
 
-Contexto imediatamente anterior (mesmo dia, rodadas de implantação e cutover): PRs #1 a #4.
+Contexto imediatamente anterior (mesmo dia, rodadas de implantação e cutover): PRs #1 a #4. Depois deste relatório:
+PRs #8 e #9 (login do Campo, §17).
 
 **Deploys desta rodada:**
 
@@ -416,3 +417,32 @@ Organização de demonstração: **TéchneCare Demo** (`technecare-demo`). Crede
 | Smoke (produção) | PASS |
 | Deploy (API + 3 frontends) | PASS |
 | Anderson Demo Ready | YES |
+
+---
+
+## 17. Adendo — login do Campo (mesmo dia, depois do relatório)
+
+**Problema.** O app de campo só tinha o login de desenvolvimento (token `local:e-mail` e o identificador da
+organização digitado à mão). A API de produção usa o provedor `password` e recusa esse token, então ninguém entrava
+em `campo-technecaremeds`.
+
+| PR | Commit(s) | Objetivo |
+|---|---|---|
+| #8 | merge `adc5f29` | Campo entra com e-mail e senha (`/auth/login`) e a organização vem das da conta (`/me/organizations`): uma só entra direto, várias viram escolha por nome. Mensagens para 401, 429 e sem rede. "Sair" revoga a sessão no servidor. Modo local mantido para desenvolvimento. 5 testes de componente. |
+| #9 | merge `dc4c6c4` | A primeira sincronização disparava na tela de entrar, sem sessão (401), e não se repetia depois do login (dia vazio por até 60 s). Agora só sincroniza com sessão e sincroniza ao entrar e ao trocar de organização. E2E novo entra pelo formulário. |
+
+**Deploy.** `technecare-field` publicado do commit `dc4c6c4` com `VITE_API_URL` de produção; o domínio serve o build
+novo, e a tela de entrar só chama `/auth/config` (nenhum `/field/sync` sem sessão).
+
+**Conta de técnico para demonstrar o Campo.** O pacote do Campo é por técnico: a conta titular é administradora, não
+tem ordens atribuídas e vê o dia vazio. Por isso o técnico fictício **Rafael Souza** (`@demo.technecare.invalid`)
+recebeu senha, com autorização. Só a credencial foi gravada (`aurora.definir_senha`). Papel, vínculo e dados da demo
+ficaram como estavam. Não foi usado o `admin:criar`, que garante papel administrativo. Validado pela API: login 200,
+organização única "TéchneCare Demo", pacote com 4 OS e 15 equipamentos. A senha fica em arquivo local, fora do
+repositório e deste relatório.
+
+| Item | Status |
+|---|---|
+| Login do Campo em produção | PASS |
+| Sincronização após entrar | PASS |
+| Técnico demo com dia no Campo | PASS |
