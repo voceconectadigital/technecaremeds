@@ -583,6 +583,16 @@ async function main() {
       // Antecedência enorme para o ciclo abrir agora, e não daqui a meses: a
       // massa precisa do ciclo EXISTINDO para a tela ter o que mostrar.
       await generateCycle(s, tarefa);
+
+      // A natureza PREVENTIVA, depois de tudo o que lê 'a primeira natureza'
+      // (LIMIT 1): sem ela o assistente de plano não oferece Preventiva, e o
+      // teste do assistente passaria contra um tipo desabilitado.
+      await createCatalogItem(s, {
+        catalogKey: 'work_order_type',
+        key: 'preventiva',
+        label: 'Preventiva',
+        systemKey: 'preventive',
+      });
     });
   }
 

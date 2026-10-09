@@ -19,10 +19,10 @@ test.describe('EPIC-013 · planos preventivos', () => {
     await page.goto('/ordens');
     await page
       .getByRole('navigation', { name: 'Ordens e planos' })
-      .getByRole('link', { name: 'Planos preventivos' })
+      .getByRole('link', { name: 'Planos de manutenção' })
       .click();
 
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Planos preventivos');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Planos de manutenção');
     expect(page.url()).toContain('/planos');
   });
 
