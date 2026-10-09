@@ -459,7 +459,10 @@ function Conteudo({ d }: { d: ControlPanel }) {
       <p className="flex flex-wrap items-center gap-1.5 text-xs text-subtle">
         <Gauge className="size-3.5" aria-hidden="true" />
         Definição de cada indicador em
-        <Link to="/indicadores" className="text-accent-text underline-offset-2 hover:underline">
+        <Link
+          to="/indicadores"
+          className="inline-flex min-h-6 items-center text-accent-text underline-offset-2 hover:underline"
+        >
           Indicadores detalhados
         </Link>
         · atualizado{' '}
