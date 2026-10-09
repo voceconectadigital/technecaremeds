@@ -999,6 +999,40 @@
     display: block;
   }
 
+  /*
+   * MOVIMENTO DOS GRÁFICOS — entrada única, curta, e um brilho interno lento
+   * só na barra herói do painel. Quem pediu menos movimento ao sistema não
+   * vê nada disto: a regra de `prefers-reduced-motion` da camada base zera
+   * duração e repetição de toda animação.
+   */
+  .aurora-anim-crescer-x {
+    transform-origin: left center;
+    animation: aurora-crescer-x 900ms var(--aurora-ease-out) both;
+  }
+  .aurora-anim-crescer-y {
+    animation: aurora-crescer-y 700ms var(--aurora-ease-out) both;
+  }
+  /* Traça a linha: exige `pathLength="1"` no elemento. */
+  .aurora-anim-tracar {
+    stroke-dasharray: 1;
+    animation: aurora-tracar 1300ms var(--aurora-ease-out) both;
+  }
+  .aurora-anim-surgir {
+    animation: aurora-surgir 900ms ease-out 350ms both;
+  }
+  .aurora-anim-brilho {
+    position: relative;
+    overflow: hidden;
+  }
+  .aurora-anim-brilho::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+    transform: translateX(-100%);
+    animation: aurora-brilho 2.8s ease-in-out 1.2s infinite;
+  }
+
   /* Seta própria do seletor: a do sistema muda de desenho em cada navegador e
      é o detalhe que mais denuncia "formulário de 2010". Cinza médio, legível
      nos dois modos. */
@@ -1026,5 +1060,48 @@
   }
   .aurora-skip-link:focus {
     top: var(--aurora-space-2);
+  }
+}
+
+/* Quadros-chave do movimento dos gráficos (ver `.aurora-anim-*`). */
+@keyframes aurora-crescer-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes aurora-crescer-y {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes aurora-tracar {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes aurora-surgir {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes aurora-brilho {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(100%);
   }
 }
