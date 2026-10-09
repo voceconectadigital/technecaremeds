@@ -29,6 +29,30 @@ test.describe('Painel de Controle', () => {
     await expect(page.getByRole('button', { name: '90 dias' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('período personalizado: incompleto vira aviso; completo recarrega pela URL', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/painel');
+    await page.getByRole('button', { name: 'Personalizado' }).click();
+    await expect(page.getByText('Escolha a data inicial e a final do período.')).toBeVisible();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const inicio = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
+    await page.getByLabel('Início do período').fill(inicio);
+    await page.getByLabel('Fim do período').fill(hoje);
+    await expect(page).toHaveURL(new RegExp(`de=${inicio}.*ate=${hoje}|ate=${hoje}.*de=${inicio}`));
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText('Evolução dos chamados')).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Início do período')).toHaveValue(inicio);
+  });
+
+  test('o cartão leva à lista correspondente já filtrada', async ({ comoCoordenadorA: page }) => {
+    await page.goto('/painel');
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
+    await page.getByRole('link', { name: /Chamados abertos/ }).click();
+    await expect(page).toHaveURL(/\/ordens\?.*categoria=open/);
+  });
+
   test('o Modo Exibição abre sem a barra lateral, com relógio, e Esc volta', async ({
     comoCoordenadorA: page,
   }) => {

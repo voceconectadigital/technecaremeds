@@ -124,7 +124,8 @@ export const PERIODOS = [
   { valor: '90d', rotulo: '90 dias', dias: 90 },
   { valor: '12m', rotulo: '12 meses', dias: 365 },
 ] as const;
-export type Periodo = (typeof PERIODOS)[number]['valor'];
+/** Os atalhos, mais o período personalizado (`de`/`ate` na URL). */
+export type Periodo = (typeof PERIODOS)[number]['valor'] | 'custom';
 
 /**
  * O intervalo do preset, terminando no fim de HOJE (hora local). Começa à

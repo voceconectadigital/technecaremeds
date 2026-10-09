@@ -34,6 +34,7 @@ import {
   workOrderSeries,
   openWorkOrdersSnapshot,
   parkSnapshot,
+  planBoard,
   type MetricFilters,
   type MembershipScope,
   type TenantSession,
@@ -314,6 +315,14 @@ export class InsightsController {
           productivity: pr,
         },
         series: await workOrderSeries(s, p, granularity, f),
+        preventives: await (async () => {
+          const b = await planBoard(
+            s,
+            { from: p.from, to: p.to, customerId: q.customerId ?? null, sectorId: q.sectorId ?? null },
+            escopo
+          );
+          return { totals: b.totals, rate: b.rate, byMonth: b.byMonth };
+        })(),
         open_now: await openWorkOrdersSnapshot(s, f),
         park: await parkSnapshot(s, f),
       };

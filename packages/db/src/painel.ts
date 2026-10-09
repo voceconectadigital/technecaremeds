@@ -124,6 +124,13 @@ export interface SeriesPoint {
   completedCorrective: number;
   /** Backlog no FIM da fatia, pela mesma definição do indicador. */
   backlog: number;
+  /**
+   * MTTR da fatia: média de `resolution_minutes` das corretivas concluídas
+   * nela — a MESMA definição do indicador. Nulo quando a fatia não tem
+   * amostra: zero diria "reparo instantâneo".
+   */
+  mttrMinutes: number | null;
+  mttrSamples: number;
 }
 
 /**
@@ -152,6 +159,8 @@ export async function workOrderSeries(
     prev: string;
     corr: string;
     backlog: string;
+    mttr: string | null;
+    mttr_n: string;
   }>(
     `WITH b AS (
        SELECT gs AS inicio, LEAST(gs + $3::interval, $2::timestamptz) AS fim
@@ -170,7 +179,15 @@ export async function workOrderSeries(
                 AND f.work_order_type_key = 'corrective' ${filtro})::text AS corr,
             (SELECT count(*) FROM aurora.fact_work_order f
               WHERE f.opened_at IS NOT NULL AND f.opened_at <= b.fim AND NOT f.cancelled
-                AND (f.completed_at IS NULL OR f.completed_at > b.fim) ${filtro})::text AS backlog
+                AND (f.completed_at IS NULL OR f.completed_at > b.fim) ${filtro})::text AS backlog,
+            (SELECT avg(f.resolution_minutes) FROM aurora.fact_work_order f
+              WHERE f.completed_at >= b.inicio AND f.completed_at < b.fim AND NOT f.cancelled
+                AND f.work_order_type_key = 'corrective' AND f.resolution_minutes IS NOT NULL
+                ${filtro})::text AS mttr,
+            (SELECT count(*) FROM aurora.fact_work_order f
+              WHERE f.completed_at >= b.inicio AND f.completed_at < b.fim AND NOT f.cancelled
+                AND f.work_order_type_key = 'corrective' AND f.resolution_minutes IS NOT NULL
+                ${filtro})::text AS mttr_n
        FROM b ORDER BY b.inicio`,
     [period.from, period.to, passo, ...p]
   );
@@ -182,6 +199,8 @@ export async function workOrderSeries(
     completedPreventive: Number(r.prev),
     completedCorrective: Number(r.corr),
     backlog: Number(r.backlog),
+    mttrMinutes: r.mttr === null ? null : Math.round(Number(r.mttr)),
+    mttrSamples: Number(r.mttr_n),
   }));
 }
 

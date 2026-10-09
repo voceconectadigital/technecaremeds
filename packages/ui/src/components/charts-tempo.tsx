@@ -39,7 +39,12 @@ const COR_DE_TOM: Record<Tom, string> = {
 export interface TimeSeries {
   key: string;
   label: string;
-  values: number[];
+  /**
+   * Um valor por fatia. `null` = fatia SEM AMOSTRA: a linha se interrompe ali
+   * e a dica diz "sem dados" — nunca vira zero (zero de MTTR seria "reparo
+   * instantâneo").
+   */
+  values: Array<number | null>;
   /** 1 a 6 (paleta de dados). Cor segue a SÉRIE, nunca a posição. */
   series?: 1 | 2 | 3 | 4 | 5 | 6;
   tone?: Tom;
@@ -118,7 +123,7 @@ function TabelaLeitor({
 }: {
   label: string;
   rotulos: string[];
-  colunas: Array<{ label: string; values: number[] }>;
+  colunas: Array<{ label: string; values: Array<number | null> }>;
 }) {
   return (
     <div className="aurora-sr-only">
@@ -139,7 +144,7 @@ function TabelaLeitor({
             <tr key={r + i}>
               <th scope="row">{r}</th>
               {colunas.map((c) => (
-                <td key={c.label}>{c.values[i] ?? 0}</td>
+                <td key={c.label}>{c.values[i] ?? '—'}</td>
               ))}
             </tr>
           ))}
@@ -196,8 +201,9 @@ export function TrendChart({
   const fonte = tv ? 15 : 11;
   const margem = { top: 12, right: 12, bottom: tv ? 30 : 22, left: tv ? 48 : 36 };
   const n = labels.length;
-  const { topo: max, marcas: grades } = escalaDoEixo(Math.max(0, ...series.flatMap((s) => s.values)));
-  const vazio = n === 0 || series.every((s) => s.values.every((v) => v === 0));
+  const numeros = series.flatMap((s) => s.values.filter((v): v is number => v !== null));
+  const { topo: max, marcas: grades } = escalaDoEixo(Math.max(0, ...numeros));
+  const vazio = n === 0 || numeros.every((v) => v === 0);
 
   const w = Math.max(largura - margem.left - margem.right, 10);
   const h = height - margem.top - margem.bottom;
@@ -270,26 +276,46 @@ export function TrendChart({
             )}
             {series.map((s, si) => {
               const cor = corDaSerie(s, si);
-              const pts = s.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+              // Trechos contínuos: uma fatia sem amostra interrompe a linha.
+              const trechos: Array<Array<[number, number]>> = [];
+              let atual: Array<[number, number]> = [];
+              s.values.forEach((v, i) => {
+                if (v === null) {
+                  if (atual.length) trechos.push(atual);
+                  atual = [];
+                } else atual.push([i, v]);
+              });
+              if (atual.length) trechos.push(atual);
               return (
                 <g key={s.key}>
-                  {s.area && (
-                    <polygon
-                      points={`${x(0)},${y(0)} ${pts} ${x(n - 1)},${y(0)}`}
-                      fill={cor}
-                      opacity={0.12}
-                    />
-                  )}
-                  <polyline
-                    points={pts}
-                    fill="none"
-                    stroke={cor}
-                    strokeWidth={tv ? 3 : 2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    strokeDasharray={s.dashed ? '5 4' : undefined}
-                  />
-                  {n === 1 && <circle cx={x(0)} cy={y(s.values[0] ?? 0)} r={4} fill={cor} />}
+                  {trechos.map((t) => {
+                    const pts = t.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+                    return (
+                      <g key={t[0]![0]}>
+                        {s.area && t.length > 1 && (
+                          <polygon
+                            points={`${x(t[0]![0])},${y(0)} ${pts} ${x(t[t.length - 1]![0])},${y(0)}`}
+                            fill={cor}
+                            opacity={0.12}
+                          />
+                        )}
+                        {t.length > 1 ? (
+                          <polyline
+                            points={pts}
+                            fill="none"
+                            stroke={cor}
+                            strokeWidth={tv ? 3 : 2}
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                            strokeDasharray={s.dashed ? '5 4' : undefined}
+                          />
+                        ) : (
+                          // Ponto isolado: sem vizinho, a linha não teria comprimento.
+                          <circle cx={x(t[0]![0])} cy={y(t[0]![1])} r={3.5} fill={cor} />
+                        )}
+                      </g>
+                    );
+                  })}
                 </g>
               );
             })}
@@ -303,17 +329,19 @@ export function TrendChart({
                   stroke="var(--color-border-strong)"
                   strokeWidth={1}
                 />
-                {series.map((s, si) => (
-                  <circle
-                    key={s.key}
-                    cx={x(foco)}
-                    cy={y(s.values[foco] ?? 0)}
-                    r={4.5}
-                    fill={corDaSerie(s, si)}
-                    stroke="var(--color-surface)"
-                    strokeWidth={2}
-                  />
-                ))}
+                {series.map((s, si) =>
+                  s.values[foco] === null || s.values[foco] === undefined ? null : (
+                    <circle
+                      key={s.key}
+                      cx={x(foco)}
+                      cy={y(s.values[foco] as number)}
+                      r={4.5}
+                      fill={corDaSerie(s, si)}
+                      stroke="var(--color-surface)"
+                      strokeWidth={2}
+                    />
+                  )
+                )}
               </g>
             )}
           </svg>
@@ -335,7 +363,11 @@ export function TrendChart({
                   style={{ backgroundColor: corDaSerie(s, si) }}
                 />
                 <span className="flex-1">{s.label}</span>
-                <span className="font-semibold text-text tabular-nums">{format(s.values[foco] ?? 0)}</span>
+                <span className="font-semibold text-text tabular-nums">
+                  {s.values[foco] === null || s.values[foco] === undefined
+                    ? 'sem dados'
+                    : format(s.values[foco] as number)}
+                </span>
               </p>
             ))}
           </div>
