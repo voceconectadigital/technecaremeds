@@ -21,7 +21,7 @@ export function AlternadorDeTrabalho() {
     <nav aria-label="Ordens e planos" className="flex gap-1">
       {[
         { para: '/ordens', rotulo: 'Ordens de serviço', ativo: !emPlanos },
-        { para: '/planos', rotulo: 'Planos preventivos', ativo: emPlanos },
+        { para: '/planos', rotulo: 'Planos de manutenção', ativo: emPlanos },
       ].map((x) => (
         <Link
           key={x.para}

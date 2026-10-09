@@ -38,3 +38,6 @@ export * from './session-documents';
 export * from './asset-timeline';
 export * from './opportunities';
 export * from './imports';
+export * from './painel';
+export * from './plan-board';
+export * from './procedures';

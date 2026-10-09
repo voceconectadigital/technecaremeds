@@ -111,13 +111,22 @@ const ContratoPage = preguicosa(() =>
   import('../features/comercial/contratos').then((m) => ({ default: m.ContratoPage }))
 );
 const PlanosPage = preguicosa(() =>
-  import('../features/planos/lista').then((m) => ({ default: m.PlanosPage }))
+  import('../features/planos/modulo').then((m) => ({ default: m.PlanosModuloPage }))
 );
 const PlanoPage = preguicosa(() =>
   import('../features/planos/lista').then((m) => ({ default: m.PlanoPage }))
 );
 const IndicadoresPage = preguicosa(() =>
   import('../features/indicadores/painel').then((m) => ({ default: m.IndicadoresPage }))
+);
+const PainelPage = preguicosa(() =>
+  import('../features/painel/painel').then((m) => ({ default: m.PainelPage }))
+);
+const ModoExibicaoPage = preguicosa(() =>
+  import('../features/painel/tv').then((m) => ({ default: m.ModoExibicaoPage }))
+);
+const ClientePage = preguicosa(() =>
+  import('../features/clientes/ficha').then((m) => ({ default: m.ClientePage }))
 );
 const NotificacoesPage = preguicosa(() =>
   import('../features/notificacoes/caixa').then((m) => ({ default: m.NotificacoesPage }))
@@ -205,6 +214,12 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/', HojePage),
 
   rotaProtegida('/clientes', ClientesPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/clientes/$id',
+    component: ClientePage,
+    beforeLoad: exigirSessao,
+  }),
 
   rotaProtegida('/solicitacoes', SolicitacoesPage),
   // Antes de `/solicitacoes/$id`: 'nova' casaria com o parâmetro, e a
@@ -270,6 +285,9 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/indicadores', IndicadoresPage),
+  rotaProtegida('/painel', PainelPage),
+  // Fora da moldura (sem barra lateral): é a tela da televisão.
+  rotaProtegida('/painel/tv', ModoExibicaoPage),
   rotaProtegida('/notificacoes', NotificacoesPage),
   rotaProtegida('/perfil', PerfilPage),
 
