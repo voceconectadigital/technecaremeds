@@ -1,81 +1,91 @@
 /**
- * Aurora — tema claro e escuro.
+ * Aurora — estilos visuais (temas) escolhidos pela pessoa.
  *
- * TRÊS ESTADOS, NÃO DOIS: claro, escuro e "o que o sistema disser". O terceiro
- * é o padrão, e é o que faz a tela acompanhar quem trabalha de dia e à noite
- * sem precisar mexer em nada.
+ * TRÊS ESTILOS, CADA UM COM SUA PERSONALIDADE — não três cores do mesmo layout:
+ *
+ *   futuristico  painel de veículo elétrico premium; escuro, preciso. PADRÃO.
+ *   mindfulness  calmo e contemplativo; claro, pedra quente, serifa nos títulos.
+ *   wellness     limpo e acolhedor; claro, verde-água, humano.
+ *
+ * O estilo vive em `data-estilo` (paleta, superfícies, face de destaque) e o
+ * MODO derivado dele em `data-theme` (`dark`/`light`) — o CSS que já sabia
+ * escurecer continua valendo, e cada estilo só precisa declarar a diferença.
+ * Tokens em packages/ui/src/styles/tokens.css.
  *
  * A aplicação inicial acontece no `index.html`, antes de o React montar —
- * senão a página pisca branca antes de escurecer, e quem trabalha de
- * madrugada no hospital recebe um flash na cara a cada carregamento.
+ * senão a página pisca com o estilo errado a cada carregamento.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark';
-type Escolha = Theme | 'system';
+export type Estilo = 'futuristico' | 'mindfulness' | 'wellness';
 
-const CHAVE = 'aurora:tema';
+export const ESTILOS: readonly { id: Estilo; nome: string; descricao: string; modo: Theme }[] = [
+  { id: 'futuristico', nome: 'Futurístico', descricao: 'Painel premium, escuro e preciso', modo: 'dark' },
+  { id: 'mindfulness', nome: 'Mindfulness', descricao: 'Calmo, leve e equilibrado', modo: 'light' },
+  { id: 'wellness', nome: 'Wellness', descricao: 'Limpo, acolhedor e humano', modo: 'light' },
+];
 
-function lerEscolha(): Escolha {
+export const ESTILO_PADRAO: Estilo = 'futuristico';
+const CHAVE = 'aurora:estilo';
+
+function valido(v: unknown): v is Estilo {
+  return ESTILOS.some((e) => e.id === v);
+}
+
+function lerEstilo(): Estilo {
   try {
     const v = localStorage.getItem(CHAVE);
-    return v === 'light' || v === 'dark' ? v : 'system';
+    return valido(v) ? v : ESTILO_PADRAO;
   } catch {
-    return 'system';
+    return ESTILO_PADRAO;
   }
 }
 
-function doSistema(): Theme {
-  if (typeof window === 'undefined' || !window.matchMedia) return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+export function modoDoEstilo(estilo: Estilo): Theme {
+  return ESTILOS.find((e) => e.id === estilo)?.modo ?? 'dark';
 }
 
 interface ThemeApi {
+  /** Luminosidade derivada do estilo — para quem só precisa saber claro/escuro. */
   tema: Theme;
-  escolha: Escolha;
-  definir(escolha: Escolha): void;
+  estilo: Estilo;
+  definir(estilo: Estilo): void;
+  /** Próximo estilo da lista (atalho do menu). */
   alternar(): void;
 }
 
 const Ctx = createContext<ThemeApi | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [escolha, setEscolha] = useState<Escolha>(lerEscolha);
-  const [doS, setDoS] = useState<Theme>(doSistema);
-
-  // Quem está em "system" acompanha a mudança do sistema EM TEMPO REAL: o
-  // computador escurece às 18h e a Aurora escurece junto, sem recarregar.
-  useEffect(() => {
-    if (!window.matchMedia) return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const aoMudar = () => setDoS(mq.matches ? 'dark' : 'light');
-    mq.addEventListener?.('change', aoMudar);
-    return () => mq.removeEventListener?.('change', aoMudar);
-  }, []);
-
-  const tema: Theme = escolha === 'system' ? doS : escolha;
+  const [estilo, setEstilo] = useState<Estilo>(lerEstilo);
+  const tema = modoDoEstilo(estilo);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = tema;
-  }, [tema]);
+    const raiz = document.documentElement;
+    raiz.dataset.estilo = estilo;
+    raiz.dataset.theme = tema;
+    raiz.style.colorScheme = tema;
+  }, [estilo, tema]);
 
-  const definir = useCallback((nova: Escolha) => {
+  const definir = useCallback((novo: Estilo) => {
+    if (!valido(novo)) return;
     try {
-      if (nova === 'system') localStorage.removeItem(CHAVE);
-      else localStorage.setItem(CHAVE, nova);
+      localStorage.setItem(CHAVE, novo);
     } catch {
       /* sem armazenamento: vale só nesta aba */
     }
-    setEscolha(nova);
+    setEstilo(novo);
   }, []);
 
   const alternar = useCallback(() => {
-    definir(tema === 'dark' ? 'light' : 'dark');
-  }, [tema, definir]);
+    const i = ESTILOS.findIndex((e) => e.id === estilo);
+    definir(ESTILOS[(i + 1) % ESTILOS.length]!.id);
+  }, [estilo, definir]);
 
   const api = useMemo<ThemeApi>(
-    () => ({ tema, escolha, definir, alternar }),
-    [tema, escolha, definir, alternar]
+    () => ({ tema, estilo, definir, alternar }),
+    [tema, estilo, definir, alternar]
   );
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;

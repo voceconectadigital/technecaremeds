@@ -41,7 +41,7 @@ export type { PermissionApi } from './permissions';
 export { useSessionQuery } from './use-session-query';
 export { lerSessaoGuardada, CHAVE_TOKEN, CHAVE_ORG } from './session-guard';
 
-export { ThemeProvider, useTheme } from './theme';
-export type { Theme } from './theme';
+export { ThemeProvider, useTheme, ESTILOS, ESTILO_PADRAO, modoDoEstilo } from './theme';
+export type { Theme, Estilo } from './theme';
 export { useUrlState } from './url-state';
 export { MARCA } from './marca.gerada';

@@ -19,11 +19,13 @@
  */
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Button, Card, Field, Input, Select, Skeleton, Textarea, useToast } from '@aurora/ui';
 import { requestCreate, requestsQueue, catalogItems, type CatalogItem } from '@aurora/contracts';
 import { customersList, type Customer } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
+import { DialogoNovoCliente } from '../clientes/novo-cliente';
 
 const PRIORIDADES = [
   { valor: 'none', rotulo: 'Sem urgência declarada' },
@@ -43,6 +45,11 @@ export function NovaSolicitacaoPage() {
   const [prioridade, setPrioridade] = useState<string>('none');
   const [sintoma, setSintoma] = useState('');
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
+  const [cadastrandoCliente, setCadastrandoCliente] = useState(false);
+  /** O cliente cadastrado aqui mesmo, enquanto a lista ainda não voltou com ele. */
+  const [clienteNovo, setClienteNovo] = useState<Customer | null>(null);
+  const { can } = usePermissions();
+  const podeCadastrarCliente = can('customer.create');
 
   const { data: clientes, isLoading: carregandoClientes } = useApiQuery(customersList, undefined, {
     staleTime: 5 * 60_000,
@@ -54,10 +61,17 @@ export function NovaSolicitacaoPage() {
     { staleTime: 10 * 60_000 }
   ) as { data: { items: CatalogItem[] } | undefined };
 
-  const lista = clientes?.items ?? [];
+  const carregados = clientes?.items ?? [];
+  // O recém-cadastrado entra na lista na hora. Esperar a recarga deixaria o
+  // seletor apontando para um valor sem opção — em branco, como se o cadastro
+  // tivesse falhado.
+  const lista =
+    clienteNovo && !carregados.some((c) => c.id === clienteNovo.id)
+      ? [...carregados, clienteNovo]
+      : carregados;
   // Uma organização que atende só a si mesma não escolhe cliente: escolher
-  // entre uma opção não é escolha, é obstáculo.
-  const clienteUnico = clientes?.single_customer ? lista[0] : undefined;
+  // entre uma opção não é escolha, é obstáculo. Até ela cadastrar o segundo.
+  const clienteUnico = clientes?.single_customer && !clienteNovo ? lista[0] : undefined;
   const clienteEscolhido = clienteUnico?.id ?? cliente;
 
   const criar = useApiMutation(requestCreate, {
@@ -132,15 +146,46 @@ export function NovaSolicitacaoPage() {
           // invisível para leitor de tela.
           <form onSubmit={enviar} noValidate className="flex flex-col gap-5 p-5">
             {!clienteUnico && (
-              <Field label="Cliente" required error={erro?.campo === 'customer_id' ? erro.mensagem : null}>
-                <Select value={cliente} onChange={(e) => setCliente(e.target.value)}>
-                  <option value="">Selecione…</option>
-                  {lista.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
+              <Field
+                label="Cliente"
+                required
+                error={erro?.campo === 'customer_id' ? erro.mensagem : null}
+                hint={
+                  lista.length === 0
+                    ? podeCadastrarCliente
+                      ? 'Nenhum cliente cadastrado ainda. Cadastre o primeiro aqui ao lado.'
+                      : 'Nenhum cliente cadastrado ainda. Peça a quem administra a organização para cadastrar.'
+                    : undefined
+                }
+              >
+                {/*
+                 * O cadastro mora AO LADO do seletor porque é aqui que a falta
+                 * aparece: o hospital está ao telefone e não está na lista.
+                 * Mandar a pessoa para outra tela é perder o que ela já digitou.
+                 */}
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={cliente}
+                    onChange={(e) => setCliente(e.target.value)}
+                    className="min-w-0 flex-1"
+                  >
+                    <option value="">Selecione…</option>
+                    {lista.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                  {podeCadastrarCliente && (
+                    <Button
+                      variant="ghost"
+                      icon={<Plus className="size-4" />}
+                      onClick={() => setCadastrandoCliente(true)}
+                    >
+                      Novo cliente
+                    </Button>
+                  )}
+                </div>
               </Field>
             )}
 
@@ -205,6 +250,24 @@ export function NovaSolicitacaoPage() {
           </form>
         )}
       </Card>
+
+      {/*
+       * FORA do formulário da solicitação, e não dentro dele. O diálogo vai
+       * para um portal no DOM, mas os eventos do React sobem pela árvore de
+       * componentes: o "Cadastrar cliente" dentro do <form> dispararia também o
+       * envio da solicitação.
+       */}
+      {podeCadastrarCliente && (
+        <DialogoNovoCliente
+          open={cadastrandoCliente}
+          onOpenChange={setCadastrandoCliente}
+          onCriado={(c) => {
+            setClienteNovo(c);
+            setCliente(c.id);
+            if (erro?.campo === 'customer_id') setErro(null);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

@@ -473,6 +473,173 @@
 
     --aurora-focus-ring: var(--aurora-brand-300);
   }
+
+  /*
+   * ESTILOS VISUAIS (data-estilo) — por cima do modo claro/escuro.
+   *
+   * O modo (`data-theme`) continua decidindo luminosidade; o estilo decide a
+   * PERSONALIDADE: paleta, superfícies, tipografia de destaque e profundidade.
+   * Cada par texto/fundo abaixo foi conferido em WCAG AA (≥ 4,5:1) sobre bg,
+   * surface, raised e subtle — o axe da suíte E2E cobra isso em toda tela.
+   *
+   *   futuristico  (escuro, padrão) — painel de veículo elétrico premium:
+   *                preto-azulado profundo, azul elétrico preciso, verde da marca.
+   *   mindfulness  (claro) — pedra quente, índigo calmo, serifa de leitura lenta.
+   *   wellness     (claro) — verde-água limpo, acolhedor, humano.
+   */
+  :root[data-estilo='futuristico'] {
+    --aurora-bg: #070a10;
+    --aurora-surface: #0d121b;
+    --aurora-surface-raised: #131b28;
+    --aurora-surface-sunken: #05070b;
+    --aurora-surface-subtle: #0a0f17;
+    --aurora-surface-hover: #172133;
+    --aurora-surface-active: #1d2a40;
+
+    --aurora-border: #1f2b3d;
+    --aurora-border-strong: #2e3e57;
+    --aurora-border-subtle: #151e2b;
+
+    --aurora-text: #eaf1fa;
+    --aurora-text-muted: #a9b8cc;
+    --aurora-text-subtle: #8392a8;
+    --aurora-text-on-accent: #04121f;
+    --aurora-text-inverse: #04121f;
+
+    --aurora-accent: #6cb8ff;
+    --aurora-accent-hover: #93ccff;
+    --aurora-accent-soft: rgb(108 184 255 / 0.14);
+    --aurora-accent-text: #6cb8ff;
+
+    --aurora-brand-accent: #8ed13a;
+    --aurora-brand-accent-hover: #a6e05a;
+    --aurora-brand-accent-soft: rgb(142 209 58 / 0.14);
+    --aurora-brand-accent-text: #9bdb4f;
+
+    --aurora-good: #34d399;
+    --aurora-good-soft: rgb(52 211 153 / 0.14);
+    --aurora-good-text: #5fe0a8;
+    --aurora-warn: #fbbf24;
+    --aurora-warn-soft: rgb(251 191 36 / 0.14);
+    --aurora-warn-text: #f7c55c;
+    --aurora-bad: #f87171;
+    --aurora-bad-soft: rgb(248 113 113 / 0.15);
+    --aurora-bad-text: #ff8c8c;
+    --aurora-info: #60a5fa;
+    --aurora-info-soft: rgb(96 165 250 / 0.14);
+    --aurora-info-text: #7db6ff;
+
+    --aurora-data-1: #4fc3f7;
+    --aurora-data-2: #8ed13a;
+    --aurora-data-3: #a78bfa;
+    --aurora-data-4: #f5b84b;
+    --aurora-data-5: #ff7a85;
+    --aurora-data-6: #2dd4bf;
+
+    --aurora-shadow-card: 0 0 0 1px rgb(255 255 255 / 0.02), 0 12px 32px -16px rgb(0 0 0 / 0.85);
+    --aurora-shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.03), 0 18px 40px -18px rgb(0 0 0 / 0.9);
+    --aurora-ring-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+    --aurora-focus-ring: #6cb8ff;
+    --aurora-glow: 0 0 0 1px rgb(108 184 255 / 0.35), 0 0 24px -6px rgb(108 184 255 / 0.45);
+    --aurora-font-display:
+      'Bahnschrift', 'DIN Alternate', 'Barlow', 'Segoe UI Variable Display', var(--aurora-font-sans);
+  }
+
+  :root[data-estilo='mindfulness'] {
+    --aurora-bg: #f3f1ec;
+    --aurora-surface: #fbfaf7;
+    --aurora-surface-raised: #ffffff;
+    --aurora-surface-sunken: #e9e5dc;
+    --aurora-surface-subtle: #ece8e0;
+    --aurora-surface-hover: #f0ece4;
+    --aurora-surface-active: #e6e1d6;
+
+    --aurora-border: #e0dad0;
+    --aurora-border-strong: #c9c1b4;
+    --aurora-border-subtle: #ebe6dd;
+
+    --aurora-text: #26252e;
+    --aurora-text-muted: #55525d;
+    --aurora-text-subtle: #67636f;
+    --aurora-text-on-accent: #ffffff;
+    --aurora-text-inverse: #ffffff;
+
+    --aurora-accent: #4e5c96;
+    --aurora-accent-hover: #3f4c82;
+    --aurora-accent-soft: rgb(78 92 150 / 0.1);
+    --aurora-accent-text: #4e5c96;
+
+    --aurora-brand-accent: #6e8f72;
+    --aurora-brand-accent-hover: #5c7d60;
+    --aurora-brand-accent-soft: rgb(110 143 114 / 0.14);
+    --aurora-brand-accent-text: #4a6650;
+
+    --aurora-good-text: #2f6e48;
+    --aurora-warn-text: #8a5a00;
+    --aurora-bad-text: #a3352e;
+    --aurora-info-text: #3a5a8c;
+
+    --aurora-data-1: #7f86c9;
+    --aurora-data-2: #7fa58a;
+    --aurora-data-3: #c9a97a;
+    --aurora-data-4: #c98b9b;
+    --aurora-data-5: #7fa7c9;
+    --aurora-data-6: #9a8fb3;
+
+    --aurora-shadow-card: 0 1px 2px rgb(60 50 30 / 0.05), 0 8px 24px -14px rgb(60 50 30 / 0.18);
+    --aurora-shadow-raised: 0 2px 4px rgb(60 50 30 / 0.06), 0 14px 32px -16px rgb(60 50 30 / 0.22);
+    --aurora-focus-ring: #4e5c96;
+    --aurora-glow: 0 0 0 1px rgb(78 92 150 / 0.25), 0 8px 24px -12px rgb(78 92 150 / 0.35);
+    --aurora-font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  }
+
+  :root[data-estilo='wellness'] {
+    --aurora-bg: #f2f7f5;
+    --aurora-surface: #ffffff;
+    --aurora-surface-raised: #ffffff;
+    --aurora-surface-sunken: #e3eee9;
+    --aurora-surface-subtle: #e7f1ed;
+    --aurora-surface-hover: #edf5f2;
+    --aurora-surface-active: #ddece6;
+
+    --aurora-border: #d5e5de;
+    --aurora-border-strong: #b5cfc5;
+    --aurora-border-subtle: #e4efea;
+
+    --aurora-text: #132d26;
+    --aurora-text-muted: #43605a;
+    --aurora-text-subtle: #56706a;
+    --aurora-text-on-accent: #ffffff;
+    --aurora-text-inverse: #ffffff;
+
+    --aurora-accent: #0b7a70;
+    --aurora-accent-hover: #08665e;
+    --aurora-accent-soft: rgb(11 122 112 / 0.1);
+    --aurora-accent-text: #0b7a70;
+
+    --aurora-brand-accent: #3e9b4f;
+    --aurora-brand-accent-hover: #338542;
+    --aurora-brand-accent-soft: rgb(62 155 79 / 0.12);
+    --aurora-brand-accent-text: #2b7239;
+
+    --aurora-good-text: #1f7a45;
+    --aurora-warn-text: #8a5a00;
+    --aurora-bad-text: #b0362f;
+    --aurora-info-text: #2563a8;
+
+    --aurora-data-1: #14b8a6;
+    --aurora-data-2: #4caf50;
+    --aurora-data-3: #38a3d9;
+    --aurora-data-4: #f28c6b;
+    --aurora-data-5: #e8b53a;
+    --aurora-data-6: #9b6bb5;
+
+    --aurora-shadow-card: 0 1px 2px rgb(19 45 38 / 0.05), 0 10px 26px -16px rgb(19 45 38 / 0.2);
+    --aurora-shadow-raised: 0 2px 4px rgb(19 45 38 / 0.06), 0 16px 34px -18px rgb(19 45 38 / 0.24);
+    --aurora-focus-ring: #0b7a70;
+    --aurora-glow: 0 0 0 1px rgb(11 122 112 / 0.25), 0 8px 24px -12px rgb(11 122 112 / 0.3);
+    --aurora-font-display: 'Segoe UI Variable Display', 'Avenir Next', 'Nunito', var(--aurora-font-sans);
+  }
 }
 
 /**
@@ -532,6 +699,7 @@
 
   --font-sans: var(--aurora-font-sans);
   --font-mono: var(--aurora-font-mono);
+  --font-display: var(--aurora-font-display, var(--aurora-font-sans));
 
   --text-2xs: var(--aurora-text-2xs);
   --text-xs: var(--aurora-text-xs);
@@ -553,6 +721,7 @@
   --shadow-raised: var(--aurora-shadow-raised);
   --shadow-overlay: var(--aurora-shadow-overlay);
   --shadow-sheet: var(--aurora-shadow-sheet);
+  --shadow-glow: var(--aurora-glow, var(--aurora-shadow-raised));
 
   /* Pontos de quebra: o portal é mobile-first, o campo vive entre 360 e 430,
      e a web é desktop com tablet funcional (§40). */
@@ -588,6 +757,39 @@
     line-height: var(--aurora-leading-normal);
     letter-spacing: var(--aurora-tracking-tight);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Atmosfera de cada estilo: luz ambiente MUITO sutil no fundo, fixa (não rola
+   * com o conteúdo). No futurístico é o brilho de painel — azul elétrico e o
+   * verde da marca nos cantos; nos claros, um véu quente ou fresco. Nunca
+   * atrás de texto com intensidade que mude contraste.
+   */
+  :root[data-estilo='futuristico'] body {
+    background-image:
+      radial-gradient(1100px 620px at 8% -12%, rgb(108 184 255 / 0.09), transparent 60%),
+      radial-gradient(900px 520px at 105% -8%, rgb(142 209 58 / 0.06), transparent 55%),
+      linear-gradient(180deg, #070a10 0%, #06080d 100%);
+    background-attachment: fixed;
+  }
+  :root[data-estilo='mindfulness'] body {
+    background-image:
+      radial-gradient(1000px 600px at 0% -10%, rgb(201 169 122 / 0.12), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgb(127 134 201 / 0.08), transparent 55%);
+    background-attachment: fixed;
+  }
+  :root[data-estilo='wellness'] body {
+    background-image:
+      radial-gradient(1000px 600px at 0% -10%, rgb(20 184 166 / 0.1), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgb(76 175 80 / 0.07), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  /* Títulos e números de painel usam a face de destaque do estilo. */
+  h1,
+  h2,
+  [data-display] {
+    font-family: var(--aurora-font-display, var(--aurora-font-sans));
   }
 
   /*
@@ -660,10 +862,20 @@
   .aurora-logo {
     border-radius: var(--aurora-radius-card);
   }
-  :root[data-theme='dark'] .aurora-logo {
+  :root[data-theme='dark'] .aurora-logo:not(.aurora-logo--duplo) {
     background-color: var(--aurora-neutral-0);
     padding: var(--aurora-space-2) var(--aurora-space-3);
     box-shadow: var(--aurora-shadow-card);
+  }
+  /* Logo com variante escura: troca pelo CSS, antes de o React montar. */
+  .aurora-logo--duplo .aurora-logo-escuro {
+    display: none;
+  }
+  :root[data-theme='dark'] .aurora-logo--duplo .aurora-logo-claro {
+    display: none;
+  }
+  :root[data-theme='dark'] .aurora-logo--duplo .aurora-logo-escuro {
+    display: block;
   }
 
   /* O pulo para o conteúdo: invisível até receber foco. Primeira parada do

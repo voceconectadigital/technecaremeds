@@ -24,7 +24,7 @@
 const CASCO = 'aurora-campo-casco-v1';
 
 /** O que existe com nome fixo, e portanto pode ser listado. */
-const ESSENCIAL = ['/', '/index.html', '/manifest.webmanifest', '/icone.svg'];
+const ESSENCIAL = ['/', '/index.html', '/manifest.webmanifest', '/icone.svg', '/marca/itech-icone-192.png'];
 
 /**
  * OS PEDAÇOS DA BUILD PRECISAM ENTRAR NO CACHE NA INSTALAÇÃO — e esta função é

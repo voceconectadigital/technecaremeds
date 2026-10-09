@@ -39,7 +39,7 @@ export function OrdensPage() {
   return (
     <AppShell
       title="Ordens de serviço"
-      subtitle="O que está em andamento, e onde está parado."
+      subtitle="O que está em andamento e onde está parado. Cada OS nasce de uma solicitação aceita na triagem — ou de um plano preventivo."
       bleed={vista === 'quadro'}
       actions={
         <div className="flex items-center gap-3">
@@ -442,6 +442,17 @@ function Lista() {
               categoria === 'todas'
                 ? 'As ordens aparecem aqui assim que uma solicitação é aceita ou um plano preventivo abre um ciclo.'
                 : undefined
+            }
+            origem="Uma OS nasce quando a triagem aceita uma solicitação (Solicitações → Assumir triagem → Aceitar) ou quando um plano preventivo abre um ciclo."
+            action={
+              categoria === 'todas' ? (
+                <Link
+                  to="/solicitacoes"
+                  className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface-raised px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent"
+                >
+                  Ver solicitações para triar
+                </Link>
+              ) : undefined
             }
           />
         ) : (

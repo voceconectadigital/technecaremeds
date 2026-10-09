@@ -183,6 +183,7 @@ export function AtivosPage() {
                     : undefined
                 }
                 filtered={itens.length > 0}
+                origem="Todo equipamento pertence a um cliente e fica num setor ou sala. Cadastre o cliente em Clientes (com a unidade); os equipamentos entram pela importação de planilha."
               />
             ) : (
               /*

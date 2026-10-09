@@ -1,37 +1,19 @@
 /**
- * Aurora — a logo do cliente na tela (SPEC v0.2 §34).
+ * Aurora — a logo do produto.
  *
- * ─────────────────────────────────────────────────────────────────────────────
- * POR QUE UM COMPONENTE, E NÃO UM `<img>` EM CADA TELA
- * ─────────────────────────────────────────────────────────────────────────────
- *
- * Três coisas precisam ser decididas uma vez só, e todas as três já deram
- * errado em algum produto:
- *
- *  1. O TAMANHO MÁXIMO. O arquivo tem 272×73. Exibi-lo maior que isso o
- *     estica, e um logotipo esticado é a primeira coisa que um cliente nota —
- *     antes de qualquer tela. O componente limita, e quem pedir mais recebe o
- *     teto.
- *
- *  2. O FUNDO ESCURO. A logo foi desenhada para papel branco: o símbolo é
- *     grafite e a assinatura "ENGENHARIA CLÍNICA" é cinza. Sobre o tema
- *     escuro, os dois SOMEM — sobra "TéchneCare" flutuando, sem o símbolo que
- *     é metade da marca.
- *
- *     A saída NÃO é filtrar a imagem: inverter ou clarear uma logo altera as
- *     cores da marca, e as cores da marca não são nossas para alterar. A saída
- *     é a que todo manual de identidade prescreve — aplicá-la sobre uma ÁREA
- *     CLARA de respiro. É o que o tema escuro faz aqui.
- *
- *  3. O TEXTO ALTERNATIVO. É o nome do produto, vindo da configuração de
- *     marca, e não a palavra "logo" — quem usa leitor de tela quer saber de
- *     quem é o sistema, não que ali existe uma imagem.
+ * DUAS VARIANTES, UMA NA TELA: a logo da marca tem um azul-marinho que some
+ * sobre fundo escuro. Em vez de pôr uma placa branca atrás dela (o que parecia
+ * adesivo colado no painel), a configuração de marca traz uma variante para o
+ * tema escuro e o CSS mostra a certa conforme `data-theme` — sem esperar o
+ * React, sem piscar.
  */
 import { cn } from '../lib/cn';
 
 export interface LogoProps {
   /** Endereço do arquivo. Vem da configuração de marca, nunca fixo na tela. */
   src: string;
+  /** Variante para fundo escuro. Sem ela, vale `src` com a placa clara de antes. */
+  srcEscuro?: string | null;
   /** Nome do produto. Vira o texto alternativo. */
   nome: string;
   /** Largura em pixels. É limitada ao tamanho real do arquivo. */
@@ -39,31 +21,37 @@ export interface LogoProps {
   className?: string;
 }
 
-/**
- * A largura real do arquivo horizontal.
- *
- * Passar disso não melhora nada: o navegador interpola pixels que não existem.
- * Fica como constante nomeada porque, no dia em que chegar o vetor, é esta
- * linha que some — e a busca por ela encontra o comentário.
- */
-const LARGURA_NATIVA = 272;
-const PROPORCAO = 73 / 272;
+const LARGURA_NATIVA = 385;
+const PROPORCAO = 148 / 385;
 
-export function Logo({ src, nome, largura = 180, className }: LogoProps) {
+export function Logo({ src, srcEscuro, nome, largura = 180, className }: LogoProps) {
   const w = Math.min(largura, LARGURA_NATIVA);
+  const h = Math.round(w * PROPORCAO);
+  const img = (endereco: string, classe: string, alt: string) => (
+    <img
+      src={endereco}
+      alt={alt}
+      width={w}
+      /* As duas dimensões declaradas: sem elas, a página salta quando a
+         imagem chega, e o salto acontece justamente no login, onde a pessoa
+         já está com o cursor no campo. */
+      height={h}
+      style={{ width: w, height: 'auto' }}
+      className={cn('block max-w-full select-none', classe)}
+      draggable={false}
+    />
+  );
   return (
-    <span className={cn('aurora-logo inline-flex shrink-0 items-center', className)}>
-      <img
-        src={src}
-        alt={nome}
-        width={w}
-        /* As duas dimensões declaradas: sem elas, a página salta quando a
-           imagem chega, e o salto acontece justamente no login, onde a pessoa
-           já está com o cursor no campo. */
-        height={Math.round(w * PROPORCAO)}
-        style={{ width: w, height: 'auto' }}
-        className="block max-w-full select-none"
-      />
+    <span
+      className={cn(
+        'aurora-logo inline-flex shrink-0 items-center',
+        srcEscuro && 'aurora-logo--duplo',
+        className
+      )}
+    >
+      {img(src, 'aurora-logo-claro', nome)}
+      {/* A variante escura é decorativa para leitores de tela: o nome já foi dito. */}
+      {srcEscuro && img(srcEscuro, 'aurora-logo-escuro', '')}
     </span>
   );
 }

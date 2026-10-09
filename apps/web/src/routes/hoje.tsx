@@ -71,6 +71,7 @@ import {
 } from '@aurora/contracts';
 import { useApiQuery, usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { AppShell } from '../shell/app-shell';
+import { FluxoDaOperacao } from './hoje-fluxo';
 
 export function HojePage() {
   const { data: sessao } = useSessionQuery();
@@ -86,6 +87,8 @@ export function HojePage() {
     >
       <div className="flex flex-col gap-8">
         {can('work_order.read') && <PainelDoTurno />}
+
+        {can('work_order.read') && <FluxoDaOperacao />}
 
         <div className="grid gap-5 lg:grid-cols-3">
           {can('service_request.read') && <BlocoTriagem className="lg:col-span-1" />}
@@ -148,7 +151,7 @@ function PainelDoTurno() {
   }
 
   return (
-    <MetricGrid columns={4}>
+    <MetricGrid columns={abaixoDoMinimo > 0 ? 5 : 4}>
       <Metric
         label="Em aberto"
         value={abertas}
@@ -199,10 +202,9 @@ function PainelDoTurno() {
       />
       {abaixoDoMinimo > 0 && (
         <Metric
-          className="sm:col-span-2 lg:col-span-4"
           label="Peças abaixo do mínimo"
           value={abaixoDoMinimo}
-          hint="Comprar antes de faltar — falta de peça é a maior causa de OS travada."
+          hint="Comprar antes de faltar — peça em falta trava OS."
           icon={<PackageSearch className="size-4" />}
           tone="warn"
           action={<AtalhoDeCartao to="/estoque">Ver o que comprar</AtalhoDeCartao>}

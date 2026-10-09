@@ -70,8 +70,8 @@ function Envolver({
 /* -------------------------------------------------------------------------- */
 
 describe('menu principal', () => {
-  it('tem oito itens — acima disso deixa de ser navegação e vira lista', () => {
-    expect(MAIN_NAV).toHaveLength(8);
+  it('tem nove itens — acima disso deixa de ser navegação e vira lista', () => {
+    expect(MAIN_NAV).toHaveLength(9);
   });
 
   it('cada item declara a permissão que o torna útil', () => {

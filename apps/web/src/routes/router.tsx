@@ -65,6 +65,9 @@ function EsqueletoDeTela() {
   );
 }
 
+const ClientesPage = preguicosa(() =>
+  import('../features/clientes/lista').then((m) => ({ default: m.ClientesPage }))
+);
 const SolicitacoesPage = preguicosa(() =>
   import('../features/solicitacoes/lista').then((m) => ({ default: m.SolicitacoesPage }))
 );
@@ -200,6 +203,8 @@ export const routeTree = raiz.addChildren([
   organizacoes,
 
   rotaProtegida('/', HojePage),
+
+  rotaProtegida('/clientes', ClientesPage),
 
   rotaProtegida('/solicitacoes', SolicitacoesPage),
   // Antes de `/solicitacoes/$id`: 'nova' casaria com o parâmetro, e a

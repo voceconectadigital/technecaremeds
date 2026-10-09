@@ -17,20 +17,13 @@ import {
   archiveLocation,
   type Database,
 } from '@aurora/db';
-import { ForbiddenError, ValidationError } from '@aurora/domain';
+import { ForbiddenError } from '@aurora/domain';
+import { locationsCreate } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
+import { parseWith } from '../common/contract-validation';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
-
-interface CreateLocationBody {
-  customer_id?: unknown;
-  parent_id?: unknown;
-  location_type_id?: unknown;
-  name?: unknown;
-  code?: unknown;
-  is_mobile?: unknown;
-}
 
 interface MoveLocationBody {
   parent_id?: unknown;
@@ -48,16 +41,6 @@ function requireMembership(membershipId: string | null): string {
     throw new ForbiddenError('esta rota exige um vínculo de usuário com a organização');
   }
   return membershipId;
-}
-
-function requiredText(value: unknown, field: string, max = 200): string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new ValidationError(`${field} é obrigatório`, { field });
-  }
-  if (value.length > max) {
-    throw new ValidationError(`${field} passa de ${max} caracteres`, { field, max });
-  }
-  return value.trim();
 }
 
 @Controller('locations')
@@ -112,16 +95,19 @@ export class LocationsController {
 
   @Post()
   @RequirePermissions('location.create')
-  async create(@Req() req: AuroraRequest, @Body() body: CreateLocationBody): Promise<{ id: string }> {
+  async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
+    // O formato vem do contrato — o mesmo que tipa a tela de clientes. A regra
+    // de aninhamento continua no banco: é ela que sabe quais pais o tipo aceita.
+    const b = parseWith(locationsCreate.body, body);
     const id = await withTenant(this.db, ctx, (s) =>
       createLocation(s, {
-        customerId: uuidParam(body.customer_id, 'customer_id'),
-        parentId: optionalUuid(body.parent_id, 'parent_id'),
-        locationTypeId: uuidParam(body.location_type_id, 'location_type_id'),
-        name: requiredText(body.name, 'name'),
-        code: typeof body.code === 'string' ? body.code : null,
-        isMobile: body.is_mobile === true,
+        customerId: b.customer_id,
+        parentId: b.parent_id ?? null,
+        locationTypeId: b.location_type_id,
+        name: b.name,
+        code: b.code || null,
+        isMobile: b.is_mobile === true,
       })
     );
     return { id };

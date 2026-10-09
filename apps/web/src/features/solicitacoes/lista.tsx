@@ -78,7 +78,7 @@ export function SolicitacoesPage() {
   return (
     <AppShell
       title="Solicitações"
-      subtitle="O que os clientes pediram e ainda aguarda decisão."
+      subtitle="O que os clientes pediram. Na triagem, cada pedido é aceito (vira ordem de serviço), recusado ou devolvido pedindo informação."
       actions={
         <Can permission="service_request.create">
           <Button
@@ -157,6 +157,17 @@ export function SolicitacoesPage() {
                   : undefined
               }
               filtered={todas.length > 0}
+              origem="Solicitações chegam do Portal do cliente, do aplicativo de campo ou de quem abre aqui mesmo. Na triagem, cada uma é aceita (vira OS), recusada ou devolvida pedindo informação."
+              action={
+                todas.length === 0 ? (
+                  <Link
+                    to="/solicitacoes/nova"
+                    className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface-raised px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent"
+                  >
+                    Abrir solicitação
+                  </Link>
+                ) : undefined
+              }
             />
           </Card>
         ) : (
