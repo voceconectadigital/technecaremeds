@@ -8,6 +8,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Runner FIXO em ubuntu-24.04, e não `ubuntu-latest`: em 19/10/2026 o GitHub
+# passa o `latest` para o Ubuntu 26, e a troca de sistema (Chromium do
+# Playwright, PostgreSQL de serviço, fontes) deve ser decisão nossa, testada
+# num PR — não algo que acontece sozinho numa terça-feira.
 jobs:
   # ---------------------------------------------------------------------------
   # O portão rápido: nada que precise de banco.
@@ -18,7 +22,7 @@ jobs:
   # ---------------------------------------------------------------------------
   estatico:
     name: Estático
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -81,7 +85,7 @@ jobs:
   # ---------------------------------------------------------------------------
   banco:
     name: Testes contra PostgreSQL 16
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -134,7 +138,7 @@ jobs:
   # ---------------------------------------------------------------------------
   navegador:
     name: Ponta a ponta
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
