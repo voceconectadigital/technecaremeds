@@ -124,61 +124,74 @@ export function SolicitacoesPage() {
           ]}
         />
 
-        <Toolbar
-          search={
-            <div className="relative">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
+        <Card className="overflow-hidden">
+          <Toolbar
+            embedded
+            search={
+              <div className="relative">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
+                />
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Filtrar por número ou resumo"
+                  aria-label="Filtrar solicitações"
+                  className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
+                />
+              </div>
+            }
+            filters={
+              <Tabs
+                aria-label="Situação"
+                items={abas}
+                value={situacao}
+                onChange={setSituacao}
+                className="border-b-0"
               />
-              <input
-                type="search"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Filtrar por número ou resumo"
-                aria-label="Filtrar solicitações"
-                className="h-9 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
-              />
-            </div>
-          }
-          filters={<Tabs aria-label="Situação" items={abas} value={situacao} onChange={setSituacao} />}
-        />
+            }
+          />
 
-        {isLoading ? (
-          <SkeletonList rows={6} label="solicitações" />
-        ) : filtradas.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={<Inbox className="size-5" />}
-              title={todas.length === 0 ? 'Nada aguardando triagem' : 'Nenhuma solicitação nesta situação'}
-              description={
-                todas.length === 0
-                  ? 'Toda solicitação enviada já foi decidida. As novas aparecem aqui assim que chegam.'
-                  : undefined
-              }
-              filtered={todas.length > 0}
-              origem="Solicitações chegam do Portal do cliente, do aplicativo de campo ou de quem abre aqui mesmo. Na triagem, cada uma é aceita (vira OS), recusada ou devolvida pedindo informação."
-              action={
-                todas.length === 0 ? (
-                  <Link
-                    to="/solicitacoes/nova"
-                    className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface-raised px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent"
-                  >
-                    Abrir solicitação
-                  </Link>
-                ) : undefined
-              }
-            />
-          </Card>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {filtradas.map((r) => (
-              <li key={r.id}>
-                <LinhaDeSolicitacao solicitacao={r} />
-              </li>
-            ))}
-          </ul>
-        )}
+          {isLoading ? (
+            <div className="p-3">
+              <SkeletonList rows={6} label="solicitações" />
+            </div>
+          ) : filtradas.length === 0 ? (
+            <>
+              <EmptyState
+                icon={<Inbox className="size-5" />}
+                title={todas.length === 0 ? 'Nada aguardando triagem' : 'Nenhuma solicitação nesta situação'}
+                description={
+                  todas.length === 0
+                    ? 'Toda solicitação enviada já foi decidida. As novas aparecem aqui assim que chegam.'
+                    : undefined
+                }
+                filtered={todas.length > 0}
+                origem="Solicitações chegam do Portal do cliente, do aplicativo de campo ou de quem abre aqui mesmo. Na triagem, cada uma é aceita (vira OS), recusada ou devolvida pedindo informação."
+                action={
+                  todas.length === 0 ? (
+                    <Link
+                      to="/solicitacoes/nova"
+                      className="inline-flex items-center gap-1.5 rounded-control border border-border bg-surface-raised px-3 py-1.5 text-sm font-medium text-accent-text transition-colors hover:border-accent"
+                    >
+                      Abrir solicitação
+                    </Link>
+                  ) : undefined
+                }
+              />
+            </>
+          ) : (
+            <ul className="divide-y divide-border-subtle">
+              {filtradas.map((r) => (
+                <li key={r.id}>
+                  <LinhaDeSolicitacao solicitacao={r} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     </AppShell>
   );
@@ -208,19 +221,19 @@ function LinhaDeSolicitacao({ solicitacao: r }: { solicitacao: ServiceRequestRow
     <Link
       to="/solicitacoes/$id"
       params={{ id: r.id }}
-      className="relative flex items-center gap-4 overflow-hidden rounded-card border border-border bg-surface py-3 pr-4 pl-5 shadow-card transition-all hover:border-border-strong hover:shadow-raised"
+      className="relative flex items-center gap-4 py-3 pr-4 pl-5 transition-colors hover:bg-surface-hover"
     >
       {/* A urgência, antes do texto. */}
       <span
         aria-hidden="true"
         className={cn(
-          'absolute inset-y-0 left-0 w-1',
-          critica ? 'bg-bad' : urgente ? 'bg-warn' : 'bg-border'
+          'absolute inset-y-2 left-0 w-[3px] rounded-r-pill',
+          critica ? 'bg-bad' : urgente ? 'bg-warn' : 'bg-transparent'
         )}
       />
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-medium text-text">{r.summary}</span>
+        <span className="block truncate text-base font-semibold text-text">{r.summary}</span>
         <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
           <span data-numeric className="font-medium">
             {r.number}

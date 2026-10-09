@@ -132,36 +132,6 @@ export function AtivosPage() {
         <ArvoreDeLocais locais={locais?.items ?? []} escolhido={local} onEscolher={setLocal} />
 
         <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search
-                aria-hidden="true"
-                className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-subtle"
-              />
-              <input
-                type="search"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder={`Filtrar por nome, patrimônio ou série`}
-                aria-label={`Filtrar ${rotulo.toLowerCase()}s nesta lista`}
-                className="h-8 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
-              />
-            </div>
-            <Select
-              value={situacao}
-              aria-label="Situação"
-              onChange={(e) => setSituacao(e.target.value)}
-              className="sm:w-48"
-            >
-              <option value="">Todas as situações</option>
-              {ASSET_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {ROTULO_SITUACAO[s]}
-                </option>
-              ))}
-            </Select>
-          </div>
-
           {noTeto && (
             /*
              * Dizer que há mais é o mínimo honesto.
@@ -176,7 +146,38 @@ export function AtivosPage() {
             </p>
           )}
 
-          <Card>
+          <Card className="overflow-hidden">
+            {/* Barra de ferramentas DENTRO do painel: pesquisa e filtro são da
+                tabela, e não soltos na página. */}
+            <div className="flex flex-col gap-2 border-b border-border-subtle p-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
+                />
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder={`Filtrar por nome, patrimônio ou série`}
+                  aria-label={`Filtrar ${rotulo.toLowerCase()}s nesta lista`}
+                  className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
+                />
+              </div>
+              <Select
+                value={situacao}
+                aria-label="Situação"
+                onChange={(e) => setSituacao(e.target.value)}
+                className="sm:w-48"
+              >
+                <option value="">Todas as situações</option>
+                {ASSET_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {ROTULO_SITUACAO[s]}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {isLoading ? (
               <div className="p-3">
                 <SkeletonList rows={8} label={`${rotulo.toLowerCase()}s`} />
