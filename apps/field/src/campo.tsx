@@ -53,7 +53,7 @@ import {
 import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao, type EstadoDaFila } from './fila';
 import { Sincronizacao, type PacoteDoDia, type ResultadoDaSincronizacao } from './sincronizacao';
 
-const API = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001/v1';
+export const API = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001/v1';
 
 /**
  * O identificador da operação, gerado no APARELHO.
