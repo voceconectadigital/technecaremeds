@@ -62,7 +62,8 @@ export interface NavItem {
 }
 
 export type NavGrupo = 'Operação' | 'Cadastros' | 'Inteligência';
-export const NAV_GRUPOS: readonly NavGrupo[] = ['Operação', 'Cadastros', 'Inteligência'];
+// Inteligência no topo: o painel é a primeira coisa que a gestão abre.
+export const NAV_GRUPOS: readonly NavGrupo[] = ['Inteligência', 'Operação', 'Cadastros'];
 
 export const MAIN_NAV: readonly NavItem[] = Object.freeze([
   {
