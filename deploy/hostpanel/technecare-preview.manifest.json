@@ -1,16 +1,21 @@
 {
   "version": 1,
-  "build": { "context": ".", "dockerfile": "Dockerfile" },
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
   "postgres": {
     "major": 16,
     "database": "aurora",
     "appLogin": "aurora_api_login",
     "grantRoles": ["aurora_app"],
-    "grantCreateOnDatabase": true,
+    "grantCreateOnDatabase": false,
     "memoryMb": 1024
   },
   "dbUrlVariable": "DATABASE_URL",
-  "migrate": { "command": ["node", "tools/db/run.mjs", "migrate"] },
+  "migrate": {
+    "command": ["node", "tools/db/run.mjs", "migrate"]
+  },
   "services": [
     {
       "name": "api",
@@ -21,13 +26,22 @@
       "healthBodyIncludes": "\"status\":\"ok\"",
       "memoryMb": 768,
       "cpus": 1,
-      "mounts": [{ "volume": "arquivos", "path": "/data/arquivos" }]
+      "mounts": [
+        {
+          "volume": "arquivos",
+          "path": "/data/arquivos"
+        }
+      ]
     },
     {
       "name": "workers",
       "command": ["node", "apps/workers/dist/main.js"],
       "memoryMb": 512,
-      "cpus": 0.5
+      "cpus": 0.5,
+      "database": {
+        "grantRoles": ["aurora_app", "aurora_publisher", "aurora_scheduler"],
+        "grantCreateOnDatabase": true
+      }
     }
   ],
   "env": {
