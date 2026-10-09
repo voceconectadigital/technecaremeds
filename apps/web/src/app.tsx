@@ -13,12 +13,14 @@
  * cache; e as rotas precisam de tudo isso montado antes de decidir para onde
  * mandar quem chegou.
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
 import {
   ApiError,
+  CHAVE_ORG,
+  CHAVE_TOKEN,
   PermissionsProvider,
   SessionProvider,
   ThemeProvider,
@@ -28,8 +30,26 @@ import { router } from './routes/router';
 import { ErrorBoundary } from './shell/error-boundary';
 import { DataProvider } from './dados/provedor';
 
+/**
+ * Sessão que o SERVIDOR não reconhece (expirada, revogada ou o token fictício
+ * que o demo antigo deixou no mesmo domínio): descarta o que está guardado e
+ * volta para a entrada. Sem isto a tela fica de pé, vazia, recebendo 401 em
+ * tudo — a guarda de rota só olha se EXISTE token, não se ele vale.
+ */
+function descartarSessaoInvalida(erro: unknown) {
+  if (!(erro instanceof ApiError) || erro.status !== 401) return;
+  try {
+    localStorage.removeItem(CHAVE_TOKEN);
+    localStorage.removeItem(CHAVE_ORG);
+  } catch {
+    /* armazenamento bloqueado: não há o que limpar */
+  }
+  if (window.location.pathname !== '/entrar') window.location.assign('/entrar');
+}
+
 function criarQueryClient() {
   return new QueryClient({
+    queryCache: new QueryCache({ onError: descartarSessaoInvalida }),
     defaultOptions: {
       queries: {
         /*
