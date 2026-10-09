@@ -1078,6 +1078,17 @@ diferença do motor de TESTE, não da API de produção.
 
 ### ⚠️ Redesign enterprise (09/10/2026) — a direção visual ATUAL
 
+**v2 (mesma data, segunda rodada — vale sobre a v1 onde divergir):**
+
+- **Moldura com canvas inset:** o fundo da janela é a cor da navegação (`bg-nav`) e o conteúdo é um canvas claro (`--aurora-bg` #eef1f5) de cantos 20px que flutua dentro dela a partir de 768px. Topbar dentro do canvas; a conta da pessoa mora na base da barra lateral (`ContaNaNavegacao`), e no celular o avatar volta à topbar.
+- **Item ativo da navegação:** superfície clara (`nav-active`) com texto marinho (`nav-active-text`), ícone azul (`nav-active-icon`) e ponto verde.
+- **Cartão sem borda** no estilo Téchne (`--aurora-card-border: transparent`; anel de 1px na `shadow-card`); raio 16, controle 10, folha 20. Use `border-card-border`, não `border-border`, em superfície de cartão.
+- **Tipografia:** título de página 32px bold (`text-2xl`), seção 19px (`xl`), cartão 16px (`lg`), KPI herói 56px.
+- **Painel de Controle:** KPI herói (disponibilidade, cartão marinho com barra empilhada) + painel 4×2 de indicadores sem ícone em círculo; ações rápidas em tiles de 44px; evolução dos chamados como gráfico protagonista (2/3); linha final em três colunas. `TrendChart` desenha curva monotônica com área em degradê e tooltip escuro; `BarChart layout="stacked"` para cartão de painel.
+- **Listas:** barra de ferramentas DENTRO do painel (`Toolbar embedded` ou bloco com `border-b`), cabeçalho de colunas discreto, linhas sem cartões soltos (Solicitações, OS, Ativos, Contratos).
+
+**v1:**
+
 Objetivo: SaaS B2B enterprise, não "admin genérico". Só camada visual — rotas,
 permissões, contratos e regras intocados.
 
