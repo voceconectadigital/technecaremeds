@@ -310,22 +310,24 @@ function TabelaParaLeitor({
   format: (v: number) => string;
 }) {
   return (
-    <table className="aurora-sr-only">
-      <caption>{label}</caption>
-      <thead>
-        <tr>
-          <th scope="col">Item</th>
-          <th scope="col">Valor</th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((d) => (
-          <tr key={d.label}>
-            <th scope="row">{d.label}</th>
-            <td>{format(d.value)}</td>
+    <div className="aurora-sr-only">
+      <table>
+        <caption>{label}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Item</th>
+            <th scope="col">Valor</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {data.map((d) => (
+            <tr key={d.label}>
+              <th scope="row">{d.label}</th>
+              <td>{format(d.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

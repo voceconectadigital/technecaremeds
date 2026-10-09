@@ -17,12 +17,27 @@
 >    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
 >    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 02/10/2026 (rodada "escopo atual contratado") · **HEAD de partida da rodada:**
-`45476ba` (o HEAD final está em `RELATORIO-ESCOPO-ATUAL.md`; confira com `git log -1`)
-**Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** ·
-**103 tabelas** · **215 rotas HTTP** (214 no OpenAPI + `/health`; **141 com contrato Zod**) ·
-**116 permissões** · **11 papéis** · **112 tipos de evento** · **1883 testes de unidade/HTTP**
-(104 arquivos, 32 pulados sem PostgreSQL real) **+ 148 de navegador + 8 da demo**
+**Atualizado em:** 09/10/2026 (rodada "overdelivery visual + operacional") · **HEAD de partida:**
+`dc4c6c4` (`origin/main`, PR #9) · branch `feat/overdelivery-painel` — confira com `git log -1`
+**Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** (nenhuma nova nesta rodada) ·
+**103 tabelas** · **230 rotas HTTP** (229 no OpenAPI + `/health`; **160 com contrato Zod**) ·
+**116 permissões** · **11 papéis** · **112 tipos de evento** · **1944 testes de unidade/HTTP**
+(106 arquivos, 32 pulados sem PostgreSQL real) **+ 175 de navegador + 8 da demo**
+
+> **Rodada 09/10/2026 — o que mudou (resumo; detalhes nas seções):** Painel de Controle
+> (`/painel`) e Modo Exibição (`/painel/tv`) sobre `GET /insights/control-panel` (§15-A);
+> **rotas de indicador agora respeitam o escopo do vínculo** (antes agregavam a organização
+> inteira); Setores explícitos na ficha do cliente (`/clientes/$id`) e Cliente → Setor →
+> Equipamento no cadastro/edição (`POST`/`PATCH /assets`, `PATCH /locations/:id`); módulo
+> Planos de manutenção com criação orientada, cronograma, painel e procedimentos
+> (`/maintenance-plans/{board,schedule,form-options}`, `POST /maintenance-plans`,
+> `/checklist-templates*`) — §16. NS-018/019/020 IMPLEMENTADAS (§38).
+>
+> **⚠️ Divergência de histórico:** o `main` LOCAL desta máquina tinha 4 commits não publicados
+> (`587a708`, `6e3834d`, `d273bde` — telas de engenharia/oportunidade/importação e PostgreSQL
+> real no CI —, `5fc2153` — runtime Fly) que NÃO estão em `origin/main` e conflitam com os PRs
+> #1–#9 (Dockerfile, destinos, navegação). Esta rodada partiu de `origin/main`; aqueles commits
+> continuam só no `main` local, intocados. Decidir se entram (e como) é do responsável.
 
 ---
 
@@ -115,20 +130,21 @@ emite documento, mede SLA e produz indicador.
 | SSO | ⬜ | A porta `AuthProvider` existe para isso |
 | RBAC | ✅ / 🟡 | 110 permissões, 11 papéis de fábrica, `deny` individual, escopos. **Falta:** criar/editar papel personalizado (schema aceita, sem rota) e tela de escopo |
 | RLS / isolamento | ✅ | `FORCE` em todas as tabelas tenant-scoped; 24 suítes adversariais |
-| Clientes (cadastro) | 🟡 | Tabela rica (`customers` + `customer_contacts`, 0008); **API só lista** (`GET /customers`); **sem tela** `/clientes` |
-| Ativos | ✅ / 🟡 | Criar, transferir, baixar, importar, QR, ficha de leitura, **linha do tempo unificada** (`GET /assets/:id/timeline`) e **substituição** (0056). **Sem edição** (sem PATCH), **sem depreciação**, **sem disponibilidade**; a ficha web ainda não mostra a linha do tempo |
+| Clientes (cadastro) | ✅ / 🟡 | `customers` + `customer_contacts` (0008). Lista `/clientes`, cadastro (`POST /customers`) e **ficha `/clientes/$id`** com a seção **Setores** (criar, renomear, atalhos de nome livre) e equipamentos por setor. **Sem edição do cliente** |
+| **Setores** | ✅ | **São `locations` do tipo `setor`** (escada inicial, 0008) — sem tabela nova. Criar: `POST /locations`; renomear: `PATCH /locations/:id` (`location.update`, 404 fora do escopo) |
+| Ativos | ✅ / 🟡 | Criar com **Cliente\* e Setor\*** conferidos no servidor (`POST /assets`: setor de outro cliente/tenant/fora do escopo → 422; tipo que não recebe equipamento → 422), **editar dados cadastrais** (`PATCH /assets/:id`; mudar de setor = transferência com motivo), transferir, baixar, importar, QR, ficha, linha do tempo (API) e substituição (0056). `location_id` **continua anulável** no banco (importação, comodato). **Sem depreciação**, **sem disponibilidade** |
 | QR Code do ativo | 🟡 | Token, resolução pública, leitura no Field, rotação, dados de etiqueta. **Sem imagem de QR e sem tela de etiqueta** — §22-A |
 | Chamados (`service_requests`) | ✅ | Entidade separada da OS (ADR-002) |
 | Ordens de serviço | ✅ / 🟡 | Estados × motivos configuráveis (ADR-003). **Sem edição de campos** (sem PATCH), **sem baixar/imprimir/enviar** |
 | SLA | ✅ | Tempo útil por fuso e feriado, pausa por motivo |
 | Agenda | ✅ | Projeção da OS (ADR-011); confere antes de salvar |
-| Checklists | ✅ / 🟡 | Motor versionado e imutável, 8 tipos de item (`measurement` desde a 0052), execução no Field. **Resposta não se sobrescreve** (histórico `checklist_answer_revisions`, 0047). **Sem rota/tela para criar modelo**; o checklist da tarefa do plano **passou a ser anexado** à OS da preventiva; `default_checklist_key` continua não lido |
-| Preventivas | 🟡 | Varredura gera ciclo e OS (gatilho **calendário** apenas), com o checklist da tarefa anexado; alvo por categoria/local/ativo **+ filtros de modelo, fabricante e criticidade** (0055), sempre recortado pelo cliente do plano; **sem rota para criar plano**; **ciclo nunca fecha** — §32 |
+| Checklists | ✅ / 🟡 | Motor versionado e imutável, 8 tipos de item (`measurement` desde a 0052), execução no Field. **Resposta não se sobrescreve** (0047). **Criar com itens, revisar (versão seguinte) e publicar** pela API e pela tela (`/checklist-templates*`, aba Procedimentos de `/planos`), com tipo de procedimento; o checklist da tarefa do plano é anexado à OS da preventiva; `default_checklist_key` continua não lido |
+| Planos de manutenção | ✅ / 🟡 | Módulo `/planos` (item próprio no menu): **criação orientada** (`POST /maintenance-plans`: cliente → setor → equipamentos → tipo → procedimento → periodicidade), **painel** (`/board`), **cronograma** com previstos (`/schedule`), procedimentos. Varredura gera ciclo e OS (gatilho **calendário** apenas); alvo por categoria/local/ativo + filtros 0055, recortado pelo cliente do plano; lista/detalhe respeitam o escopo de cliente; **ciclo nunca fecha** — §32; educação continuada ⬜ |
 | Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046). Sem rota para criar depósito/item |
 | Contratos | ✅ | Cobertura por expressão, medição congelada. Tela só de leitura |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
 | Documentos | ✅ / 🟡 | Motor completo; 7 tipos (aceite desde esta rodada) com `payloadFields` técnicos **vazios** (norma); **rascunho a partir da sessão de medição** por cópia; **PDF** (interno e portal); tela web só lista — §15 |
-| Indicadores | ✅ / 🟡 | 14 métricas com definição; tela mostra 9, filtro só por período — §15-A |
+| Indicadores | ✅ / 🟡 | 14 métricas com definição, **recortadas pelo escopo do vínculo**; **Painel de Controle** (`/painel`, gráficos de série e composição, filtros período/cliente/setor) e **Modo Exibição** (`/painel/tv`); "Indicadores detalhados" (`/indicadores`) com as definições — §15-A |
 | Portal | ✅ | Com varredura anti-vazamento (§21). Leitura + abrir chamado + **decidir orçamento** + **avaliar atendimento** + **baixar PDF** do documento liberado |
 | Field / offline | ✅ | Idempotência provada sob concorrência |
 | Notificações | 🟡 | Tabelas e roteamento existem; **nenhum transporte**, e nada as dispara em produção — §18 |
@@ -782,16 +798,36 @@ exclusões, nota de comparabilidade) — a tela mostra a cobertura, não só o n
 | **Produtividade** | por responsável: OS concluídas + soma de minutos apontados | ⬜ (API sim, **sem contrato**) |
 | Horas apontadas | soma de `time_entries` | ⬜ (API sim) |
 
+### Painel de Controle e Modo Exibição (09/10/2026)
+
+`GET /v1/insights/control-panel?from&to[&customerId][&sectorId]` (contrato
+`insights.controlPanel`, `packages/db/src/painel.ts`) devolve, numa ida: os
+envelopes de abertas, concluídas, backlog, MTTR, MTBF, SLA, mix, conformidade e
+produtividade (as MESMAS funções de `metrics.ts`); `series` — abertas,
+concluídas (preventiva/corretiva) e backlog no fim de cada fatia, com
+granularidade dia (≤ 31 dias), semana (≤ 120) ou mês; `open_now` (OS abertas por
+situação e prioridade); `park` (equipamentos por **status cadastrado** e por
+setor — **não é disponibilidade**); e as listas de clientes/setores que o filtro
+pode oferecer A ESTA pessoa. Telas: `apps/web/src/features/painel/{painel,tv,dados,rotulos}`.
+A TV (`/painel/tv`) fica fora da moldura, atualiza a cada 60 s, cabe em 16:9 sem
+rolagem (gráficos medem o espaço que recebem) e sai com Esc.
+
+**Escopo (corrigido nesta rodada):** toda rota `/insights/*` passa a recortar por
+`membership_scopes` (cliente e subárvore de local) via `membershipScope` →
+`scopeCustomerIds`/`scopeLocationPaths` em `MetricFilters`. Antes, qualquer
+vínculo com `insight.read` via o agregado da organização. `customerId` fora do
+escopo — ou de outra organização — responde **404**.
+
 ### Limitações reais
 
 - **Filtros:** a API aceita `from`/`to` (≤ 400 dias) e `customerId`,
-  `locationPath`, `assetCategoryId`, `teamId`, `membershipId` — mas
-  conformidade de plano, tempo por situação e por motivo **ignoram todos**, e
-  SLA/primeira resposta só honram `customerId`. **A tela só filtra por período.**
-- **Não existe:** indicador de ativo (ativo × inativo, disponibilidade,
-  tempo parado), indicador por equipamento, série temporal (a API devolve
-  números de período; o `Sparkline` espera a rota), comparação com período
-  anterior, exportação/relatório, perfis de indicador por cliente ou contrato.
+  `locationPath`, `assetCategoryId`, `teamId`, `membershipId`; desde 09/10 todas
+  respeitam o escopo, e conformidade de plano honra `customerId`. Tempo por
+  situação/motivo continuam sem os filtros de tela (só o escopo).
+- **Não existe:** disponibilidade/tempo parado (sem definição do cliente),
+  série de ativo × inativo (não há histórico de status do ativo), indicador por
+  equipamento, comparação com período anterior, exportação/relatório, perfis de
+  indicador por cliente ou contrato (NS-008), editor de painel.
 - `work_order_type_settings.causes_asset_downtime` e
   `countsForAvailability()` existem e **nenhuma métrica os lê**.
 
@@ -834,20 +870,40 @@ requisitos).
   `pass/fail/na`.
 - **Execução:** só no Field (`apps/field/src/telas/ordem.tsx`), via
   `/work-orders/:id/checklists` e `/checklist-responses/:id/answers`.
-- **Ausente:** rota e tela para **criar/editar/publicar modelo** (as permissões
-  `procedure.*` existem sem rota); "tipo" de modelo (calibração, TSE,
-  preventiva); vínculo com cliente, ativo, categoria ou modelo de
-  equipamento. Os dois vínculos que existem são **chave de texto não acionada**:
-  `plan_tasks.checklist_template_key` (desde 02/10 o `materializeCycle` **anexa** a
-  versão publicada mais recente; sem versão publicada, a OS diz isso na descrição)
-  e `work_order_type_settings.default_checklist_key` (nunca lido).
-- **Procedimento** como entidade própria: ⬜ não existe — o protocolo metrológico é
-  o checklist com `procedure_kind` (0052); não há rota/tela para criá-lo.
+- **Criar/revisar/publicar modelo (09/10):** `GET/POST /v1/checklist-templates`,
+  `GET /:id`, `POST /:id/revisions` (versão seguinte com os itens informados; o
+  `procedure_kind` não muda entre versões), `POST /:id/publish`
+  (`packages/db/src/procedures.ts`, `apps/api/src/plans/procedures.controller.ts`).
+  Publicar na mesma operação exige `procedure.publish`. A tela (aba
+  "Procedimentos e checklists" de `/planos`) oferece: texto/alfanumérico,
+  sim/não, conforme/não conforme (opção com "Não conforme" como falha —
+  declarado pelo técnico), numérico com unidade, medição (nominal ± tolerância
+  absoluta/percentual, leituras — DADO, veredito `na`), opções, observação, foto,
+  data. **Sem faixa min/max na tela** (ela produziria veredito automático).
+- **Ainda ausente:** tipo "preditiva"; vínculo direto checklist ↔ categoria/modelo
+  de equipamento; `work_order_type_settings.default_checklist_key` (nunca lido);
+  ver o checklist respondido na ficha web da OS. O vínculo com cliente/setor/
+  equipamento existe **pelo plano** (`plan_tasks.checklist_template_key`, anexado
+  pelo `materializeCycle` na versão publicada mais recente).
+- **Procedimento** como entidade própria: não — é o checklist com `procedure_kind`
+  (0052). Os tipos de PLANO são derivados (sem coluna nova), em
+  `packages/db/src/plan-board.ts` (`PLAN_KINDS`): Preventiva = natureza
+  `preventive` + checklist sem `procedure_kind`; Calibração = `calibration`;
+  TSE e Qualificação = natureza **`inspection`** + `procedure_kind` próprio
+  (A VALIDAR). Educação continuada: ⬜ (não é manutenção de ativo).
 - **Preventivas** (`migrations/0029`): plano → tarefas (alvo ativo, categoria
   ou subárvore de local; frequência dia…ano; tolerância; equipe) → ciclos →
   itens com OS. A varredura `plans.sweep` gera ciclo e OS **só para gatilho
-  `calendar`** (`meter`/`condition` são valores de enum sem motor). **Não há
-  rota para criar plano nem tarefa** — entram por seed. Educação continuada: ⬜.
+  `calendar`**. **Criação orientada (09/10):** `POST /v1/maintenance-plans` cria
+  plano + tarefas — setor inteiro = UMA tarefa `location_subtree`; equipamentos
+  escolhidos = uma tarefa `asset` cada —, conferindo no servidor que setor e
+  equipamentos são do cliente, estão no escopo e que o procedimento é publicado e
+  do mesmo tipo. **Painel** (`/board`): itens de ciclo EXISTENTES no período,
+  com `complianceState` (tolerância) dobrado em realizado/pendente/vencido/
+  dispensado, por mês, tipo, cliente e setor. **Cronograma** (`/schedule`):
+  itens reais + ciclos futuros PROJETADOS por `addFrequency` a partir do fim do
+  último ciclo (ou da âncora) sobre os ativos que o alvo alcança hoje — marcados
+  `projected`, nunca gravados; teto de 1500 previstos por resposta.
 
 **Não transforme planejamento em feature pronta.** O que está acima como ⬜ não
 existe, mesmo que os documentos do cliente descrevam.
@@ -1029,6 +1085,13 @@ vermelho de crítico faria uma barra alta parecer alarme.
 | `BarChart` | comparar grandezas com rótulo em frase | barras horizontais; tem tabela só para leitor de tela |
 | `DonutChart` | composição de um todo | nunca para comparar grandezas |
 | `Sparkline` | tendência dentro de um cartão | responde "para onde", não "quanto" |
+| `TrendChart` | série no tempo (1–4 linhas) | um eixo só; passo inteiro; cursor + dica no hover; tabela para leitor de tela; `scale="tv"` para o Modo Exibição |
+| `ColumnChart` | composição por fatia de tempo (empilhada) | estado por `tone` (vencido = `bad`), sempre com legenda |
+| `RateRing` | uma taxa (SLA, conformidade) | nulo vira traço; 0 não desenha arco |
+
+> **Armadilha corrigida em 09/10:** a tabela só-para-leitor dentro de `<table class="aurora-sr-only">`
+> não encolhe para 1 px (tabela cresce com o conteúdo) e esticava a página. Agora o
+> `aurora-sr-only` fica num `div` em volta da tabela — faça o mesmo em gráfico novo.
 | `Thumb` | item físico numa lista | o vazio é DESENHADO — iniciais sobre cor estável derivada do nome |
 | `Section` | bloco de página com título | título `text-xl`, para varrer a página sem ler |
 | `Toolbar` | busca + filtro + ação de uma lista | sempre na mesma ordem, em toda tela |
@@ -1138,7 +1201,7 @@ isso que criou `brand-accent-text` e o degrau `550` dos neutros.
 | | `apps/web` | `apps/portal` | `apps/field` |
 | --- | --- | --- | --- |
 | **Objetivo** | Operação interna | Autoatendimento do cliente | Execução em campo |
-| **Rotas** | `/entrar` `/login`→`/entrar` `/organizacoes` `/` `/solicitacoes[/nova\|/$id]` `/ordens[/$id]` `/agenda` `/planos[/$id]` `/ativos[/$id]` `/estoque` `/contratos[/$id]` `/orcamentos[/$id]` `/documentos` `/indicadores` `/notificacoes` `/perfil` `/configuracoes[/automacoes]` | `/entrar` `/` `/chamados[/$id]` `/abrir` `/equipamentos` `/documentos` `/orcamentos` | HOJE · OS · QR · SINCRONIZAÇÃO · PERFIL (+ assinatura e atenção) |
+| **Rotas** | `/entrar` `/login`→`/entrar` `/organizacoes` `/` `/clientes[/$id]` `/solicitacoes[/nova\|/$id]` `/ordens[/$id]` `/agenda` `/planos[/$id]` (`?aba=visao\|cronograma\|procedimentos`) `/ativos[/$id]` `/estoque` `/contratos[/$id]` `/orcamentos[/$id]` `/documentos` `/painel` `/painel/tv` `/indicadores` `/notificacoes` `/perfil` `/configuracoes[/automacoes]` | `/entrar` `/` `/chamados[/$id]` `/abrir` `/equipamentos` `/documentos` `/orcamentos` | HOJE · OS · QR · SINCRONIZAÇÃO · PERFIL (+ assinatura e atenção) |
 | **Estado** | TanStack Query + URL-state | idem | **base local é a fonte** |
 | **Auth** | `useSession` + `/auth/login` | idem | idem |
 | **Dados** | `useApiQuery`/`useApiMutation` tipados pelo contrato | idem | `useColecaoLocal` |
@@ -1717,6 +1780,13 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Automações** | §18 · `packages/domain/src/automations.ts` · `packages/db/src/automations.ts` · `migrations/0037` · `apps/workers/src/main.ts` (o `EventSink`) |
 | **Notificações** | `packages/db/src/notifications.ts` · `migrations/0036` |
 | **Indicadores (tela)** | §15-A · `apps/api/src/insights/insights.controller.ts` · `apps/web/src/features/indicadores/painel.tsx` |
+| **Painel de Controle / Modo TV** | §15-A · `packages/db/src/painel.ts` · `packages/contracts/src/operations/painel.ts` · `apps/web/src/features/painel/*` · `packages/ui/src/components/charts-tempo.tsx` |
+| **Escopo do vínculo em consultas** | `membershipScope`/`assertCustomerInScope` (`packages/db/src/painel.ts`) · `scopeSql` (`packages/db/src/metrics.ts`) |
+| **Setores / ficha do cliente** | `apps/web/src/features/clientes/ficha.tsx` · `apps/api/src/directory/locations.controller.ts` (`PATCH`) · `apps/api/src/directory/customers.controller.ts` |
+| **Cadastro/edição de equipamento** | `apps/web/src/features/ativos/formulario.tsx` · `apps/api/src/assets/assets.controller.ts` (`conferirClienteESetor`) |
+| **Planos (módulo, assistente, cronograma, painel)** | `packages/db/src/plan-board.ts` · `packages/contracts/src/operations/planejamento.ts` · `apps/api/src/plans/plans.controller.ts` · `apps/web/src/features/planos/{modulo,novo-plano}.tsx` |
+| **Procedimentos / checklists (criar, revisar)** | `packages/db/src/procedures.ts` · `apps/api/src/plans/procedures.controller.ts` · `apps/web/src/features/planos/procedimentos.tsx` |
+| **Testes da rodada 09/10** | `apps/api/src/__tests__/api-painel-planejamento.test.ts` · `e2e/specs/painel-planejamento.spec.ts` · `tools/demo/fotografar.mjs` (capturas de tela da demo local) |
 | **Estoque (imagem)** | `migrations/0046` · `apps/api/src/inventory/inventory.controller.ts` · `apps/web/public/catalogo/LEIA-ME.md` |
 | **Field (app)** | §13, §22 · `apps/field/src/*` · `apps/field/capacitor.config.ts` · `docs/AURORA-FIELD-LOJAS.md` · `docs/adr/ADR-029-aurora-field-pwa-e-lojas.md` |
 | **Demo pública** | §27-A · `apps/web/src/demo/*` · `apps/web/src/dados/*` · `apps/web/vite.config.ts` · `tools/demo/*` · `e2e/demo/*` |
@@ -1821,19 +1891,20 @@ implementada, atualize primeiro a evidência e o status dela em
 NOVAS-SOLICITACOES e então promova a capacidade correspondente para o estado
 real descrito neste AI-HANDOFF.
 
-**Resumo em 01/10/2026** (manual — confira o documento, que manda):
+**Resumo em 09/10/2026** (manual — confira o documento, que manda):
 
 | Status | Quantidade |
 | --- | --- |
-| **TOTAL** | **17** (NS-001 a NS-017) |
-| NOVA | 5 |
-| PARCIAL | 9 |
+| **TOTAL** | **20** (NS-001 a NS-020) |
+| NOVA | 4 |
+| PARCIAL | 10 |
 | JÁ EXISTE | 0 |
 | EM IMPLEMENTAÇÃO | 0 |
-| IMPLEMENTADA | 0 |
+| IMPLEMENTADA | 3 (NS-018 Painel/TV, NS-019 Setores, NS-020 Planos) |
 | BLOQUEADA (cliente ou especialista) | 1 |
 | FUTURA FASE | 2 |
 
 "PARCIAL" significa que **parte da base existe no código** (descrita nas seções
-acima) e o pedido do cliente ainda não está atendido. Nenhum pedido novo foi
-implementado nesta rodada.
+acima) e o pedido do cliente ainda não está atendido. Na rodada de 09/10/2026,
+NS-018, NS-019 e NS-020 foram implementadas (com evidência no documento) e
+NS-006 passou a PARCIAL; NS-001 a 004 receberam a linha "Revisão 09/10/2026".

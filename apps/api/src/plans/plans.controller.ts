@@ -30,13 +30,51 @@ import {
   skipCycleItem,
   cycleCompliance,
   resolveTargetAssets,
+  membershipScope,
+  assertCustomerInScope,
+  createGuidedPlan,
+  planBoard,
+  planSchedule,
+  PLAN_KINDS,
+  type MembershipScope,
+  type TenantSession,
   type Database,
 } from '@aurora/db';
 import { NotFoundError, ValidationError } from '@aurora/domain';
+import { plansBoard, plansCreate, plansSchedule } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
+
+/** O período do painel/cronograma: datas ISO, no máximo dois anos. */
+function periodo(q: { from: string; to: string }): { from: Date; to: Date } {
+  const from = new Date(q.from);
+  const to = new Date(q.to);
+  if (Number.isNaN(from.getTime()))
+    throw new ValidationError('from não é uma data válida', { field: 'from' });
+  if (Number.isNaN(to.getTime())) throw new ValidationError('to não é uma data válida', { field: 'to' });
+  if (to <= from) throw new ValidationError('"to" precisa ser depois de "from"', { field: 'to' });
+  if (to.getTime() - from.getTime() > 732 * 86_400_000) {
+    throw new ValidationError('o período do cronograma é de no máximo dois anos', { field: 'to' });
+  }
+  return { from, to };
+}
+
+/**
+ * O plano está dentro do escopo de quem pergunta? Fora dele é 404, como
+ * qualquer cliente fora do escopo — o plano é sempre DE um cliente.
+ */
+async function planoNoEscopo(s: TenantSession, escopo: MembershipScope, planId: string): Promise<void> {
+  if (escopo.customerIds === null) return;
+  const [p] = await s.query<{ customer_id: string }>(
+    `SELECT customer_id FROM aurora.maintenance_plans WHERE id = $1`,
+    [planId]
+  );
+  if (p && !escopo.customerIds.includes(p.customer_id))
+    throw new NotFoundError('Plano de manutenção', planId);
+}
 
 @Controller('maintenance-plans')
 export class PlansController {
@@ -55,8 +93,10 @@ export class PlansController {
     const ctx = req.auroraContext!;
     const customerId = optionalUuid(customer, 'customer');
 
-    const items = await withTenant(this.db, ctx, (s) =>
-      s.query(
+    const items = await withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      await assertCustomerInScope(s, escopo, customerId);
+      return s.query(
         `SELECT p.id, p.name, p.description, p.customer_id, c.name AS customer_name,
                 p.team_id, p.is_active, p.auto_generate, p.include_late_assets,
                 p.anchor_date::text AS anchor_date,
@@ -82,11 +122,118 @@ export class PlansController {
            JOIN aurora.customers c ON c.id = p.customer_id
           WHERE p.archived_at IS NULL
             AND ($1::uuid IS NULL OR p.customer_id = $1)
+            AND ($2::uuid[] IS NULL OR p.customer_id = ANY($2::uuid[]))
           ORDER BY p.name`,
-        [customerId]
-      )
-    );
+        [customerId, escopo.customerIds]
+      );
+    });
     return { items };
+  }
+
+  /**
+   * O que o formulário de plano oferece.
+   *
+   * Um tipo só fica disponível quando a natureza de OS dele existe no catálogo
+   * DESTA organização: oferecer "Calibração" e recusar ao salvar é a pior
+   * forma de descobrir que falta cadastro.
+   */
+  @Get('form-options')
+  @RequirePermissions('maintenance_plan.read')
+  async formOptions(@Req() req: AuroraRequest): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    return withTenant(this.db, ctx, async (s) => {
+      const naturezas = await s.query<{ system_key: string }>(
+        `SELECT DISTINCT system_key FROM aurora.catalog_items
+          WHERE catalog_key = 'work_order_type' AND system_key IS NOT NULL AND archived_at IS NULL`
+      );
+      const existentes = new Set(naturezas.map((n) => n.system_key));
+      const templates = await s.query(
+        `SELECT DISTINCT ON (t.key) t.key, t.title, t.version, t.procedure_kind::text AS procedure_kind,
+                (SELECT count(*)::int FROM aurora.checklist_items i WHERE i.template_id = t.id) AS item_count
+           FROM aurora.checklist_templates t
+          WHERE t.status = 'published'
+          ORDER BY t.key, t.version DESC`
+      );
+      return {
+        kinds: Object.entries(PLAN_KINDS).map(([key, v]) => ({
+          key,
+          available: existentes.has(v.workOrderType),
+          work_order_type: v.workOrderType,
+          procedure_kind: v.procedureKind,
+        })),
+        templates,
+      };
+    });
+  }
+
+  /** Painel dos planos: programados, realizados, pendentes, vencidos — por tipo, cliente, setor, mês. */
+  @Get('board')
+  @RequirePermissions('maintenance_plan.read')
+  async board(@Req() req: AuroraRequest, @Query() query: unknown): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const q = parseWith(plansBoard.query, query);
+    const p = periodo(q);
+    return withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      await assertCustomerInScope(s, escopo, q.customer);
+      return planBoard(s, { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null }, escopo);
+    });
+  }
+
+  /** Cronograma: atividades reais e as previstas pela frequência, com cliente, setor e equipamento. */
+  @Get('schedule')
+  @RequirePermissions('maintenance_plan.read')
+  async schedule(@Req() req: AuroraRequest, @Query() query: unknown): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const q = parseWith(plansSchedule.query, query);
+    const p = periodo(q);
+    return withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      await assertCustomerInScope(s, escopo, q.customer);
+      return planSchedule(s, { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null }, escopo);
+    });
+  }
+
+  /**
+   * Cria o plano pelo fluxo orientado. Toda conferência de pertença (setor do
+   * cliente, equipamento do setor, escopo de quem cadastra) é do servidor.
+   */
+  @Post()
+  @RequirePermissions('maintenance_plan.create')
+  async create(
+    @Req() req: AuroraRequest,
+    @Body() body: unknown
+  ): Promise<{ id: string; task_count: number }> {
+    const ctx = req.auroraContext!;
+    const b = parseWith(plansCreate.body, body);
+    const anchor = new Date(`${b.anchor_date}T00:00:00Z`);
+    if (Number.isNaN(anchor.getTime())) {
+      throw new ValidationError('data de início inválida', { field: 'anchor_date' });
+    }
+    return withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      const r = await createGuidedPlan(
+        s,
+        {
+          name: b.name,
+          description: b.description,
+          customerId: b.customer_id,
+          sectorId: b.sector_id,
+          assetIds: b.asset_ids,
+          kind: b.kind,
+          checklistTemplateKey: b.checklist_template_key ?? null,
+          frequencyUnit: b.frequency_unit,
+          frequencyInterval: b.frequency_interval,
+          anchorDate: anchor,
+          leadTimeDays: b.lead_time_days,
+          toleranceDays: b.tolerance_days,
+          autoGenerate: b.auto_generate,
+          estimatedDurationMin: b.estimated_duration_min ?? null,
+        },
+        escopo
+      );
+      return { id: r.planId, task_count: r.taskIds.length };
+    });
   }
 
   /** O plano, com as tarefas e o ciclo aberto de cada uma. */
@@ -97,6 +244,7 @@ export class PlansController {
     const planId = uuidParam(id, 'id');
 
     return withTenant(this.db, ctx, async (s) => {
+      await planoNoEscopo(s, await membershipScope(s, ctx.membershipId), planId);
       const [plano] = await s.query<Record<string, unknown>>(
         `SELECT p.id, p.name, p.description, p.customer_id, c.name AS customer_name,
                 p.team_id, p.is_active, p.auto_generate, p.include_late_assets,

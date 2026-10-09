@@ -98,7 +98,7 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
                   <ItemDeMenu
                     key={item.to}
                     item={item}
-                    ativo={ehAtivo(caminho, item.to)}
+                    ativo={ehAtivo(caminho, item.to) || (item.tambem ?? []).some((t) => ehAtivo(caminho, t))}
                     onNavigate={onNavigate}
                   />
                 ))}

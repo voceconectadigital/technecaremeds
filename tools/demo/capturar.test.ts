@@ -172,6 +172,48 @@ it('captura as respostas da demonstração', async () => {
   }
   await ler(C.insightBacklog, null, { to: periodo.to });
 
+  /* ------------------------------------------- Painel de Controle e TV */
+  // A demonstração ignora from/to ao escolher a captura (PAGINACAO): uma por
+  // recorte de cliente e de setor basta para os filtros da tela responderem.
+  const painel = await ler<{
+    customers: Array<{ id: string }>;
+    sectors: Array<{ id: string; customer_id: string }>;
+  }>(C.insightControlPanel, null, periodo);
+  for (const c of painel?.customers ?? []) {
+    await ler(C.insightControlPanel, null, { ...periodo, customerId: c.id });
+  }
+  for (const s of painel?.sectors ?? []) {
+    await ler(C.insightControlPanel, null, { ...periodo, customerId: s.customer_id, sectorId: s.id });
+  }
+
+  /* ------------------------------------ clientes, setores e equipamentos */
+  const clientesDemo = await ler<ComId>(C.customersList);
+  for (const c of clientesDemo?.items ?? []) {
+    await ler(C.customersDetail, { id: c.id });
+    await ler(C.assetsList, null, { customer: c.id, limit: 500 });
+    await ler(C.contractsList, null, { customerId: c.id });
+  }
+  await ler(C.assetsFormOptions);
+  await ler(C.locationTypesList);
+
+  /* --------------------------------- planos: painel, cronograma, checklist */
+  const anoInicio = `${new Date().getUTCFullYear()}-01-01T00:00:00.000Z`;
+  const anoFim = `${new Date().getUTCFullYear() + 1}-01-01T00:00:00.000Z`;
+  await ler(C.plansFormOptions);
+  await ler(C.plansBoard, null, { from: anoInicio, to: anoFim });
+  await ler(C.plansSchedule, null, { from: `${dia(-30)}T00:00:00.000Z`, to: `${dia(91)}T00:00:00.000Z` });
+  for (const c of clientesDemo?.items ?? []) {
+    await ler(C.plansBoard, null, { from: anoInicio, to: anoFim, customer: c.id });
+    await ler(C.plansSchedule, null, {
+      from: `${dia(-30)}T00:00:00.000Z`,
+      to: `${dia(91)}T00:00:00.000Z`,
+      customer: c.id,
+    });
+    await ler(C.plansList, null, { customer: c.id });
+  }
+  const modelos = await ler<ComId>(C.checklistTemplatesList);
+  for (const m of modelos?.items ?? []) await ler(C.checklistTemplatesDetail, { id: m.id });
+
   /* ------------------------------------------------- planos e outros */
   const planos = await ler<ComId>(C.plansList);
   for (const p of planos?.items ?? []) {

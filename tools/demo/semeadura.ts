@@ -155,8 +155,8 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
     for (const [key, label, systemKey] of [
       ['corretiva', 'Corretiva', 'corrective'],
       ['preventiva', 'Preventiva', 'preventive'],
-      ['calibracao', 'Calibração', null],
-      ['seguranca_eletrica', 'Teste de segurança elétrica', null],
+      ['calibracao', 'Calibração', 'calibration'],
+      ['seguranca_eletrica', 'Teste de segurança elétrica', 'inspection'],
       ['instalacao', 'Instalação', null],
     ] as const) {
       natureza[key] = await db.createCatalogItem(s, { catalogKey: 'work_order_type', key, label, systemKey });
@@ -1139,6 +1139,64 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
       }
     }
 
+    /* ---------------------------------------------- procedimentos (checklists) */
+
+    // Dois procedimentos publicados, no motor versionado de sempre: o
+    // checklist operacional da preventiva e o protocolo de calibração com
+    // ponto de medição (nominal e tolerância como DADO; veredito "na").
+    const checklistPreventiva = await tentar('checklist preventiva', async () => {
+      const r = await db.createTemplateWithItems(s, {
+        title: 'Preventiva de ventilador pulmonar',
+        procedureKind: null,
+        publish: true,
+        items: [
+          { kind: 'text', label: 'Número de série conferido com a etiqueta' },
+          { kind: 'boolean', label: 'Alarmes sonoros e visuais funcionam?' },
+          {
+            kind: 'option',
+            label: 'Estado do circuito e das conexões',
+            options: ['Conforme', 'Não conforme', 'Não se aplica'],
+            failingOptions: ['Não conforme'],
+          },
+          { kind: 'number', label: 'Horas de uso no horímetro', unit: 'h' },
+          { kind: 'photo', label: 'Foto do painel após a preventiva' },
+          { kind: 'text', label: 'Observações', required: false },
+        ],
+      });
+      return r.key;
+    });
+    const checklistCalibracao = await tentar('checklist calibração', async () => {
+      const r = await db.createTemplateWithItems(s, {
+        title: 'Calibração de monitor — PNI',
+        procedureKind: 'calibration',
+        publish: true,
+        items: [
+          {
+            kind: 'measurement',
+            label: 'Pressão estática a 100 mmHg',
+            unit: 'mmHg',
+            nominalValue: 100,
+            toleranceMinus: 3,
+            tolerancePlus: 3,
+            toleranceMode: 'absolute',
+            readingsRequired: 3,
+          },
+          {
+            kind: 'measurement',
+            label: 'Pressão estática a 200 mmHg',
+            unit: 'mmHg',
+            nominalValue: 200,
+            toleranceMinus: 3,
+            tolerancePlus: 3,
+            toleranceMode: 'absolute',
+            readingsRequired: 3,
+          },
+          { kind: 'boolean', label: 'Teste de vazamento aprovado pelo técnico?' },
+        ],
+      });
+      return r.key;
+    });
+
     /* ---------------------------------------------------------- planos */
 
     for (const [nome, cliente, raiz, unidade] of [
@@ -1146,6 +1204,7 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
       ['Calibração anual de monitores', saoLucas, 'saoLucas', 'year'],
       ['Preventiva semestral — Vida Plena', vidaPlena, 'vidaPlena', 'month'],
     ] as const) {
+      const calibra = nome.startsWith('Calibração');
       const plano = await tentar(`plano ${nome}`, () =>
         db.createPlan(s, {
           name: nome,
@@ -1162,7 +1221,8 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
           name: nome,
           targetKind: 'location_subtree',
           targetLocationId: local[raiz],
-          workOrderTypeId: natureza.preventiva,
+          workOrderTypeId: calibra ? natureza.calibracao : natureza.preventiva,
+          checklistTemplateKey: (calibra ? checklistCalibracao : checklistPreventiva) ?? null,
           frequencyUnit: unidade,
           frequencyInterval: unidade === 'month' ? 6 : 1,
           leadTimeDays: 3650,

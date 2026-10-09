@@ -39,7 +39,16 @@ const LARGURAS = [
 ] as const;
 
 /** As telas com mais risco de estourar: listas largas, quadro, painel. */
-const TELAS = ['/', '/ordens?vista=lista', '/ativos', '/estoque', '/indicadores', '/agenda'];
+const TELAS = [
+  '/',
+  '/ordens?vista=lista',
+  '/ativos',
+  '/estoque',
+  '/indicadores',
+  '/agenda',
+  '/painel',
+  '/planos',
+];
 
 for (const v of LARGURAS) {
   for (const caminho of TELAS) {

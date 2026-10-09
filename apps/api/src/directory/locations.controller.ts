@@ -8,7 +8,7 @@
  * intenção: `PATCH /locations/:id` com `parent_id` no meio de outros campos
  * torna acidental uma operação que reescreve centenas de linhas.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createLocation,
@@ -17,8 +17,8 @@ import {
   archiveLocation,
   type Database,
 } from '@aurora/db';
-import { ForbiddenError } from '@aurora/domain';
-import { locationsCreate } from '@aurora/contracts';
+import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
+import { locationsCreate, locationsUpdate } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
 import { optionalUuid, uuidParam } from '../common/params';
@@ -69,7 +69,7 @@ export class LocationsController {
       s.query(
         `SELECT l.id, l.parent_id, l.customer_id, l.location_type_id, l.name, l.code,
                 l.path, l.depth, l.status::text AS status, l.is_mobile,
-                t.name AS location_type_name
+                t.name AS location_type_name, t.key AS location_type_key
            FROM aurora.locations l
            LEFT JOIN aurora.location_types t ON t.id = l.location_type_id
           WHERE l.deleted_at IS NULL
@@ -111,6 +111,45 @@ export class LocationsController {
       })
     );
     return { id };
+  }
+
+  /**
+   * Renomeia o local — o setor "UTI 2" que virou "UTI Pediátrica".
+   *
+   * Só nome e código: mudar de pai é `move` (outra permissão), e mudar de
+   * cliente não existe. O caminho materializado é feito de ids, então
+   * renomear não reescreve nada abaixo. Fora do escopo de quem edita: 404.
+   */
+  @Patch(':id')
+  @RequirePermissions('location.update')
+  async update(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const membershipId = requireMembership(ctx.membershipId);
+    const locationId = uuidParam(id, 'id');
+    const b = parseWith(locationsUpdate.body, body);
+    if (b.name === undefined && b.code === undefined) {
+      throw new ValidationError('nada para alterar', { field: 'name' });
+    }
+    await withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.accessible_location_ids($1) WHERE location_id = $2`,
+        [membershipId, locationId]
+      );
+      if (!visivel) throw new NotFoundError('local', locationId);
+      await s.query(
+        `UPDATE aurora.locations
+            SET name = COALESCE($2, name),
+                code = CASE WHEN $3::boolean THEN $4 ELSE code END,
+                updated_at = now(), updated_by = $5
+          WHERE id = $1 AND deleted_at IS NULL`,
+        [locationId, b.name ?? null, b.code !== undefined, b.code || null, ctx.actorId]
+      );
+    });
+    return { ok: true };
   }
 
   /**

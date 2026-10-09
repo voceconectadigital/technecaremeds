@@ -49,3 +49,5 @@ export * from './operations/schedule';
 export * from './operations/metrology';
 export * from './operations/opportunities';
 export * from './operations/imports';
+export * from './operations/painel';
+export * from './operations/planejamento';
