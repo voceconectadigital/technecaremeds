@@ -58,8 +58,15 @@ test.describe('Painel de Controle', () => {
         els.map((e) => [e.textContent?.trim() ?? '', (e as HTMLAnchorElement).getAttribute('href') ?? ''])
       );
     expect(destinos.length).toBeGreaterThanOrEqual(8);
-    for (const [, href] of destinos) {
+    for (const [rotulo, href] of destinos) {
       await page.goto(href);
+      if (href.includes('novo=sim')) {
+        // O atalho de cadastro abre o diálogo — e o diálogo modal tira o resto
+        // da página da árvore de acessibilidade (aria-hidden): o título da tela
+        // existe, mas não é "visível" para um papel. O que se confere é o cadastro.
+        await expect(page.getByRole('dialog', { name: rotulo })).toBeVisible({ timeout: 15_000 });
+        continue;
+      }
       // Rota existente: a tela tem título; a página de "não encontrado" não teria a moldura.
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
     }
