@@ -29,6 +29,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useSession } from '@aurora/app-kit';
 import type { ArmazenamentoOffline, Colecao } from './armazenamento';
 import {
   enviarAnexosPendentes,
@@ -300,8 +301,20 @@ export function CampoProvider({
     void atualizarEstado();
   }, [atualizarEstado]);
 
+  /*
+   * SEM SESSÃO NÃO HÁ O QUE SINCRONIZAR.
+   *
+   * O provedor monta antes do login — é ele que abre a base local —, e o
+   * relógio e a primeira sincronização disparavam na tela de entrar, levando
+   * 401 da API. A sessão vem do contexto, e não do `localStorage`, para o
+   * provedor saber quando ela muda.
+   */
+  const { token, organizationId } = useSession();
+  const temSessaoRef = useRef(false);
+  temSessaoRef.current = Boolean(token && organizationId);
+
   const sincronizar = useCallback(async () => {
-    if (!sincronizacao) return;
+    if (!sincronizacao || !temSessaoRef.current) return;
     setSincronizando(true);
     try {
       const r = await sincronizacao.rodar();
@@ -368,13 +381,20 @@ export function CampoProvider({
    * alguém tocar no botão ou até o relógio disparar — e o técnico que abre o
    * aplicativo às 7h55 e desce para o subsolo às 7h56 desceria com a base
    * vazia. Foi assim que o teste de ponta a ponta encontrou isto.
+   *
+   * E ELA SE REPETE A CADA SESSÃO. Aberto sem sessão, o aplicativo não tem o
+   * que baixar; depois de entrar, só o relógio de um minuto disparava — e o
+   * técnico via o dia vazio logo depois do login. A chave é a sessão inteira:
+   * trocar de organização também baixa o dia certo na hora.
    */
-  const jaAbriu = useRef(false);
+  const sincronizouNaSessao = useRef<string | null>(null);
   useEffect(() => {
-    if (!sincronizacao || jaAbriu.current) return;
-    jaAbriu.current = true;
+    if (!sincronizacao || !token || !organizationId) return;
+    const chave = `${token}|${organizationId}`;
+    if (sincronizouNaSessao.current === chave) return;
+    sincronizouNaSessao.current = chave;
     void sincronizarRef.current();
-  }, [sincronizacao]);
+  }, [sincronizacao, token, organizationId]);
 
   /*
    * O AVISO DE REDE VEM DA PORTA, e não de `window`.
