@@ -37,6 +37,7 @@ import {
   EmptyState,
   FilterChip,
   RateRing,
+  SegmentGroup,
   Select,
   Skeleton,
   SkeletonList,
@@ -300,17 +301,18 @@ function VisaoGeral({ cliente, setor }: { cliente: string; setor: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div role="group" aria-label="Período" className="flex flex-wrap gap-1.5">
+      <SegmentGroup label="Período">
         {Object.entries(RECORTES_VISAO).map(([k, v]) => (
           <FilterChip
             key={k}
+            segment
             active={recorte === k}
             onClick={() => setRecorte(k as keyof typeof RECORTES_VISAO)}
           >
             {v.rotulo}
           </FilterChip>
         ))}
-      </div>
+      </SegmentGroup>
 
       {board.isLoading || !b ? (
         <div aria-busy="true" className="grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -523,17 +525,23 @@ function Numero({
   }[tom];
   return (
     <Card>
-      <div className="flex flex-col gap-1.5 p-4">
-        <span className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted uppercase">
+      <div className="flex flex-col gap-2 p-4 lg:p-5">
+        <span className="flex items-center gap-2 text-sm font-medium text-muted">
+          <span className="min-w-0 flex-1 truncate">{rotulo}</span>
           <span
-            className={cn('flex size-6 items-center justify-center rounded-control', cor)}
+            className={cn('flex size-7 shrink-0 items-center justify-center rounded-control', cor)}
             aria-hidden="true"
           >
             {icone}
           </span>
-          {rotulo}
         </span>
-        <span data-numeric className="text-3xl font-semibold tracking-display text-text tabular-nums">
+        <span
+          data-numeric
+          className={cn(
+            'text-3xl leading-none font-bold tracking-display tabular-nums',
+            tom === 'bad' && valor > 0 ? 'text-bad-text' : 'text-text'
+          )}
+        >
           {valor.toLocaleString('pt-BR')}
         </span>
         {dica && <span className="text-xs text-subtle">{dica}</span>}
@@ -658,17 +666,18 @@ function Cronograma({ cliente, setor }: { cliente: string; setor: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div role="group" aria-label="Janela" className="flex flex-wrap gap-1.5">
+        <SegmentGroup label="Janela">
           {Object.entries(RECORTES_CRONO).map(([k, v]) => (
             <FilterChip
               key={k}
+              segment
               active={recorte === k}
               onClick={() => setRecorte(k as keyof typeof RECORTES_CRONO)}
             >
               {v.rotulo}
             </FilterChip>
           ))}
-        </div>
+        </SegmentGroup>
         <Link
           to="/agenda"
           className="inline-flex min-h-8 items-center gap-1.5 text-sm text-accent-text hover:underline"

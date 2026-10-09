@@ -212,13 +212,28 @@ export function AtivosPage() {
                * "quantos BeneHeart R3 temos?"), local e identificadores viram
                * colunas alinhadas, e garantia vencendo aparece como alerta.
                */
-              <ul className="divide-y divide-border-subtle">
-                {filtrados.map((a) => (
-                  <li key={a.id}>
-                    <LinhaDeAtivo ativo={a} />
-                  </li>
-                ))}
-              </ul>
+              <>
+                {/* Cabeçalho de colunas discreto: as linhas são links (uma ficha
+                  por equipamento), e não células — por isso ele é só visual e
+                  some para o leitor de tela, que lê cada linha inteira. */}
+                <div
+                  aria-hidden="true"
+                  className="hidden items-center gap-4 border-b border-border-subtle bg-surface-subtle px-4 py-2 text-2xs font-semibold tracking-label text-subtle uppercase md:flex"
+                >
+                  <span className="w-10 shrink-0" />
+                  <span className="min-w-0 flex-1">Equipamento</span>
+                  <span className="w-44 shrink-0">Local</span>
+                  <span className="hidden w-36 shrink-0 lg:block">Identificação</span>
+                  <span className="w-40 shrink-0 text-right">Situação</span>
+                </div>
+                <ul className="divide-y divide-border-subtle">
+                  {filtrados.map((a) => (
+                    <li key={a.id}>
+                      <LinhaDeAtivo ativo={a} />
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </Card>
 
@@ -379,12 +394,12 @@ function LinhaDeAtivo({ ativo: a }: { ativo: AssetRow }) {
     <Link
       to="/ativos/$id"
       params={{ id: a.id }}
-      className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-surface-hover"
+      className="flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-hover"
     >
       <Thumb name={a.name} size="sm" />
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-medium text-text">{a.name}</span>
+        <span className="block truncate text-base font-semibold text-text">{a.name}</span>
         <span className="mt-0.5 block truncate text-xs text-muted">
           {[a.manufacturer_name, a.model_name].filter(Boolean).join(' ') || a.category_name}
         </span>
@@ -413,7 +428,7 @@ function LinhaDeAtivo({ ativo: a }: { ativo: AssetRow }) {
         )}
       </span>
 
-      <span className="flex shrink-0 items-center gap-2">
+      <span className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 md:w-40">
         {garantiaEhNoticia && (
           <StatusChip
             tone={diasDeGarantia! < 0 ? 'neutral' : 'warn'}
