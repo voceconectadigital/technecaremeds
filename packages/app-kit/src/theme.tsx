@@ -1,9 +1,10 @@
 /**
  * Aurora — estilos visuais (temas) escolhidos pela pessoa.
  *
- * TRÊS ESTILOS, CADA UM COM SUA PERSONALIDADE — não três cores do mesmo layout:
+ * QUATRO ESTILOS, CADA UM COM SUA PERSONALIDADE — não três cores do mesmo layout:
  *
- *   futuristico  painel de veículo elétrico premium; escuro, preciso. PADRÃO.
+ *   techne       claro, enterprise; azul-marinho estrutural da marca. PADRÃO.
+ *   futuristico  painel de veículo elétrico premium; escuro, preciso.
  *   mindfulness  calmo e contemplativo; claro, pedra quente, serifa nos títulos.
  *   wellness     limpo e acolhedor; claro, verde-água, humano.
  *
@@ -18,15 +19,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark';
-export type Estilo = 'futuristico' | 'mindfulness' | 'wellness';
+export type Estilo = 'techne' | 'futuristico' | 'mindfulness' | 'wellness';
 
 export const ESTILOS: readonly { id: Estilo; nome: string; descricao: string; modo: Theme }[] = [
+  { id: 'techne', nome: 'Téchne', descricao: 'Claro, corporativo e preciso', modo: 'light' },
   { id: 'futuristico', nome: 'Futurístico', descricao: 'Painel premium, escuro e preciso', modo: 'dark' },
   { id: 'mindfulness', nome: 'Mindfulness', descricao: 'Calmo, leve e equilibrado', modo: 'light' },
   { id: 'wellness', nome: 'Wellness', descricao: 'Limpo, acolhedor e humano', modo: 'light' },
 ];
 
-export const ESTILO_PADRAO: Estilo = 'futuristico';
+export const ESTILO_PADRAO: Estilo = 'techne';
 const CHAVE = 'aurora:estilo';
 
 function valido(v: unknown): v is Estilo {
@@ -43,7 +45,7 @@ function lerEstilo(): Estilo {
 }
 
 export function modoDoEstilo(estilo: Estilo): Theme {
-  return ESTILOS.find((e) => e.id === estilo)?.modo ?? 'dark';
+  return ESTILOS.find((e) => e.id === estilo)?.modo ?? 'light';
 }
 
 interface ThemeApi {

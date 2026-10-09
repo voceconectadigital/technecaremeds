@@ -76,8 +76,8 @@ export function CardHeader({ title, description, actions, className, headingLeve
       <div className="min-w-0">
         {/* O TAMANHO é do estilo; o NÍVEL é da estrutura. Um cartão parece
             igual em qualquer nível, e é a árvore de cabeçalhos que muda. */}
-        <H className="truncate text-lg font-semibold tracking-display text-text">{title}</H>
-        {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
+        <H className="truncate text-lg font-semibold tracking-tight text-text">{title}</H>
+        {description && <p className="mt-1 text-sm text-muted">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
     </div>
@@ -121,17 +121,17 @@ export function EmptyState({
   origem,
 }: EmptyStateProps) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-14 text-center', className)}>
+    <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-12 text-center', className)}>
       {icon && (
         <div
           aria-hidden="true"
-          className="flex size-14 items-center justify-center rounded-pill border border-accent/30 bg-accent-soft text-accent-text shadow-glow"
+          className="flex size-10 items-center justify-center rounded-card border border-border bg-surface-subtle text-muted shadow-card"
         >
           {icon}
         </div>
       )}
       <div className="max-w-sm">
-        <p className="text-lg font-semibold tracking-display text-text">{title}</p>
+        <p className="text-base font-semibold text-text">{title}</p>
         {description && <p className="mt-1 text-sm text-muted">{description}</p>}
         {filtered && !description && (
           <p className="mt-1 text-sm text-muted">Nenhum registro corresponde aos filtros aplicados.</p>

@@ -112,6 +112,7 @@ export {
   Section,
   Toolbar,
   FilterChip,
+  SegmentGroup,
   StatStrip,
   FieldPair,
   type SectionProps,

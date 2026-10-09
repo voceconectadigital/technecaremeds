@@ -58,12 +58,15 @@ export interface MetricProps {
 }
 
 const ACENTO_DE_TOM: Record<Tone, string> = {
+  // Número na cor do texto quando o estado é neutro ou bom: o tom vira
+  // ponto e ícone. Só atenção e problema pintam o número — o que é cor em
+  // toda parte deixa de ser sinal.
   neutral: 'text-text',
-  accent: 'text-accent-text',
-  good: 'text-good-text',
+  accent: 'text-text',
+  good: 'text-text',
   warn: 'text-warn-text',
   bad: 'text-bad-text',
-  info: 'text-info-text',
+  info: 'text-text',
 };
 
 const ICONE_DE_TOM: Record<Tone, string> = {
@@ -73,16 +76,6 @@ const ICONE_DE_TOM: Record<Tone, string> = {
   warn: 'bg-warn-soft text-warn-text',
   bad: 'bg-bad-soft text-bad-text',
   info: 'bg-info-soft text-info-text',
-};
-
-/* Brilho de canto no tom: no futurístico vira a "luz de painel" do indicador. */
-const BRILHO_DE_TOM: Record<Tone, string> = {
-  neutral: 'transparent',
-  accent: 'var(--aurora-accent-soft)',
-  good: 'var(--aurora-good-soft)',
-  warn: 'var(--aurora-warn-soft)',
-  bad: 'var(--aurora-bad-soft)',
-  info: 'var(--aurora-info-soft)',
 };
 
 const BARRA_DE_TOM: Record<Tone, string> = {
@@ -112,13 +105,9 @@ export function Metric({
   return (
     <div
       className={cn(
-        'group relative flex flex-col gap-1 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
-        'transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-raised motion-reduce:transform-none',
+        'group relative flex flex-col gap-2 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
         className
       )}
-      style={{
-        backgroundImage: `radial-gradient(140% 90% at 100% 0%, ${BRILHO_DE_TOM[tone]}, transparent 55%)`,
-      }}
     >
       {/*
        * A FAIXA DE TOM fica na borda esquerda, e não no fundo do cartão.
@@ -127,19 +116,17 @@ export function Metric({
        * parecerem um semáforo quebrado, e o número — que é o conteúdo — perde
        * contraste. A faixa dá o mesmo sinal ocupando 3px.
        */}
-      {tone !== 'neutral' && (
-        <span
-          aria-hidden="true"
-          className={cn('absolute inset-x-0 top-0 h-[2px] opacity-90', BARRA_DE_TOM[tone])}
-        />
-      )}
-
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium tracking-[0.12em] text-muted uppercase">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-muted">
+          {tone !== 'neutral' && (
+            <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', BARRA_DE_TOM[tone])} />
+          )}
+          <span className="truncate">{label}</span>
+        </p>
         {icon && (
           <span
             aria-hidden="true"
-            className={cn('grid size-8 shrink-0 place-items-center rounded-control', ICONE_DE_TOM[tone])}
+            className={cn('grid size-7 shrink-0 place-items-center rounded-control', ICONE_DE_TOM[tone])}
           >
             {icon}
           </span>
@@ -151,14 +138,14 @@ export function Metric({
           data-numeric
           data-display
           className={cn(
-            'leading-none font-semibold tracking-display tabular-nums',
+            'leading-none font-bold tracking-display tabular-nums',
             size === 'lg' ? 'text-4xl' : 'text-3xl',
             indisponivel ? 'text-subtle' : ACENTO_DE_TOM[tone]
           )}
         >
           {indisponivel ? '—' : value}
         </span>
-        {!indisponivel && unit && <span className="text-md font-medium text-muted">{unit}</span>}
+        {!indisponivel && unit && <span className="text-base font-semibold text-subtle">{unit}</span>}
         {trend && !indisponivel && <TrendPill trend={trend} />}
       </div>
 

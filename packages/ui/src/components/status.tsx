@@ -17,7 +17,7 @@ import { cn } from '../lib/cn';
 export type Tone = 'neutral' | 'accent' | 'good' | 'warn' | 'bad' | 'info';
 
 const FUNDOS: Record<Tone, string> = {
-  neutral: 'bg-surface-sunken text-muted border-border',
+  neutral: 'bg-surface-sunken text-muted border-transparent',
   accent: 'bg-accent-soft text-accent-text border-transparent',
   good: 'bg-good-soft text-good-text border-transparent',
   warn: 'bg-warn-soft text-warn-text border-transparent',
@@ -74,14 +74,14 @@ export function StatusChip({
     <span
       title={hint}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-pill border font-medium whitespace-nowrap',
-        size === 'sm' ? 'px-2 py-0.5 text-2xs' : 'px-2.5 py-1 text-xs',
+        'inline-flex items-center gap-1.5 rounded-[6px] border font-semibold whitespace-nowrap',
+        size === 'sm' ? 'px-1.5 py-px text-2xs' : 'px-2 py-0.5 text-xs',
         FUNDOS[tone],
         className
       )}
     >
       {!withoutDot && (
-        <span aria-hidden="true" className={cn('size-2 shrink-0', PONTOS[tone], FORMAS[tone])} />
+        <span aria-hidden="true" className={cn('size-1.5 shrink-0', PONTOS[tone], FORMAS[tone])} />
       )}
       {children}
       {hint && <span className="aurora-sr-only">. {hint}</span>}

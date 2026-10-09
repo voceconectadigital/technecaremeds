@@ -10,20 +10,20 @@
       exige que o texto amplie até 200%.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f2f7f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#070a10" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/png" href="/marca/itech-simbolo.png" />
     <link rel="apple-touch-icon" href="/marca/itech-icone-180.png" />
     <title>Portal — Téchne Care</title>
     <script>
       (function () {
-        var modos = { futuristico: 'dark', mindfulness: 'light', wellness: 'light' };
-        var estilo = 'futuristico';
+        var modos = { techne: 'light', futuristico: 'dark', mindfulness: 'light', wellness: 'light' };
+        var estilo = 'techne';
         try {
           var guardado = localStorage.getItem('aurora:estilo');
           if (guardado && modos[guardado]) estilo = guardado;
         } catch (e) {
-          /* modo privado sem localStorage: vale o padrão futurístico */
+          /* modo privado sem localStorage: vale o padrão Téchne */
         }
         document.documentElement.dataset.estilo = estilo;
         document.documentElement.dataset.theme = modos[estilo];

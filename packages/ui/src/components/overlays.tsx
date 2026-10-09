@@ -76,7 +76,7 @@ export function Dialog({
       <RadixDialog.Portal>
         <RadixDialog.Overlay
           className="fixed inset-0 z-50 bg-neutral-950/40 backdrop-blur-[2px] data-[state=open]:animate-in"
-          style={{ backgroundColor: 'rgb(13 18 17 / 0.45)' }}
+          style={{ backgroundColor: 'rgb(16 24 40 / 0.5)' }}
         />
         <RadixDialog.Content
           onCloseAutoFocus={(e) => {
@@ -94,9 +94,11 @@ export function Dialog({
             LARGURAS[size]
           )}
         >
-          <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-5 py-4">
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
             <div className="min-w-0">
-              <RadixDialog.Title className="text-lg font-semibold text-text">{title}</RadixDialog.Title>
+              <RadixDialog.Title className="text-xl font-bold tracking-tight text-text">
+                {title}
+              </RadixDialog.Title>
               <RadixDialog.Description
                 className={cn('mt-1 text-sm text-muted', descriptionHidden && 'aurora-sr-only')}
               >
@@ -111,10 +113,10 @@ export function Dialog({
             </RadixDialog.Close>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-5">{children}</div>
 
           {footer && (
-            <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-5 py-3">
+            <div className="flex items-center justify-end gap-2 rounded-b-sheet border-t border-border-subtle bg-surface-subtle px-6 py-3.5">
               {footer}
             </div>
           )}
@@ -160,7 +162,7 @@ export function Menu({ trigger, items, align = 'end', label }: MenuProps) {
         <RadixMenu.Content
           align={align}
           sideOffset={6}
-          className="z-50 min-w-52 rounded-card border border-border bg-surface p-1 shadow-overlay"
+          className="z-50 min-w-52 rounded-card border border-border bg-surface p-1.5 shadow-overlay"
         >
           {items.map((item, i) =>
             item === 'separator' ? (
@@ -172,7 +174,7 @@ export function Menu({ trigger, items, align = 'end', label }: MenuProps) {
                 onSelect={item.onSelect}
                 title={item.disabled ? item.disabledReason : undefined}
                 className={cn(
-                  'flex cursor-pointer items-center gap-2.5 rounded-control px-2.5 py-1.5 text-base outline-none',
+                  'flex min-h-9 cursor-pointer items-center gap-2.5 rounded-control px-2.5 text-sm font-medium outline-none',
                   'data-[highlighted]:bg-surface-hover',
                   item.destructive ? 'text-bad-text' : 'text-text',
                   item.disabled && 'cursor-not-allowed opacity-50'

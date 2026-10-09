@@ -44,7 +44,7 @@ export function Section({
       {(title || actions) && (
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            {title && <H className="truncate text-xl font-semibold tracking-display text-text">{title}</H>}
+            {title && <H className="truncate text-xl font-bold tracking-display text-text">{title}</H>}
             {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
@@ -81,7 +81,7 @@ export function Toolbar({ search, filters, actions, className }: ToolbarProps) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-card border border-border bg-surface p-3 shadow-card lg:flex-row lg:items-center',
+        'flex flex-col gap-3 rounded-card border border-border bg-surface p-2.5 shadow-card lg:flex-row lg:items-center',
         className
       )}
     >
@@ -100,6 +100,12 @@ export interface FilterChipProps {
   children: ReactNode;
   /** Contagem à direita do rótulo. `undefined` não desenha nada. */
   count?: number;
+  /**
+   * Segmento de um grupo exclusivo (período, vista): sem borda própria, dentro
+   * de um `SegmentGroup`. O ativo vira a "tecla levantada" — superfície,
+   * sombra de contato e peso —, que é como o olho reconhece seleção única.
+   */
+  segment?: boolean;
   className?: string;
 }
 
@@ -110,17 +116,28 @@ export interface FilterChipProps {
  * pela mesma razão de sempre: filtro aplicado que a pessoa não percebe produz
  * o chamado "o sistema perdeu meus registros".
  */
-export function FilterChip({ active = false, onClick, children, count, className }: FilterChipProps) {
+export function FilterChip({
+  active = false,
+  onClick,
+  children,
+  count,
+  segment = false,
+  className,
+}: FilterChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex min-h-8 items-center gap-1.5 rounded-pill border px-3 text-sm transition-colors',
-        active
-          ? 'border-accent bg-accent-soft font-semibold text-accent-text'
-          : 'border-border bg-surface font-medium text-muted hover:bg-surface-hover hover:text-text',
+        'inline-flex min-h-8 items-center gap-1.5 rounded-control border px-3 text-sm transition-colors',
+        segment
+          ? active
+            ? 'border-border bg-surface font-semibold text-text shadow-card'
+            : 'border-transparent font-medium text-muted hover:text-text'
+          : active
+            ? 'border-accent/50 bg-accent-soft font-semibold text-accent-text'
+            : 'border-border bg-surface font-medium text-muted hover:border-border-strong hover:text-text',
         className
       )}
     >
@@ -137,6 +154,30 @@ export function FilterChip({ active = false, onClick, children, count, className
         </span>
       )}
     </button>
+  );
+}
+
+/** O trilho de um grupo de segmentos — período, vista, modo. */
+export function SegmentGroup({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={cn(
+        'inline-flex w-fit max-w-full flex-wrap items-center gap-0.5 rounded-[10px] border border-border-subtle bg-surface-sunken p-0.5',
+        className
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -179,11 +220,11 @@ export function StatStrip({ items, className }: StatStripProps) {
     >
       {items.map((s) => (
         <div key={s.label} className="flex flex-col gap-0.5 px-4 py-3" title={s.hint}>
-          <dt className="truncate text-2xs font-medium tracking-label text-muted uppercase">{s.label}</dt>
+          <dt className="truncate text-xs font-medium text-muted">{s.label}</dt>
           <dd
             data-numeric
             className={cn(
-              'text-2xl font-semibold tabular-nums tracking-display',
+              'text-2xl font-bold tabular-nums tracking-display',
               TOM_DO_VALOR[s.tone ?? 'neutral']
             )}
           >

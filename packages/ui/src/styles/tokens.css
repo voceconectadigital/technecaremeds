@@ -74,13 +74,13 @@
      * escuro; o que muda é qual degrau cada papel semântico usa.
      */
     --aurora-neutral-0: #ffffff;
-    --aurora-neutral-25: #f9fafb;
-    --aurora-neutral-50: #f3f5f8;
-    --aurora-neutral-100: #e8eaf0;
-    --aurora-neutral-200: #d3d7e0;
-    --aurora-neutral-300: #b0b6c4;
-    --aurora-neutral-400: #8b92a4;
-    --aurora-neutral-500: #6c7385;
+    --aurora-neutral-25: #fafbfc;
+    --aurora-neutral-50: #f5f6f8;
+    --aurora-neutral-100: #eceef2;
+    --aurora-neutral-200: #dfe2e8;
+    --aurora-neutral-300: #c4c9d3;
+    --aurora-neutral-400: #9aa1af;
+    --aurora-neutral-500: #6f7686;
     /*
      * O degrau que existe por causa de uma auditoria.
      *
@@ -90,50 +90,54 @@
      * cor. Este degrau intermediário dá 5,06:1 no pior fundo e continua
      * visivelmente mais claro que `muted`.
      */
-    --aurora-neutral-550: #5b6275;
-    --aurora-neutral-600: #4f5768;
-    --aurora-neutral-700: #3c4354;
-    --aurora-neutral-800: #272c3a;
-    --aurora-neutral-900: #171b26;
+    --aurora-neutral-550: #5d6679;
+    --aurora-neutral-600: #4b5263;
+    --aurora-neutral-700: #373d4c;
+    --aurora-neutral-800: #252a36;
+    --aurora-neutral-900: #161a23;
     --aurora-neutral-950: #0d1017;
 
     /*
      * AZUL DA MARCA — o "Care" da logo. A cor de PRODUTO.
      *
-     * A rampa é a cor real (500) clareada até o branco e escurecida até o
-     * preto, em passos conferidos um a um:
-     *   500 sobre branco  5,50:1  → botão primário com texto branco
-     *   600 sobre branco  7,13:1  → link e texto de destaque
-     *   300 sobre #0d1017 8,31:1  → o degrau do tema escuro
+     * Desde 09/10/2026 a rampa parte da cor de marca.config.json
+     * (corPrimaria #4a7fc4, medida na logo atual) — o 500 é a cor real. Ele
+     * dá 4,10:1 sobre branco e por isso NÃO é fundo de botão com texto
+     * branco; os papéis usam degraus conferidos:
+     *   600 sobre branco  5,22:1  → botão primário com texto branco
+     *   700 sobre branco  6,42:1  → link e texto de destaque
+     *   300 sobre #0d1017 ≥ 8:1   → o degrau do tema escuro
      */
-    --aurora-brand-50: #f1f5f9;
-    --aurora-brand-100: #e2e9f3;
-    --aurora-brand-200: #c1cfe4;
-    --aurora-brand-300: #95add1;
-    --aurora-brand-400: #6587bd;
-    --aurora-brand-500: #3e69ac;
-    --aurora-brand-600: #345890;
-    --aurora-brand-700: #2a4775;
-    --aurora-brand-800: #1f3556;
-    --aurora-brand-900: #15243a;
+    --aurora-brand-50: #f2f6fc;
+    --aurora-brand-100: #e4ecf8;
+    --aurora-brand-200: #c6d7ef;
+    --aurora-brand-300: #9bb9e2;
+    --aurora-brand-400: #6f9bd4;
+    --aurora-brand-500: #4a7fc4;
+    --aurora-brand-600: #3b6db3;
+    --aurora-brand-700: #335f9e;
+    --aurora-brand-800: #284a7b;
+    --aurora-brand-900: #1c3456;
+    /* O azul-marinho estrutural: fundo da navegação no estilo Téchne. */
+    --aurora-brand-950: #102038;
 
     /*
      * VERDE DA MARCA — o "Téchne" da logo. ACENTO, e só.
      *
-     * O 500 é a cor real e serve para FORMA: barra, ponto, marcador, borda.
-     * Para TEXTO ele reprova (2,23:1), e por isso existe o 700 (4,54:1) — o
-     * mesmo verde escurecido até passar, e não um verde inventado.
+     * O 500 é a cor real (corAcento #78c018) e serve para FORMA: barra,
+     * ponto, marcador, borda. Para TEXTO ele reprova (2,25:1), e por isso
+     * existe o 700 (5,14:1) — o mesmo verde escurecido até passar.
      */
-    --aurora-lime-50: #f8faf0;
-    --aurora-lime-100: #f0f5de;
-    --aurora-lime-200: #e0e9b9;
-    --aurora-lime-300: #c9d987;
-    --aurora-lime-400: #b1c750;
-    --aurora-lime-500: #9db924;
-    --aurora-lime-600: #849b1e;
-    --aurora-lime-700: #6b7e18;
-    --aurora-lime-800: #4f5d12;
-    --aurora-lime-900: #353f0c;
+    --aurora-lime-50: #f5fbec;
+    --aurora-lime-100: #e8f5d4;
+    --aurora-lime-200: #d0eba8;
+    --aurora-lime-300: #b0dc6c;
+    --aurora-lime-400: #92cf3c;
+    --aurora-lime-500: #78c018;
+    --aurora-lime-600: #64a113;
+    --aurora-lime-700: #4a7a12;
+    --aurora-lime-800: #3a5f0f;
+    --aurora-lime-900: #29430b;
 
     /*
      * SEMÂNTICAS — significado, nunca decoração, e NUNCA a cor da marca.
@@ -167,12 +171,12 @@
      * Nenhuma delas é uma cor semântica: uma série que reusasse o vermelho de
      * crítico faria uma barra alta parecer um alarme.
      */
-    --aurora-data-1: #3e69ac;
-    --aurora-data-2: #849b1e;
-    --aurora-data-3: #6587bd;
-    --aurora-data-4: #4f5768;
-    --aurora-data-5: #2a4775;
-    --aurora-data-6: #b1c750;
+    --aurora-data-1: #3b6db3;
+    --aurora-data-2: #64a113;
+    --aurora-data-3: #9bb9e2;
+    --aurora-data-4: #6f7686;
+    --aurora-data-5: #1c3456;
+    --aurora-data-6: #b0dc6c;
 
     /* ------------------------------------------------- papéis semânticos */
 
@@ -186,12 +190,12 @@
        ferramentas e de faixa dentro de cartão. Sem ele, tudo o que não é
        branco vira o mesmo cinza e a tela perde os planos. */
     --aurora-surface-subtle: var(--aurora-neutral-25);
-    --aurora-surface-hover: var(--aurora-neutral-50);
+    --aurora-surface-hover: #f7f8fa;
     --aurora-surface-active: var(--aurora-neutral-100);
 
-    --aurora-border: var(--aurora-neutral-200);
+    --aurora-border: #e3e6ec;
     --aurora-border-strong: var(--aurora-neutral-300);
-    --aurora-border-subtle: var(--aurora-neutral-100);
+    --aurora-border-subtle: #eef0f3;
 
     --aurora-text: var(--aurora-neutral-900);
     --aurora-text-muted: var(--aurora-neutral-600);
@@ -211,10 +215,10 @@
      *   `accent-text` (600) é TEXTO sobre superfície clara — 7,13:1.
      * Usar o mesmo tom para as duas coisas reprovaria numa das duas.
      */
-    --aurora-accent: var(--aurora-brand-500);
-    --aurora-accent-hover: var(--aurora-brand-600);
+    --aurora-accent: var(--aurora-brand-600);
+    --aurora-accent-hover: var(--aurora-brand-700);
     --aurora-accent-soft: var(--aurora-brand-50);
-    --aurora-accent-text: var(--aurora-brand-600);
+    --aurora-accent-text: var(--aurora-brand-700);
 
     /*
      * ACENTO DE MARCA — o verde-limão do "Téchne".
@@ -247,6 +251,24 @@
     --aurora-info-soft: var(--aurora-info-100);
     --aurora-info-text: var(--aurora-info-700);
 
+    /*
+     * NAVEGAÇÃO — a barra lateral tem papéis próprios.
+     *
+     * No estilo Téchne (padrão, claro) ela é o AZUL-MARINHO estrutural da
+     * marca: moldura escura e conteúdo claro são o que faz o produto ler como
+     * um sistema, e não como uma página. Os outros estilos redefinem estes
+     * papéis para a própria superfície rebaixada.
+     * Contraste sobre #102038: texto 10,9:1 · rótulo de grupo 5,8:1.
+     */
+    --aurora-nav-bg: var(--aurora-brand-950);
+    --aurora-nav-border: rgb(255 255 255 / 0.07);
+    --aurora-nav-text: #c9d4e5;
+    --aurora-nav-text-active: #ffffff;
+    --aurora-nav-label: #8a9bb5;
+    --aurora-nav-hover: rgb(255 255 255 / 0.05);
+    --aurora-nav-active: rgb(255 255 255 / 0.09);
+    --aurora-nav-marker: var(--aurora-lime-500);
+
     /* --------------------------------------------------------- tipografia */
 
     /*
@@ -257,9 +279,16 @@
      * hospital, onde o técnico está. A indireção existe: trocar por uma face
      * hospedada conosco é mudar esta linha, e só ela.
      */
+    /*
+     * Desde 09/10/2026: Plus Jakarta Sans, HOSPEDADA CONOSCO
+     * (@fontsource-variable/plus-jakarta-sans, importada pela web e pelo
+     * portal). Nenhuma CDN: o arquivo sai no próprio pacote. Onde a face não
+     * é carregada (o Campo, que funciona sem rede) a pilha do sistema
+     * continua valendo — a indireção é a mesma de antes.
+     */
     --aurora-font-sans:
-      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
-      sans-serif;
+      'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+      'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
     --aurora-font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
 
     /*
@@ -277,16 +306,33 @@
      * título de seção, título de página e número de indicador. É o que
      * qualquer produto B2B de valor faz: corpo compacto, títulos com presença.
      */
-    --aurora-text-2xs: 0.6875rem; /* 11px — só rótulo em caixa alta */
-    --aurora-text-xs: 0.75rem; /* 12px — metadado, legenda */
-    --aurora-text-sm: 0.8125rem; /* 13px — corpo de tabela */
-    --aurora-text-base: 0.875rem; /* 14px — corpo da interface */
-    --aurora-text-md: 1rem; /* 16px — corpo de leitura, campo em mobile */
-    --aurora-text-lg: 1.1875rem; /* 19px — título de cartão */
-    --aurora-text-xl: 1.5rem; /* 24px — título de seção */
-    --aurora-text-2xl: 1.9375rem; /* 31px — título de página */
-    --aurora-text-3xl: 2.4375rem; /* 39px — número de indicador */
-    --aurora-text-4xl: 3.0625rem; /* 49px — número herói do painel */
+    /*
+     * Recalibrada em 09/10/2026 (redesign enterprise). A versão anterior
+     * abria demais o topo (título de cartão 19px, de página 31px) e a tela
+     * inteira gritava. Agora o contraste vem de PESO e COR, e o tamanho só
+     * cresce onde o olho precisa pousar: título de página e número de KPI.
+     *
+     *   caption      2xs 11 · rótulo em caixa alta, eixo de gráfico
+     *   helper/label xs  12 · metadado, legenda, ajuda de campo
+     *   table        sm  13 · corpo de tabela
+     *   body         base 14 · corpo da interface
+     *   reading      md  16 · leitura longa, campo no celular
+     *   card title   lg  15 · título de cartão (semibold)
+     *   section      xl  18 · título de seção
+     *   page title   2xl 24 · título de página
+     *   metric       3xl 30 · número de indicador
+     *   hero         4xl 40 · número herói (TV, vitrine)
+     */
+    --aurora-text-2xs: 0.6875rem;
+    --aurora-text-xs: 0.75rem;
+    --aurora-text-sm: 0.8125rem;
+    --aurora-text-base: 0.875rem;
+    --aurora-text-md: 1rem;
+    --aurora-text-lg: 0.9375rem;
+    --aurora-text-xl: 1.125rem;
+    --aurora-text-2xl: 1.5rem;
+    --aurora-text-3xl: 1.875rem;
+    --aurora-text-4xl: 2.5rem;
 
     --aurora-leading-tight: 1.25;
     --aurora-leading-normal: 1.5;
@@ -295,10 +341,11 @@
     --aurora-weight-normal: 400;
     --aurora-weight-medium: 500;
     --aurora-weight-semibold: 600;
+    --aurora-weight-bold: 700;
 
     /* Rótulo em caixa alta precisa de entreletra; texto normal, não. */
-    --aurora-tracking-label: 0.06em;
-    --aurora-tracking-tight: -0.011em;
+    --aurora-tracking-label: 0.05em;
+    --aurora-tracking-tight: -0.006em;
     /*
      * Título grande precisa de entreletra NEGATIVA, e é o detalhe que separa
      * um título que parece desenhado de um que parece texto ampliado. Acima de
@@ -322,13 +369,22 @@
     --aurora-space-12: 3rem;
     --aurora-space-16: 4rem;
 
+    /*
+     * Ritmo de página (09/10/2026): múltiplos previsíveis de 8 —
+     * 8 · 12 · 16 · 24 · 32 · 40. Gap entre blocos de página 24, entre
+     * cartões irmãos 16, dentro de cartão 16/20. A largura máxima segura a
+     * leitura em monitor largo: acima dela a linha vira deserto.
+     */
+    --aurora-content-max: 1600px;
+    --aurora-nav-width: 264px;
+
     /* ------------------------------------------------------------- raio */
 
     /* Três degraus com papéis distintos: controle, cartão, folha. Um raio só
        para tudo é o que faz toda interface gerada parecer a mesma. */
-    --aurora-radius-control: 6px;
-    --aurora-radius-card: 10px;
-    --aurora-radius-sheet: 14px;
+    --aurora-radius-control: 8px;
+    --aurora-radius-card: 12px;
+    --aurora-radius-sheet: 16px;
     --aurora-radius-pill: 999px;
 
     /* ---------------------------------------------------------- elevação */
@@ -351,10 +407,12 @@
      * de 1px que assenta o cartão, e uma difusão larga e fraquíssima que o
      * descola do fundo. Junto com a borda, e não no lugar dela.
      */
-    --aurora-shadow-card: 0 1px 2px rgb(13 18 17 / 0.04), 0 4px 12px -4px rgb(13 18 17 / 0.06);
-    --aurora-shadow-raised: 0 1px 2px rgb(13 18 17 / 0.06), 0 8px 20px -6px rgb(13 18 17 / 0.1);
-    --aurora-shadow-overlay: 0 4px 6px -2px rgb(13 18 17 / 0.06), 0 12px 24px -6px rgb(13 18 17 / 0.14);
-    --aurora-shadow-sheet: 0 8px 12px -4px rgb(13 18 17 / 0.08), 0 24px 48px -12px rgb(13 18 17 / 0.2);
+    /* Recalibrada em 09/10/2026: quase só contato. A separação do cartão é a
+       superfície branca sobre o fundo e a borda fina; a sombra só assenta. */
+    --aurora-shadow-card: 0 1px 2px rgb(16 24 40 / 0.04);
+    --aurora-shadow-raised: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 16px -6px rgb(16 24 40 / 0.1);
+    --aurora-shadow-overlay: 0 2px 4px -2px rgb(16 24 40 / 0.06), 0 12px 28px -6px rgb(16 24 40 / 0.16);
+    --aurora-shadow-sheet: 0 8px 12px -4px rgb(16 24 40 / 0.08), 0 24px 48px -12px rgb(16 24 40 / 0.22);
     /* O anel interno que dá borda "de vidro" ao cartão de destaque. */
     --aurora-ring-inset: inset 0 1px 0 0 rgb(255 255 255 / 0.6);
 
@@ -381,7 +439,7 @@
     /* O anel de foco é o AZUL DA MARCA: é o elemento de interface que mais
        aparece para quem navega por teclado, e ele deve pertencer à marca
        tanto quanto o botão primário. */
-    --aurora-focus-ring: var(--aurora-brand-500);
+    --aurora-focus-ring: var(--aurora-brand-600);
     --aurora-focus-ring-width: 2px;
     --aurora-focus-ring-offset: 2px;
 
@@ -393,7 +451,7 @@
      */
     --aurora-target-min: 44px;
     --aurora-control-height-sm: 28px;
-    --aurora-control-height-md: 34px;
+    --aurora-control-height-md: 36px;
     --aurora-control-height-lg: 44px;
 
     /* -------------------------------------------------------------- z */
@@ -437,7 +495,7 @@
      */
     --aurora-accent: var(--aurora-brand-300);
     --aurora-accent-hover: var(--aurora-brand-200);
-    --aurora-accent-soft: rgb(62 105 172 / 0.22);
+    --aurora-accent-soft: rgb(74 127 196 / 0.22);
     --aurora-accent-text: var(--aurora-brand-300);
 
     /*
@@ -447,7 +505,7 @@
      */
     --aurora-brand-accent: var(--aurora-lime-500);
     --aurora-brand-accent-hover: var(--aurora-lime-400);
-    --aurora-brand-accent-soft: rgb(157 185 36 / 0.18);
+    --aurora-brand-accent-soft: rgb(120 192 24 / 0.18);
     --aurora-brand-accent-text: var(--aurora-lime-400);
 
     /* As semânticas ganham versão clara para o texto e versão translúcida
@@ -640,6 +698,21 @@
     --aurora-glow: 0 0 0 1px rgb(11 122 112 / 0.25), 0 8px 24px -12px rgb(11 122 112 / 0.3);
     --aurora-font-display: 'Segoe UI Variable Display', 'Avenir Next', 'Nunito', var(--aurora-font-sans);
   }
+
+  /* Nos estilos alternativos a navegação volta a ser a superfície rebaixada
+     do próprio estilo — o azul-marinho estrutural é a assinatura do Téchne. */
+  :root[data-estilo='futuristico'],
+  :root[data-estilo='mindfulness'],
+  :root[data-estilo='wellness'] {
+    --aurora-nav-bg: var(--aurora-surface-subtle);
+    --aurora-nav-border: var(--aurora-border);
+    --aurora-nav-text: var(--aurora-text-muted);
+    --aurora-nav-text-active: var(--aurora-text);
+    --aurora-nav-label: var(--aurora-text-subtle);
+    --aurora-nav-hover: var(--aurora-surface-hover);
+    --aurora-nav-active: var(--aurora-accent-soft);
+    --aurora-nav-marker: var(--aurora-brand-accent);
+  }
 }
 
 /**
@@ -696,6 +769,15 @@
   --color-data-4: var(--aurora-data-4);
   --color-data-5: var(--aurora-data-5);
   --color-data-6: var(--aurora-data-6);
+
+  --color-nav: var(--aurora-nav-bg);
+  --color-nav-border: var(--aurora-nav-border);
+  --color-nav-text: var(--aurora-nav-text);
+  --color-nav-text-active: var(--aurora-nav-text-active);
+  --color-nav-label: var(--aurora-nav-label);
+  --color-nav-hover: var(--aurora-nav-hover);
+  --color-nav-active: var(--aurora-nav-active);
+  --color-nav-marker: var(--aurora-nav-marker);
 
   --font-sans: var(--aurora-font-sans);
   --font-mono: var(--aurora-font-mono);
@@ -805,6 +887,18 @@
     border-radius: var(--aurora-radius-control);
   }
 
+  /*
+   * Campo de texto tem indicador próprio: borda azul + halo suave de 3px
+   * (field.tsx). O contorno global continua, fino e colado, para o foco ser
+   * inconfundível sem virar dois anéis concêntricos.
+   */
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-width: 1px;
+    outline-offset: 0;
+  }
+
   /* Números que se alinham em coluna. Numa tabela de OS, sem isto, os
      identificadores dançam e a leitura vertical se perde. */
   table,
@@ -876,6 +970,24 @@
   }
   :root[data-theme='dark'] .aurora-logo--duplo .aurora-logo-escuro {
     display: block;
+  }
+  /* A navegação azul-marinho do estilo Téchne é fundo escuro dentro de um
+     tema claro: ali dentro vale a variante escura da logo. */
+  :root[data-estilo='techne'] .aurora-nav .aurora-logo--duplo .aurora-logo-claro {
+    display: none;
+  }
+  :root[data-estilo='techne'] .aurora-nav .aurora-logo--duplo .aurora-logo-escuro {
+    display: block;
+  }
+
+  /* Seta própria do seletor: a do sistema muda de desenho em cada navegador e
+     é o detalhe que mais denuncia "formulário de 2010". Cinza médio, legível
+     nos dois modos. */
+  .aurora-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238a92a2' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem;
   }
 
   /* O pulo para o conteúdo: invisível até receber foco. Primeira parada do
