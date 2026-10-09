@@ -9,15 +9,19 @@
  */
 export function FaixaDemonstracao() {
   return (
-    <div
-      role="note"
-      data-testid="faixa-demonstracao"
-      className="flex shrink-0 items-center justify-center gap-2 border-b border-border bg-surface-sunken px-4 py-1 text-xs text-muted"
-    >
-      <span className="rounded-full border border-border px-2 py-px text-[10px] font-semibold tracking-wider">
-        DEMONSTRAÇÃO
-      </span>
-      <span className="truncate">Ambiente de demonstração — dados fictícios e não persistentes.</span>
-    </div>
+    // Dentro de um marco `complementary`: solta, a faixa era o único
+    // conteúdo da página fora de qualquer região (axe `region`).
+    <aside aria-label="Aviso de demonstração" className="shrink-0">
+      <div
+        role="note"
+        data-testid="faixa-demonstracao"
+        className="flex items-center justify-center gap-2 border-b border-border bg-surface-sunken px-4 py-1 text-xs text-muted"
+      >
+        <span className="rounded-[5px] border border-border px-1.5 py-px text-2xs font-semibold tracking-label">
+          DEMONSTRAÇÃO
+        </span>
+        <span className="truncate">Ambiente de demonstração — dados fictícios e não persistentes.</span>
+      </div>
+    </aside>
   );
 }

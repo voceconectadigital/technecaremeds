@@ -462,25 +462,34 @@ function Lista() {
                 <Link
                   to="/ordens/$id"
                   params={{ id: os.id }}
-                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
+                  className="flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-hover"
                 >
-                  <span className="w-20 shrink-0 text-xs text-muted tabular-nums" data-numeric>
+                  <span
+                    className="w-24 shrink-0 font-mono text-xs whitespace-nowrap text-muted tabular-nums"
+                    data-numeric
+                  >
                     {os.number ?? '—'}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base text-text">{os.title}</span>
+                    <span className="block truncate text-base font-semibold text-text">{os.title}</span>
                     <span className="block truncate text-xs text-muted">
                       {[os.asset_name_snapshot, os.location_name_snapshot].filter(Boolean).join(' · ') ||
                         'sem equipamento'}
                     </span>
                   </span>
-                  <span className="hidden text-xs text-muted sm:block">
+                  <span className="hidden w-20 shrink-0 text-right text-xs text-muted md:block">
                     {formatarDataRelativa(os.created_at)}
                   </span>
-                  <PrioridadeChip prioridade={os.priority} />
-                  <StatusChip tone={tomDaCategoria(os.category)} size="sm">
-                    {os.status_label}
-                  </StatusChip>
+                  {/* Colunas de largura fixa: prioridade e situação caem no
+                      mesmo lugar em toda linha, e o olho varre de cima a baixo. */}
+                  <span className="flex shrink-0 justify-end md:w-28">
+                    <PrioridadeChip prioridade={os.priority} />
+                  </span>
+                  <span className="flex shrink-0 justify-end md:w-28">
+                    <StatusChip tone={tomDaCategoria(os.category)} size="sm">
+                      {os.status_label}
+                    </StatusChip>
+                  </span>
                 </Link>
               </li>
             ))}

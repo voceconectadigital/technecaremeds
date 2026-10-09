@@ -680,7 +680,7 @@
     --aurora-brand-accent-soft: rgb(62 155 79 / 0.12);
     --aurora-brand-accent-text: #2b7239;
 
-    --aurora-good-text: #1f7a45;
+    --aurora-good-text: #1a6e3e; /* 5,28:1 sobre good-soft; o anterior dava 4,50 — no limite */
     --aurora-warn-text: #8a5a00;
     --aurora-bad-text: #b0362f;
     --aurora-info-text: #2563a8;

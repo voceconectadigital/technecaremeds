@@ -39,7 +39,7 @@ export function MolduraDeEntrada({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh bg-bg lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
       <VitrineDeEntrada />
-      <div className="flex items-center justify-center px-4 py-10 sm:px-8">
+      <main className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-[400px]">
           <div className="mb-8 lg:hidden">
             <Logo
@@ -51,7 +51,7 @@ export function MolduraDeEntrada({ children }: { children: ReactNode }) {
           </div>
           {children}
         </div>
-      </div>
+      </main>
     </div>
   );
 }
