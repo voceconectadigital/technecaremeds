@@ -22,6 +22,17 @@ como "set/2026" quando não informado.
 > isso mudou a base de uma NS, a linha **Revisão 02/10/2026** da solicitação diz
 > o quê — e o que continua faltando. Detalhes: `RELATORIO-ESCOPO-ATUAL.md`.
 
+> **Revisão de 09/10/2026 (rodada "overdelivery visual + operacional").**
+> Pedidos novos desta rodada registrados como **NS-018** (Painel de Controle +
+> Modo Exibição), **NS-019** (setores explícitos e Cliente → Setor →
+> Equipamento) e **NS-020** (Planos de manutenção: criação orientada,
+> procedimento, cronograma e gráficos) — as três **IMPLEMENTADAS**, com
+> evidência. NS-006 passa de NOVA a **PARCIAL**; NS-001, 002, 003 e 004 ganham
+> a linha **Revisão 09/10/2026** e continuam **PARCIAL**. Nada de Básico/
+> Completo/Expert, FHEMIG, GPS, QR, depreciação, IA ou e-commerce foi feito.
+> Branch `feat/overdelivery-painel` (commits `35b924d`, `fc4f2c6`, `87f44cf`,
+> `1f334e4`, `1ba85dd`).
+
 ---
 
 ## Status permitidos
@@ -71,7 +82,7 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-003 | Checklist por cliente/equipamento | PARCIAL | MÉDIA | Próxima |
 | NS-004 | Procedimentos técnicos | PARCIAL | ALTA | Após NS-003 |
 | NS-005 | Ações em Ordem de Serviço | PARCIAL | MÉDIA | Próxima |
-| NS-006 | Indicadores de ativos por cliente | NOVA | MÉDIA | Após NS-002 |
+| NS-006 | Indicadores de ativos por cliente | PARCIAL | MÉDIA | Após NS-002 |
 | NS-007 | Indicadores integrados (app, FHEMIG, robô) | BLOQUEADA — CLIENTE | ALTA | Quando o material chegar |
 | NS-008 | Níveis de indicadores (Básico/Completo/Expert) | NOVA | MÉDIA | Após NS-006 |
 | NS-009 | IA dentro do sistema | FUTURA FASE | ALTA | Futura |
@@ -83,9 +94,12 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-015 | QR Code do equipamento (etiqueta) | PARCIAL | BAIXA | Próxima |
 | NS-016 | Check-in / check-out no hospital | NOVA | MÉDIA | Média |
 | NS-017 | App / mobile (validação) | PARCIAL | MÉDIA | Próxima (demonstrar) |
+| NS-018 | Painel de Controle + Modo Exibição (TV) | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
+| NS-019 | Setores do hospital · Cliente → Setor → Equipamento | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
+| NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026 |
 
-**Contagem:** 17 no total · JÁ EXISTE 0 · PARCIAL 9 · NOVA 5 · FUTURA FASE 2 ·
-BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
+**Contagem:** 20 no total · JÁ EXISTE 0 · PARCIAL 10 · NOVA 4 · FUTURA FASE 2 ·
+BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 
 ---
 
@@ -107,6 +121,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Fase sugerida** | Próxima |
 | **Arquivos / domínios** | `packages/db/src/directory.ts` · `apps/api/src/directory/customers.controller.ts` · `packages/contracts/src/operations/directory.ts` · `apps/web/src/shell/global-search.tsx` · `migrations/0008`, `0027`, `0031` |
 | **Revisão 02/10/2026** | Busca global: resultado de cliente deixou de levar a `/clientes/:id` (rota inexistente) e leva a `/contratos`; a ficha de cliente continua **não existindo**. `customers.external_source/external_id` (0048) existem para migração. Status **inalterado**. |
+| **Revisão 09/10/2026** | **Existe agora:** ficha de cliente `/clientes/$id` com SETORES (criar, renomear, atalhos de nome) e equipamentos agrupados por setor (NS-019); cadastro de cliente (`POST /v1/customers`, rodada anterior). **Continua faltando:** editar o cliente, contratos/SLA agregados na ficha, configuração de indicadores (NS-008). Status **PARCIAL**. |
 | **Evidência de implementação** | — |
 | **Observações** | "Tipo de contrato" deve continuar morando no **contrato** (um cliente pode ter mais de um); a ficha mostra, não duplica |
 
@@ -128,6 +143,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Fase sugerida** | Próxima para histórico/indicadores; depreciação após definição |
 | **Arquivos / domínios** | `apps/web/src/features/ativos/ficha.tsx` · `apps/api/src/assets/assets.controller.ts` · `packages/domain/src/assets.ts` · `packages/db/src/metrics.ts` · `migrations/0013`, `0014`, `0026`, `0035` |
 | **Revisão 02/10/2026** | Base nova do escopo atual (gap V2 P1.3/P1.5): `GET /v1/assets/:id/timeline` — linha do tempo unificada (ciclo de vida, transferências, OS, sessões de medição, documentos, substituição), e `assets.replaced_by_asset_id` (0056). A **ficha web não usa** a linha do tempo ainda; depreciação, disponibilidade e indicadores por ativo continuam **não existindo**. Status **inalterado (PARCIAL)**. |
+| **Revisão 09/10/2026** | **Existe agora:** edição dos dados cadastrais (`PATCH /v1/assets/:id`; mudar de setor = transferência com motivo, pela tela) e a ficha mostra Cliente e Setor. **Continua faltando:** depreciação, disponibilidade, indicadores por equipamento. Status **PARCIAL**. |
 | **Evidência de implementação** | — |
 | **Observações** | "Em tempo real" = calculado na leitura, não gravado; não é processamento contínuo |
 
@@ -149,6 +165,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Fase sugerida** | Próxima |
 | **Arquivos / domínios** | `packages/domain/src/checklists.ts` · `packages/db/src/execution.ts` · `packages/db/src/maintenance-plans.ts` · `apps/api/src/work-orders/execution.controller.ts` · `migrations/0024`, `0026`, `0029` |
 | **Revisão 02/10/2026** | Base nova do escopo atual: a OS da preventiva passa a nascer com o checklist da tarefa do plano anexado (`materializeCycle`, P1.4); modelos ganharam `procedure_kind` só para protocolos metrológicos (calibração, TSE, qualificação, aceite). Continuam **não existindo**: rota/tela de criar e publicar modelo, tipo preventiva/preditiva, vínculo com cliente/equipamento, `default_checklist_key`. Status **inalterado (PARCIAL)**. |
+| **Revisão 09/10/2026** | **Existe agora:** API e tela para criar (com itens), revisar (versão seguinte) e publicar checklists — `GET/POST /v1/checklist-templates`, `/:id`, `/:id/revisions`, `/:id/publish` — com tipo (preventiva = sem `procedure_kind`; calibração, TSE, qualificação, aceite) e os tipos de item do motor; vínculo com cliente/setor/equipamento **pelo plano** (NS-020). **Continua faltando:** tipo "preditiva", vínculo direto checklist ↔ modelo/categoria de equipamento, `default_checklist_key`, ver o checklist respondido na ficha web da OS. Status **PARCIAL**. |
 | **Evidência de implementação** | — |
 | **Observações** | Não criar um segundo motor: estender o existente |
 
@@ -170,6 +187,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Fase sugerida** | Após NS-003; a parte metrológica só após o especialista |
 | **Arquivos / domínios** | `packages/domain/src/maintenance-plans.ts` · `packages/domain/src/metrologia.ts` · `docs/AURORA-METROLOGIA-FRONTEIRA.md` · `packages/domain/src/documents.ts` · `migrations/0029`, `0034` |
 | **Revisão 02/10/2026** | Base nova do escopo atual (metrologia N0, 0050–0053): protocolo = checklist versionado com tipo de procedimento, responsável técnico, instrumentos exigidos por categoria e ponto `measurement` (unidade, nominal, tolerâncias e leituras **como dado**, sem veredito); instrumentos, certificados externos e sessão de medição. Preventiva por modelo/fabricante/criticidade (0055). Continuam **não existindo**: entidade/tela de procedimento, rota de criar plano/tarefa, educação continuada, cronograma por procedimento, regras metrológicas (BLOQUEADA — ESPECIALISTA). Status **inalterado (PARCIAL)**. |
+| **Revisão 09/10/2026** | **Existe agora:** tela de procedimentos (o checklist com `procedure_kind`) com nominal/tolerância como dado; **rota de criar plano** (`POST /v1/maintenance-plans`, criação orientada); **cronograma por procedimento** (`GET /v1/maintenance-plans/schedule`, reais + previstos) — NS-020. **Continua faltando:** educação continuada (não existe no domínio; o assistente a mostra desabilitada), regras por tipo de equipamento, questionários, gatilhos por medidor/condição, natureza de OS própria para TSE/qualificação (hoje `inspection`, A VALIDAR), e as regras metrológicas (**BLOQUEADA — ESPECIALISTA**). Status **PARCIAL**. |
 | **Evidência de implementação** | — |
 | **Observações** | Há um teste que **falha** se alguém adicionar função de cálculo a `metrologia.ts`. Não inventar fórmula |
 
@@ -203,7 +221,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Gráficos de ativo × inativo por mês, período e cliente; disponibilidade individual por equipamento; geração de relatórios |
 | **Interpretação funcional** | Indicadores sobre a **base instalada** (não sobre OS), filtráveis por cliente e período, com série mensal e exportação |
-| **Status** | **NOVA** |
+| **Status** | **PARCIAL** |
 | **O que já existe** | Base indireta: `assets.status` (active, under_maintenance, standby, loaned, decommissioned, disposed), `decommissioned_at`; a API de insights aceita `customerId`; componentes `BarChart`/`DonutChart`/`Sparkline` |
 | **O que falta** | Métrica de ativo × inativo (não existe); histórico de status do ativo para série mensal (só há `decommissioned_at`); disponibilidade por equipamento (não existe); filtro por cliente na tela; séries temporais na API; relatório/exportação |
 | **Impacto** | Médio-alto |
@@ -211,7 +229,8 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Dependências** | Definição de "inativo" e de disponibilidade pelo cliente; NS-002 (disponibilidade) |
 | **Fase sugerida** | Após NS-002 |
 | **Arquivos / domínios** | `packages/domain/src/metrics.ts` · `packages/db/src/metrics.ts` · `apps/api/src/insights/insights.controller.ts` · `apps/web/src/features/indicadores/painel.tsx` · `migrations/0014`, `0035` |
-| **Evidência de implementação** | — |
+| **Revisão 09/10/2026** | **Existe agora (NS-018):** fotografia do parque AGORA por situação cadastrada e por setor, filtrável por cliente e setor, dentro do escopo (`GET /v1/insights/control-panel` → `park`), e séries por período das métricas de OS. **Continua faltando:** série mensal de ativo × inativo (não há histórico de status do ativo — não se inventa), disponibilidade por equipamento (sem definição do cliente), relatório/exportação. Status **NOVA → PARCIAL**. |
+| **Evidência de implementação** | Parcial: commit `35b924d` · `packages/db/src/painel.ts` (`parkSnapshot`) · teste `api-painel-planejamento.test.ts` |
 | **Observações** | Toda métrica nova precisa viajar com definição (padrão do módulo) |
 
 ## NS-007 — Indicadores integrados
@@ -433,3 +452,51 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Arquivos / domínios** | `apps/field` · `apps/portal` · `apps/web/src/demo` · `e2e/specs/viewports.spec.ts` · `docs/AURORA-FIELD-LOJAS.md` · `docs/adr/ADR-029-aurora-field-pwa-e-lojas.md` |
 | **Evidência de implementação** | — |
 | **Observações** | — |
+
+## NS-018 — Painel de Controle e Modo Exibição (TV)
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-018 |
+| **Data** | 09/10/2026 |
+| **Origem** | Anderson (Be Care), rodada "overdelivery visual + operacional" |
+| **Descrição original (resumo)** | Dashboard mais rico (MTTR, MTBF, backlog, abertos/concluídos, SLA, disponibilidade, preventivas, ativos, produtividade), com gráficos e filtros; botão "Modo Exibição" para monitor/TV, sem distrações, atualização automática |
+| **Interpretação funcional** | Uma área "Painel de Controle" com os indicadores reais, gráficos de tendência/distribuição/realizado × pendente, filtros de período, cliente e setor dentro do escopo; uma tela cheia 16:9 para televisão com configuração fixa |
+| **Status** | **IMPLEMENTADA** |
+| **O que foi entregue** | `/painel`: 8 cartões (abertos, concluídos, backlog, equipamentos, MTTR, MTBF, SLA, preventivas em dia) com minitendência; gráficos abertos × concluídos, backlog no tempo, concluídos por natureza, taxas (SLA, conformidade, participação de preventivas), abertas agora por situação/prioridade, situação do parque, equipamentos por setor, produtividade, idade do backlog. Filtros de período (7/30/90 dias, 12 meses), cliente (só para quem vê mais de um) e setor — na URL. `/painel/tv`: sem barra lateral, números grandes, relógio/data, recorte atual, atualização a cada minuto, "atualizado há N min", tela cheia, Esc/botão para sair; cabe em 1920×1080 e 1280×720 sem rolagem |
+| **Fora do entregue (deliberado)** | **Disponibilidade do parque** não é número: sem definição do cliente de "tempo parado" (AI-HANDOFF §15-A) — o painel mostra a situação cadastrada e diz que não é disponibilidade. Editor drag-and-drop, layouts salvos e widgets customizados: fora desta rodada |
+| **Segurança** | As rotas de indicador passaram a respeitar o escopo do vínculo (`membership_scopes`, cliente e subárvore de local) — antes agregavam a organização inteira para qualquer vínculo com `insight.read`. Cliente fora do escopo ou de outra organização: 404 |
+| **Evidência de implementação** | Commit `35b924d` · rota `GET /v1/insights/control-panel` (contrato `insights.controlPanel`) · `packages/db/src/painel.ts`, `packages/db/src/metrics.ts` (escopo) · `apps/web/src/features/painel/*` · `packages/ui/src/components/charts-tempo.tsx` · testes `apps/api/src/__tests__/api-painel-planejamento.test.ts`, `e2e/specs/painel-planejamento.spec.ts`, `e2e/demo/demonstracao.spec.ts` · **sem migration** |
+| **Observações** | Nenhuma métrica nova: as séries aplicam as definições existentes por fatia (a soma das fatias de "abertas" é o cartão — há teste) |
+
+## NS-019 — Setores do hospital e Cliente → Setor → Equipamento
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-019 |
+| **Data** | 09/10/2026 |
+| **Origem** | Anderson (Be Care), rodada "overdelivery visual + operacional" |
+| **Descrição original (resumo)** | Seção SETORES explícita no cliente/hospital (listar, criar, editar nome; atalhos UTI, Bloco Cirúrgico, Enfermaria, Pronto Atendimento, Imaginologia; nome livre). No cadastro/edição do equipamento, Cliente* e Setor*, setor filtrado pelo cliente e validado no servidor |
+| **Interpretação funcional** | Reutilizar `locations` (tipo `setor`) — sem tabela nova; tornar o setor visível na ficha do cliente e obrigatório no formulário de equipamento |
+| **Status** | **IMPLEMENTADA** |
+| **O que foi entregue** | Ficha `/clientes/$id` com a seção Setores (cartões com contagem, atalhos de nome, novo setor — criando a unidade no mesmo gesto quando falta —, renomear) e "Equipamentos por setor". Formulário Novo/Editar equipamento com Cliente/Hospital* e Setor* (setores do cliente escolhido; trocar o cliente descarta o setor); na edição, mudar de setor pede motivo e vira transferência registrada |
+| **Validação no servidor** | `POST /v1/assets`: setor de outro cliente → 422 (`location_id`); setor de outra organização ou fora do escopo → 422; local que não recebe equipamento → 422; cliente fora do escopo → 404. `PATCH /v1/assets/:id` e `PATCH /v1/locations/:id` respondem 404 fora do escopo |
+| **Banco** | `assets.location_id` **continua anulável** (importação, comodato em trânsito): a obrigatoriedade é da rota de cadastro, não do esquema. O gatilho da 0015 já recusava local de outro cliente |
+| **Evidência de implementação** | Commit `fc4f2c6` · rotas `POST /v1/assets` (agora com contrato), `PATCH /v1/assets/:id`, `GET /v1/assets/form-options`, `PATCH /v1/locations/:id`, `GET /v1/assets?customer=` · `apps/web/src/features/clientes/ficha.tsx`, `apps/web/src/features/ativos/formulario.tsx` · testes em `api-painel-planejamento.test.ts` e `painel-planejamento.spec.ts` · **sem migration** |
+| **Observações** | Setor = local do tipo `setor` da escada inicial; organização que renomear/remover esse tipo perde a seção (registrado) |
+
+## NS-020 — Planos de manutenção: criação orientada, procedimento, cronograma e gráficos
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-020 |
+| **Data** | 09/10/2026 |
+| **Origem** | Anderson (Be Care), rodada "overdelivery visual + operacional" |
+| **Descrição original (resumo)** | Módulo de Planos de Manutenção com criação orientada (Cliente → Setor → Equipamentos → Tipo → Checklist → Periodicidade → Revisão), tipos Preventiva/Calibração/TSE/Qualificação/Educação continuada conforme suporte real, checklist/procedimento sobre a engine existente, cronograma (próximas, vencidas, previstas, realizadas) e gráficos (programados, realizados, pendentes, vencidos, por tipo/cliente/setor/período) |
+| **Interpretação funcional** | Expor o motor de planos (0029/0055) e de checklists (0024/0052) com telas de produto; nenhuma engine nova |
+| **Status** | **IMPLEMENTADA** (educação continuada: ver observações) |
+| **O que foi entregue** | Item "Planos de manutenção" no menu; abas Visão geral (cartões, realizado × pendente × vencido por mês, taxa, distribuição por tipo/cliente/setor, lista de planos), Cronograma (carga por mês e lista com data, equipamento, setor, cliente, plano, tipo e situação; filtros por situação e tipo; reais × previstos) e Procedimentos e checklists (criar, ver, revisar, publicar). Assistente de criação em sete passos com contexto contratual do cliente (informativo) |
+| **Como o domínio suporta os tipos** | Preventiva = natureza `preventive` + checklist sem `procedure_kind`; Calibração = `calibration` + `procedure_kind=calibration`; TSE e Qualificação = natureza `inspection` + `procedure_kind` próprio (**A VALIDAR** se o cliente quer naturezas próprias). Tipo indisponível no catálogo da organização aparece desabilitado |
+| **Fora do entregue** | **Educação continuada**: não existe no domínio (não é manutenção de ativo); aparece desabilitada e o gap segue em NS-004. Regras automáticas por Básico/Completo/Expert: fora (NS-008). Veredito de medição: continua `na` (BLOQUEADA — ESPECIALISTA) |
+| **Evidência de implementação** | Commit `87f44cf` · rotas `POST /v1/maintenance-plans`, `GET /v1/maintenance-plans/form-options`, `/board`, `/schedule`, `GET/POST /v1/checklist-templates`, `GET /v1/checklist-templates/:id`, `POST /:id/revisions`, `POST /:id/publish` · `packages/db/src/plan-board.ts`, `packages/db/src/procedures.ts` · `apps/web/src/features/planos/{modulo,novo-plano,procedimentos}.tsx` · testes `api-painel-planejamento.test.ts` (recusas de setor/equipamento de outro cliente e de outro tenant, procedimento de outro tipo, escopo do hospital) e `painel-planejamento.spec.ts` · **sem migration** |
+| **Observações** | "Programado" é item de ciclo que existe; o futuro é **previsto** pela frequência e marcado como tal — nada de histórico inventado. As OS geradas continuam na Agenda de sempre |
