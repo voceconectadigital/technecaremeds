@@ -3,6 +3,7 @@
  */
 import { defineOperation } from '../registry';
 import { z, Uuid, NonEmpty } from '../primitives';
+import { CONTRACT_PROFILES } from './commercial';
 
 export const Customer = z.object({
   id: Uuid,
@@ -21,6 +22,18 @@ export const Customer = z.object({
    * ao cliente na lista, e não uma porta para os ativos.
    */
   asset_count: z.number().int(),
+  /**
+   * Possui contrato? DERIVADO dos contratos — não há coluna no cliente.
+   * Conta o contrato vigente, suspenso ou em rascunho (o declarado no
+   * cadastro); expirado e encerrado não contam.
+   */
+  has_contract: z.boolean(),
+  /**
+   * O perfil desse contrato (o vigente primeiro). Nulo quando não há
+   * contrato, ou quando o contrato é anterior à 0060 e ninguém definiu o
+   * perfil — `has_contract` separa os dois casos.
+   */
+  contract_profile: z.enum(CONTRACT_PROFILES).nullable(),
 });
 export type Customer = z.infer<typeof Customer>;
 
@@ -75,8 +88,31 @@ export const customersCreate = defineOperation({
       code: TextoOpcional(60),
       tax_id: Documento,
       segment: TextoOpcional(60),
+      /**
+       * "Possui contrato?" Com `true`, `contract_profile` é obrigatório e o
+       * contrato nasce de verdade, em rascunho, na mesma transação — é lá que
+       * o perfil mora. Com `false` (ou ausente) o cliente nasce sem contrato.
+       */
+      has_contract: z.boolean().optional(),
+      contract_profile: z.enum(CONTRACT_PROFILES).optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((b, ctx) => {
+      if (b.has_contract === true && !b.contract_profile) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['contract_profile'],
+          message: 'informe o tipo de contrato: básico, completo ou expert',
+        });
+      }
+      if (b.has_contract !== true && b.contract_profile) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['contract_profile'],
+          message: 'tipo de contrato só vale para cliente com contrato',
+        });
+      }
+    }),
   response: Customer,
   errors: ['conflict'],
 });

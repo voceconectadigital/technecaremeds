@@ -198,6 +198,8 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
     const saoLucas = await db.createCustomer(s, { name: 'Hospital São Lucas', isInternal: false });
     const vidaPlena = await db.createCustomer(s, { name: 'Clínica Vida Plena', isInternal: false });
     const bemEstar = await db.createCustomer(s, { name: 'Policlínica Bem-Estar', isInternal: false });
+    // Cliente sem contrato: atendido avulso, e a lista de clientes precisa mostrar isso.
+    await db.createCustomer(s, { name: 'Laboratório Bom Pastor', segment: 'laboratorio', isInternal: false });
 
     const local: Record<string, string> = {};
     const clienteDoLocal: Record<string, string> = {};
@@ -990,11 +992,18 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
 
     /* ------------------------------------------------------------ comercial */
 
-    const contratos: Array<[string, string, string, string, string, string, number, number, string]> = [
+    /*
+     * Um contrato de cada PERFIL — o tipo de contrato confirmado pelo cliente.
+     * Os títulos são descritivos e não classificam nada; a natureza (`kind`)
+     * fica em branco. O Laboratório Bom Pastor fica SEM contrato.
+     */
+    const contratos: Array<
+      [string, 'basic' | 'complete' | 'expert', string, string, string, string, number, number, string]
+    > = [
       [
         saoLucas,
-        'full_service',
-        'Manutenção integral — Hospital São Lucas',
+        'expert',
+        'Contrato de manutenção — Hospital São Lucas',
         '2026-01-01',
         '2026-12-31',
         'fixed_monthly',
@@ -1004,8 +1013,8 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
       ],
       [
         vidaPlena,
-        'preventive_only',
-        'Preventiva programada — Clínica Vida Plena',
+        'complete',
+        'Contrato de manutenção — Clínica Vida Plena',
         '2026-03-01',
         '2027-02-28',
         'per_call',
@@ -1015,8 +1024,8 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
       ],
       [
         bemEstar,
-        'full_service',
-        'Manutenção integral — Policlínica Bem-Estar',
+        'basic',
+        'Contrato de manutenção — Policlínica Bem-Estar',
         '2025-11-01',
         '2026-10-31',
         'fixed_monthly',
@@ -1025,15 +1034,15 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
         'bemEstar',
       ],
     ];
-    for (const [cliente, tipo, titulo, inicio, fim, cobranca, mensal, chamados, raiz] of contratos) {
+    for (const [cliente, perfil, titulo, inicio, fim, cobranca, mensal, chamados, raiz] of contratos) {
       const id = await tentar(`contrato ${titulo}`, () =>
         db.createContract(s, {
           customerId: cliente,
-          kind: tipo,
+          profile: perfil,
           title: titulo,
           startsOn: inicio,
           endsOn: fim,
-          autoRenew: tipo === 'full_service',
+          autoRenew: cobranca === 'fixed_monthly',
           billingModel: cobranca,
           monthlyValue: mensal,
           includedCalls: chamados,

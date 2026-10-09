@@ -19,12 +19,14 @@ test.describe('EPIC-017 · contratos', () => {
   }) => {
     await page.goto('/contratos');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Contratos');
-    await expect(page.getByRole('link', { name: /Manutenção integral Alfa/ })).toBeVisible({
-      timeout: 15_000,
-    });
+    const linha = page.getByRole('link', { name: /Contrato de manutenção Alfa/ });
+    await expect(linha).toBeVisible({ timeout: 15_000 });
+    // O tipo do contrato é o perfil, ao lado do título — e não o título.
+    await expect(linha.getByText('Completo')).toBeVisible();
 
-    await page.getByRole('link', { name: /Manutenção integral Alfa/ }).click();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Manutenção integral');
+    await linha.click();
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Contrato de manutenção');
+    await expect(page.getByText('Completo').first()).toBeVisible();
 
     // Duas coisas separadas: a expressão, e a lista que ela produz agora.
     await expect(page.getByText('O local e tudo que está dentro dele')).toBeVisible({

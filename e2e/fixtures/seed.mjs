@@ -535,8 +535,8 @@ async function main() {
        */
       const contrato = await createContract(s, {
         customerId: clienteId,
-        kind: 'full_service',
-        title: 'Manutenção integral ' + (org === E2E.orgA ? 'Alfa' : 'Beta'),
+        profile: 'complete',
+        title: 'Contrato de manutenção ' + (org === E2E.orgA ? 'Alfa' : 'Beta'),
         startsOn: '2026-01-01',
         endsOn: '2026-12-31',
         autoRenew: true,

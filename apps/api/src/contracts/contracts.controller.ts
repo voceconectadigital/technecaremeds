@@ -31,9 +31,11 @@ import {
 import {
   ValidationError,
   CONTRACT_KINDS,
+  CONTRACT_PROFILES,
   COVERAGE_KINDS,
   BILLING_MODELS,
   type ContractKind,
+  type ContractProfile,
   type CoverageKind,
   type BillingModel,
 } from '@aurora/domain';
@@ -80,6 +82,7 @@ function today(): string {
 interface CreateBody {
   customerId?: unknown;
   kind?: unknown;
+  profile?: unknown;
   title?: unknown;
   startsOn?: unknown;
   endsOn?: unknown;
@@ -119,7 +122,15 @@ export class ContractsController {
     const id = await withTenant(this.db, ctx, (s) =>
       createContract(s, {
         customerId: uuidParam(body.customerId, 'customerId'),
-        kind: oneOf<ContractKind>(body.kind, CONTRACT_KINDS, 'kind'),
+        // A natureza é opcional; o perfil é a classificação do contrato (0060).
+        kind:
+          body.kind === undefined || body.kind === null
+            ? null
+            : oneOf<ContractKind>(body.kind, CONTRACT_KINDS, 'kind'),
+        profile:
+          body.profile === undefined || body.profile === null
+            ? null
+            : oneOf<ContractProfile>(body.profile, CONTRACT_PROFILES, 'profile'),
         title: typeof body.title === 'string' ? body.title : undefined,
         startsOn: isoDate(body.startsOn, 'startsOn'),
         endsOn: body.endsOn === undefined || body.endsOn === null ? null : isoDate(body.endsOn, 'endsOn'),
@@ -149,19 +160,30 @@ export class ContractsController {
   async list(
     @Req() req: AuroraRequest,
     @Query('customerId') customerId?: string,
-    @Query('status') status?: string
+    @Query('status') status?: string,
+    @Query('profile') profile?: string
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
+    // `none` filtra os contratos ainda sem perfil — os anteriores à 0060.
+    const perfil =
+      profile === undefined || profile === ''
+        ? null
+        : oneOf<ContractProfile | 'none'>(profile, [...CONTRACT_PROFILES, 'none'], 'profile');
     const items = await withTenant(this.db, ctx, (s) =>
       s.query(
-        `SELECT id, number, title, customer_id, kind, status, starts_on::text, ends_on::text,
-                auto_renew, billing_model
-           FROM aurora.contracts
-          WHERE archived_at IS NULL
-            AND ($1::uuid IS NULL OR customer_id = $1)
-            AND ($2::text  IS NULL OR status::text = $2)
-          ORDER BY starts_on DESC, number`,
-        [customerId ?? null, status ?? null]
+        `SELECT c.id, c.number, c.title, c.customer_id, c.kind, c.profile::text AS profile,
+                c.status, c.starts_on::text, c.ends_on::text, c.auto_renew, c.billing_model,
+                cu.name AS customer_name
+           FROM aurora.contracts c
+           JOIN aurora.customers cu ON cu.id = c.customer_id
+          WHERE c.archived_at IS NULL
+            AND ($1::uuid IS NULL OR c.customer_id = $1)
+            AND ($2::text  IS NULL OR c.status::text = $2)
+            AND ($3::text  IS NULL
+                 OR ($3 = 'none' AND c.profile IS NULL)
+                 OR c.profile::text = $3)
+          ORDER BY c.starts_on DESC, c.number`,
+        [customerId ?? null, status ?? null, perfil]
       )
     );
     return { items };
@@ -185,7 +207,8 @@ export class ContractsController {
       // teria trafegado até o navegador de quem não pode vê-lo.
       const podeVerValores = ctx.permissions.has('contract.read_financials');
       const [contrato] = await s.query(
-        `SELECT id, number, title, customer_id, kind::text AS kind, status::text AS status,
+        `SELECT id, number, title, customer_id, kind::text AS kind, profile::text AS profile,
+                status::text AS status,
                 starts_on::text AS starts_on, ends_on::text AS ends_on,
                 auto_renew, renewal_notice_days, adjustment_index,
                 sla_policy_id, price_list_id,

@@ -16,12 +16,16 @@
  * está abrindo uma solicitação às pressas fecha e segue.
  */
 import { useState, type FormEvent } from 'react';
-import { Button, Dialog, Field, Input, Select, useToast } from '@aurora/ui';
+import { Button, Dialog, Field, Input, Select, cn, useToast } from '@aurora/ui';
 import {
+  CONTRACT_PROFILES,
+  CONTRACT_PROFILE_LABELS,
+  contractsList,
   customersCreate,
   customersList,
   locationTypesList,
   locationsCreate,
+  type ContractProfile,
   type Customer,
   type LocationType,
 } from '@aurora/contracts';
@@ -79,6 +83,13 @@ export function DialogoNovoCliente({
   const [documento, setDocumento] = useState('');
   const [codigo, setCodigo] = useState('');
   const [segmento, setSegmento] = useState('');
+  /*
+   * "Possui contrato?" começa em NÃO: um contrato só nasce quando alguém o
+   * declara. Com Sim, o tipo é obrigatório — e o contrato é criado de verdade,
+   * em rascunho, para ser completado em Contratos.
+   */
+  const [possuiContrato, setPossuiContrato] = useState(false);
+  const [perfil, setPerfil] = useState<ContractProfile | ''>('');
   const [erro, setErro] = useState<Erro | null>(null);
 
   /** Preenchido depois de salvar: o diálogo passa a oferecer a unidade. */
@@ -86,6 +97,8 @@ export function DialogoNovoCliente({
   const [unidade, setUnidade] = useState('');
 
   const podeCriarUnidade = oferecerUnidade && can('location.create', 'location.read');
+  // Declarar o contrato cria um contrato: a pergunta só aparece para quem pode.
+  const podeDeclararContrato = can('contract.create');
 
   // Só busca os tipos quando vai precisar deles — quem não pode criar local
   // não deve pagar uma ida ao servidor que termina em 403.
@@ -96,7 +109,7 @@ export function DialogoNovoCliente({
   const tipoUnidade = tipos?.items.find((t) => t.key === 'unidade' && t.can_be_root);
 
   const criar = useApiMutation(customersCreate, {
-    invalidates: [customersList],
+    invalidates: [customersList, contractsList],
     onError: (e: ApiError) => setErro({ campo: e.field, mensagem: e.problem.message }),
   });
 
@@ -112,6 +125,8 @@ export function DialogoNovoCliente({
     setDocumento('');
     setCodigo('');
     setSegmento('');
+    setPossuiContrato(false);
+    setPerfil('');
     setErro(null);
     setCriado(null);
     setUnidade('');
@@ -129,6 +144,14 @@ export function DialogoNovoCliente({
       setErro({ campo: 'name', mensagem: 'Informe o nome do cliente — o hospital, a clínica ou a rede.' });
       return;
     }
+    const comContrato = podeDeclararContrato && possuiContrato;
+    if (comContrato && !perfil) {
+      setErro({
+        campo: 'contract_profile',
+        mensagem: 'Escolha o tipo de contrato: Básico, Completo ou Expert.',
+      });
+      return;
+    }
     criar.mutate(
       {
         body: {
@@ -138,6 +161,7 @@ export function DialogoNovoCliente({
           tax_id: documento.trim() || undefined,
           code: codigo.trim() || undefined,
           segment: segmento || undefined,
+          ...(comContrato && perfil ? { has_contract: true, contract_profile: perfil } : {}),
         },
       },
       {
@@ -181,7 +205,10 @@ export function DialogoNovoCliente({
 
   const erroDe = (campo: string) => (erro?.campo === campo ? erro.mensagem : null);
   const erroSolto =
-    erro && !['name', 'trade_name', 'tax_id', 'code', 'segment', 'unidade'].includes(erro.campo ?? '');
+    erro &&
+    !['name', 'trade_name', 'tax_id', 'code', 'segment', 'contract_profile', 'unidade'].includes(
+      erro.campo ?? ''
+    );
 
   if (criado) {
     return (
@@ -319,6 +346,42 @@ export function DialogoNovoCliente({
           </Select>
         </Field>
 
+        {podeDeclararContrato && (
+          <>
+            <PossuiContrato
+              valor={possuiContrato}
+              onChange={(v) => {
+                setPossuiContrato(v);
+                if (!v) setPerfil('');
+                setErro(null);
+              }}
+            />
+            {possuiContrato && (
+              <Field
+                label="Tipo de contrato"
+                required
+                error={erroDe('contract_profile')}
+                hint="O contrato entra em rascunho: vigência e cobertura se completam em Contratos."
+              >
+                <Select
+                  value={perfil}
+                  onChange={(e) => {
+                    setPerfil(e.target.value as ContractProfile | '');
+                    setErro(null);
+                  }}
+                >
+                  <option value="">Escolha o tipo</option>
+                  {CONTRACT_PROFILES.map((p) => (
+                    <option key={p} value={p}>
+                      {CONTRACT_PROFILE_LABELS[p]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </>
+        )}
+
         {erroSolto && (
           <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
             {erro.mensagem}
@@ -326,5 +389,46 @@ export function DialogoNovoCliente({
         )}
       </form>
     </Dialog>
+  );
+}
+
+/**
+ * "Possui contrato?" — Sim ou Não, lado a lado.
+ *
+ * Rádios de verdade por baixo, e não dois botões: a pergunta tem exatamente
+ * uma resposta, e o leitor de tela precisa anunciá-la como escolha única.
+ */
+function PossuiContrato({ valor, onChange }: { valor: boolean; onChange: (v: boolean) => void }) {
+  const opcoes = [
+    { v: true, rotulo: 'Sim' },
+    { v: false, rotulo: 'Não' },
+  ];
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="mb-1.5 text-sm font-medium text-text">Possui contrato?</legend>
+      <div className="grid grid-cols-2 gap-1 rounded-control border border-border p-0.5 sm:w-56">
+        {opcoes.map((o) => (
+          <label
+            key={o.rotulo}
+            className={cn(
+              'flex min-h-8 cursor-pointer items-center justify-center rounded-control px-3 text-sm transition-colors',
+              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-accent',
+              valor === o.v
+                ? 'bg-accent-soft font-semibold text-accent-text'
+                : 'font-medium text-muted hover:bg-surface-hover hover:text-text'
+            )}
+          >
+            <input
+              type="radio"
+              name="possui-contrato"
+              className="aurora-sr-only"
+              checked={valor === o.v}
+              onChange={() => onChange(o.v)}
+            />
+            {o.rotulo}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

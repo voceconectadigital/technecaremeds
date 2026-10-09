@@ -16,6 +16,7 @@ import {
   NotFoundError,
   ConflictError,
   type ContractKind,
+  type ContractProfile,
   type ContractStatus,
   type BillingModel,
   type CoverageKind,
@@ -31,7 +32,10 @@ import { emitEvent } from './outbox';
 
 export interface ContractInput {
   customerId: string;
-  kind: ContractKind;
+  /** Natureza do acordo. Opcional desde a 0060: o tipo do contrato é o perfil. */
+  kind?: ContractKind | null;
+  /** Básico, completo ou expert. Nulo = ainda não definido (nunca inferido). */
+  profile?: ContractProfile | null;
   title?: string;
   startsOn: IsoDate;
   endsOn?: IsoDate | null;
@@ -65,15 +69,15 @@ export async function createContract(session: TenantSession, input: ContractInpu
         auto_renew, renewal_notice_days, adjustment_index, sla_policy_id, billing_model,
         monthly_value, included_calls, included_hours, overage_call_rate, overage_hour_rate,
         penalty_percent_per_breach, penalty_cap_percent, sla_target_percent, plan_target_percent,
-        notes, created_by)
+        notes, created_by, profile)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
+             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
     [
       id,
       session.context.organizationId,
       `CT-${new Date().getUTCFullYear()}-${String(seq!.next_number).padStart(5, '0')}`,
       input.customerId,
-      input.kind,
+      input.kind ?? null,
       input.title ?? null,
       input.startsOn,
       input.endsOn ?? null,
@@ -93,6 +97,7 @@ export async function createContract(session: TenantSession, input: ContractInpu
       input.planTargetPercent ?? null,
       input.notes ?? null,
       session.context.actorId,
+      input.profile ?? null,
     ]
   );
   return id;

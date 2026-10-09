@@ -19,7 +19,7 @@
 
 **Atualizado em:** 02/10/2026 (rodada "escopo atual contratado") · **HEAD de partida da rodada:**
 `45476ba` (o HEAD final está em `RELATORIO-ESCOPO-ATUAL.md`; confira com `git log -1`)
-**Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** ·
+**Migration mais recente:** `0060_perfil_do_contrato.sql` · **60 migrations** (sem 0059 nesta linha) ·
 **103 tabelas** · **215 rotas HTTP** (214 no OpenAPI + `/health`; **141 com contrato Zod**) ·
 **116 permissões** · **11 papéis** · **112 tipos de evento** · **1883 testes de unidade/HTTP**
 (104 arquivos, 32 pulados sem PostgreSQL real) **+ 148 de navegador + 8 da demo**
@@ -125,7 +125,7 @@ emite documento, mede SLA e produz indicador.
 | Checklists | ✅ / 🟡 | Motor versionado e imutável, 8 tipos de item (`measurement` desde a 0052), execução no Field. **Resposta não se sobrescreve** (histórico `checklist_answer_revisions`, 0047). **Sem rota/tela para criar modelo**; o checklist da tarefa do plano **passou a ser anexado** à OS da preventiva; `default_checklist_key` continua não lido |
 | Preventivas | 🟡 | Varredura gera ciclo e OS (gatilho **calendário** apenas), com o checklist da tarefa anexado; alvo por categoria/local/ativo **+ filtros de modelo, fabricante e criticidade** (0055), sempre recortado pelo cliente do plano; **sem rota para criar plano**; **ciclo nunca fecha** — §32 |
 | Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046). Sem rota para criar depósito/item |
-| Contratos | ✅ | Cobertura por expressão, medição congelada. Tela só de leitura |
+| Contratos | ✅ | Cobertura por expressão, medição congelada. **Tipo = perfil** Básico/Completo/Expert (`contracts.profile`, 0060; nulo nos anteriores, nunca inferido); `kind` é só natureza, opcional. Cliente "possui contrato" é **derivado** (vigente/suspenso/rascunho), sem coluna no cliente; o Novo cliente declara e cria o contrato em rascunho. Regras por perfil: NS-008, pendentes. Tela só de leitura (com filtro por tipo) |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
 | Documentos | ✅ / 🟡 | Motor completo; 7 tipos (aceite desde esta rodada) com `payloadFields` técnicos **vazios** (norma); **rascunho a partir da sessão de medição** por cópia; **PDF** (interno e portal); tela web só lista — §15 |
 | Indicadores | ✅ / 🟡 | 14 métricas com definição; tela mostra 9, filtro só por período — §15-A |
@@ -1434,8 +1434,8 @@ npm run demo:capturar
 ```
 
 que sobe a API de verdade **em processo**, sobre um PGlite em memória semeado
-por `tools/demo/semeadura.ts` (3 clientes, 15 locais, 22 ativos, 28 OS em todos
-os estados, 10 chamados, 13 itens de estoque com ilustração, 3 contratos, 5
+por `tools/demo/semeadura.ts` (4 clientes — um sem contrato —, 15 locais, 22 ativos, 28 OS em todos
+os estados, 10 chamados, 13 itens de estoque com ilustração, 3 contratos (um por perfil), 5
 orçamentos, 3 planos, 8 pessoas), faz as mesmas leituras que as telas fazem
 (`tools/demo/capturar.test.ts`) e grava ~270 respostas. Nada toca rede,
 Supabase ou banco remoto. Campos calculados (SLA, MTTR, saldos) são os que o

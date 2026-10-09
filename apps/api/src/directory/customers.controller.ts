@@ -8,8 +8,8 @@
  * código para a mesma pergunta e divergiria no primeiro cliente que crescer.
  */
 import { Body, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
-import { withTenant, createCustomer, type Database, type TenantSession } from '@aurora/db';
-import { ConflictError, ForbiddenError, NotFoundError } from '@aurora/domain';
+import { withTenant, createCustomer, createContract, type Database, type TenantSession } from '@aurora/db';
+import { ConflictError, CURRENT_CONTRACT_STATUSES, ForbiddenError, NotFoundError } from '@aurora/domain';
 import { customersCreate, type Customer } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
@@ -35,8 +35,23 @@ const SELECT_CUSTOMER = `
          (SELECT count(*) FROM aurora.locations l
            WHERE l.customer_id = c.id AND l.deleted_at IS NULL)::int AS location_count,
          (SELECT count(*) FROM aurora.assets a
-           WHERE a.customer_id = c.id AND a.deleted_at IS NULL)::int AS asset_count
-    FROM aurora.customers c`;
+           WHERE a.customer_id = c.id AND a.deleted_at IS NULL)::int AS asset_count,
+         contrato.id IS NOT NULL AS has_contract,
+         contrato.profile::text AS contract_profile
+    FROM aurora.customers c
+    -- "Possui contrato?" é derivado do cadastro de contratos, nunca de OS,
+    -- preventiva ou atendimento. O vigente vem primeiro; depois o suspenso e
+    -- o rascunho (o declarado no cadastro do cliente).
+    LEFT JOIN LATERAL (
+      SELECT ct.id, ct.profile
+        FROM aurora.contracts ct
+       WHERE ct.customer_id = c.id
+         AND ct.archived_at IS NULL
+         AND ct.status::text IN (${CURRENT_CONTRACT_STATUSES.map((s) => `'${s}'`).join(', ')})
+       ORDER BY array_position(ARRAY[${CURRENT_CONTRACT_STATUSES.map((s) => `'${s}'`).join(', ')}], ct.status::text),
+                ct.starts_on DESC, ct.number DESC
+       LIMIT 1
+    ) contrato ON true`;
 
 /**
  * O escopo por cliente é resolvido a partir do vínculo. Um chamador sem
@@ -120,6 +135,11 @@ export class CustomersController {
   @RequirePermissions('customer.create')
   async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<Customer> {
     const b = parseWith(customersCreate.body, body);
+    // Declarar o contrato é criar um contrato: quem não pode criar contrato
+    // não o faz por esta porta lateral.
+    if (b.has_contract === true && !req.auroraContext!.permissions.has('contract.create')) {
+      throw new ForbiddenError('cadastrar o cliente com contrato exige a permissão contract.create');
+    }
     try {
       return await withTenant(this.db, req.auroraContext!, async (s) => {
         const id = await createCustomer(s, {
@@ -129,6 +149,22 @@ export class CustomersController {
           taxId: ouNulo(b.tax_id),
           segment: ouNulo(b.segment),
         });
+        if (b.has_contract === true && b.contract_profile) {
+          /*
+           * O CONTRATO DECLARADO NASCE DE VERDADE, E EM RASCUNHO.
+           *
+           * O perfil mora no contrato (0060), e não numa coluna do cliente que
+           * envelheceria quando o contrato encerrar. Rascunho porque só o
+           * perfil foi dito: vigência, cobertura e valores se completam em
+           * Contratos, e só então ele é ativado. O início provisório é a data
+           * do cadastro; natureza (`kind`) fica em branco — não se inventa.
+           */
+          await createContract(s, {
+            customerId: id,
+            profile: b.contract_profile,
+            startsOn: new Date().toISOString().slice(0, 10),
+          });
+        }
         return (await lerCliente(s, id))!;
       });
     } catch (err) {

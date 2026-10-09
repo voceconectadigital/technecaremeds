@@ -27,7 +27,10 @@ import {
   contractAssets,
   contractDetail,
   contractsList,
+  CONTRACT_PROFILES,
+  CONTRACT_PROFILE_LABELS,
   CONTRACT_STATUSES,
+  type ContractProfile,
   type ContractCoverage,
   type ContractRow,
   type ContractStatus,
@@ -37,6 +40,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
+import { SeloDePerfil } from './perfil';
 
 const ROTULO: Record<ContractStatus, string> = {
   draft: 'Rascunho',
@@ -56,10 +60,14 @@ const TOM: Record<ContractStatus, 'neutral' | 'info' | 'warn' | 'good' | 'bad'> 
 
 export function ContratosPage() {
   const [situacao, setSituacao] = useUrlState<string>('situacao', '');
+  const [perfil, setPerfil] = useUrlState<string>('perfil', '');
   const [busca, setBusca] = useState('');
 
   const { data, isLoading, isError, error } = useApiQuery(contractsList, {
-    query: situacao ? { status: situacao as ContractStatus } : {},
+    query: {
+      ...(situacao ? { status: situacao as ContractStatus } : {}),
+      ...(perfil ? { profile: perfil as ContractProfile | 'none' } : {}),
+    },
   }) as {
     data: { items: ContractRow[] } | undefined;
     isLoading: boolean;
@@ -73,7 +81,10 @@ export function ContratosPage() {
     const termo = busca.trim().toLowerCase();
     if (!termo) return itens;
     return itens.filter(
-      (c) => c.number.toLowerCase().includes(termo) || (c.title ?? '').toLowerCase().includes(termo)
+      (c) =>
+        c.number.toLowerCase().includes(termo) ||
+        (c.title ?? '').toLowerCase().includes(termo) ||
+        c.customer_name.toLowerCase().includes(termo)
     );
   }, [itens, busca]);
 
@@ -94,7 +105,7 @@ export function ContratosPage() {
               type="search"
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Filtrar por número ou título"
+              placeholder="Filtrar por número, título ou cliente"
               aria-label="Filtrar contratos"
               className="h-8 w-full rounded-control border border-border-strong bg-surface pr-3 pl-8 text-sm text-text placeholder:text-subtle"
             />
@@ -112,6 +123,21 @@ export function ContratosPage() {
               </option>
             ))}
           </Select>
+          {/* O tipo do contrato é o perfil — e só ele. */}
+          <Select
+            value={perfil}
+            aria-label="Tipo de contrato"
+            onChange={(e) => setPerfil(e.target.value)}
+            className="sm:w-48"
+          >
+            <option value="">Todos os tipos</option>
+            {CONTRACT_PROFILES.map((p) => (
+              <option key={p} value={p}>
+                {CONTRACT_PROFILE_LABELS[p]}
+              </option>
+            ))}
+            <option value="none">Perfil não definido</option>
+          </Select>
         </div>
 
         <Card>
@@ -122,10 +148,16 @@ export function ContratosPage() {
           ) : filtrados.length === 0 ? (
             <EmptyState
               icon={<FileSignature className="size-5" />}
-              title={itens.length === 0 ? 'Nenhum contrato' : 'Nenhum contrato com esse texto'}
-              filtered={itens.length > 0}
+              title={
+                itens.length > 0
+                  ? 'Nenhum contrato com esse texto'
+                  : situacao || perfil
+                    ? 'Nenhum contrato com esses filtros'
+                    : 'Nenhum contrato'
+              }
+              filtered={itens.length > 0 || Boolean(situacao || perfil)}
               description={
-                itens.length === 0
+                itens.length === 0 && !situacao && !perfil
                   ? 'Um contrato diz o que está coberto para cada cliente — locais e equipamentos —, com SLA e modelo de cobrança.'
                   : undefined
               }
@@ -188,8 +220,11 @@ function LinhaDeContrato({ contrato: c }: { contrato: ContractRow }) {
               e mostrar "—" seria pior do que mostrar o número, que é o que a
               pessoa procura. */}
           <p className="truncate text-base font-medium text-text">{c.title || c.number}</p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted" data-numeric>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted" data-numeric>
             <span className="font-medium">{c.number}</span>
+            <span aria-hidden="true">·</span>
+            <span className="truncate">{c.customer_name}</span>
+            <SeloDePerfil perfil={c.profile} />
             {c.auto_renew && (
               <>
                 <span aria-hidden="true">·</span>
@@ -253,7 +288,8 @@ interface Detalhe {
     number: string;
     title: string | null;
     status: ContractStatus;
-    kind: string;
+    kind: string | null;
+    profile: ContractProfile | null;
     starts_on: string;
     ends_on: string | null;
     auto_renew: boolean;
@@ -320,6 +356,7 @@ export function ContratoPage() {
           <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <StatusChip tone={TOM[c.status]}>{ROTULO[c.status]}</StatusChip>
+              <SeloDePerfil perfil={c.profile} />
               {c.auto_renew && (
                 <StatusChip tone="info" size="sm">
                   Renova sozinho
@@ -333,7 +370,7 @@ export function ContratoPage() {
                 rotulo="Vigência"
                 valor={`${formatarData(c.starts_on)} → ${c.ends_on ? formatarData(c.ends_on) : 'sem fim'}`}
               />
-              <Info rotulo="Natureza" valor={c.kind} />
+              <Info rotulo="Natureza" valor={c.kind} vazio="Não informada" />
               <Info
                 rotulo="Chamados inclusos"
                 valor={c.included_calls === null ? null : String(c.included_calls)}

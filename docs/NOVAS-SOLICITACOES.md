@@ -22,6 +22,16 @@ como "set/2026" quando não informado.
 > isso mudou a base de uma NS, a linha **Revisão 02/10/2026** da solicitação diz
 > o quê — e o que continua faltando. Detalhes: `RELATORIO-ESCOPO-ATUAL.md`.
 
+> **Revisão de 09/10/2026 (validação do Anderson — tipo de contrato).** O
+> cliente confirmou: **um cliente pode ter ou não contrato**, e, quando houver,
+> o **perfil do contrato é Básico, Completo ou Expert** — e só isso.
+> "Atendimento sob demanda", "Preventiva programada" e "Manutenção integral"
+> **não são tipo de contrato** (eram títulos da massa de demonstração e valores
+> de `contracts.kind`). Implementado só a classificação: `contracts.profile`
+> (0060), "Possui contrato?" no Novo cliente, selo na lista de clientes e em
+> Contratos, filtro por tipo. As regras de cada perfil continuam pendentes —
+> ver NS-008 (agora PARCIAL, **não** IMPLEMENTADA) e NS-001.
+
 ---
 
 ## Status permitidos
@@ -73,7 +83,7 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-005 | Ações em Ordem de Serviço | PARCIAL | MÉDIA | Próxima |
 | NS-006 | Indicadores de ativos por cliente | NOVA | MÉDIA | Após NS-002 |
 | NS-007 | Indicadores integrados (app, FHEMIG, robô) | BLOQUEADA — CLIENTE | ALTA | Quando o material chegar |
-| NS-008 | Níveis de indicadores (Básico/Completo/Expert) | NOVA | MÉDIA | Após NS-006 |
+| NS-008 | Níveis de indicadores (Básico/Completo/Expert) | PARCIAL | MÉDIA | Após NS-006 |
 | NS-009 | IA dentro do sistema | FUTURA FASE | ALTA | Futura |
 | NS-010 | Automação de tarefas e relatórios | PARCIAL | ALTA | Após ligar o motor |
 | NS-011 | Hierarquia / acessos | PARCIAL | MÉDIA | Próxima |
@@ -84,7 +94,7 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-016 | Check-in / check-out no hospital | NOVA | MÉDIA | Média |
 | NS-017 | App / mobile (validação) | PARCIAL | MÉDIA | Próxima (demonstrar) |
 
-**Contagem:** 17 no total · JÁ EXISTE 0 · PARCIAL 9 · NOVA 5 · FUTURA FASE 2 ·
+**Contagem:** 17 no total · JÁ EXISTE 0 · PARCIAL 10 · NOVA 4 · FUTURA FASE 2 ·
 BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 
 ---
@@ -99,7 +109,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Descrição original (resumo)** | Cliente com dados completos, tipo de contrato, SLA geral, configuração de indicadores e vínculo com equipamentos |
 | **Interpretação funcional** | Uma ficha de cliente navegável e editável que reúne cadastro, contratos vigentes (e seu tipo), SLA padrão, perfil de indicadores (NS-008) e os equipamentos do cliente |
 | **Status** | **PARCIAL** |
-| **O que já existe** | Tabela `customers` (`migrations/0008`): razão social, nome fantasia, código, CNPJ (`tax_id`), interno/externo, segmento, situação, e-mail e endereço de cobrança, logo, campos personalizados. `customer_contacts`. `customers.default_sla_policy_id` (`0027`). Tipo de contrato existe **no contrato** (`contracts.contract_kind`: full_service, preventive_only, on_demand, rental, loan, warranty — `0031`), com SLA e metas. Vínculo com equipamentos: `assets.customer_id` obrigatório. API: só `GET /v1/customers` |
+| **O que já existe** | Tabela `customers` (`migrations/0008`): razão social, nome fantasia, código, CNPJ (`tax_id`), interno/externo, segmento, situação, e-mail e endereço de cobrança, logo, campos personalizados. `customer_contacts`. `customers.default_sla_policy_id` (`0027`). O **tipo de contrato é o perfil**, e mora **no contrato** (`contracts.profile`: basic, complete, expert — `0060`); `contracts.kind` (full_service, preventive_only, on_demand, rental, loan, warranty — `0031`) é só a natureza do acordo, opcional desde a 0060, e **não** é tipo. Com SLA e metas. Vínculo com equipamentos: `assets.customer_id` obrigatório. API: só `GET /v1/customers` |
 | **O que falta** | Rota de criar/editar cliente (a função `createCustomer` existe em `packages/db/src/directory.ts`, sem rota; permissões `customer.create/update` sem uso); tela `/clientes` e ficha de cliente (a busca global já aponta para `/clientes/:id`, que não existe); exibir contratos/SLA/equipamentos agregados; configuração de indicadores (não existe em lugar nenhum) |
 | **Impacto** | Alto — é a entidade-raiz que o cliente enxerga em todas as conversas |
 | **Complexidade** | MÉDIA |
@@ -107,6 +117,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Fase sugerida** | Próxima |
 | **Arquivos / domínios** | `packages/db/src/directory.ts` · `apps/api/src/directory/customers.controller.ts` · `packages/contracts/src/operations/directory.ts` · `apps/web/src/shell/global-search.tsx` · `migrations/0008`, `0027`, `0031` |
 | **Revisão 02/10/2026** | Busca global: resultado de cliente deixou de levar a `/clientes/:id` (rota inexistente) e leva a `/contratos`; a ficha de cliente continua **não existindo**. `customers.external_source/external_id` (0048) existem para migração. Status **inalterado**. |
+| **Revisão 09/10/2026** | "Novo cliente" pergunta **Possui contrato?** (Sim/Não); com Sim, **Tipo de contrato** (Básico/Completo/Expert) é obrigatório e o contrato nasce **em rascunho** com o perfil (`POST /v1/customers` com `has_contract` + `contract_profile`). Lista de clientes mostra "Sem contrato" ou o perfil. Continuam **não existindo**: editar cliente, ficha de cliente. Status **inalterado (PARCIAL)**. |
 | **Evidência de implementação** | — |
 | **Observações** | "Tipo de contrato" deve continuar morando no **contrato** (um cliente pode ter mais de um); a ficha mostra, não duplica |
 
@@ -243,16 +254,17 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 0.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Perfis BÁSICO, COMPLETO e EXPERT, configurados por cliente + tipo de contrato; futuramente gráficos, relatórios padrão e personalizados conforme o perfil contratado |
 | **Interpretação funcional** | Um catálogo de perfis que define quais indicadores/relatórios cada cliente vê, derivado do contrato |
-| **Status** | **NOVA** |
-| **O que já existe** | Nada de perfil. Mais próximo: metas por contrato (`sla_target_percent`, `plan_target_percent`), medição congelada em `contract_periods`, permissão `insight.manage_dashboards` sem uso |
-| **O que falta** | Modelo de perfil, vínculo com contrato/cliente, aplicação no web e no portal (o portal não tem indicadores) |
+| **Status** | **PARCIAL** (só a classificação; as regras de cada perfil não existem) |
+| **O que já existe** | **Desde 09/10/2026:** o perfil é a classificação do contrato — `contracts.profile` (`basic`/`complete`/`expert`, 0060, nulo nos contratos anteriores: nunca inferido); "possui contrato?" é derivado do contrato vigente/suspenso/rascunho (sem coluna no cliente). Mais próximo das regras: metas por contrato (`sla_target_percent`, `plan_target_percent`), medição congelada em `contract_periods`, permissão `insight.manage_dashboards` sem uso |
+| **O que falta** | O que cada perfil libera — quais indicadores, gráficos e relatórios; SLA por plano; preços; bloqueio de módulos; aplicação no web e no portal (o portal não tem indicadores). **Nada disso foi implementado** |
 | **Impacto** | Comercial — vira produto em camadas |
 | **Complexidade** | MÉDIA |
 | **Dependências** | NS-001, NS-006; definição de quais indicadores compõem cada nível (cliente) |
 | **Fase sugerida** | Após NS-006 |
-| **Arquivos / domínios** | `migrations/0031`, `0035` · `packages/domain/src/metrics.ts` · `apps/portal` |
-| **Evidência de implementação** | — |
-| **Observações** | — |
+| **Arquivos / domínios** | `migrations/0031`, `0035`, `0060` · `packages/domain/src/contracts.ts` (`CONTRACT_PROFILES`) · `packages/domain/src/metrics.ts` · `apps/portal` |
+| **Revisão 09/10/2026** | Cliente confirmou os três perfis como **o** tipo de contrato, e que cliente pode não ter contrato. Classificação implementada (ver topo); regras por perfil **pendentes** |
+| **Evidência de implementação** | Só da classificação: `apps/api/src/__tests__/api-clientes-contrato.test.ts`, `apps/web/src/__tests__/novo-cliente-contrato.test.tsx` |
+| **Observações** | O perfil mora no **contrato**; o cliente mostra o do contrato corrente, não duplica |
 
 ## NS-009 — IA dentro do sistema
 

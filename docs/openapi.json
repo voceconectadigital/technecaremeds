@@ -4849,7 +4849,29 @@
                           "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
                         },
                         "kind": {
-                          "type": "string"
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "profile": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "basic",
+                                "complete",
+                                "expert"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         },
                         "status": {
                           "type": "string",
@@ -5066,6 +5088,7 @@
                         "title",
                         "customer_id",
                         "kind",
+                        "profile",
                         "status",
                         "starts_on",
                         "ends_on",
@@ -5350,6 +5373,20 @@
                 "terminated"
               ]
             }
+          },
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "basic",
+                "complete",
+                "expert",
+                "none"
+              ]
+            }
           }
         ],
         "responses": {
@@ -5391,8 +5428,33 @@
                             "format": "uuid",
                             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
                           },
-                          "kind": {
+                          "customer_name": {
                             "type": "string"
+                          },
+                          "kind": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "profile": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "basic",
+                                  "complete",
+                                  "expert"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           },
                           "status": {
                             "type": "string",
@@ -5429,7 +5491,9 @@
                           "number",
                           "title",
                           "customer_id",
+                          "customer_name",
                           "kind",
+                          "profile",
                           "status",
                           "starts_on",
                           "ends_on",
@@ -5820,6 +5884,24 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "has_contract": {
+                          "type": "boolean"
+                        },
+                        "contract_profile": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "basic",
+                                "complete",
+                                "expert"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -5832,7 +5914,9 @@
                         "segment",
                         "status",
                         "location_count",
-                        "asset_count"
+                        "asset_count",
+                        "has_contract",
+                        "contract_profile"
                       ]
                     },
                     "locations": {
@@ -6086,6 +6170,24 @@
                             "type": "integer",
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
+                          },
+                          "has_contract": {
+                            "type": "boolean"
+                          },
+                          "contract_profile": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "basic",
+                                  "complete",
+                                  "expert"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -6098,7 +6200,9 @@
                           "segment",
                           "status",
                           "location_count",
-                          "asset_count"
+                          "asset_count",
+                          "has_contract",
+                          "contract_profile"
                         ]
                       }
                     },
@@ -6201,6 +6305,17 @@
                   "segment": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "has_contract": {
+                    "type": "boolean"
+                  },
+                  "contract_profile": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "complete",
+                      "expert"
+                    ]
                   }
                 },
                 "required": [
@@ -6285,6 +6400,24 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "has_contract": {
+                      "type": "boolean"
+                    },
+                    "contract_profile": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "basic",
+                            "complete",
+                            "expert"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -6297,7 +6430,9 @@
                     "segment",
                     "status",
                     "location_count",
-                    "asset_count"
+                    "asset_count",
+                    "has_contract",
+                    "contract_profile"
                   ]
                 }
               }

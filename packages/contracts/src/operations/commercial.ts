@@ -169,13 +169,30 @@ export const quoteTransition = defineOperation({
 export const CONTRACT_STATUSES = ['draft', 'active', 'suspended', 'expired', 'terminated'] as const;
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
+/**
+ * O PERFIL é a classificação do contrato — básico, completo ou expert, e só
+ * isso (confirmado pelo cliente). O título é texto livre e não classifica
+ * nada. Repetido de `@aurora/domain` (paridade em `paridade-contratos.test`).
+ */
+export const CONTRACT_PROFILES = ['basic', 'complete', 'expert'] as const;
+export type ContractProfile = (typeof CONTRACT_PROFILES)[number];
+export const CONTRACT_PROFILE_LABELS: Record<ContractProfile, string> = {
+  basic: 'Básico',
+  complete: 'Completo',
+  expert: 'Expert',
+};
+
 export const ContractRow = z.object({
   id: Uuid,
   number: z.string(),
   /** Nulo é permitido: há contrato identificado só pelo número. */
   title: z.string().nullable(),
   customer_id: Uuid,
-  kind: z.string(),
+  customer_name: z.string(),
+  /** Natureza do acordo (locação, comodato…). Opcional — não é o tipo. */
+  kind: z.string().nullable(),
+  /** Nulo nos contratos anteriores à 0060: o perfil nunca é inferido. */
+  profile: z.enum(CONTRACT_PROFILES).nullable(),
   status: z.enum(CONTRACT_STATUSES),
   starts_on: z.string(),
   ends_on: z.string().nullable(),
@@ -193,6 +210,8 @@ export const contractsList = defineOperation({
   query: z.object({
     customerId: Uuid.optional(),
     status: z.enum(CONTRACT_STATUSES).optional(),
+    /** `none` = contratos ainda sem perfil definido. */
+    profile: z.enum([...CONTRACT_PROFILES, 'none']).optional(),
   }),
   response: z.object({ items: z.array(ContractRow) }),
 });
@@ -233,7 +252,8 @@ export const contractDetail = defineOperation({
       number: z.string(),
       title: z.string().nullable(),
       customer_id: Uuid,
-      kind: z.string(),
+      kind: z.string().nullable(),
+      profile: z.enum(CONTRACT_PROFILES).nullable(),
       status: z.enum(CONTRACT_STATUSES),
       starts_on: z.string(),
       ends_on: z.string().nullable(),

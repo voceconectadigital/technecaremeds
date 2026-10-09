@@ -31,7 +31,9 @@
  * IDEMPOTENTE POR MARCADOR.
  *
  * O primeiro cliente semeado tem o código `DEMO-HSC`. Se ele já existe, o
- * comando diz "já semeado", mostra a contagem e sai com 0 sem tocar em nada.
+ * comando diz "já semeado", mostra a contagem e sai com 0 sem tocar em nada —
+ * exceto o perfil dos três contratos da própria massa, se ainda estiverem na
+ * forma antiga (ver `ajustarPerfisDaDemonstracao`).
  * A semeadura de negócio roda numa transação só: ou o marcador e tudo o que
  * vem com ele entram juntos, ou nada entra.
  *
@@ -269,6 +271,65 @@ function imprimirContagem(org, c) {
 
 /* -------------------------------------------------------------------------- */
 
+/*
+ * O PERFIL DE CADA CONTRATO DA DEMONSTRAÇÃO, e o título que a massa antiga
+ * usava no lugar dele.
+ *
+ * A massa até 09/10/2026 punha a "forma de vender" no título e em `kind`
+ * ("Atendimento sob demanda", "Preventiva programada") — e o cliente leu,
+ * com razão, como tipo de contrato. Tipo de contrato é o perfil.
+ */
+const PERFIL_DEMO = {
+  hsc: {
+    codigo: MARCADOR,
+    perfil: 'expert',
+    titulo: 'Contrato de manutenção — Hospital Santa Clara',
+    tituloAntigo: 'Manutenção integral — Hospital Santa Clara',
+  },
+  cvp: {
+    codigo: 'DEMO-CVP',
+    perfil: 'complete',
+    titulo: 'Contrato de manutenção — Clínica Vida Plena',
+    tituloAntigo: 'Preventiva programada — Clínica Vida Plena',
+  },
+  idc: {
+    codigo: 'DEMO-IDC',
+    perfil: 'basic',
+    titulo: 'Contrato de manutenção — Instituto do Coração',
+    tituloAntigo: 'Atendimento sob demanda — Instituto do Coração',
+  },
+};
+
+/**
+ * Ajusta, numa organização JÁ semeada, só os três contratos da demonstração.
+ *
+ * Estreito de propósito: o contrato precisa ser do cliente marcado da massa
+ * (`DEMO-*`), estar ainda sem perfil e ter exatamente o título antigo que esta
+ * massa gravou. Contrato que alguém editou na demonstração não é tocado, e
+ * contrato de cliente de verdade não casa com nada disto. Rodar de novo não
+ * acha mais nada para ajustar.
+ */
+async function ajustarPerfisDaDemonstracao(orgId) {
+  let ajustados = 0;
+  for (const { codigo, perfil, titulo, tituloAntigo } of Object.values(PERFIL_DEMO)) {
+    const linhas = await q(
+      `UPDATE aurora.contracts ct
+          SET profile = $3::aurora.contract_profile, title = $4, kind = NULL, updated_at = now()
+         FROM aurora.customers cu
+        WHERE ct.organization_id = $1
+          AND cu.organization_id = $1
+          AND cu.id = ct.customer_id
+          AND cu.code = $2
+          AND ct.profile IS NULL
+          AND ct.title = $5
+        RETURNING ct.id`,
+      [orgId, codigo, perfil, titulo, tituloAntigo]
+    );
+    ajustados += linhas.length;
+  }
+  return ajustados;
+}
+
 async function main() {
   /* ----------------------------------------------------- a organização */
 
@@ -288,8 +349,12 @@ async function main() {
     [org.id, MARCADOR]
   );
   if (marcado) {
+    const ajustados = await ajustarPerfisDaDemonstracao(org.id);
     process.stdout.write(
-      `\njá semeado — a organização "${slug}" já tem o cliente ${MARCADOR}. Nada foi alterado.\n`
+      ajustados > 0
+        ? `\njá semeado — a organização "${slug}" já tem o cliente ${MARCADOR}. ` +
+            `Só o perfil de ${ajustados} contrato(s) da demonstração foi ajustado.\n`
+        : `\njá semeado — a organização "${slug}" já tem o cliente ${MARCADOR}. Nada foi alterado.\n`
     );
     imprimirContagem(org, await contagem(org.id));
     return;
@@ -739,15 +804,19 @@ async function main() {
     /* ----------------------------------------------------------- contratos */
 
     /*
-     * Três contratos, três formas de vender — e um vencendo em 45 dias, que é
-     * o que acende o alerta de renovação. Datas relativas a hoje: um contrato
-     * "até 31/12/2026" deixaria de vencer em breve na semana seguinte.
+     * Três contratos, um de cada PERFIL — Expert, Completo, Básico, que é a
+     * classificação confirmada pelo cliente —, e um vencendo em 45 dias, que é
+     * o que acende o alerta de renovação. O Hospital São Lucas fica SEM
+     * contrato: o cliente atendido avulso existe e a lista precisa mostrá-lo.
+     * Datas relativas a hoje: um contrato "até 31/12/2026" deixaria de vencer
+     * em breve na semana seguinte. Os títulos são descritivos e não
+     * classificam nada; a natureza (`kind`) fica em branco.
      */
     const contratos = [
       {
         cli: 'hsc',
-        kind: 'full_service',
-        title: 'Manutenção integral — Hospital Santa Clara',
+        profile: PERFIL_DEMO.hsc.perfil,
+        title: PERFIL_DEMO.hsc.titulo,
         startsOn: emDias(-320),
         endsOn: emDias(45),
         autoRenew: false,
@@ -762,8 +831,8 @@ async function main() {
       },
       {
         cli: 'cvp',
-        kind: 'preventive_only',
-        title: 'Preventiva programada — Clínica Vida Plena',
+        profile: PERFIL_DEMO.cvp.perfil,
+        title: PERFIL_DEMO.cvp.titulo,
         startsOn: emDias(-180),
         endsOn: emDias(185),
         autoRenew: true,
@@ -774,8 +843,8 @@ async function main() {
       },
       {
         cli: 'idc',
-        kind: 'on_demand',
-        title: 'Atendimento sob demanda — Instituto do Coração',
+        profile: PERFIL_DEMO.idc.perfil,
+        title: PERFIL_DEMO.idc.titulo,
         startsOn: emDias(-90),
         endsOn: emDias(275),
         autoRenew: true,

@@ -693,8 +693,9 @@ async function main() {
 
     const contrato = await db.createContract(s, {
       customerId: hospitalCliente,
-      kind: 'full_service',
-      title: 'Manutenção integral — Hospital São Lucas',
+      // O tipo do contrato é o PERFIL; o título só descreve.
+      profile: 'expert',
+      title: 'Contrato de manutenção — Hospital São Lucas',
       startsOn: '2026-01-01',
       endsOn: '2026-12-31',
       autoRenew: true,
@@ -710,8 +711,8 @@ async function main() {
 
     const contratoClinica = await db.createContract(s, {
       customerId: clinicaCliente,
-      kind: 'preventive_only',
-      title: 'Preventiva programada — Clínica Vida Plena',
+      profile: 'basic',
+      title: 'Contrato de manutenção — Clínica Vida Plena',
       startsOn: '2026-03-01',
       endsOn: '2027-02-28',
       autoRenew: false,

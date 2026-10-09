@@ -19,6 +19,7 @@ import { Can, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { DialogoNovoCliente, rotuloDoSegmento } from './novo-cliente';
+import { SeloContratoDoCliente } from '../comercial/perfil';
 
 export function ClientesPage() {
   const [criando, setCriando] = useState(false);
@@ -192,6 +193,12 @@ function LinhaCliente({ cliente: c, primeira }: { cliente: Customer; primeira: b
             {detalhes}
           </span>
         )}
+      </span>
+
+      {/* Contrato ao lado, e não misturado ao segmento: segmento diz o que o
+          cliente É; o contrato diz o que ele contratou. */}
+      <span className="shrink-0">
+        <SeloContratoDoCliente possui={c.has_contract} perfil={c.contract_profile} />
       </span>
 
       <span className="hidden shrink-0 text-right text-xs text-muted sm:block" data-numeric>

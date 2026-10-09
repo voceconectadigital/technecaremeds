@@ -12,9 +12,18 @@ import {
   REQUEST_STATUSES as STATUS_DOMINIO,
   SERVICE_REQUEST_SOURCES as ORIGENS_DOMINIO,
   REQUEST_PRIORITIES as PRIORIDADES_DOMINIO,
+  CONTRACT_PROFILES as PERFIS_DOMINIO,
+  CONTRACT_PROFILE_LABELS as ROTULOS_PERFIL_DOMINIO,
 } from '@aurora/domain';
 import { SEAT_TYPES as ASSENTOS_DB } from '@aurora/db';
-import { REQUEST_STATUSES, SERVICE_REQUEST_SOURCES, REQUEST_PRIORITIES, SEAT_TYPES } from '@aurora/contracts';
+import {
+  REQUEST_STATUSES,
+  SERVICE_REQUEST_SOURCES,
+  REQUEST_PRIORITIES,
+  SEAT_TYPES,
+  CONTRACT_PROFILES,
+  CONTRACT_PROFILE_LABELS,
+} from '@aurora/contracts';
 
 describe('paridade contrato × domínio × banco', () => {
   it('situações da solicitação', () => {
@@ -25,6 +34,12 @@ describe('paridade contrato × domínio × banco', () => {
   });
   it('prioridades', () => {
     expect([...REQUEST_PRIORITIES]).toEqual([...PRIORIDADES_DOMINIO]);
+  });
+  it('perfis de contrato: Básico, Completo e Expert — e só eles', () => {
+    expect([...CONTRACT_PROFILES]).toEqual(['basic', 'complete', 'expert']);
+    expect([...PERFIS_DOMINIO]).toEqual([...CONTRACT_PROFILES]);
+    expect(CONTRACT_PROFILE_LABELS).toEqual(ROTULOS_PERFIL_DOMINIO);
+    expect(Object.values(CONTRACT_PROFILE_LABELS)).toEqual(['Básico', 'Completo', 'Expert']);
   });
   it('tipos de assento (o banco tem staff e portal)', () => {
     expect([...SEAT_TYPES]).toEqual(['staff', 'portal']);

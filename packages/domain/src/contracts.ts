@@ -33,6 +33,32 @@ export const CONTRACT_KIND_LABELS: Record<ContractKind, string> = {
   warranty: 'Garantia',
 };
 
+/**
+ * O PERFIL é a classificação do contrato — e a única (confirmado pelo cliente).
+ *
+ * `kind` acima é a natureza do acordo (locação, comodato, garantia…), opcional
+ * desde a 0060; "sob demanda" ou "preventiva" nunca foram tipo de contrato.
+ * O que cada perfil libera (indicadores, SLA, relatórios) é NS-008 e ainda não
+ * existe: aqui o perfil só classifica.
+ */
+export const CONTRACT_PROFILES = ['basic', 'complete', 'expert'] as const;
+export type ContractProfile = (typeof CONTRACT_PROFILES)[number];
+
+export const CONTRACT_PROFILE_LABELS: Record<ContractProfile, string> = {
+  basic: 'Básico',
+  complete: 'Completo',
+  expert: 'Expert',
+};
+
+/**
+ * Situações em que o contrato ainda é "o contrato do cliente".
+ *
+ * O rascunho conta: é o contrato declarado no cadastro do cliente e que ainda
+ * espera cobertura e datas. Expirado e encerrado não contam — o cliente deixou
+ * de ter contrato, e dizer o contrário esconderia uma renovação perdida.
+ */
+export const CURRENT_CONTRACT_STATUSES = ['active', 'suspended', 'draft'] as const;
+
 export const BILLING_MODELS = ['fixed_monthly', 'per_asset', 'per_call', 'hybrid'] as const;
 export type BillingModel = (typeof BILLING_MODELS)[number];
 
