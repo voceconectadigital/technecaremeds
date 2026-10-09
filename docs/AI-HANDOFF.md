@@ -21,7 +21,7 @@
 `dc4c6c4` (`origin/main`, PR #9) · branch `feat/overdelivery-painel` — confira com `git log -1`
 **Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** (nenhuma nova nesta rodada) ·
 **103 tabelas** · **230 rotas HTTP** (229 no OpenAPI + `/health`; **160 com contrato Zod**) ·
-**116 permissões** · **11 papéis** · **112 tipos de evento** · **1944 testes de unidade/HTTP**
+**116 permissões** · **11 papéis** · **112 tipos de evento** · **1947 testes de unidade/HTTP**
 (106 arquivos, 32 pulados sem PostgreSQL real) **+ 175 de navegador + 8 da demo**
 
 > **Rodada 09/10/2026 — o que mudou (resumo; detalhes nas seções):** Painel de Controle
@@ -811,6 +811,22 @@ setor — **não é disponibilidade**); e as listas de clientes/setores que o fi
 pode oferecer A ESTA pessoa. Telas: `apps/web/src/features/painel/{painel,tv,dados,rotulos}`.
 A TV (`/painel/tv`) fica fora da moldura, atualiza a cada 60 s, cabe em 16:9 sem
 rolagem (gráficos medem o espaço que recebem) e sai com Esc.
+
+**2ª entrega (09/10/2026):** a tela tem 8 KPIs (MTTR, MTBF, backlog, SLA,
+disponíveis agora, chamados abertos, concluídos, preventivas vencidas) e 6
+gráficos (evolução dos chamados, OS por situação, preventivas por mês,
+disponibilidade do parque, MTTR no tempo, backlog no tempo). A resposta ganhou
+`series[].mttrMinutes`/`mttrSamples` (média de `resolution_minutes` das
+corretivas concluídas na fatia — a mesma definição do MTTR; **nulo** sem amostra,
+e o `TrendChart` aceita `null` como lacuna) e `preventives` (o `planBoard` do
+período, com o mesmo cliente/setor/escopo). "Disponíveis agora" é derivado na
+tela de `park.byStatus` (`disponibilidadeAgora` em `features/painel/dados.ts`:
+disponível = `active` + `standby`; indisponível = `under_maintenance`;
+`loaned` à parte; baixados fora) — **não** é disponibilidade no tempo. Período
+personalizado: `?periodo=custom&de=AAAA-MM-DD&ate=AAAA-MM-DD` (incompleto,
+invertido ou acima de 400 dias vira aviso, sem consulta). Cartões levam à lista
+filtrada: `/ordens?vista=lista&categoria=…`, `/ativos?situacao=under_maintenance`,
+`/planos?aba=cronograma&estado=late`.
 
 **Escopo (corrigido nesta rodada):** toda rota `/insights/*` passa a recortar por
 `membership_scopes` (cliente e subárvore de local) via `membershipScope` →
