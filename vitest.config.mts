@@ -55,13 +55,14 @@ const alias = {
  * navegador de verdade, pela tela de diagnóstico do aparelho, e o teste de ponta
  * a ponta exige que ela passe.
  *
- * Quando existir teste de COMPONENTE do campo, ele entra aqui com um padrão
- * próprio — e não devolvendo a pasta inteira para o jsdom.
+ * Os testes de COMPONENTE do campo entram com um padrão próprio — só as telas
+ * —, e não devolvendo a pasta inteira para o jsdom.
  */
 const INTERFACE = [
   'packages/ui/**/*.test.{ts,tsx}',
   'apps/web/**/*.test.{ts,tsx}',
   'apps/portal/**/*.test.{ts,tsx}',
+  'apps/field/src/telas/**/*.test.tsx',
 ];
 
 const comum = {

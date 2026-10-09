@@ -21,7 +21,7 @@
 import { useEffect, useState } from 'react';
 import { CircleCheck, CircleX, Loader } from 'lucide-react';
 import { useSession } from '@aurora/app-kit';
-import { useCampo } from '../campo';
+import { API, useCampo } from '../campo';
 import { armazenamentoIndexedDb, conferirConformidade, type ResultadoDeConformidade } from '../armazenamento';
 
 function tamanho(bytes: number | null): string {
@@ -192,7 +192,18 @@ export function PerfilPage() {
         )}
         <button
           type="button"
-          onClick={() => signOut()}
+          onClick={() => {
+            // Revoga a sessão no servidor quando há rede; sem rede, sair continua
+            // valendo neste aparelho e o token expira sozinho.
+            const token = localStorage.getItem('aurora:token');
+            if (token && !token.startsWith('local:')) {
+              void fetch(`${API}/auth/logout`, {
+                method: 'POST',
+                headers: { authorization: `Bearer ${token}` },
+              }).catch(() => undefined);
+            }
+            signOut();
+          }}
           className="min-h-12 rounded-control border border-border-subtle px-3 text-sm text-muted"
         >
           Sair
