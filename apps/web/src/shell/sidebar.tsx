@@ -31,7 +31,7 @@ import { Link, useRouterState } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { cn, Logo, Tooltip } from '@aurora/ui';
 import { usePermissions, useSessionQuery, MARCA } from '@aurora/app-kit';
-import { MAIN_NAV, SETTINGS_NAV, type NavItem } from './navigation';
+import { MAIN_NAV, NAV_GRUPOS, SETTINGS_NAV, type NavItem } from './navigation';
 
 export interface SidebarProps {
   /** Chamado ao navegar — a gaveta do celular se fecha sozinha. */
@@ -51,7 +51,7 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
   return (
     <nav
       aria-label="Navegação principal"
-      className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface-subtle"
+      className="relative flex h-full w-64 shrink-0 flex-col border-r border-border bg-surface-subtle/90 backdrop-blur-xl"
     >
       {/* ------------------------------------------------------- identidade */}
       {/*
@@ -84,11 +84,29 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
         )}
       </div>
 
-      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
-        {visiveis.map((item) => (
-          <ItemDeMenu key={item.to} item={item} ativo={ehAtivo(caminho, item.to)} onNavigate={onNavigate} />
-        ))}
-      </ul>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 pt-3 pb-3">
+        {NAV_GRUPOS.map((grupo) => {
+          const doGrupo = visiveis.filter((i) => i.grupo === grupo);
+          if (doGrupo.length === 0) return null;
+          return (
+            <div key={grupo}>
+              <p className="px-4 pb-1.5 text-2xs font-semibold tracking-[0.14em] text-subtle uppercase">
+                {grupo}
+              </p>
+              <ul className="flex flex-col gap-0.5">
+                {doGrupo.map((item) => (
+                  <ItemDeMenu
+                    key={item.to}
+                    item={item}
+                    ativo={ehAtivo(caminho, item.to)}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
 
       {mostrarConfig && (
         <ul className="border-t border-border-subtle px-3 py-3">
@@ -123,10 +141,10 @@ function ItemDeMenu({ item, ativo, onNavigate }: { item: NavItem; ativo: boolean
           // sozinho não chega a quem não vê a tela.
           aria-current={ativo ? 'page' : undefined}
           className={cn(
-            'relative flex items-center gap-3 rounded-control py-2.5 pr-3 pl-4 text-base transition-colors',
+            'group relative flex items-center gap-3 rounded-control py-2 pr-3 pl-4 text-base transition-all duration-200',
             ativo
-              ? 'bg-accent-soft font-semibold text-accent-text'
-              : 'font-medium text-muted hover:bg-surface hover:text-text'
+              ? 'bg-[linear-gradient(90deg,var(--aurora-accent-soft),transparent_85%)] font-semibold text-text shadow-[inset_0_0_0_1px_var(--aurora-border-subtle)]'
+              : 'font-medium text-muted hover:bg-surface-hover hover:text-text'
           )}
         >
           {/*
@@ -146,10 +164,16 @@ function ItemDeMenu({ item, ativo, onNavigate }: { item: NavItem; ativo: boolean
           {ativo && (
             <span
               aria-hidden="true"
-              className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-brand-accent"
+              className="absolute inset-y-1.5 left-0 w-[3px] rounded-pill bg-brand-accent shadow-[0_0_12px_var(--aurora-brand-accent)]"
             />
           )}
-          <Icone aria-hidden="true" className="size-[18px] shrink-0" />
+          <Icone
+            aria-hidden="true"
+            className={cn(
+              'size-[18px] shrink-0 transition-colors',
+              ativo ? 'text-accent-text' : 'text-subtle group-hover:text-accent-text'
+            )}
+          />
           <span className="truncate">{item.label}</span>
         </Link>
       </Tooltip>
@@ -183,9 +207,14 @@ function NomeDaOrganizacao({ nome }: { nome: string | null }) {
           {ambiente}
         </span>
       )}
-      <p className="truncate text-sm font-semibold text-text" title={limpo}>
-        {limpo}
+      <p className="flex items-center gap-2 truncate text-sm font-semibold text-text" title={limpo}>
+        <span className="relative flex size-2 shrink-0" aria-hidden="true">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-good opacity-40 motion-reduce:animate-none" />
+          <span className="relative inline-flex size-2 rounded-full bg-good" />
+        </span>
+        <span className="truncate">{limpo}</span>
       </p>
+      <p className="text-2xs tracking-[0.12em] text-subtle uppercase">Operação ao vivo</p>
     </div>
   );
 }
@@ -204,5 +233,12 @@ function NomeDaOrganizacao({ nome }: { nome: string | null }) {
  * `apps/web/public/marca/LEIA-ME.md`.
  */
 function Marca() {
-  return <Logo src={MARCA.logoHorizontal} nome={MARCA.produto} largura={168} />;
+  return (
+    <Logo
+      src={MARCA.logoHorizontal}
+      srcEscuro={MARCA.logoHorizontalEscuro}
+      nome={MARCA.produto}
+      largura={168}
+    />
+  );
 }

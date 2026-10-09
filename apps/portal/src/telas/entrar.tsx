@@ -19,8 +19,8 @@
  */
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Field, Input } from '@aurora/ui';
-import { useSession } from '@aurora/app-kit';
+import { Button, Card, Field, Input, Logo } from '@aurora/ui';
+import { useSession, MARCA } from '@aurora/app-kit';
 
 export function EntrarPage() {
   const { signIn } = useSession();
@@ -53,6 +53,13 @@ export function EntrarPage() {
           }}
         >
           <header className="flex flex-col items-center gap-2 text-center">
+            <Logo
+              src={MARCA.logoHorizontal}
+              srcEscuro={MARCA.logoHorizontalEscuro}
+              nome={MARCA.produto}
+              largura={168}
+              className="mx-auto mb-2"
+            />
             <h1 className="text-xl font-semibold text-text">Portal do cliente</h1>
             <p className="text-sm text-muted">Acompanhe seus chamados e abra novos, de onde estiver.</p>
           </header>

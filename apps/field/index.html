@@ -10,21 +10,25 @@
       ler o próprio checklist — e a WCAG 1.4.4 exige ampliação até 200%.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d1017" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f2f7f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#070a10" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" type="image/png" href="/marca/technecare-simbolo.png" />
+    <link rel="icon" type="image/png" href="/marca/itech-simbolo.png" />
+    <link rel="apple-touch-icon" href="/marca/itech-icone-180.png" />
     <title>Campo — Téchne Care</title>
     <script>
       (function () {
+        var modos = { futuristico: 'dark', mindfulness: 'light', wellness: 'light' };
+        var estilo = 'futuristico';
         try {
-          var escolhido = localStorage.getItem('aurora:tema');
-          if (escolhido === 'dark' || escolhido === 'light') {
-            document.documentElement.setAttribute('data-theme', escolhido);
-          }
+          var guardado = localStorage.getItem('aurora:estilo');
+          if (guardado && modos[guardado]) estilo = guardado;
         } catch (e) {
-          /* Modo privado bloqueia o armazenamento. A página funciona sem. */
+          /* modo privado sem localStorage: vale o padrão futurístico */
         }
+        document.documentElement.dataset.estilo = estilo;
+        document.documentElement.dataset.theme = modos[estilo];
+        document.documentElement.style.colorScheme = modos[estilo];
       })();
     </script>
   </head>

@@ -124,6 +124,12 @@ export function ContratosPage() {
               icon={<FileSignature className="size-5" />}
               title={itens.length === 0 ? 'Nenhum contrato' : 'Nenhum contrato com esse texto'}
               filtered={itens.length > 0}
+              description={
+                itens.length === 0
+                  ? 'Um contrato diz o que está coberto para cada cliente — locais e equipamentos —, com SLA e modelo de cobrança.'
+                  : undefined
+              }
+              origem="Contratos ficam ligados a um cliente (veja Clientes). A cobertura decide quais solicitações entram como atendimento contratado."
             />
           ) : (
             <ul className="divide-y divide-border-subtle">

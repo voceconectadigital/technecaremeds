@@ -103,6 +103,12 @@ export interface EmptyStateProps {
    * a pessoa criar registro duplicado.
    */
   filtered?: boolean;
+  /**
+   * De onde os dados desta tela VÊM — a frase que tira a pessoa do impasse
+   * "está vazio, e agora?". Ex.: "Uma OS nasce quando a triagem aceita uma
+   * solicitação." Aparece destacada, abaixo da descrição.
+   */
+  origem?: string;
 }
 
 export function EmptyState({
@@ -112,13 +118,14 @@ export function EmptyState({
   action,
   className,
   filtered = false,
+  origem,
 }: EmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-14 text-center', className)}>
       {icon && (
         <div
           aria-hidden="true"
-          className="flex size-12 items-center justify-center rounded-card border border-border-subtle bg-surface-subtle text-subtle"
+          className="flex size-14 items-center justify-center rounded-pill border border-accent/30 bg-accent-soft text-accent-text shadow-glow"
         >
           {icon}
         </div>
@@ -128,6 +135,14 @@ export function EmptyState({
         {description && <p className="mt-1 text-sm text-muted">{description}</p>}
         {filtered && !description && (
           <p className="mt-1 text-sm text-muted">Nenhum registro corresponde aos filtros aplicados.</p>
+        )}
+        {origem && !filtered && (
+          <p className="mt-3 rounded-control border border-border-subtle bg-surface-subtle px-3 py-2 text-left text-xs leading-relaxed text-muted">
+            <span className="mr-1 font-semibold tracking-[0.1em] text-accent-text uppercase">
+              De onde vem
+            </span>
+            {origem}
+          </p>
         )}
       </div>
       {action && <div className="mt-1">{action}</div>}

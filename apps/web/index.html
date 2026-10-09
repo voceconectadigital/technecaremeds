@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- `theme-color` acompanha o tema: sem isto, a barra do navegador no
          celular fica clara com a página escura. -->
-    <meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d1017" media="(prefers-color-scheme: dark)" />
-    <link rel="icon" type="image/png" href="/marca/technecare-simbolo.png" />
+    <meta name="theme-color" content="#f2f7f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#070a10" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/png" href="/marca/itech-simbolo.png" />
+    <link rel="apple-touch-icon" href="/marca/itech-icone-180.png" />
     <title>Téchne Care</title>
     <script>
       /*
@@ -17,15 +18,17 @@
        * noite no hospital recebe um flash na cara a cada carregamento.
        */
       (function () {
+        var modos = { futuristico: 'dark', mindfulness: 'light', wellness: 'light' };
+        var estilo = 'futuristico';
         try {
-          var escolhido = localStorage.getItem('aurora:tema');
-          var escuro =
-            escolhido === 'dark' ||
-            (escolhido !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.dataset.theme = escuro ? 'dark' : 'light';
+          var guardado = localStorage.getItem('aurora:estilo');
+          if (guardado && modos[guardado]) estilo = guardado;
         } catch (e) {
-          /* modo privado sem localStorage: o padrão claro serve */
+          /* modo privado sem localStorage: vale o padrão futurístico */
         }
+        document.documentElement.dataset.estilo = estilo;
+        document.documentElement.dataset.theme = modos[estilo];
+        document.documentElement.style.colorScheme = modos[estilo];
       })();
     </script>
   </head>

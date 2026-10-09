@@ -5718,6 +5718,282 @@
         ]
       }
     },
+    "/v1/customers/{id}": {
+      "get": {
+        "operationId": "customers.detail",
+        "summary": "Um cliente e os locais dele que esta pessoa enxerga",
+        "description": "Cliente fora do escopo do vínculo responde 404, e não 403: confirmar que ele existe já seria dizer demais. Os locais vêm recortados pelo escopo de locais, como em `/locations`.",
+        "tags": [
+          "Customers"
+        ],
+        "x-aurora-permissions": [
+          "customer.read"
+        ],
+        "x-aurora-source": "apps/api/src/directory/customers.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "customer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "trade_name": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "code": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "tax_id": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "is_internal": {
+                          "type": "boolean"
+                        },
+                        "segment": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "location_count": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "asset_count": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "trade_name",
+                        "code",
+                        "tax_id",
+                        "is_internal",
+                        "segment",
+                        "status",
+                        "location_count",
+                        "asset_count"
+                      ]
+                    },
+                    "locations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "parent_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "code": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "depth": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "location_type_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "location_type_key": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "location_type_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "parent_id",
+                          "name",
+                          "code",
+                          "path",
+                          "depth",
+                          "location_type_id",
+                          "location_type_key",
+                          "location_type_name"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "customer",
+                    "locations"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/customers": {
       "get": {
         "operationId": "customers.list",
@@ -5775,6 +6051,16 @@
                               }
                             ]
                           },
+                          "tax_id": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "is_internal": {
                             "type": "boolean"
                           },
@@ -5795,6 +6081,11 @@
                             "type": "integer",
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
+                          },
+                          "asset_count": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
                           }
                         },
                         "required": [
@@ -5802,10 +6093,12 @@
                           "name",
                           "trade_name",
                           "code",
+                          "tax_id",
                           "is_internal",
                           "segment",
                           "status",
-                          "location_count"
+                          "location_count",
+                          "asset_count"
                         ]
                       }
                     },
@@ -5833,6 +6126,205 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "customers.create",
+        "summary": "Cadastra um cliente — o hospital, a clínica ou a unidade atendida",
+        "description": "Ativos, solicitações, ordens e contratos penduram-se num cliente. O cliente interno (a organização que atende a si mesma) não nasce por aqui: ele é um só por organização e vem do provisionamento. Nome e código repetidos são recusados com 409.",
+        "tags": [
+          "Customers"
+        ],
+        "x-aurora-permissions": [
+          "customer.create"
+        ],
+        "x-aurora-source": "apps/api/src/directory/customers.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 200
+                  },
+                  "trade_name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "tax_id": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "segment": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "trade_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tax_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "is_internal": {
+                      "type": "boolean"
+                    },
+                    "segment": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "location_count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "asset_count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "trade_name",
+                    "code",
+                    "tax_id",
+                    "is_internal",
+                    "segment",
+                    "status",
+                    "location_count",
+                    "asset_count"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -16819,8 +17311,8 @@
     },
     "/v1/location-types": {
       "get": {
-        "operationId": "CustomersController.locationTypes",
-        "summary": "(sem contrato) CustomersController.locationTypes",
+        "operationId": "locationTypes.list",
+        "summary": "Tipos de local, com as regras de aninhamento resolvidas em nomes",
         "tags": [
           "Customers"
         ],
@@ -16828,14 +17320,88 @@
           "location.read"
         ],
         "x-aurora-source": "apps/api/src/directory/customers.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
         "responses": {
           "200": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "key": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "icon": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "can_be_root": {
+                            "type": "boolean"
+                          },
+                          "allows_assets": {
+                            "type": "boolean"
+                          },
+                          "position": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "allowed_parent_type_ids": {
+                            "type": "array",
+                            "items": {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            }
+                          },
+                          "allowed_parent_names": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "key",
+                          "name",
+                          "icon",
+                          "can_be_root",
+                          "allows_assets",
+                          "position",
+                          "allowed_parent_type_ids",
+                          "allowed_parent_names"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
               }
             }
           },
@@ -17317,8 +17883,9 @@
         ]
       },
       "post": {
-        "operationId": "LocationsController.create",
-        "summary": "(sem contrato) LocationsController.create",
+        "operationId": "locations.create",
+        "summary": "Cria um local na árvore de um cliente",
+        "description": "Quem decide se o tipo cabe sob o pai é o banco, pela regra do tipo — e a recusa chega como 422 dizendo quais pais são aceitos. Sem `parent_id`, o local nasce na raiz, o que só vale para tipo que aceita ficar na raiz (a Unidade, na escada inicial).",
         "tags": [
           "Locations"
         ],
@@ -17326,14 +17893,89 @@
           "location.create"
         ],
         "x-aurora-source": "apps/api/src/directory/locations.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "customer_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "parent_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "location_type_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "is_mobile": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "customer_id",
+                  "location_type_id",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
               }
             }
           },
@@ -17349,6 +17991,16 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
             "content": {
               "application/problem+json": {
                 "schema": {

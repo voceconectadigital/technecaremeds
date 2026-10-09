@@ -66,6 +66,25 @@ const ACENTO_DE_TOM: Record<Tone, string> = {
   info: 'text-info-text',
 };
 
+const ICONE_DE_TOM: Record<Tone, string> = {
+  neutral: 'bg-surface-hover text-muted',
+  accent: 'bg-accent-soft text-accent-text',
+  good: 'bg-good-soft text-good-text',
+  warn: 'bg-warn-soft text-warn-text',
+  bad: 'bg-bad-soft text-bad-text',
+  info: 'bg-info-soft text-info-text',
+};
+
+/* Brilho de canto no tom: no futurístico vira a "luz de painel" do indicador. */
+const BRILHO_DE_TOM: Record<Tone, string> = {
+  neutral: 'transparent',
+  accent: 'var(--aurora-accent-soft)',
+  good: 'var(--aurora-good-soft)',
+  warn: 'var(--aurora-warn-soft)',
+  bad: 'var(--aurora-bad-soft)',
+  info: 'var(--aurora-info-soft)',
+};
+
 const BARRA_DE_TOM: Record<Tone, string> = {
   neutral: 'bg-border-strong',
   accent: 'bg-accent',
@@ -93,9 +112,13 @@ export function Metric({
   return (
     <div
       className={cn(
-        'relative flex flex-col gap-1 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
+        'group relative flex flex-col gap-1 overflow-hidden rounded-card border border-border bg-surface p-4 shadow-card',
+        'transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-border-strong hover:shadow-raised motion-reduce:transform-none',
         className
       )}
+      style={{
+        backgroundImage: `radial-gradient(140% 90% at 100% 0%, ${BRILHO_DE_TOM[tone]}, transparent 55%)`,
+      }}
     >
       {/*
        * A FAIXA DE TOM fica na borda esquerda, e não no fundo do cartão.
@@ -105,13 +128,19 @@ export function Metric({
        * contraste. A faixa dá o mesmo sinal ocupando 3px.
        */}
       {tone !== 'neutral' && (
-        <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-[3px]', BARRA_DE_TOM[tone])} />
+        <span
+          aria-hidden="true"
+          className={cn('absolute inset-x-0 top-0 h-[2px] opacity-90', BARRA_DE_TOM[tone])}
+        />
       )}
 
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium tracking-label text-muted uppercase">{label}</p>
+        <p className="text-xs font-medium tracking-[0.12em] text-muted uppercase">{label}</p>
         {icon && (
-          <span aria-hidden="true" className="shrink-0 text-subtle">
+          <span
+            aria-hidden="true"
+            className={cn('grid size-8 shrink-0 place-items-center rounded-control', ICONE_DE_TOM[tone])}
+          >
             {icon}
           </span>
         )}
@@ -120,8 +149,9 @@ export function Metric({
       <div className="flex items-baseline gap-1.5">
         <span
           data-numeric
+          data-display
           className={cn(
-            'font-semibold tracking-display tabular-nums',
+            'leading-none font-semibold tracking-display tabular-nums',
             size === 'lg' ? 'text-4xl' : 'text-3xl',
             indisponivel ? 'text-subtle' : ACENTO_DE_TOM[tone]
           )}
@@ -195,7 +225,7 @@ function TrendPill({ trend }: { trend: MetricTrend }) {
 export interface MetricGridProps {
   children: ReactNode;
   /** Quantas colunas no maior tamanho. O grid degrada sozinho abaixo disso. */
-  columns?: 2 | 3 | 4;
+  columns?: 2 | 3 | 4 | 5;
   className?: string;
 }
 
@@ -215,6 +245,7 @@ export function MetricGrid({ children, columns = 4, className }: MetricGridProps
         columns === 2 && 'grid-cols-1 sm:grid-cols-2',
         columns === 3 && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
         columns === 4 && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+        columns === 5 && 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5',
         className
       )}
     >

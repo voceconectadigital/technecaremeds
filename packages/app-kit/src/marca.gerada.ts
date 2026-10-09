@@ -16,8 +16,10 @@
 export const MARCA = {
   "produto": "Téchne Care",
   "descricao": "Engenharia clínica e gestão de ativos",
-  "logoHorizontal": "/marca/technecare-horizontal.png",
-  "logoSimbolo": "/marca/technecare-simbolo.png",
+  "logoHorizontal": "/marca/itech-logo.webp",
+  "logoSimbolo": "/marca/itech-simbolo.png",
+  "logoHorizontalEscuro": "/marca/itech-logo-escuro.webp",
+  "logoSimboloEscuro": "/marca/itech-simbolo-escuro.png",
   "web": {
     "titulo": "Téchne Care",
     "descricao": "Engenharia clínica e gestão de ativos"

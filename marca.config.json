@@ -59,14 +59,18 @@
       "Os tokens de CSS vivem em packages/ui/src/styles/tokens.css e são a fonte",
       "para a interface. Os valores aqui existem para as superfícies que NÃO",
       "conseguem importar CSS: theme-color do navegador, manifesto do PWA e as",
-      "strings nativas dos projetos de loja."
+      "strings nativas dos projetos de loja.",
+      "",
+      "Em 09/10/2026 a logo passou a ser a iTech (BeCare) — arquivo iTech_logo_principal_unificada.webp entregue pelo cliente. As variantes \"escuro\" trocam só o azul-marinho por um tom claro para o tema futurístico; as cores da marca (verde-lima e azul) são as do arquivo, medidas por histograma."
     ],
-    "logoHorizontal": "/marca/technecare-horizontal.png",
-    "logoSimbolo": "/marca/technecare-simbolo.png",
-    "corPrimaria": "#3e69ac",
-    "corAcento": "#9db924",
-    "corTinta": "#262937",
-    "temaClaro": "#f3f5f8",
-    "temaEscuro": "#0d1017"
+    "logoHorizontal": "/marca/itech-logo.webp",
+    "logoSimbolo": "/marca/itech-simbolo.png",
+    "corPrimaria": "#4a7fc4",
+    "corAcento": "#78c018",
+    "corTinta": "#30304a",
+    "temaClaro": "#f2f7f5",
+    "temaEscuro": "#070a10",
+    "logoHorizontalEscuro": "/marca/itech-logo-escuro.webp",
+    "logoSimboloEscuro": "/marca/itech-simbolo-escuro.png"
   }
 }

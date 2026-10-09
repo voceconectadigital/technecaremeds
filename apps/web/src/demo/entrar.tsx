@@ -44,7 +44,12 @@ export function EntrarDemoPage() {
       <Card raised className="relative w-full max-w-md">
         <div className="flex flex-col gap-6 p-7 sm:p-8">
           <header className="flex flex-col items-center gap-4 text-center">
-            <Logo src={MARCA.logoHorizontal} nome={MARCA.produto} largura={208} />
+            <Logo
+              src={MARCA.logoHorizontal}
+              srcEscuro={MARCA.logoHorizontalEscuro}
+              nome={MARCA.produto}
+              largura={208}
+            />
             <span
               className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-semibold tracking-wider text-muted"
               data-testid="selo-demonstracao"

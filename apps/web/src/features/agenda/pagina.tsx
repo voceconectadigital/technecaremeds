@@ -96,7 +96,10 @@ export function AgendaPage() {
   ];
 
   return (
-    <AppShell title="Agenda" subtitle="O que está sem data, o que atrasou e o que é para hoje.">
+    <AppShell
+      title="Agenda"
+      subtitle="Ordens de serviço com técnico e horário: o que está sem data, o que atrasou e o que é para hoje."
+    >
       {isLoading ? (
         <SkeletonList rows={6} label="agenda" />
       ) : (

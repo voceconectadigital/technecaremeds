@@ -2,11 +2,11 @@
  * Aurora — barra superior: busca, avisos, organização e conta (SPEC §34, §40).
  */
 import { useNavigate } from '@tanstack/react-router';
-import { Bell, Building2, LogOut, Moon, Search, Sun, User } from 'lucide-react';
+import { Bell, Building2, Check, LogOut, Palette, Search, User } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Avatar, Button, CountBadge, Menu, cn, type MenuItem as MenuItemUi } from '@aurora/ui';
 import { meOrganizations } from '@aurora/contracts';
-import { useApiQuery, useSessionQuery, useTheme, useEncerrarSessao } from '@aurora/app-kit';
+import { ESTILOS, useApiQuery, useSessionQuery, useTheme, useEncerrarSessao } from '@aurora/app-kit';
 import { GlobalSearch } from './global-search';
 
 export interface TopbarProps {
@@ -18,7 +18,7 @@ export function Topbar({ menuButton }: TopbarProps) {
   const { data: sessao } = useSessionQuery();
   const encerrarSessao = useEncerrarSessao();
   const navigate = useNavigate();
-  const { tema, alternar } = useTheme();
+  const { estilo, definir } = useTheme();
   const [buscaAberta, setBuscaAberta] = useState(false);
 
   /*
@@ -51,12 +51,17 @@ export function Topbar({ menuButton }: TopbarProps) {
       icon: <User className="size-4" />,
       onSelect: () => void navigate({ to: '/perfil' }),
     },
-    {
-      label: tema === 'dark' ? 'Tema claro' : 'Tema escuro',
-      icon: tema === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />,
-      onSelect: alternar,
-    },
   ];
+
+  /*
+   * Tema à vista, e não escondido no perfil: trocar o estilo é parte da
+   * apresentação do produto. A escolha fica guardada neste navegador.
+   */
+  const itensDeTema: MenuItemUi[] = ESTILOS.map((e) => ({
+    label: `${e.nome} — ${e.descricao}`,
+    icon: e.id === estilo ? <Check className="size-4" /> : <span className="size-4" aria-hidden="true" />,
+    onSelect: () => definir(e.id),
+  }));
 
   if (varias) {
     itensDaConta.push('separator', {
@@ -80,7 +85,7 @@ export function Topbar({ menuButton }: TopbarProps) {
   });
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 md:px-4">
+    <header className="relative z-[var(--aurora-z-sticky)] flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface/80 px-3 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/65 md:px-4">
       {menuButton}
 
       {/*
@@ -94,7 +99,7 @@ export function Topbar({ menuButton }: TopbarProps) {
         type="button"
         onClick={() => setBuscaAberta(true)}
         className={cn(
-          'flex h-8 flex-1 items-center gap-2 rounded-control border border-border px-2.5 text-left',
+          'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control border border-border px-2.5 text-left',
           'text-sm text-subtle transition-colors hover:border-border-strong hover:text-muted',
           'md:max-w-md'
         )}
@@ -106,7 +111,7 @@ export function Topbar({ menuButton }: TopbarProps) {
         </kbd>
       </button>
 
-      <div className="flex flex-1 items-center justify-end gap-1">
+      <div className="flex shrink-0 items-center justify-end gap-1 md:flex-1">
         {varias && (
           <Button
             variant="ghost"
@@ -118,6 +123,22 @@ export function Topbar({ menuButton }: TopbarProps) {
             {sessao?.organization.name ?? '—'}
           </Button>
         )}
+
+        <Menu
+          label="Tema visual"
+          align="end"
+          items={itensDeTema}
+          trigger={
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Palette className="size-4" />}
+              aria-label="Trocar tema visual"
+            >
+              <span className="hidden xl:inline">{ESTILOS.find((e) => e.id === estilo)?.nome}</span>
+            </Button>
+          }
+        />
 
         <NotificationsButton />
 

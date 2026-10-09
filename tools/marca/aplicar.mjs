@@ -172,6 +172,8 @@ export const MARCA = ${JSON.stringify(
     descricao: marca.descricao,
     logoHorizontal: marca.identidadeVisual?.logoHorizontal ?? null,
     logoSimbolo: marca.identidadeVisual?.logoSimbolo ?? null,
+    logoHorizontalEscuro: marca.identidadeVisual?.logoHorizontalEscuro ?? null,
+    logoSimboloEscuro: marca.identidadeVisual?.logoSimboloEscuro ?? null,
     web: marca.aplicacoes.web,
     portal: marca.aplicacoes.portal,
     campo: marca.aplicacoes.campo,

@@ -154,6 +154,7 @@ export function EstoquePage() {
                     : undefined
                 }
                 filtered={itens.length > 0}
+                origem="O saldo nasce das entradas (recebimento de compra) e baixa a cada peça usada numa ordem de serviço. Abaixo do mínimo, o item aparece no painel Hoje."
               />
             </Card>
           ) : (
