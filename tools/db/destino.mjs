@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { carregarFonte } from '../lib/fonte.mjs';
 
 const require = createRequire(import.meta.url);
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -90,8 +91,7 @@ export function conferirOuSair(url) {
     );
   }
 
-  require('tsx/cjs');
-  const { conferirDestino } = require(join(raiz, 'packages', 'config', 'src', 'destino.ts'));
+  const { conferirDestino } = carregarFonte(raiz, 'packages', 'config', 'src', 'destino.ts');
 
   try {
     const r = conferirDestino({ url, ambiente: process.env.AURORA_AMBIENTE, lista });

@@ -1,0 +1,19 @@
+# O contexto da imagem é o código versionado — nada de dependências locais,
+# artefatos de build, ambiente ou dados de teste.
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.aurora
+.pgdata
+*.pglite
+coverage
+test-results
+playwright-report
+apps/field/android
+apps/field/ios
+supabase
+null

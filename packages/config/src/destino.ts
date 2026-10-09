@@ -65,7 +65,17 @@ export interface AmbienteDeDestino {
   bancos: string[];
   ref: string | null;
   situacao?: string;
+  /**
+   * Nomes de serviço numa rede PRIVADA de containers (ex.: `db` no compose do
+   * HostPanel). Só valem com o AURORA_AMBIENTE deste ambiente declarado, só
+   * com banco da lista e só nome de UMA palavra — um nome com ponto é DNS
+   * público e continua sendo remoto (exige `ref`).
+   */
+  hostsInternos?: string[];
 }
+
+/** Uma palavra, sem ponto: só resolve dentro de uma rede privada de containers. */
+const HOST_INTERNO = /^[a-z][a-z0-9-]{0,62}$/;
 
 export interface ListaDeDestinos {
   ambientes: Record<string, AmbienteDeDestino>;
@@ -214,6 +224,23 @@ export function conferirDestino(entrada: ConferenciaDeDestino): {
   }
 
   const alvo = ambientes[ambiente]!;
+
+  if (destino.remoto && (alvo.hostsInternos ?? []).includes(destino.host)) {
+    if (!HOST_INTERNO.test(destino.host) || destino.ref || !alvo.bancos.includes(destino.banco)) {
+      throw new DestinoRecusadoError(
+        `destino interno fora da lista do ambiente "${ambiente}".
+
+` +
+          `  host recebido  : ${destino.host}
+` +
+          `  banco recebido : ${destino.banco}
+` +
+          `  bancos aceitos : ${alvo.bancos.join(', ') || '(nenhum)'}`,
+        'fora_da_lista'
+      );
+    }
+    return { ambiente, destino };
+  }
 
   if (destino.remoto) {
     if (!alvo.ref) {

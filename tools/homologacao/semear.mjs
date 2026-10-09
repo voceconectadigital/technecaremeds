@@ -38,7 +38,8 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 process.env.TSX_TSCONFIG_PATH ??= join(raiz, 'tsconfig.base.json');
-require('tsx/cjs');
+// Fonte TypeScript via tsx em desenvolvimento; `dist/` na imagem (tools/lib/fonte.mjs).
+const { carregarFonte } = await import('../lib/fonte.mjs');
 
 const { Pool } = require('pg');
 
@@ -300,9 +301,9 @@ async function main() {
 
   /* ------------------------------------------------------------- o resto */
 
-  const db = require(join(raiz, 'packages', 'db', 'src', 'index.ts'));
-  const { pgPoolAdapter } = require(join(raiz, 'packages', 'db', 'src', 'adapters.ts'));
-  const { buildContext, PERMISSION_KEYS } = require(join(raiz, 'packages', 'domain', 'src', 'index.ts'));
+  const db = carregarFonte(raiz, 'packages', 'db', 'src', 'index.ts');
+  const { pgPoolAdapter } = carregarFonte(raiz, 'packages', 'db', 'src', 'adapters.ts');
+  const { buildContext, PERMISSION_KEYS } = carregarFonte(raiz, 'packages', 'domain', 'src', 'index.ts');
 
   // O catálogo de permissões é espelho do código (§21) e não vem por migração:
   // sem sincronizar, o papel de fábrica aponta para uma chave que o banco não

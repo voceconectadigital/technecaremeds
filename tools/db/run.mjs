@@ -17,7 +17,10 @@ const require = createRequire(import.meta.url);
 // instalado, então este comando nunca rodou uma vez sequer — descoberto ao
 // aplicar as migrations num PostgreSQL real pela primeira vez. Um script no
 // package.json que ninguém executa é um script que não existe.
-require('tsx/cjs');
+// Fonte TypeScript via tsx em desenvolvimento; `dist/` na imagem (tools/lib/fonte.mjs).
+const { carregarFonte } = await import('../lib/fonte.mjs');
+const { fileURLToPath } = await import('node:url');
+const raiz = fileURLToPath(new URL('../..', import.meta.url));
 
 /*
  * O DESTINO É CONFERIDO ANTES DE ABRIR CONEXÃO.
@@ -35,8 +38,8 @@ const url = process.env.DATABASE_URL;
 conferirOuSair(url);
 
 const { Pool } = require('pg');
-const { pgPoolAdapter, migrate } = require('../../packages/db/src/index.ts');
-const { seed } = require('../../packages/db/src/seeds/index.ts');
+const { pgPoolAdapter, migrate } = carregarFonte(raiz, 'packages', 'db', 'src', 'index.ts');
+const { seed } = carregarFonte(raiz, 'packages', 'db', 'src', 'seeds', 'index.ts');
 
 const command = process.argv[2] ?? 'status';
 const pool = new Pool({ connectionString: url, max: 2 });
