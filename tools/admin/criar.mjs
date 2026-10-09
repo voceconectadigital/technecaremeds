@@ -189,7 +189,25 @@ try {
 
   let org;
 
-  if (typeof argumentos.org === 'string') {
+  if (argumentos['nova-org']) {
+    /*
+     * `--nova-org`: a PRIMEIRA organização real (produção nasce vazia). Nome e
+     * identificador são DIGITADOS por quem opera — o comando não inventa nenhum —
+     * e a linha só é gravada na mesma transação que cria a conta titular: se a
+     * conta falhar, a organização não fica órfã.
+     */
+    const nomeOrg = (await perguntar('Nome da organização (como aparece nas telas): ')).trim();
+    if (nomeOrg.length < 2 || nomeOrg.length > 120) sair('Nome da organização inválido. Nada foi alterado.');
+    const slug = (await perguntar('Identificador curto (ex.: technecare, só minúsculas, números e hífen): '))
+      .trim()
+      .toLowerCase();
+    if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(slug)) sair('Identificador inválido. Nada foi alterado.');
+    const ja = await admin.query(`SELECT 1 FROM aurora.organizations WHERE slug = $1`, [slug]);
+    if (ja.length > 0) sair(`Já existe organização com o identificador "${slug}". Use --org=${slug}.`);
+    const ok = await perguntar(`Criar a organização "${nomeOrg}" (${slug})? [s/N] `);
+    if (!/^s(im)?$/i.test(ok.trim())) sair('Nada foi alterado.');
+    org = { id: dominio.newId(), slug, name: nomeOrg, nova: true };
+  } else if (typeof argumentos.org === 'string') {
     /* `--org=slug`: exato, e a recusa diz o que existe. É o caminho de quem
      * automatiza, e o único que não depende de a lista caber na tela. */
     const achada = await admin.query(
@@ -214,11 +232,12 @@ try {
       `SELECT id, slug, name FROM aurora.organizations
         WHERE deleted_at IS NULL AND status = 'active' ORDER BY created_at`
     );
-    if (todas.length === 0) {
+    if (todas.length === 0 && !argumentos['nova-org']) {
       sair(
         'Não há organização neste banco.\n' +
-          'Rode `npm run homolog:semear` (massa de homologação) ou `npm run db:seed` primeiro:\n' +
-          'uma conta sem organização não enxerga tela nenhuma.'
+          'Em PRODUÇÃO, crie a primeira organização real junto com a conta: `npm run admin:criar -- --nova-org`.\n' +
+          'Em homologação, `npm run homolog:semear` cria a massa de teste.\n' +
+          'Uma conta sem organização não enxerga tela nenhuma.'
       );
     }
 
@@ -356,6 +375,13 @@ try {
   let membroFinal = membershipId;
 
   await admin.transaction(async (tx) => {
+    if (org.nova) {
+      await tx.query(`INSERT INTO aurora.organizations (id, slug, name) VALUES ($1, $2, $3)`, [
+        org.id,
+        org.slug,
+        org.name,
+      ]);
+    }
     if (!existente[0]) {
       await tx.query(
         `INSERT INTO aurora.users (id, email, name, status, auth_provider)

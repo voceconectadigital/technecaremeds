@@ -13,6 +13,9 @@ import { json, raw, urlencoded } from 'express';
 export async function createApp(deps: AppDeps): Promise<INestApplication> {
   const logger = deps.logger ?? createLogger(deps.env.AURORA_LOG_LEVEL, { app: 'aurora-api' });
   const app = await NestFactory.create(createAppModule({ ...deps, logger }), { logger: false });
+  // `req.ip` é a chave do limite de tentativas (login, QR). Só proxies em rede
+  // privada de containers podem informar o cliente — ver AURORA_PROXY_CONFIAVEL.
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxyPara(deps.env.AURORA_PROXY_CONFIAVEL));
   // O padrão do Express é 100 kB, que recusa a importação do EPIC-005 antes de
   // qualquer validação nossa — e recusa com 500, porque o erro nasce no
   // middleware. 12 MB cobre as 50 mil linhas que a rota aceita (§07) com folga,
@@ -88,4 +91,13 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   // física é uma promessa que não temos como cumprir.
   app.setGlobalPrefix('v1', { exclude: ['q/:token'] });
   return app;
+}
+
+/**
+ * Valor do `trust proxy` do Express para cada modo. `false` = só o soquete.
+ * `rede-privada` = loopback, link-local e faixas privadas (10/8, 172.16/12,
+ * 192.168/16, fc00::/7): os saltos do HostPanel; nunca um endereço público.
+ */
+export function trustProxyPara(modo: 'nenhum' | 'rede-privada' | undefined): false | string[] {
+  return modo === 'rede-privada' ? ['loopback', 'linklocal', 'uniquelocal'] : false;
 }

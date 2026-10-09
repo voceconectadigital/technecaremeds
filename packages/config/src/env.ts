@@ -93,6 +93,24 @@ export const envSchema = z
     AURORA_ARQUIVOS_DIR: z.string().default('.aurora/arquivos'),
 
     AURORA_ALLOW_UNSAFE_DEV: booleanish.default(false),
+
+    /**
+     * Quem pode dizer à API qual é o IP do cliente (`req.ip`, chave do limite de
+     * tentativas de entrada).
+     *
+     * `nenhum` (padrão): vale o endereço do soquete — `x-forwarded-for` é
+     * ignorado, porque qualquer um o escreve.
+     *
+     * `rede-privada`: atrás do HostPanel (Traefik → portão web → API, todos em
+     * rede de containers). O Express percorre `x-forwarded-for` da DIREITA para
+     * a esquerda e só pula saltos em loopback/link-local/rede privada; o
+     * primeiro endereço público é o cliente. Um cabeçalho forjado na internet
+     * fica à esquerda do salto verdadeiro e nunca é escolhido — e o Traefik
+     * nem repassa `x-forwarded-for` de origem não confiável.
+     *
+     * Lista fechada de propósito: não há modo "confie em todos".
+     */
+    AURORA_PROXY_CONFIAVEL: z.enum(['nenhum', 'rede-privada']).default('nenhum'),
   })
   .superRefine((env, ctx) => {
     if (env.AURORA_AUTH_PROVIDER === 'supabase') {
