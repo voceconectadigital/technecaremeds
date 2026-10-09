@@ -96,7 +96,7 @@ export function Dialog({
         >
           <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
             <div className="min-w-0">
-              <RadixDialog.Title className="text-xl font-bold tracking-tight text-text">
+              <RadixDialog.Title className="text-[1.375rem] leading-tight font-bold tracking-tight text-text">
                 {title}
               </RadixDialog.Title>
               <RadixDialog.Description

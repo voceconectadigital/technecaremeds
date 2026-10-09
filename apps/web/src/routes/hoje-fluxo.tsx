@@ -101,7 +101,7 @@ export function FluxoDaOperacao() {
   return (
     <section
       aria-labelledby="fluxo-da-operacao"
-      className="relative overflow-hidden rounded-card border border-border bg-surface p-5 shadow-card"
+      className="relative overflow-hidden rounded-card border border-card-border bg-surface p-5 shadow-card"
     >
       {/* Trama sutil de painel: textura, não ruído — some nos temas claros. */}
       <div

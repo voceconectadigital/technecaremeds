@@ -53,7 +53,7 @@ const VARIANTES: Record<ButtonVariant, string> = {
 
 const TAMANHOS: Record<ButtonSize, string> = {
   sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-9 px-3.5 text-sm gap-2',
+  md: 'h-10 px-4 text-sm gap-2',
   // No toque, 44px — o mínimo da WCAG 2.2 (2.5.8). O técnico está de luva.
   lg: 'h-11 px-5 text-base gap-2',
 };
@@ -125,7 +125,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         variant !== 'link' && TAMANHOS[size],
         soIcone &&
           variant !== 'link' &&
-          (size === 'sm' ? 'w-8 px-0' : size === 'lg' ? 'w-11 px-0' : 'w-9 px-0'),
+          (size === 'sm' ? 'w-8 px-0' : size === 'lg' ? 'w-11 px-0' : 'w-10 px-0'),
         fullWidth && 'w-full',
         className
       )}

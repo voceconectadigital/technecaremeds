@@ -182,20 +182,26 @@
 
     /* O fundo da janela e o das superfícies são DIFERENTES: é o degrau entre
        os dois que faz um cartão parecer um cartão sem precisar de sombra. */
-    --aurora-bg: var(--aurora-neutral-50);
+    /* Redesign v2 (09/10/2026): o fundo da área de trabalho é um neutro frio
+       PERCEPTÍVEL, e o cartão branco se destaca dele por superfície — não
+       por borda. Ver "Card" e `--aurora-card-border`. */
+    --aurora-bg: #eef1f5;
     --aurora-surface: var(--aurora-neutral-0);
     --aurora-surface-raised: var(--aurora-neutral-0);
-    --aurora-surface-sunken: var(--aurora-neutral-100);
+    --aurora-surface-sunken: #e8ebf0;
     /* O degrau intermediário: fundo de cabeçalho de tabela, de barra de
        ferramentas e de faixa dentro de cartão. Sem ele, tudo o que não é
        branco vira o mesmo cinza e a tela perde os planos. */
-    --aurora-surface-subtle: var(--aurora-neutral-25);
-    --aurora-surface-hover: #f7f8fa;
+    --aurora-surface-subtle: #f7f8fa;
+    --aurora-surface-hover: #f4f6f9;
     --aurora-surface-active: var(--aurora-neutral-100);
 
-    --aurora-border: #e3e6ec;
+    --aurora-border: #e2e6ec;
     --aurora-border-strong: var(--aurora-neutral-300);
-    --aurora-border-subtle: #eef0f3;
+    --aurora-border-subtle: #edf0f4;
+    /* Cartão no estilo Téchne não tem borda: um anel de 1px na sombra faz o
+       contorno, quase invisível de perto. Os outros estilos devolvem a borda. */
+    --aurora-card-border: transparent;
 
     --aurora-text: var(--aurora-neutral-900);
     --aurora-text-muted: var(--aurora-neutral-600);
@@ -265,9 +271,14 @@
     --aurora-nav-text: #c9d4e5;
     --aurora-nav-text-active: #ffffff;
     --aurora-nav-label: #8a9bb5;
-    --aurora-nav-hover: rgb(255 255 255 / 0.05);
-    --aurora-nav-active: rgb(255 255 255 / 0.09);
+    --aurora-nav-hover: rgb(255 255 255 / 0.06);
+    /* Item ativo: superfície CLARA sobre o marinho — inconfundível sem
+       depender de cor de marca — com o texto no marinho e o ícone no azul. */
+    --aurora-nav-active: #ffffff;
+    --aurora-nav-active-text: var(--aurora-brand-950);
+    --aurora-nav-active-icon: var(--aurora-brand-600);
     --aurora-nav-marker: var(--aurora-lime-500);
+    --aurora-nav-raised: rgb(255 255 255 / 0.06);
 
     /* --------------------------------------------------------- tipografia */
 
@@ -328,11 +339,11 @@
     --aurora-text-sm: 0.8125rem;
     --aurora-text-base: 0.875rem;
     --aurora-text-md: 1rem;
-    --aurora-text-lg: 0.9375rem;
-    --aurora-text-xl: 1.125rem;
-    --aurora-text-2xl: 1.5rem;
+    --aurora-text-lg: 1rem;
+    --aurora-text-xl: 1.1875rem;
+    --aurora-text-2xl: 2rem;
     --aurora-text-3xl: 1.875rem;
-    --aurora-text-4xl: 2.5rem;
+    --aurora-text-4xl: 2.75rem;
 
     --aurora-leading-tight: 1.25;
     --aurora-leading-normal: 1.5;
@@ -351,7 +362,7 @@
      * um título que parece desenhado de um que parece texto ampliado. Acima de
      * 24px o espaço entre as letras cresce junto e o conjunto se solta.
      */
-    --aurora-tracking-display: -0.022em;
+    --aurora-tracking-display: -0.028em;
 
     /* -------------------------------------------------------- espaçamento */
 
@@ -376,15 +387,15 @@
      * leitura em monitor largo: acima dela a linha vira deserto.
      */
     --aurora-content-max: 1600px;
-    --aurora-nav-width: 264px;
+    --aurora-nav-width: 252px;
 
     /* ------------------------------------------------------------- raio */
 
     /* Três degraus com papéis distintos: controle, cartão, folha. Um raio só
        para tudo é o que faz toda interface gerada parecer a mesma. */
-    --aurora-radius-control: 8px;
-    --aurora-radius-card: 12px;
-    --aurora-radius-sheet: 16px;
+    --aurora-radius-control: 10px;
+    --aurora-radius-card: 16px;
+    --aurora-radius-sheet: 20px;
     --aurora-radius-pill: 999px;
 
     /* ---------------------------------------------------------- elevação */
@@ -409,8 +420,8 @@
      */
     /* Recalibrada em 09/10/2026: quase só contato. A separação do cartão é a
        superfície branca sobre o fundo e a borda fina; a sombra só assenta. */
-    --aurora-shadow-card: 0 1px 2px rgb(16 24 40 / 0.04);
-    --aurora-shadow-raised: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 16px -6px rgb(16 24 40 / 0.1);
+    --aurora-shadow-card: 0 0 0 1px rgb(16 24 40 / 0.045), 0 1px 2px rgb(16 24 40 / 0.04);
+    --aurora-shadow-raised: 0 0 0 1px rgb(16 24 40 / 0.05), 0 8px 24px -10px rgb(16 24 40 / 0.16);
     --aurora-shadow-overlay: 0 2px 4px -2px rgb(16 24 40 / 0.06), 0 12px 28px -6px rgb(16 24 40 / 0.16);
     --aurora-shadow-sheet: 0 8px 12px -4px rgb(16 24 40 / 0.08), 0 24px 48px -12px rgb(16 24 40 / 0.22);
     /* O anel interno que dá borda "de vidro" ao cartão de destaque. */
@@ -711,7 +722,11 @@
     --aurora-nav-label: var(--aurora-text-subtle);
     --aurora-nav-hover: var(--aurora-surface-hover);
     --aurora-nav-active: var(--aurora-accent-soft);
+    --aurora-nav-active-text: var(--aurora-text);
+    --aurora-nav-active-icon: var(--aurora-accent-text);
     --aurora-nav-marker: var(--aurora-brand-accent);
+    --aurora-nav-raised: var(--aurora-surface-hover);
+    --aurora-card-border: var(--aurora-border);
   }
 }
 
@@ -778,6 +793,10 @@
   --color-nav-hover: var(--aurora-nav-hover);
   --color-nav-active: var(--aurora-nav-active);
   --color-nav-marker: var(--aurora-nav-marker);
+  --color-nav-active-text: var(--aurora-nav-active-text);
+  --color-nav-active-icon: var(--aurora-nav-active-icon);
+  --color-nav-raised: var(--aurora-nav-raised);
+  --color-card-border: var(--aurora-card-border);
 
   --font-sans: var(--aurora-font-sans);
   --font-mono: var(--aurora-font-mono);

@@ -144,7 +144,7 @@ function PainelDoTurno() {
     return (
       <MetricGrid columns={4}>
         {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="h-28 animate-pulse rounded-card border border-border bg-surface" />
+          <div key={i} className="h-28 animate-pulse rounded-card border border-card-border bg-surface" />
         ))}
       </MetricGrid>
     );

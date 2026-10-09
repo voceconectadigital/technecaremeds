@@ -494,7 +494,7 @@ function ConstrutorDialog({
           {linhas.map((l, i) => (
             <li
               key={i}
-              className="flex flex-col gap-2 rounded-card border border-border bg-surface-subtle p-3"
+              className="flex flex-col gap-2 rounded-card border border-card-border bg-surface-subtle p-3"
             >
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input

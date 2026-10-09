@@ -64,6 +64,8 @@ export interface ToolbarProps {
   filters?: ReactNode;
   /** Botões de ação à direita. */
   actions?: ReactNode;
+  /** Dentro de um painel (Card): sem moldura própria, com divisória embaixo. */
+  embedded?: boolean;
   className?: string;
 }
 
@@ -77,11 +79,14 @@ export interface ToolbarProps {
  * agrupar visualmente é o que faz a pessoa entender que aqueles controles
  * governam a lista logo abaixo, e não a página inteira.
  */
-export function Toolbar({ search, filters, actions, className }: ToolbarProps) {
+export function Toolbar({ search, filters, actions, embedded = false, className }: ToolbarProps) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-card border border-border bg-surface p-2.5 shadow-card lg:flex-row lg:items-center',
+        'flex flex-col gap-3 lg:flex-row lg:items-center',
+        embedded
+          ? 'border-b border-border-subtle px-3 py-2.5'
+          : 'rounded-card border border-card-border bg-surface p-2.5 shadow-card',
         className
       )}
     >
@@ -214,7 +219,7 @@ export function StatStrip({ items, className }: StatStripProps) {
   return (
     <dl
       className={cn(
-        'grid grid-cols-2 divide-border-subtle overflow-hidden rounded-card border border-border bg-surface shadow-card sm:grid-cols-4 sm:divide-x',
+        'grid grid-cols-2 divide-border-subtle overflow-hidden rounded-card border border-card-border bg-surface shadow-card sm:grid-cols-4 sm:divide-x',
         className
       )}
     >
