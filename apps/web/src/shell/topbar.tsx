@@ -85,7 +85,7 @@ export function Topbar({ menuButton }: TopbarProps) {
   });
 
   return (
-    <header className="relative z-[var(--aurora-z-sticky)] flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface/80 px-3 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/65 md:px-4">
+    <header className="relative z-[var(--aurora-z-sticky)] flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-3 md:px-6">
       {menuButton}
 
       {/*
@@ -99,14 +99,14 @@ export function Topbar({ menuButton }: TopbarProps) {
         type="button"
         onClick={() => setBuscaAberta(true)}
         className={cn(
-          'flex h-8 min-w-0 flex-1 items-center gap-2 rounded-control border border-border px-2.5 text-left',
-          'text-sm text-subtle transition-colors hover:border-border-strong hover:text-muted',
+          'flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-control border border-border bg-surface-subtle px-3 text-left',
+          'text-sm text-subtle transition-colors hover:border-border-strong hover:bg-surface hover:text-muted',
           'md:max-w-md'
         )}
       >
         <Search aria-hidden="true" className="size-4 shrink-0" />
         <span className="flex-1 truncate">Buscar OS, ativo, solicitação…</span>
-        <kbd className="hidden rounded border border-border px-1.5 py-0.5 font-sans text-2xs text-subtle md:inline">
+        <kbd className="hidden rounded-[5px] border border-border bg-surface px-1.5 py-0.5 font-sans text-2xs font-medium text-subtle md:inline">
           Ctrl K
         </kbd>
       </button>
@@ -150,9 +150,16 @@ export function Topbar({ menuButton }: TopbarProps) {
             <button
               type="button"
               aria-label={`Conta de ${sessao?.user.name ?? 'usuário'}`}
-              className="rounded-pill transition-opacity hover:opacity-80"
+              className="flex items-center gap-2.5 rounded-control py-1 pr-2 pl-1 transition-colors hover:bg-surface-hover md:ml-1 md:border-l md:border-border md:pl-3"
             >
               <Avatar name={sessao?.user.name || sessao?.user.email || '?'} size="md" />
+              {/* O nome à vista a partir de 1280px: quem divide o computador
+                  da sala técnica confere de quem é a sessão sem abrir menu. */}
+              {sessao?.user.name && (
+                <span className="hidden max-w-40 truncate text-sm font-semibold text-text xl:inline">
+                  {sessao.user.name}
+                </span>
+              )}
             </button>
           }
         />
@@ -181,7 +188,7 @@ function NotificationsButton() {
       type="button"
       onClick={() => void navigate({ to: '/notificacoes' })}
       aria-label={naoLidas > 0 ? `Notificações: ${naoLidas} não lidas` : 'Notificações: nenhuma não lida'}
-      className="relative rounded-control p-2 text-muted transition-colors hover:bg-surface-hover hover:text-text"
+      className="relative grid size-9 place-items-center rounded-control text-muted transition-colors hover:bg-surface-hover hover:text-text"
     >
       <Bell aria-hidden="true" className="size-[18px]" />
       {naoLidas > 0 && (

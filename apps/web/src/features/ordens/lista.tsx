@@ -51,7 +51,7 @@ export function OrdensPage() {
           */}
           <AlternadorDeTrabalho />
           <span aria-hidden="true" className="h-5 w-px bg-border" />
-          <div className="flex items-center gap-1 rounded-control border border-border p-0.5">
+          <div className="flex items-center gap-0.5 rounded-[10px] border border-border-subtle bg-surface-sunken p-0.5">
             <Button
               size="sm"
               variant={vista === 'quadro' ? 'secondary' : 'ghost'}
