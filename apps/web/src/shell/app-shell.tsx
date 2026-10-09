@@ -54,7 +54,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
   }, [gavetaAberta]);
 
   return (
-    <div className="flex h-dvh flex-col bg-bg">
+    /*
+     * REDESIGN v2: a moldura é a cor da navegação (`bg-nav`) e o conteúdo é um
+     * CANVAS claro, com cantos arredondados, que flutua dentro dela a partir
+     * de 768px. No celular o canvas ocupa a tela inteira.
+     */
+    <div className="flex h-dvh flex-col bg-nav">
       {ambiente.demonstracao && <FaixaDemonstracao />}
       {/* Primeira parada do teclado, invisível até receber foco. */}
       <a href="#conteudo" className="aurora-skip-link">
@@ -100,22 +105,23 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
 
         {/* ------------------------------------------------------- conteúdo */}
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar
-            onOpenMenu={() => setGavetaAberta(true)}
-            menuButton={
-              <Button
-                aria-label="Abrir menu"
-                variant="ghost"
-                size="sm"
-                className="md:hidden"
-                onClick={() => setGavetaAberta(true)}
-                icon={<MenuIcon className="size-5" />}
-              />
-            }
-          />
+        <div className="flex min-w-0 flex-1 flex-col md:py-2.5 md:pr-2.5">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg md:rounded-[20px] md:shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_10px_40px_-12px_rgb(0_0_0/0.35)]">
+            <Topbar
+              onOpenMenu={() => setGavetaAberta(true)}
+              menuButton={
+                <Button
+                  aria-label="Abrir menu"
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={() => setGavetaAberta(true)}
+                  icon={<MenuIcon className="size-5" />}
+                />
+              }
+            />
 
-          {/*
+            {/*
             O CABEÇALHO DA PÁGINA ROLA JUNTO COM O CONTEÚDO (09/10/2026).
 
             Antes ele era uma faixa branca fixa, com borda, acima de `<main>` —
@@ -125,13 +131,13 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             SANGRADA (quadro de OS): ali o conteúdo mede a altura que sobra, e
             o arranjo antigo — cabeçalho fixo, `<main>` rolando — continua.
           */}
-          <div
-            className={cn(
-              'min-h-0 flex-1',
-              bleed ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'
-            )}
-          >
-            {/*
+            <div
+              className={cn(
+                'min-h-0 flex-1',
+                bleed ? 'flex flex-col' : 'overflow-y-auto [scrollbar-gutter:stable]'
+              )}
+            >
+              {/*
             `<section>` NOMEADA, e não `<div>` nem `<header>`.
             
             Um `<div>` não é marco, e todo conteúdo de uma página precisa estar
@@ -151,9 +157,9 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
             `<section>` com nome acessível é marco `region` — que é exatamente
             o que isto é: uma região da página, nomeada pelo próprio título.
           */}
-            <section
-              aria-labelledby="titulo-da-pagina"
-              /*
+              <section
+                aria-labelledby="titulo-da-pagina"
+                /*
               EMPILHA ATÉ 1024px, e o limiar subiu por um defeito medido DUAS
               vezes.
 
@@ -179,12 +185,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               primeiro item do índice de quem usa leitor de tela e a única
               confirmação de onde a pessoa está.
             */
-              className={cn(
-                'mx-auto flex w-full max-w-[var(--aurora-content-max)] shrink-0 flex-col gap-3 px-4 pt-5 pb-5 md:px-6 md:pt-7 lg:flex-row lg:items-end lg:justify-between lg:gap-6 lg:px-8',
-                bleed && 'max-w-none border-b border-border-subtle'
-              )}
-            >
-              {/*
+                className={cn(
+                  'mx-auto flex w-full max-w-[var(--aurora-content-max)] shrink-0 flex-col gap-4 px-4 pt-6 pb-6 md:px-8 md:pt-9 md:pb-7 lg:flex-row lg:items-end lg:justify-between lg:gap-8 lg:px-10',
+                  bleed && 'max-w-none border-b border-border-subtle'
+                )}
+              >
+                {/*
               O TÍTULO TEM PISO DE LARGURA, e o piso é a correção de um defeito
               que voltou.
 
@@ -206,21 +212,23 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               da página, o primeiro item do índice de quem usa leitor de tela e a
               única confirmação de onde a pessoa está.
             */}
-              <div className="min-w-40 flex-1">
-                {breadcrumbs && breadcrumbs.length > 0 && (
-                  <Breadcrumbs items={breadcrumbs} className="mb-2" />
-                )}
-                {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
+                <div className="min-w-40 flex-1">
+                  {breadcrumbs && breadcrumbs.length > 0 && (
+                    <Breadcrumbs items={breadcrumbs} className="mb-2" />
+                  )}
+                  {/* Um `<h1>` por tela. A lista de cabeçalhos é o índice de quem
                   não vê a tela. */}
-                <h1
-                  id="titulo-da-pagina"
-                  className="truncate text-2xl leading-tight font-bold tracking-display text-text"
-                >
-                  {title}
-                </h1>
-                {subtitle && <p className="mt-1.5 max-w-3xl text-base text-muted">{subtitle}</p>}
-              </div>
-              {/*
+                  <h1
+                    id="titulo-da-pagina"
+                    className="truncate text-[1.625rem] leading-[1.15] font-bold tracking-display text-text md:text-2xl"
+                  >
+                    {title}
+                  </h1>
+                  {subtitle && (
+                    <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-muted">{subtitle}</p>
+                  )}
+                </div>
+                {/*
               `flex-wrap` e SEM `shrink-0` em nenhuma largura.
 
               O `sm:shrink-0` que existia aqui era a outra metade do defeito: ele
@@ -229,12 +237,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               em linhas quando o espaço aperta, que é o que uma barra de ações
               deve fazer.
             */}
-              {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
-            </section>
+                {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+              </section>
 
-            <main
-              id="conteudo"
-              /*
+              <main
+                id="conteudo"
+                /*
               `tabIndex={0}`, e não `-1`.
               
               O `-1` já servia ao pulo do teclado: sem ele o link "pular para o
@@ -252,17 +260,18 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               O preço é uma parada a mais na tabulação, que é exatamente o que
               se quer numa região rolável.
             */
-              tabIndex={0}
-              className={cn('outline-none', bleed && 'min-h-0 flex-1 overflow-auto')}
-            >
-              {bleed ? (
-                children
-              ) : (
-                <div className="mx-auto w-full max-w-[var(--aurora-content-max)] px-4 pb-10 md:px-6 lg:px-8">
-                  {children}
-                </div>
-              )}
-            </main>
+                tabIndex={0}
+                className={cn('outline-none', bleed && 'min-h-0 flex-1 overflow-auto')}
+              >
+                {bleed ? (
+                  children
+                ) : (
+                  <div className="mx-auto w-full max-w-[var(--aurora-content-max)] px-4 pb-12 md:px-8 lg:px-10">
+                    {children}
+                  </div>
+                )}
+              </main>
+            </div>
           </div>
         </div>
       </div>
