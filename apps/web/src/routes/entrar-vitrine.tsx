@@ -1,12 +1,19 @@
 /**
- * Aurora — a vitrine ao lado da entrada.
+ * A moldura da entrada — painel de marca à esquerda, formulário à direita.
  *
- * A tela de entrada é a primeira impressão do produto. Do lado esquerdo, em
- * telas largas, ela diz o que o sistema faz — sem números inventados: são
- * capacidades, não estatísticas. A constelação ecoa os nós da logo e se move
- * devagar (e para, para quem pediu menos movimento).
+ * Redesenhada em 09/10/2026. A versão anterior era uma constelação animada
+ * atrás de cartões translúcidos, e a do formulário um cartão de vidro sobre
+ * dois degradês: três camadas de efeito numa tela cuja única tarefa é
+ * entrar. Agora o painel usa a cor ESTRUTURAL da marca (os papéis `nav-*`:
+ * azul-marinho no estilo Téchne, a superfície rebaixada nos outros), a logo
+ * na variante para fundo escuro, o texto que já existia e nada piscando.
+ *
+ * Abaixo de 1024px o painel some e a logo sobe para o topo do formulário — no
+ * celular, a pessoa veio entrar, não ler sobre a plataforma.
  */
+import type { ReactNode } from 'react';
 import { Activity, CalendarRange, ShieldCheck, Smartphone } from 'lucide-react';
+import { Logo } from '@aurora/ui';
 import { MARCA } from '@aurora/app-kit';
 
 const CAPACIDADES = [
@@ -28,108 +35,78 @@ const CAPACIDADES = [
   { icone: Smartphone, titulo: 'Campo sem rede', texto: 'O técnico executa e assina mesmo no subsolo.' },
 ] as const;
 
+export function MolduraDeEntrada({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid min-h-dvh bg-bg lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <VitrineDeEntrada />
+      <div className="flex items-center justify-center px-4 py-10 sm:px-8">
+        <div className="w-full max-w-[400px]">
+          <div className="mb-8 lg:hidden">
+            <Logo
+              src={MARCA.logoHorizontal}
+              srcEscuro={MARCA.logoHorizontalEscuro}
+              nome={MARCA.produto}
+              largura={168}
+            />
+          </div>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function VitrineDeEntrada() {
   return (
-    <aside className="relative hidden flex-col justify-between overflow-hidden border-r border-border p-12 lg:flex">
-      <Constelacao />
+    <aside className="aurora-nav relative hidden flex-col justify-between overflow-hidden bg-nav p-12 xl:p-16 lg:flex">
+      {/* Grade técnica muito fraca: textura de prancheta, e não enfeite. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
+        style={{
+          backgroundImage:
+            'linear-gradient(var(--aurora-nav-text) 1px, transparent 1px), linear-gradient(90deg, var(--aurora-nav-text) 1px, transparent 1px)',
+          backgroundSize: '48px 48px',
+          maskImage: 'radial-gradient(120% 90% at 0% 0%, black, transparent 70%)',
+        }}
+      />
+
       <div className="relative">
-        <p className="text-xs font-semibold tracking-[0.2em] text-accent-text uppercase">
+        <Logo
+          src={MARCA.logoHorizontal}
+          srcEscuro={MARCA.logoHorizontalEscuro}
+          nome={MARCA.produto}
+          largura={176}
+        />
+      </div>
+
+      <div className="relative max-w-xl">
+        <p className="text-xs font-semibold tracking-[0.12em] text-nav-label uppercase">
           Plataforma de engenharia clínica
         </p>
-        <h2 data-display className="mt-4 max-w-xl text-4xl leading-[1.05] font-semibold text-text">
-          Cada equipamento do hospital, <span className="text-brand-accent-text">visível</span> e sob
-          controle.
-        </h2>
-        <p className="mt-4 max-w-lg text-md text-muted">
+        <p className="mt-4 text-4xl leading-[1.1] font-bold tracking-display text-nav-text-active">
+          Cada equipamento do hospital, visível e sob controle.
+        </p>
+        <p className="mt-4 max-w-lg text-md text-nav-text">
           {MARCA.descricao} — do chamado à peça, da agenda ao indicador.
         </p>
       </div>
 
-      <ul className="relative grid max-w-2xl grid-cols-2 gap-3">
+      <ul className="relative grid max-w-2xl grid-cols-2 gap-x-8 gap-y-6 border-t border-nav-border pt-8">
         {CAPACIDADES.map(({ icone: Icone, titulo, texto }) => (
-          <li
-            key={titulo}
-            className="rounded-card border border-border bg-surface/60 p-4 shadow-card backdrop-blur-md"
-          >
-            <span className="grid size-9 place-items-center rounded-control bg-accent-soft text-accent-text">
-              <Icone aria-hidden="true" className="size-[18px]" />
-            </span>
-            <p className="mt-3 text-sm font-semibold text-text">{titulo}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">{texto}</p>
+          <li key={titulo} className="flex gap-3">
+            <Icone
+              aria-hidden="true"
+              strokeWidth={1.75}
+              className="mt-0.5 size-[18px] shrink-0 text-nav-marker"
+            />
+            <div>
+              <p className="text-sm font-semibold text-nav-text-active">{titulo}</p>
+              <p className="mt-1 text-xs leading-relaxed text-nav-text">{texto}</p>
+            </div>
           </li>
         ))}
       </ul>
     </aside>
-  );
-}
-
-/** Nós e arestas no espírito da logo — decorativo, ignorado por leitores de tela. */
-function Constelacao() {
-  const nos = [
-    [120, 140, 5],
-    [260, 90, 3],
-    [380, 210, 6],
-    [520, 120, 4],
-    [610, 260, 5],
-    [470, 340, 3],
-    [300, 330, 4],
-    [180, 260, 3],
-  ] as const;
-  const arestas = [
-    [0, 1],
-    [1, 2],
-    [2, 3],
-    [3, 4],
-    [4, 5],
-    [5, 6],
-    [6, 7],
-    [7, 0],
-    [2, 6],
-    [2, 5],
-  ] as const;
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 720 420"
-      className="pointer-events-none absolute top-[34%] -right-28 w-[720px] opacity-50"
-    >
-      <defs>
-        <radialGradient id="no-brilho">
-          <stop offset="0%" stopColor="var(--aurora-accent)" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="var(--aurora-accent)" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      {arestas.map(([a, b]) => (
-        <line
-          key={`${a}-${b}`}
-          x1={nos[a][0]}
-          y1={nos[a][1]}
-          x2={nos[b][0]}
-          y2={nos[b][1]}
-          stroke="var(--aurora-brand-accent)"
-          strokeOpacity="0.35"
-          strokeWidth="1.2"
-        />
-      ))}
-      {nos.map(([x, y, r], i) => (
-        <g key={i}>
-          <circle cx={x} cy={y} r={r * 4} fill="url(#no-brilho)" opacity="0.25">
-            <animate
-              attributeName="opacity"
-              values="0.1;0.35;0.1"
-              dur={`${4 + (i % 3)}s`}
-              repeatCount="indefinite"
-            />
-          </circle>
-          <circle
-            cx={x}
-            cy={y}
-            r={r}
-            fill={i % 2 ? 'var(--aurora-accent)' : 'var(--aurora-text)'}
-            opacity="0.85"
-          />
-        </g>
-      ))}
-    </svg>
   );
 }
