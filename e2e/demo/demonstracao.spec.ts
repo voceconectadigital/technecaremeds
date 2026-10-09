@@ -87,6 +87,11 @@ const TELAS: Array<[string, RegExp]> = [
   ['/contratos', /Contratos/],
   ['/orcamentos', /Orçamentos/],
   ['/indicadores', /Indicadores/],
+  ['/painel', /Painel de Controle/],
+  ['/planos', /Planos de manutenção/],
+  ['/planos?aba=cronograma', /Planos de manutenção/],
+  ['/planos?aba=procedimentos', /Planos de manutenção/],
+  ['/clientes', /Clientes/],
   ['/configuracoes', /Configurações|Pessoas|Membros/],
 ];
 
@@ -143,6 +148,21 @@ test('rota profunda abre direto por URL e sobrevive ao recarregamento', async ({
     await page.reload();
     await telaPronta(page, titulo);
   }
+
+  // A ficha do cliente (setores e equipamentos por setor), recarregada.
+  await page.goto('/clientes');
+  await page.locator('a[href^="/clientes/"]').first().click();
+  await expect(page).toHaveURL(/\/clientes\/[0-9a-f-]{36}/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Setores' })).toBeVisible();
+
+  // O Modo Exibição: fora da moldura (sem faixa nem menu), mesmo dado, sem rolagem lateral.
+  await page.goto('/painel/tv');
+  await expect(page.getByRole('heading', { level: 1, name: 'Painel de Controle' })).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth))
+    .toBeLessThanOrEqual(1);
 
   conferirLimpo(v);
 });
