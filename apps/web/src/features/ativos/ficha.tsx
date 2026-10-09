@@ -19,11 +19,13 @@
  * inteiro deixa de existir. É a diferença entre "não está na tela" e "não
  * saiu do servidor".
  */
+import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { BadgeCheck, CalendarDays, MapPin, QrCode, ShieldAlert, Wrench } from 'lucide-react';
-import { Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
+import { BadgeCheck, CalendarDays, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
+import { Button, Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { assetDetail, workOrdersList, type AssetDetail, type WorkOrderRow } from '@aurora/contracts';
-import { useApiQuery } from '@aurora/app-kit';
+import { Can, useApiQuery } from '@aurora/app-kit';
+import { DialogoEquipamento } from './formulario';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
@@ -31,6 +33,7 @@ import { tomDaCategoria } from '../ordens/lista';
 
 export function AtivoPage() {
   const { id } = useParams({ strict: false }) as { id: string };
+  const [editando, setEditando] = useState(false);
 
   const { data, isLoading, isError, error } = useApiQuery(assetDetail, { params: { id } }) as {
     data: AssetDetail | undefined;
@@ -59,7 +62,30 @@ export function AtivoPage() {
       title={data.name}
       subtitle={[data.manufacturer_name, data.model_name, data.category_name].filter(Boolean).join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
+      actions={
+        <Can permission="asset.update">
+          <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
+            Editar
+          </Button>
+        </Can>
+      }
     >
+      <DialogoEquipamento
+        open={editando}
+        onOpenChange={setEditando}
+        inicial={{
+          id: data.id,
+          name: data.name,
+          customer_id: data.customer_id,
+          location_id: data.location_id,
+          asset_category_id: data.asset_category_id,
+          asset_model_id: data.asset_model_id,
+          criticality_id: data.criticality_id,
+          tag: data.tag,
+          serial_number: data.serial_number,
+          asset_number: data.asset_number,
+        }}
+      />
       <div className="flex flex-col gap-4">
         <Card>
           <div className="flex flex-col gap-4 p-4">
@@ -99,13 +125,15 @@ export function AtivoPage() {
             )}
 
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-              <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
-              <Info rotulo="Número de série" valor={data.serial_number} />
+              <Info rotulo="Cliente / Hospital" valor={data.customer_name ?? null} />
               <Info
-                rotulo="Local"
-                valor={data.location_path ?? data.location_name}
+                rotulo="Setor"
+                valor={data.location_name}
+                vazio="Sem setor"
                 icone={<MapPin className="size-3.5" />}
               />
+              <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
+              <Info rotulo="Número de série" valor={data.serial_number} />
               <Info
                 rotulo="Idade"
                 valor={

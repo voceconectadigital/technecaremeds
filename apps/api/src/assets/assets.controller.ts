@@ -12,7 +12,7 @@
  * (`asset_label`, ADR-006). Quem consome não precisa saber que internamente
  * tudo é `asset`; quem opera num hospital lê "Equipamento".
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createAsset,
@@ -21,9 +21,10 @@ import {
   importAssets,
   curationQueue,
   assetTimeline,
+  type TenantSession,
   type Database,
 } from '@aurora/db';
-import { assetsTimeline } from '@aurora/contracts';
+import { assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
@@ -50,6 +51,48 @@ function requiredText(value: unknown, field: string, min = 1): string {
   return value.trim();
 }
 
+/**
+ * Cliente → Setor → Equipamento, conferido no SERVIDOR.
+ *
+ * O banco já recusa local de outro cliente (gatilho da 0015) e de outra
+ * organização (FK composta + RLS). Esta conferência vem antes para três
+ * coisas que o banco não diz: o escopo de quem cadastra (vínculo restrito a um
+ * hospital não cadastra em outro), o tipo de local que aceita equipamento, e
+ * uma recusa com o CAMPO nomeado — que é o que o formulário precisa.
+ */
+async function conferirClienteESetor(
+  s: TenantSession,
+  membershipId: string,
+  customerId: string,
+  locationId: string
+): Promise<void> {
+  const [cliente] = await s.query<{ ok: boolean }>(
+    `SELECT true AS ok FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+    [membershipId, customerId]
+  );
+  if (!cliente) throw new NotFoundError('cliente', customerId);
+
+  const [local] = await s.query<{ customer_id: string; allows_assets: boolean; acessivel: boolean }>(
+    `SELECT l.customer_id, t.allows_assets,
+            EXISTS (SELECT 1 FROM aurora.accessible_location_ids($1) a WHERE a.location_id = l.id) AS acessivel
+       FROM aurora.locations l
+       JOIN aurora.location_types t ON t.id = l.location_type_id
+      WHERE l.id = $2 AND l.deleted_at IS NULL`,
+    [membershipId, locationId]
+  );
+  if (!local || !local.acessivel) {
+    throw new ValidationError('setor não encontrado', { field: 'location_id' });
+  }
+  if (local.customer_id !== customerId) {
+    throw new ValidationError('o setor escolhido pertence a outro cliente', { field: 'location_id' });
+  }
+  if (!local.allows_assets) {
+    throw new ValidationError('este tipo de local não recebe equipamento — escolha um setor ou sala', {
+      field: 'location_id',
+    });
+  }
+}
+
 @Controller('assets')
 export class AssetsController {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -67,12 +110,14 @@ export class AssetsController {
     @Req() req: AuroraRequest,
     @Query('location') location?: string,
     @Query('status') status?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('customer') customer?: string
   ): Promise<{ items: unknown[]; asset_label: string }> {
     const ctx = req.auroraContext!;
     if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
     const membershipId = ctx.membershipId;
     const locationId = location === undefined ? null : uuidParam(location, 'location');
+    const customerId = customer === undefined ? null : uuidParam(customer, 'customer');
     const max = Math.min(Number.parseInt(limit ?? '100', 10) || 100, 500);
 
     return withTenant(this.db, ctx, async (s) => {
@@ -99,12 +144,37 @@ export class AssetsController {
                   SELECT r.path || '%' FROM aurora.locations r WHERE r.id = $2
                 ))
             AND ($3::text IS NULL OR a.status::text = $3)
+            AND ($5::uuid IS NULL OR a.customer_id = $5)
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
           ORDER BY a.name
           LIMIT $4`,
-        [membershipId, locationId, status ?? null, max]
+        [membershipId, locationId, status ?? null, max, customerId]
       );
       return { items, asset_label: org?.asset_label ?? 'Ativo' };
     });
+  }
+
+  /**
+   * Os catálogos que o cadastro de equipamento usa: categoria, modelo,
+   * criticidade. Cliente e setor vêm de `/customers` — já recortados pelo escopo.
+   */
+  @Get('form-options')
+  @RequirePermissions('asset.read')
+  async formOptions(@Req() req: AuroraRequest): Promise<unknown> {
+    return withTenant(this.db, req.auroraContext!, async (s) => ({
+      categories: await s.query(
+        `SELECT id, name, parent_id FROM aurora.asset_categories WHERE archived_at IS NULL ORDER BY name`
+      ),
+      models: await s.query(
+        `SELECT m.id, m.name, f.name AS manufacturer_name, m.asset_category_id
+           FROM aurora.asset_models m LEFT JOIN aurora.manufacturers f ON f.id = m.manufacturer_id
+          WHERE m.archived_at IS NULL ORDER BY f.name NULLS LAST, m.name`
+      ),
+      criticalities: await s.query(
+        `SELECT id, name, score::float8 AS score FROM aurora.criticality_levels
+          WHERE archived_at IS NULL ORDER BY score DESC`
+      ),
+    }));
   }
 
   /**
@@ -151,9 +221,10 @@ export class AssetsController {
                 CASE WHEN $3::boolean THEN a.currency END AS currency,
                 c.name AS category_name, l.name AS location_name,
                 m.name AS model_name, m.specs AS model_specs,
-                f.name AS manufacturer_name
+                f.name AS manufacturer_name, cu.name AS customer_name
            FROM aurora.assets a
            JOIN aurora.asset_categories c ON c.id = a.asset_category_id
+           JOIN aurora.customers cu ON cu.id = a.customer_id
            LEFT JOIN aurora.locations l    ON l.id = a.location_id
            LEFT JOIN aurora.asset_models m ON m.id = a.asset_model_id
            LEFT JOIN aurora.manufacturers f ON f.id = m.manufacturer_id
@@ -197,26 +268,91 @@ export class AssetsController {
     });
   }
 
+  /**
+   * Cadastra o equipamento: cliente E setor obrigatórios, conferidos aqui.
+   *
+   * Ativo sem local continua legítimo no banco (importação, comodato em
+   * trânsito) — por isso a coluna segue anulável. Quem entra pela tela de
+   * cadastro, porém, informa onde o equipamento está.
+   */
   @Post()
   @RequirePermissions('asset.create')
-  async create(@Req() req: AuroraRequest, @Body() body: Record<string, unknown>): Promise<{ id: string }> {
+  async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
-    const id = await withTenant(this.db, ctx, (s) =>
-      createAsset(s, {
-        name: requiredText(body.name, 'name'),
-        customerId: uuidParam(body.customer_id, 'customer_id'),
-        assetCategoryId: uuidParam(body.asset_category_id, 'asset_category_id'),
-        locationId: body.location_id === undefined ? null : uuidParam(body.location_id, 'location_id'),
-        assetModelId:
-          body.asset_model_id === undefined ? null : uuidParam(body.asset_model_id, 'asset_model_id'),
-        criticalityId:
-          body.criticality_id === undefined ? null : uuidParam(body.criticality_id, 'criticality_id'),
-        tag: typeof body.tag === 'string' ? body.tag : null,
-        serialNumber: typeof body.serial_number === 'string' ? body.serial_number : null,
-        assetNumber: typeof body.asset_number === 'string' ? body.asset_number : null,
-      })
-    );
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const b = parseWith(assetsCreate.body, body);
+    const id = await withTenant(this.db, ctx, async (s) => {
+      await conferirClienteESetor(s, membershipId, b.customer_id, b.location_id);
+      return createAsset(s, {
+        name: requiredText(b.name, 'name'),
+        customerId: b.customer_id,
+        assetCategoryId: b.asset_category_id,
+        locationId: b.location_id,
+        assetModelId: b.asset_model_id ?? null,
+        criticalityId: b.criticality_id ?? null,
+        tag: b.tag || null,
+        serialNumber: b.serial_number || null,
+        assetNumber: b.asset_number || null,
+      });
+    });
     return { id };
+  }
+
+  /**
+   * Edita os dados cadastrais. Cliente e setor NÃO mudam aqui: é
+   * transferência, com motivo — e o banco recusa a edição direta (0015).
+   */
+  @Patch(':id')
+  @RequirePermissions('asset.update')
+  async update(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const b = parseWith(assetsUpdate.body, body);
+
+    const colunas: Record<string, string> = {
+      name: 'name',
+      asset_category_id: 'asset_category_id',
+      asset_model_id: 'asset_model_id',
+      criticality_id: 'criticality_id',
+      tag: 'tag',
+      serial_number: 'serial_number',
+      asset_number: 'asset_number',
+    };
+    const sets: string[] = [];
+    const valores: unknown[] = [assetId];
+    for (const [campo, coluna] of Object.entries(colunas)) {
+      const v = (b as Record<string, unknown>)[campo];
+      if (v === undefined) continue;
+      valores.push(typeof v === 'string' && v.trim() === '' && campo !== 'name' ? null : v);
+      sets.push(`${coluna} = $${valores.length}`);
+    }
+    if (sets.length === 0) throw new ValidationError('nada para alterar', { field: 'body' });
+
+    await withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      valores.push(ctx.actorId);
+      await s.query(
+        `UPDATE aurora.assets SET ${sets.join(', ')}, updated_at = now(), updated_by = $${valores.length}
+          WHERE id = $1`,
+        valores
+      );
+    });
+    return { ok: true };
   }
 
   /** Transferência: motivo obrigatório, porque movimentação sem motivo não explica nada depois. */

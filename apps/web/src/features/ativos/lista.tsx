@@ -23,8 +23,8 @@
  */
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { Boxes, ChevronRight, MapPin, Search } from 'lucide-react';
-import { Card, EmptyState, Select, SkeletonList, StatusChip, Thumb, cn } from '@aurora/ui';
+import { Boxes, ChevronRight, MapPin, Plus, Search } from 'lucide-react';
+import { Button, Card, EmptyState, Select, SkeletonList, StatusChip, Thumb, cn } from '@aurora/ui';
 import {
   assetsList,
   locationsList,
@@ -33,10 +33,11 @@ import {
   type AssetStatus,
   type LocationRow,
 } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorDeParque } from './alternador';
+import { DialogoEquipamento } from './formulario';
 
 const LIMITE = 500;
 
@@ -64,6 +65,7 @@ export function AtivosPage() {
   // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
   // sobrevive ao recarregar e ao link compartilhado.
   const [busca, setBusca] = useUrlState<string>('q', '');
+  const [criando, setCriando] = useState(false);
 
   const { data: locais } = useApiQuery(locationsList, { query: {} }, { staleTime: 5 * 60_000 }) as {
     data: { items: LocationRow[] } | undefined;
@@ -111,6 +113,13 @@ export function AtivosPage() {
     <AppShell
       title={`${rotulo}s`}
       subtitle="O parque, pela árvore de locais. Escolha onde para ver o que há lá."
+      actions={
+        <Can permission="asset.create">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCriando(true)}>
+            Novo equipamento
+          </Button>
+        </Can>
+      }
     >
       <div className="mb-4">
         <AlternadorDeParque />
@@ -217,6 +226,11 @@ export function AtivosPage() {
           </p>
         </div>
       </div>
+      <DialogoEquipamento
+        open={criando}
+        onOpenChange={setCriando}
+        clienteInicial={locais?.items.find((l) => l.id === local)?.customer_id ?? undefined}
+      />
     </AppShell>
   );
 }

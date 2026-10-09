@@ -91,6 +91,10 @@ export const CustomerLocation = z.object({
   location_type_id: Uuid.nullable(),
   location_type_key: z.string().nullable(),
   location_type_name: z.string().nullable(),
+  /** Opcionais: respostas capturadas antes desta rodada (demo) não os têm. */
+  allows_assets: z.boolean().optional(),
+  /** Equipamentos na subárvore do local, pelo cadastro. */
+  asset_count: z.number().int().optional(),
 });
 export type CustomerLocation = z.infer<typeof CustomerLocation>;
 
@@ -157,4 +161,24 @@ export const locationsCreate = defineOperation({
   }),
   response: z.object({ id: Uuid }),
   errors: ['not_found'],
+});
+
+export const locationsUpdate = defineOperation({
+  operationId: 'locations.update',
+  method: 'PATCH',
+  path: '/locations/:id',
+  summary: 'Renomeia um local (setor, sala, unidade)',
+  description:
+    'Só nome e código. Mudar de pai é `POST /locations/:id/move` (outra permissão); mudar de ' +
+    'cliente não existe. Local fora do escopo de quem edita responde 404.',
+  permissions: ['location.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(1).max(200).optional(),
+      code: z.string().trim().max(60).nullable().optional(),
+    })
+    .strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed', 'conflict'],
 });

@@ -70,6 +70,8 @@ export const assetsList = defineOperation({
   query: z.object({
     /** Restringe à subárvore deste local, e não só aos filhos diretos. */
     location: Uuid.optional(),
+    /** Só os equipamentos deste cliente (dentro do escopo). */
+    customer: Uuid.optional(),
     status: z.enum(ASSET_STATUSES).optional(),
     limit: z.coerce.number().int().positive().max(500).optional(),
   }),
@@ -113,6 +115,8 @@ export const AssetDetail = z.object({
   model_name: z.string().nullable(),
   manufacturer_name: z.string().nullable(),
   customer_id: Uuid,
+  /** Opcional: respostas capturadas antes desta rodada (demo) não o têm. */
+  customer_name: z.string().optional(),
   location_id: Uuid.nullable(),
   location_name: z.string().nullable(),
   location_path: z.string().nullable(),
@@ -218,6 +222,8 @@ export const LocationRow = z.object({
   depth: z.number().int(),
   location_type_id: Uuid.nullable(),
   location_type_name: z.string().nullable(),
+  /** A chave do tipo (`setor`, `sala`…). Opcional: respostas antigas da demo não a têm. */
+  location_type_key: z.string().nullable().optional(),
   customer_id: Uuid.nullable(),
   is_mobile: z.boolean(),
   status: z.string(),
@@ -295,4 +301,91 @@ export const assetsTimeline = defineOperation({
   query: z.object({ limit: z.coerce.number().int().min(1).max(500).optional() }),
   response: z.object({ items: z.array(AssetTimelineEvent) }),
   errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* cadastro e edição: Cliente → Setor → Equipamento                            */
+/* -------------------------------------------------------------------------- */
+
+export const assetsFormOptions = defineOperation({
+  operationId: 'assets.formOptions',
+  method: 'GET',
+  path: '/assets/form-options',
+  summary: 'Categorias, modelos e criticidades para o cadastro de equipamento',
+  description:
+    'Os catálogos da organização que o formulário precisa. Cliente e setor NÃO vêm aqui: vêm de ' +
+    '`/customers` e `/customers/:id`, já recortados pelo escopo de quem cadastra.',
+  permissions: ['asset.read'],
+  response: z.object({
+    categories: z.array(z.object({ id: Uuid, name: z.string(), parent_id: Uuid.nullable() })),
+    models: z.array(
+      z.object({
+        id: Uuid,
+        name: z.string(),
+        manufacturer_name: z.string().nullable(),
+        asset_category_id: Uuid.nullable(),
+      })
+    ),
+    criticalities: z.array(z.object({ id: Uuid, name: z.string(), score: z.number() })),
+  }),
+});
+
+const CamposDoEquipamento = {
+  name: z.string().trim().min(2).max(200),
+  asset_category_id: Uuid,
+  asset_model_id: Uuid.nullable().optional(),
+  criticality_id: Uuid.nullable().optional(),
+  tag: z.string().trim().max(80).nullable().optional(),
+  serial_number: z.string().trim().max(120).nullable().optional(),
+  asset_number: z.string().trim().max(80).nullable().optional(),
+};
+
+export const assetsCreate = defineOperation({
+  operationId: 'assets.create',
+  method: 'POST',
+  path: '/assets',
+  summary: 'Cadastra um equipamento num setor de um cliente',
+  description:
+    'Cliente e setor são conferidos no SERVIDOR: o setor precisa ser do cliente informado, estar ' +
+    'no escopo de quem cadastra e ser de um tipo de local que aceita equipamento. Identificador ' +
+    'de outro cliente ou de outra organização é recusado.',
+  permissions: ['asset.create'],
+  body: z.object({ ...CamposDoEquipamento, customer_id: Uuid, location_id: Uuid }),
+  response: z.object({ id: Uuid }),
+  errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+export const assetsUpdate = defineOperation({
+  operationId: 'assets.update',
+  method: 'PATCH',
+  path: '/assets/:id',
+  summary: 'Edita os dados cadastrais do equipamento',
+  description:
+    'Cliente e setor NÃO mudam por aqui: mudar de lugar é transferência, com motivo, ' +
+    '(`POST /assets/:id/transfer`) — o banco recusa a edição direta (0015).',
+  permissions: ['asset.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object(CamposDoEquipamento).partial().strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+export const assetsTransfer = defineOperation({
+  operationId: 'assets.transfer',
+  method: 'POST',
+  path: '/assets/:id/transfer',
+  summary: 'Transfere o equipamento para outro setor/local, com motivo',
+  description:
+    'É o ÚNICO caminho para mudar o equipamento de lugar (ou de cliente, pelo local de destino). ' +
+    'Motivo obrigatório: movimentação sem motivo não explica nada depois.',
+  permissions: ['asset.transfer'],
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    to_location_id: Uuid,
+    reason: z.string().trim().min(5).max(500),
+    kind: z.enum(['transfer', 'loan', 'return']).optional(),
+    due_back_at: z.string().optional(),
+  }),
+  response: z.object({ transfer_id: Uuid }),
+  errors: ['not_found', 'validation_failed'],
 });

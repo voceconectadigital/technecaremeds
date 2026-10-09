@@ -12,7 +12,8 @@
  * dois hospitais vê dois, e não a rede inteira "filtrada depois".
  */
 import { useMemo, useState } from 'react';
-import { Boxes, Building2, MapPin, Plus, Search } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Boxes, Building2, ChevronRight, MapPin, Plus, Search } from 'lucide-react';
 import { Button, Card, EmptyState, Metric, MetricGrid, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { customersList, type Customer } from '@aurora/contracts';
 import { Can, useApiQuery, usePermissions } from '@aurora/app-kit';
@@ -164,50 +165,57 @@ function LinhaCliente({ cliente: c, primeira }: { cliente: Customer; primeira: b
     .join(' · ');
 
   return (
-    <li className={cn('flex items-center gap-3 px-4 py-3', !primeira && 'border-t border-border-subtle')}>
-      <span
-        aria-hidden="true"
-        className="flex size-9 shrink-0 items-center justify-center rounded-card border border-border-subtle bg-surface-subtle text-subtle"
+    <li className={cn(!primeira && 'border-t border-border-subtle')}>
+      <Link
+        to="/clientes/$id"
+        params={{ id: c.id }}
+        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
       >
-        <Building2 className="size-4" />
-      </span>
+        <span
+          aria-hidden="true"
+          className="flex size-9 shrink-0 items-center justify-center rounded-card border border-border-subtle bg-surface-subtle text-subtle"
+        >
+          <Building2 className="size-4" />
+        </span>
 
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-base text-text">
-          {c.name}
-          {c.is_internal && (
-            <StatusChip
-              tone="accent"
-              size="sm"
-              withoutDot
-              className="ml-2"
-              hint="A própria organização, quando ela atende a si mesma"
-            >
-              Interno
-            </StatusChip>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base text-text">
+            {c.name}
+            {c.is_internal && (
+              <StatusChip
+                tone="accent"
+                size="sm"
+                withoutDot
+                className="ml-2"
+                hint="A própria organização, quando ela atende a si mesma"
+              >
+                Interno
+              </StatusChip>
+            )}
+          </span>
+          {detalhes && (
+            <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
+              {detalhes}
+            </span>
           )}
         </span>
-        {detalhes && (
-          <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
-            {detalhes}
+
+        <span className="hidden shrink-0 text-right text-xs text-muted sm:block" data-numeric>
+          <span className="block">
+            {c.location_count} {c.location_count === 1 ? 'local' : 'locais'}
           </span>
+          <span className="block">
+            {c.asset_count} {c.asset_count === 1 ? 'ativo' : 'ativos'}
+          </span>
+        </span>
+
+        {c.status !== 'active' && (
+          <StatusChip tone="neutral" size="sm">
+            Inativo
+          </StatusChip>
         )}
-      </span>
-
-      <span className="hidden shrink-0 text-right text-xs text-muted sm:block" data-numeric>
-        <span className="block">
-          {c.location_count} {c.location_count === 1 ? 'local' : 'locais'}
-        </span>
-        <span className="block">
-          {c.asset_count} {c.asset_count === 1 ? 'ativo' : 'ativos'}
-        </span>
-      </span>
-
-      {c.status !== 'active' && (
-        <StatusChip tone="neutral" size="sm">
-          Inativo
-        </StatusChip>
-      )}
+        <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-subtle" />
+      </Link>
     </li>
   );
 }

@@ -155,7 +155,9 @@ export class CustomersController {
 
       const locations = await s.query(
         `SELECT l.id, l.parent_id, l.name, l.code, l.path, l.depth, l.location_type_id,
-                t.key AS location_type_key, t.name AS location_type_name
+                t.key AS location_type_key, t.name AS location_type_name, t.allows_assets,
+                (SELECT count(*) FROM aurora.assets a
+                  WHERE a.location_path LIKE l.path || '%' AND a.deleted_at IS NULL)::int AS asset_count
            FROM aurora.locations l
            LEFT JOIN aurora.location_types t ON t.id = l.location_type_id
           WHERE l.customer_id = $2
