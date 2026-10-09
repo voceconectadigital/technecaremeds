@@ -7,8 +7,13 @@ no commit fixado e sobe, num node dedicado:
 | ------------------- | ----------------------------------------------------------------------- | ---------------------------------- |
 | `db`                | PostgreSQL 16 dedicado (imagem fixada pelo HostPanel)                   | só rede interna, sem porta pública |
 | `migrate` (one-off) | `node tools/db/run.mjs migrate` como **superusuário do banco dedicado** | interna                            |
-| `api`               | `node apps/api/dist/main.js`                                            | interna + borda (Traefik, HTTPS)   |
+| `api`               | `node apps/api/dist/main.js`                                            | interna, sem exposição             |
 | `workers`           | `node apps/workers/dist/main.js` (pg-boss)                              | interna, sem exposição             |
+| `web`               | `node tools/imagem/servidor-web.mjs` — frontend + `/v1` → `api:3000`    | interna + borda (Traefik, HTTPS)   |
+
+O host do preview serve o frontend da equipe (`apps/web`, build conectado: `VITE_API_URL` vazio = `/v1` na
+mesma origem) e repassa `/v1/*` à API interna. Sem CORS a abrir e sem a API exposta diretamente. O demo do
+Cloudflare Pages (`build:demo`) continua independente e intocado.
 
 - **Imagem:** `Dockerfile` — `npm ci` → `tsc -b apps/api apps/workers` → pacotes apontados para `dist/`
   (`tools/imagem/apontar-dist.mjs`) → `npm prune --omit=dev`. Em runtime não há `tsx`: as ferramentas de banco

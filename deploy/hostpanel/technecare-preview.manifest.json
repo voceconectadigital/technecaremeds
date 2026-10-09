@@ -21,9 +21,6 @@
       "name": "api",
       "command": ["node", "apps/api/dist/main.js"],
       "port": 3000,
-      "public": true,
-      "healthPath": "/v1/health/ready",
-      "healthBodyIncludes": "\"status\":\"ok\"",
       "memoryMb": 768,
       "cpus": 1,
       "mounts": [
@@ -42,6 +39,16 @@
         "grantRoles": ["aurora_app", "aurora_publisher", "aurora_scheduler"],
         "grantCreateOnDatabase": true
       }
+    },
+    {
+      "name": "web",
+      "command": ["node", "tools/imagem/servidor-web.mjs"],
+      "port": 8080,
+      "public": true,
+      "healthPath": "/v1/health/ready",
+      "healthBodyIncludes": "\"status\":\"ok\"",
+      "memoryMb": 128,
+      "cpus": 0.25
     }
   ],
   "env": {
@@ -51,7 +58,7 @@
     "AURORA_DB_APP_ROLE": "aurora_app",
     "AURORA_LOG_LEVEL": "info",
     "AURORA_ARQUIVOS_DIR": "/data/arquivos",
-    "AURORA_CORS_ORIGINS": "https://technecare-preview.pages.dev"
+    "AURORA_CORS_ORIGINS": ""
   },
   "secretsGeneratedOnNode": [],
   "volumes": ["arquivos"]
