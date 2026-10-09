@@ -41,6 +41,9 @@ export const ControlPanelPoint = z.object({
   completedPreventive: z.number().int(),
   completedCorrective: z.number().int(),
   backlog: z.number().int(),
+  /** MTTR da fatia (corretivas concluídas nela). Nulo = sem amostra, nunca zero. */
+  mttrMinutes: z.number().nullable().optional(),
+  mttrSamples: z.number().int().optional(),
 });
 export type ControlPanelPoint = z.infer<typeof ControlPanelPoint>;
 
@@ -104,6 +107,32 @@ export const ControlPanel = z.object({
     byStatus: z.record(z.string(), z.number().int()),
     byPriority: z.record(z.string(), z.number().int()),
   }),
+  /**
+   * Preventivas do período: itens de ciclo EXISTENTES com vencimento no
+   * período (mesma régua de `/maintenance-plans/board`). Opcional: capturas
+   * anteriores da demo não o têm.
+   */
+  preventives: z
+    .object({
+      totals: z.object({
+        scheduled: z.number().int(),
+        done: z.number().int(),
+        pending: z.number().int(),
+        late: z.number().int(),
+        skipped: z.number().int(),
+      }),
+      rate: z.number().nullable(),
+      byMonth: z.array(
+        z.object({
+          key: z.string(),
+          done: z.number().int(),
+          pending: z.number().int(),
+          late: z.number().int(),
+          skipped: z.number().int(),
+        })
+      ),
+    })
+    .optional(),
   park: z.object({
     total: z.number().int(),
     byStatus: z.record(z.string(), z.number().int()),

@@ -29,6 +29,67 @@ test.describe('Painel de Controle', () => {
     await expect(page.getByRole('button', { name: '90 dias' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  test('período personalizado: incompleto vira aviso; completo recarrega pela URL', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/painel');
+    await page.getByRole('button', { name: 'Personalizado' }).click();
+    await expect(page.getByText('Escolha a data inicial e a final do período.')).toBeVisible();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const inicio = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
+    await page.getByLabel('Início do período').fill(inicio);
+    await page.getByLabel('Fim do período').fill(hoje);
+    await expect(page).toHaveURL(new RegExp(`de=${inicio}.*ate=${hoje}|ate=${hoje}.*de=${inicio}`));
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText('Evolução dos chamados')).toBeVisible();
+    await page.reload();
+    await expect(page.getByLabel('Início do período')).toHaveValue(inicio);
+  });
+
+  test('atalhos rápidos: cada um abre a rota real; "novo" abre o cadastro; teclado alcança', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/painel');
+    const atalhos = page.getByRole('navigation', { name: 'Atalhos rápidos' });
+    await expect(atalhos).toBeVisible();
+    const destinos = await atalhos
+      .getByRole('link')
+      .evaluateAll((els) =>
+        els.map((e) => [e.textContent?.trim() ?? '', (e as HTMLAnchorElement).getAttribute('href') ?? ''])
+      );
+    expect(destinos.length).toBeGreaterThanOrEqual(8);
+    for (const [rotulo, href] of destinos) {
+      await page.goto(href);
+      if (href.includes('novo=sim')) {
+        // O atalho de cadastro abre o diálogo — e o diálogo modal tira o resto
+        // da página da árvore de acessibilidade (aria-hidden): o título da tela
+        // existe, mas não é "visível" para um papel. O que se confere é o cadastro.
+        await expect(page.getByRole('dialog', { name: rotulo })).toBeVisible({ timeout: 15_000 });
+        continue;
+      }
+      // Rota existente: a tela tem título; a página de "não encontrado" não teria a moldura.
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+    }
+
+    await page.goto('/painel');
+    await page.getByRole('link', { name: 'Novo cliente' }).click();
+    await expect(page).toHaveURL(/\/clientes\?novo=sim/);
+    await expect(page.getByRole('dialog', { name: 'Novo cliente' })).toBeVisible();
+
+    await page.goto('/painel');
+    await page.getByRole('link', { name: 'Novo equipamento' }).focus();
+    await expect(page.getByRole('link', { name: 'Novo equipamento' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Novo equipamento' })).toBeVisible();
+  });
+
+  test('o cartão leva à lista correspondente já filtrada', async ({ comoCoordenadorA: page }) => {
+    await page.goto('/painel');
+    await expect(page.locator('[aria-busy="true"]')).toHaveCount(0, { timeout: 15_000 });
+    await page.getByRole('link', { name: /Chamados abertos/ }).click();
+    await expect(page).toHaveURL(/\/ordens\?.*categoria=open/);
+  });
+
   test('o Modo Exibição abre sem a barra lateral, com relógio, e Esc volta', async ({
     comoCoordenadorA: page,
   }) => {

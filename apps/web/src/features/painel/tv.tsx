@@ -22,8 +22,8 @@ import { BarChart, DonutChart, Logo, RateRing, TrendChart, cn, type Tone } from 
 import { MARCA } from '@aurora/app-kit';
 import type { ControlPanel } from '@aurora/contracts';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { rotuloDoRecorte, usePainel, useFiltrosDoPainel } from './dados';
-import { PERIODOS, ROTULO_STATUS_ATIVO, TOM_STATUS_ATIVO, formatarDuracao, rotuloDaFatia } from './rotulos';
+import { buscaDoPainel, disponibilidadeAgora, rotuloDoRecorte, usePainel, useFiltrosDoPainel } from './dados';
+import { PERIODOS, formatarDuracao, rotuloDaFatia } from './rotulos';
 
 const ATUALIZAR_MS = 60_000;
 
@@ -38,7 +38,7 @@ function useAgora(passoMs: number): Date {
 
 export function ModoExibicaoPage() {
   const filtros = useFiltrosDoPainel();
-  const { data, isLoading, isError, error, isFetching, dataUpdatedAt } = usePainel(filtros, {
+  const { data, isLoading, isError, error, isFetching, dataUpdatedAt, problema } = usePainel(filtros, {
     refetchMs: ATUALIZAR_MS,
   });
   const navigate = useNavigate();
@@ -48,11 +48,7 @@ export function ModoExibicaoPage() {
   const sair = () =>
     void navigate({
       to: '/painel',
-      search: {
-        ...(filtros.periodo !== '30d' ? { periodo: filtros.periodo } : {}),
-        ...(filtros.cliente ? { cliente: filtros.cliente } : {}),
-        ...(filtros.setor ? { setor: filtros.setor } : {}),
-      } as never,
+      search: buscaDoPainel(filtros) as never,
     });
 
   useEffect(() => {
@@ -77,7 +73,10 @@ export function ModoExibicaoPage() {
     else void document.documentElement.requestFullscreen?.().catch(() => undefined);
   };
 
-  const periodo = PERIODOS.find((p) => p.valor === filtros.periodo)?.rotulo ?? '30 dias';
+  const periodo =
+    filtros.periodo === 'custom'
+      ? `${filtros.de.split('-').reverse().join('/')} a ${filtros.ate.split('-').reverse().join('/')}`
+      : `últimos ${PERIODOS.find((p) => p.valor === filtros.periodo)?.rotulo ?? '30 dias'}`;
   const desde = dataUpdatedAt ? Math.max(0, Math.round((agora.getTime() - dataUpdatedAt) / 60_000)) : null;
 
   return (
@@ -95,7 +94,8 @@ export function ModoExibicaoPage() {
         <div className="min-w-0 flex-1 border-l border-border pl-4">
           <h1 className="truncate text-2xl font-semibold tracking-display lg:text-3xl">Painel de Controle</h1>
           <p className="truncate text-sm text-muted lg:text-base">
-            {data ? `${rotuloDoRecorte(data, filtros.cliente, filtros.setor)} · ` : ''}últimos {periodo}
+            {data ? `${rotuloDoRecorte(data, filtros.cliente, filtros.setor)} · ` : ''}
+            {periodo}
           </p>
         </div>
         <div className="hidden text-right sm:block" aria-live="off">
@@ -114,7 +114,9 @@ export function ModoExibicaoPage() {
         </div>
       </header>
 
-      {isLoading || !data ? (
+      {problema ? (
+        <p className="flex flex-1 items-center justify-center text-xl text-muted">{problema}</p>
+      ) : isLoading || !data ? (
         <div aria-busy="true" className="grid flex-1 grid-cols-3 gap-4 lg:grid-cols-6">
           <span className="sr-only">Carregando o painel</span>
           {Array.from({ length: 6 }).map((_, i) => (
@@ -217,7 +219,12 @@ function Corpo({ d }: { d: ControlPanel }) {
         />
         <Numero rotulo="MTTR" valor={mttr.valor} unidade={mttr.unidade} tom="info" />
         <Numero rotulo="SLA" valor={k.sla.data.rate} unidade="%" tom={tomSla} />
-        <Numero rotulo="Equipamentos" valor={d.park.total} tom="accent" />
+        <Numero
+          rotulo="Disponíveis"
+          valor={disponibilidadeAgora(d.park.byStatus).taxa}
+          unidade="%"
+          tom="accent"
+        />
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-3 lg:grid-rows-2">
@@ -226,7 +233,7 @@ function Corpo({ d }: { d: ControlPanel }) {
             {(h) => (
               <TrendChart
                 scale="tv"
-                height={h - 30}
+                height={h - 36}
                 label="Ordens abertas e concluídas por período"
                 labels={rotulos}
                 series={[
@@ -268,7 +275,7 @@ function Corpo({ d }: { d: ControlPanel }) {
             {(h) => (
               <TrendChart
                 scale="tv"
-                height={h}
+                height={h - 10}
                 label="Backlog por período"
                 labels={rotulos}
                 series={[
@@ -284,29 +291,30 @@ function Corpo({ d }: { d: ControlPanel }) {
             )}
           </Medido>
         </Painel>
-        <Painel titulo="Situação do parque">
+        <Painel titulo="Disponibilidade do parque (agora)">
           <Medido>
-            {(h) =>
-              d.park.total === 0 ? (
+            {(h) => {
+              const disp = disponibilidadeAgora(d.park.byStatus);
+              return disp.base === 0 ? (
                 <p className="text-muted">Nenhum equipamento no recorte.</p>
               ) : (
                 <div className="flex h-full items-center">
                   <DonutChart
                     size={Math.min(200, Math.max(110, h - 8))}
-                    label="Equipamentos por situação"
-                    centerValue={d.park.total}
-                    centerLabel="equipamentos"
-                    data={Object.entries(d.park.byStatus)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([s, v]) => ({
-                        label: ROTULO_STATUS_ATIVO[s] ?? s,
-                        value: v,
-                        tone: TOM_STATUS_ATIVO[s],
-                      }))}
+                    label="Equipamentos disponíveis e indisponíveis"
+                    centerValue={disp.taxa === null ? '—' : `${disp.taxa.toLocaleString('pt-BR')}%`}
+                    centerLabel="disponíveis"
+                    data={[
+                      { label: 'Disponíveis', value: disp.disponiveis, tone: 'good' },
+                      { label: 'Em manutenção', value: disp.indisponiveis, tone: 'warn' },
+                      ...(disp.emprestados > 0
+                        ? [{ label: 'Emprestados', value: disp.emprestados, tone: 'neutral' as const }]
+                        : []),
+                    ]}
                   />
                 </div>
-              )
-            }
+              );
+            }}
           </Medido>
         </Painel>
         <Painel titulo="Equipamentos por setor">

@@ -152,6 +152,18 @@ describe('todo número vem com a sua definição', () => {
     expect(r.body.coverage.note).toMatch(/calculado sobre/);
   });
 
+  it('o MTTR por fatia do painel soma as MESMAS amostras do indicador', async () => {
+    const mttr = await http.get(`/v1/insights/mttr?${janela}`).set(auth(EMAIL_GESTOR)).expect(200);
+    const painel = await http.get(`/v1/insights/control-panel?${janela}`).set(auth(EMAIL_GESTOR)).expect(200);
+    const fatias = painel.body.series as Array<{ mttrMinutes: number | null; mttrSamples: number }>;
+    expect(fatias.reduce((a, p) => a + p.mttrSamples, 0)).toBe(mttr.body.data.samples);
+    // Fatia com amostra tem número; sem amostra, nulo — nunca zero inventado.
+    for (const p of fatias) {
+      if (p.mttrSamples > 0) expect(typeof p.mttrMinutes).toBe('number');
+      else expect(p.mttrMinutes).toBeNull();
+    }
+  });
+
   it('o backlog vem com as faixas de idade', async () => {
     const r = await http.get('/v1/insights/backlog').set(auth(EMAIL_GESTOR)).expect(200);
     expect(r.body.data.count).toBe(1);

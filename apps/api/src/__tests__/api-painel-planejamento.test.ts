@@ -330,6 +330,29 @@ describe('Painel de Controle', () => {
     expect(fora.status).toBe(404);
   });
 
+  it('MTTR por fatia: sem corretiva concluída é NULO, nunca zero', async () => {
+    const r = await http.get('/v1/insights/control-panel').query({ from: DE, to: ATE }).set(auth(GESTOR));
+    for (const p of r.body.series) {
+      expect(p.mttrSamples).toBe(0);
+      expect(p.mttrMinutes).toBeNull();
+    }
+  });
+
+  it('as preventivas do painel seguem o mesmo filtro e o mesmo escopo', async () => {
+    const g = await http.get('/v1/insights/control-panel').query({ from: DE, to: ATE }).set(auth(GESTOR));
+    const h = await http.get('/v1/insights/control-panel').query({ from: DE, to: ATE }).set(auth(HOSPITAL));
+    const b = await http
+      .get('/v1/insights/control-panel')
+      .query({ from: DE, to: ATE, customerId: clienteB })
+      .set(auth(GESTOR));
+    // Três equipamentos em ciclo: dois do Alfa (hospital), um do Beta.
+    expect(g.body.preventives.totals.scheduled).toBe(3);
+    expect(h.body.preventives.totals.scheduled).toBe(2);
+    expect(b.body.preventives.totals.scheduled).toBe(1);
+    const t = g.body.preventives.totals;
+    expect(t.done + t.pending + t.late + t.skipped).toBe(t.scheduled);
+  });
+
   it('setor fora do escopo no filtro responde 404', async () => {
     const r = await http
       .get('/v1/insights/control-panel')
