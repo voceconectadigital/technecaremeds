@@ -42,7 +42,8 @@
     "admin:criar": "node tools/admin/criar.mjs",
     "demo:capturar": "vitest run --config tools/demo/vitest.config.mts --root .",
     "demo:build": "npm run build:demo --workspace @aurora/web",
-    "demo:e2e": "playwright test --config e2e/demo/playwright.config.mts"
+    "demo:e2e": "playwright test --config e2e/demo/playwright.config.mts",
+    "versao": "node tools/imagem/versao.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

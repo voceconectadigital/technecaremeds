@@ -12,6 +12,10 @@ WORKDIR /repo
 COPY . .
 RUN npm ci --no-audit --no-fund
 RUN npx tsc -b apps/api apps/workers
+# A versão que `GET /v1/health/version` devolve: commit (argumento de build ou
+# .git/HEAD do contexto) e a impressão digital do código da API.
+ARG AURORA_VERSAO=
+RUN AURORA_VERSAO=$AURORA_VERSAO node tools/imagem/versao.mjs --gravar apps/api/dist/versao.json
 # Frontend da equipe para o ambiente conectado: sem VITE_API_URL ele fala com `/v1`
 # na mesma origem, servido pelo portão (tools/imagem/servidor-web.mjs).
 RUN npx vite build --config apps/web/vite.config.ts
