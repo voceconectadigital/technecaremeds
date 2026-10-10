@@ -159,7 +159,7 @@ emite documento, mede SLA e produz indicador.
 | Migração Arkmeds | 🟡 | **Pipeline rastreável genérico existe** (0058: lote, linha crua, arquivo original, amostra/oficial, relatório). **Parser do formato Arkmeds: BLOQUEADO — CLIENTE** |
 | Integrações (Omie, WhatsApp, BI…) | ⬜ | Nada. Ver §30 |
 | IA | ⬜ | Nada (nenhuma biblioteca, nenhuma chamada). Ver §30 |
-| Deploy | 🟡 | **Só a demonstração** (web, sem API) está publicada. API, workers, banco, portal e field: não. §27 |
+| Deploy | ✅ | **Produção conectada no ar** (09/10/2026): web, portal e campo no Cloudflare Pages (upload direto) e API + workers + PostgreSQL no runtime do HostPanel. A demo segue em `technecaremeds.pages.dev`. §27 |
 
 ---
 
@@ -1364,7 +1364,7 @@ dentro dela; o PORTAL-011 isola o que é interno da prestadora.
 | QR | 🟡 leitura e resolução local — §22-A | `telas/qr.tsx` |
 | Geolocalização / check-in | ⬜ **não pede localização**; não há entidade de visita | — |
 | Push | ⬜ plugin instalado, sem servidor nem FCM/APNs | — |
-| Publicação | ⬜ PWA não hospedado; lojas não publicadas | §27 |
+| Publicação | ✅ PWA em https://campo-technecaremeds.voceconecta.com.br (produção); ⬜ lojas não publicadas | §27 |
 
 Prova: `e2e/specs/campo.spec.ts`, incluindo **SOBREVIVÊNCIA** — vinte passos
 sem rede e com o app fechado no meio, sem perda nem duplicata.
@@ -1505,36 +1505,65 @@ Detalhes em `docs/AURORA-AMBIENTES.md`.
 
 ## 27 · Deploy
 
-### Só a DEMONSTRAÇÃO está publicada. O produto conectado não.
+### ⚠️ A PRODUÇÃO CONECTADA ESTÁ NO AR (conferido em 09/10/2026)
 
-| Item | Estado |
-| --- | --- |
-| Web — **DEMONSTRAÇÃO** | ✅ **PUBLICADA** em https://technecaremeds.voceconecta.com.br (Cloudflare Pages, `VITE_DEMO_MODE=true`, **sem API**) — §27-A. **Não é ambiente conectado nem produção** |
-| API remota | ⬜ **NÃO PUBLICADA** — roda só local |
-| Workers remotos | ⬜ **NÃO PUBLICADOS** |
-| Web conectada / Portal / Field (PWA) | ⬜ **NÃO PUBLICADOS** |
-| PostgreSQL remoto | ⬜ **não existe** — não presuma. Hoje: contêiner local `aurora-postgres` (porta 15432); `homologacao`/`producao` sem destino em `aurora.destinos.json` |
-| Supabase | 🔒 projeto "Aurora CMMS" existe, **contaminado e bloqueado**; não é backend de nada (§11) |
-| Storage | disco local (`AURORA_ARQUIVOS_DIR`) |
-| Lojas (Play/App Store) | projetos nativos existem; **nada assinado, nada publicado** (`docs/AURORA-FIELD-LOJAS.md`) |
-| Domínio | `technecaremeds.voceconecta.com.br` → projeto Pages da demo (zona `voceconecta.com.br` na Cloudflare). Não há domínio para API |
-| HostPanel | **não gerencia** o Téchne Care (§27-B) |
-| VPS / servidor próprio | ⬜ nenhum deploy existe — não presuma |
+O cutover de `deploy/producao/CUTOVER.md` foi executado: o domínio principal
+deixou de servir a demonstração e passou a servir o produto conectado. A demo
+continua publicada, só que em `technecaremeds.pages.dev` (§27-A).
 
-**Não há Dockerfile, wrangler.toml, fly.toml nem compose versionados.** O Pages
-da demonstração é configurado no painel da Cloudflare (ligado ao GitHub), não
-por arquivo — ver §27-A.
+| Peça | Onde | Estado |
+| --- | --- | --- |
+| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · publicado do `main` `7d15791` (redesign v2) |
+| **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `7d15791` |
+| **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `7d15791` |
+| **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ `/v1/health/ready` → `{"status":"ok","checks":{"database":"ok"}}`; `/v1/auth/config` → `"ambiente":"producao"`, provedor `password`. **Não expõe a versão em execução** — confirme com o responsável que está no mesmo commit do front |
+| **Workers** (pg-boss) | mesmo runtime, pelo manifesto `deploy/hostpanel/technecare-producao.manifest.json` | 🟡 não verificável de fora |
+| **PostgreSQL 16** | mesmo runtime, rede interna, sem porta pública (`db`, banco `aurora`; `aurora.destinos.json` → `producao.hostsInternos`) | ✅ (pela saúde da API) |
+| **Demo** | Pages `technecaremeds` (ligado ao GitHub) → https://technecaremeds.pages.dev | ✅ publica sozinho a cada push no `main` — é também o rollback do domínio principal |
+| Supabase | projeto "Aurora CMMS", **contaminado e bloqueado**; não é backend de nada (§11) | 🔒 |
+| Lojas (Play/App Store) | projetos nativos existem; **nada assinado, nada publicado** (`docs/AURORA-FIELD-LOJAS.md`) | ⬜ |
 
-**O que trava:** uma máquina. Opções comparadas com custo em
-`docs/AURORA-AMBIENTES.md`; a que não gasta é a máquina do próprio cliente.
+**Imagem e runtime:** `Dockerfile` (uma imagem: API, workers e migrations
+one-off), `deploy/hostpanel/*.manifest.json` e o roteiro
+`deploy/producao/CUTOVER.md` (passos, smoke e rollback). Não há `wrangler.toml`:
+os projetos Pages são configurados na conta.
+
+### Como publicar o front de produção
+
+Os três projetos de produção são **upload direto** — NÃO publicam sozinhos com
+push no `main` (só a demo publica). Conta Cloudflare
+`7b7ce518846bdc2f6f3bdf476cbd053b` (voceconecta):
+
+```
+# 1. confirmar que a API de produção já roda o commit que vai ao ar
+# 2. builds conectados (a demo não pode estar ligada: o build recusa os dois juntos)
+VITE_API_URL=https://api-technecaremeds.voceconecta.com.br/v1 npx vite build --config apps/web/vite.config.ts
+VITE_API_URL=https://api-technecaremeds.voceconecta.com.br/v1 npx vite build --config apps/portal/vite.config.ts
+VITE_API_URL=https://api-technecaremeds.voceconecta.com.br/v1 npx vite build --config apps/field/vite.config.ts
+# 3. publicar (CLOUDFLARE_ACCOUNT_ID=7b7ce518846bdc2f6f3bdf476cbd053b)
+npx wrangler pages deploy apps/web/dist    --project-name technecare-web    --branch main --commit-hash <sha>
+npx wrangler pages deploy apps/portal/dist --project-name technecare-portal --branch main --commit-hash <sha>
+npx wrangler pages deploy apps/field/dist  --project-name technecare-field  --branch main --commit-hash <sha>
+```
+
+**A ordem importa:** API primeiro, front depois. Um front novo sobre uma API
+antiga quebra as telas que dependem de rota nova (o Painel de Controle, por
+exemplo, depende de `/insights/control-panel`). Conferir depois: os três
+domínios servem o `index-*.js` do build, o web não mostra "Demonstração" e
+chama `api-technecaremeds…/v1`.
+
+**Rollback do front:** cada projeto Pages guarda as publicações anteriores;
+reativar a anterior no painel da Cloudflare. Rollback do domínio principal para
+a demo: ver `deploy/producao/CUTOVER.md`.
 
 ---
 
 ## 27-A · DEMO PÚBLICA
 
-**URL:** https://technecaremeds.voceconecta.com.br — é o link que vai para o
-cliente. Funciona **sem API, sem Supabase e sem banco**: dados fictícios, nada
-persiste, nenhuma chamada de rede além dos próprios arquivos do site.
+**URL:** https://technecaremeds.pages.dev — desde o cutover (09/10/2026) o
+domínio `technecaremeds.voceconecta.com.br` é a PRODUÇÃO conectada (§27), e não
+mais a demo. Funciona **sem API, sem Supabase e sem banco**: dados fictícios,
+nada persiste, nenhuma chamada de rede além dos próprios arquivos do site.
 
 ### Como funciona — uma troca, num lugar só
 
@@ -1602,7 +1631,7 @@ seguinte quando roda depois do meio-dia, para nada nascer atrasado.
    qualquer domínio externo, resposta ≥ 400, erro de console ou rolagem
    lateral; cobre entrada, as 9 telas principais, ficha de OS e de ativo
    recarregadas, rota profunda direta, busca e uma escrita recusada. Contra o
-   site publicado: `DEMO_URL=https://technecaremeds.voceconecta.com.br npm run demo:e2e`.
+   site publicado: `DEMO_URL=https://technecaremeds.pages.dev npm run demo:e2e`.
 4. **Única requisição externa no domínio publicado:** o beacon do Cloudflare
    Web Analytics (`static.cloudflareinsights.com`), injetado pela BORDA porque a
    zona `voceconecta.com.br` tem o Web Analytics automático ligado — não está
@@ -1639,7 +1668,10 @@ toda tela interna.
 
 - **HostPanel** (`voceconectadigital/hostpanel`, diretório local `hospedagem`)
   é outro produto da mesma conta, com projeto Supabase próprio ("Sites Schema
-  Gerais", bloqueado em `aurora.destinos.json`). **Não gerencia o Téchne Care.**
+  Gerais", bloqueado em `aurora.destinos.json`). **Desde 09/10/2026 hospeda a
+  API, os workers e o PostgreSQL de produção do Téchne Care** (runtime PostgreSQL
+  VPS, manifesto `deploy/hostpanel/technecare-producao.manifest.json`, roteiro
+  `deploy/producao/CUTOVER.md`). O texto abaixo é o contexto anterior.
 - Auditoria de infraestrutura feita fora deste repositório (relatada pelo
   responsável em 01/10/2026): o HostPanel atual **não suporta aplicação Node
   persistente** como a API (NestJS) e os workers (pg-boss) deste projeto. Isso é
@@ -1767,7 +1799,7 @@ Não conclua que existe porque os documentos do cliente descrevem.
 | **Recuperação de senha por e-mail** | Esquecer a senha exige `admin:criar` | aberto | transporte de e-mail | documentado na tela de login |
 | **E2E do login por senha** | A suíte de navegador roda com provedor `local`; o login por senha tem 17 provas de HTTP e foi verificado à mão no navegador, mas **não tem prova automatizada de ponta a ponta** | aberto | um 4º par api+web no `playwright.config` | próxima rodada |
 | **Supabase remoto** | Projeto "Aurora CMMS" contaminado; nenhuma operação remota possível | 🔒 | recuperar/recriar + registrar destino | §11 |
-| **Produto conectado sem deploy** | Só a demo está no ar; API, workers, banco, portal e field não | 🔒 | uma máquina com Node persistente | §27, §27-B |
+| **Versão da API em produção invisível** | A API de produção não expõe o commit em execução; publicar front exige confirmar a API com o responsável | aberto | endpoint de versão (ex.: `/v1/health/version`) | §27 |
 | **Automações e notificações não ligadas** | `runAutomations` só roda em teste; `EventSink` é log; regra `schedule` sem motor; nenhum transporte | aberto | decisão de ligar + canal | §18 |
 | **Escrita sem rota** | Cliente, edição de ativo e de OS, plano/tarefa, modelo de checklist, papel personalizado, depósito e item de estoque só se criam por seed | aberto | priorização | §19 |
 | **73 rotas sem contrato Zod** | OpenAPI sem esquema de corpo nessas rotas | aberto | — | §19 |

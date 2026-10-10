@@ -1,8 +1,15 @@
-# Cutover de produção — Téchne Care (NÃO EXECUTADO)
+# Cutover de produção — Téchne Care (EXECUTADO)
 
-Estado em 2026-10-09: preview PostgreSQL VPS validado (`technecare-preview.80-190-72-199.sslip.io`, runtime
-`pgv-70gvxl2n` no node `apps-us-east-01`). O domínio `technecaremeds.voceconecta.com.br` segue servindo o
-DEMO (projeto Pages `technecaremeds`, `build:demo`). Este roteiro troca isso pela produção — só com decisão humana.
+**Executado — conferido em 2026-10-09 à noite:** `technecaremeds.voceconecta.com.br` serve o projeto Pages
+`technecare-web` (produção conectada); portal e campo nos seus domínios; API em
+`https://api-technecaremeds.voceconecta.com.br/v1` (`80.190.72.199`) com `ambiente: producao` e banco ok. O demo
+segue em `technecaremeds.pages.dev`. Estado atual e como publicar o front: `docs/AI-HANDOFF.md` §27. Os passos 4
+(conta titular), 8 (smoke autenticado) e 9 (backup + restore drill) não são verificáveis de fora — confirmar com o
+responsável.
+
+Estado anterior (2026-10-09, antes do cutover): preview PostgreSQL VPS validado
+(`technecare-preview.80-190-72-199.sslip.io`, runtime `pgv-70gvxl2n` no node `apps-us-east-01`), e o domínio
+principal servindo o DEMO. O roteiro abaixo é o que trocou isso pela produção.
 
 ## Arquitetura de produção
 
