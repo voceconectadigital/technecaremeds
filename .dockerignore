@@ -1,6 +1,10 @@
 # O contexto da imagem é o código versionado — nada de dependências locais,
 # artefatos de build, ambiente ou dados de teste.
 .git
+# Exceção: só o necessário para saber o commit (tools/imagem/versao.mjs).
+!.git/HEAD
+!.git/refs
+!.git/packed-refs
 **/node_modules
 **/dist
 **/*.tsbuildinfo

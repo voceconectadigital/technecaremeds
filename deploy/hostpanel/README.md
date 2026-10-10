@@ -28,6 +28,10 @@ Cloudflare Pages (`build:demo`) continua independente e intocado.
 - **Arquivos:** volume persistente `arquivos` em `/data/arquivos` (`AURORA_ARQUIVOS_DIR`), dentro do backup.
 - **Saúde:** `GET /v1/health/ready` só é saudável com `"status":"ok"` no corpo — o endpoint responde 200 também
   quando degradado.
+- **Versão:** `GET /v1/health/version` (pública) devolve `commit` e `impressao` gravados no build
+  (`tools/imagem/versao.mjs`). O commit vem do argumento de build `AURORA_VERSAO` ou do `.git/HEAD` do contexto e
+  pode vir nulo; a `impressao` (sha-256 do código da API) sai sempre e se compara com `npm run versao` rodado no
+  commit candidato. **Antes de publicar um front, confira que a API do ambiente bate com o commit do front.**
 
 Manifesto registrado no HostPanel: [`technecare-preview.manifest.json`](technecare-preview.manifest.json).
 Massa de homologação (opcional, recusa produção): `node tools/homologacao/semear.mjs` no container `migrate`.

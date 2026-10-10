@@ -19,6 +19,7 @@ import {
   organizationsCurrent,
   meOrganizations,
   healthReady,
+  healthVersion,
   ProblemDetails,
 } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
@@ -277,6 +278,14 @@ describe('a resposta cumpre o contrato', () => {
   it('health.ready', async () => {
     const r = await http.get('/v1/health/ready').expect(200);
     expect(healthReady.response.safeParse(r.body).success).toBe(true);
+  });
+
+  it('health.version responde sem login e na forma do contrato', async () => {
+    // Sem token, de propósito: é a sonda que confere a versão de um ambiente
+    // antes de publicar um front. Fora da imagem os campos vêm nulos.
+    const r = await http.get('/v1/health/version').expect(200);
+    const conferido = healthVersion.response.safeParse(r.body);
+    expect(conferido.success ? null : conferido.error.issues).toBeNull();
   });
 
   /*

@@ -22,6 +22,30 @@ export const healthLive = defineOperation({
   response: HealthStatus,
 });
 
+/**
+ * A versão do código em execução. Existe para conferir, SEM LOGIN, se a API
+ * de um ambiente está no commit esperado antes de publicar um front que
+ * depende dela (ver tools/imagem/versao.mjs).
+ */
+export const HealthVersion = z.object({
+  /** Commit da imagem, quando o build o recebe; nulo fora da imagem ou sem .git. */
+  commit: z.string().nullable(),
+  /** sha-256 (12 hex) do código da API — comparável com `node tools/imagem/versao.mjs`. */
+  impressao: z.string().nullable(),
+  construido_em: z.string().nullable(),
+});
+
+export const healthVersion = defineOperation({
+  operationId: 'health.version',
+  method: 'GET',
+  path: '/health/version',
+  summary: 'Qual código está rodando',
+  description:
+    'Commit e impressão digital do código da API, gravados no build da imagem. Pública, como as outras de saúde.',
+  public: true,
+  response: HealthVersion,
+});
+
 export const healthReady = defineOperation({
   operationId: 'health.ready',
   method: 'GET',

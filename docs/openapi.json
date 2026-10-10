@@ -11131,6 +11131,90 @@
         "security": []
       }
     },
+    "/v1/health/version": {
+      "get": {
+        "operationId": "health.version",
+        "summary": "Qual código está rodando",
+        "description": "Commit e impressão digital do código da API, gravados no build da imagem. Pública, como as outras de saúde.",
+        "tags": [
+          "Health"
+        ],
+        "x-aurora-public": true,
+        "x-aurora-source": "apps/api/src/health/health.controller.ts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "commit": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "impressao": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "construido_em": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "commit",
+                    "impressao",
+                    "construido_em"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/v1/imports/{id}/rows": {
       "get": {
         "operationId": "imports.rows",
