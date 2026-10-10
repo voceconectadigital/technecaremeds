@@ -1,6 +1,6 @@
 # Cutover de produção — Téchne Care (EXECUTADO)
 
-**Executado — conferido em 2026-10-09 à noite:** `technecaremeds.voceconecta.com.br` serve o projeto Pages
+**Executado — conferido em 2026-10-09 à noite** (front em `99b42f2`/`dc4c6c4`; a API está atrás do `main` — ver AI-HANDOFF §27): `technecaremeds.voceconecta.com.br` serve o projeto Pages
 `technecare-web` (produção conectada); portal e campo nos seus domínios; API em
 `https://api-technecaremeds.voceconecta.com.br/v1` (`80.190.72.199`) com `ambiente: producao` e banco ok. O demo
 segue em `technecaremeds.pages.dev`. Estado atual e como publicar o front: `docs/AI-HANDOFF.md` §27. Os passos 4

@@ -1513,15 +1513,25 @@ continua publicada, só que em `technecaremeds.pages.dev` (§27-A).
 
 | Peça | Onde | Estado |
 | --- | --- | --- |
-| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · publicado do `main` `7d15791` (redesign v2) |
-| **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `7d15791` |
-| **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `7d15791` |
+| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · `99b42f2` (visual futurístico) — **atrás do `main`**; ver nota abaixo |
+| **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `99b42f2` |
+| **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `dc4c6c4` |
 | **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ `/v1/health/ready` → `{"status":"ok","checks":{"database":"ok"}}`; `/v1/auth/config` → `"ambiente":"producao"`, provedor `password`. **Não expõe a versão em execução** — confirme com o responsável que está no mesmo commit do front |
 | **Workers** (pg-boss) | mesmo runtime, pelo manifesto `deploy/hostpanel/technecare-producao.manifest.json` | 🟡 não verificável de fora |
 | **PostgreSQL 16** | mesmo runtime, rede interna, sem porta pública (`db`, banco `aurora`; `aurora.destinos.json` → `producao.hostsInternos`) | ✅ (pela saúde da API) |
 | **Demo** | Pages `technecaremeds` (ligado ao GitHub) → https://technecaremeds.pages.dev | ✅ publica sozinho a cada push no `main` — é também o rollback do domínio principal |
 | Supabase | projeto "Aurora CMMS", **contaminado e bloqueado**; não é backend de nada (§11) | 🔒 |
 | Lojas (Play/App Store) | projetos nativos existem; **nada assinado, nada publicado** (`docs/AURORA-FIELD-LOJAS.md`) | ⬜ |
+
+> **⚠️ API de produção ATRÁS do `main` (09/10/2026).** O front do `main` `7d15791`
+> (redesign v2) chegou a ser publicado e foi **revertido no mesmo dia**: a API em
+> produção não tinha `/insights/control-panel` — o Painel de Controle respondia 404
+> ("Não encontramos este registro"), e Planos e cadastros com setor dependem de
+> rotas da mesma época. O front voltou ao build exato que casa com a API
+> (`99b42f2`/`dc4c6c4`, mesmos `index-*.js`). **Para levar o `main` à produção:**
+> reimplantar API + workers no HostPanel a partir do `main` (sem migration nova
+> desde `99b42f2`), conferir com um usuário logado que `/v1/insights/control-panel`
+> responde 200, e só então publicar o front (abaixo).
 
 **Imagem e runtime:** `Dockerfile` (uma imagem: API, workers e migrations
 one-off), `deploy/hostpanel/*.manifest.json` e o roteiro
