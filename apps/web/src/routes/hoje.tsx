@@ -49,7 +49,6 @@ import {
   BarChart,
   Card,
   CardHeader,
-  DonutChart,
   EmptyState,
   Metric,
   MetricGrid,
@@ -285,42 +284,52 @@ function BlocoTriagem({ className }: { className?: string }) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * A distribuição do trabalho, em rosca.
+ * Onde o trabalho está — a composição do quadro de OS, por situação.
  *
- * É a única pergunta do painel que é de COMPOSIÇÃO — "deste total, quanto está
- * em cada fase?" —, e é para isso que a rosca serve. O total vai no buraco do
- * meio, que é o melhor lugar da tela para ele.
+ * Era uma rosca de 132px com nove fatias e uma legenda estreita ao lado: num
+ * cartão de duas colunas, sobrava um vazio enorme e as fatias pequenas (uma OS
+ * em pausa, uma cancelada) viravam fios. Agora: o total em aberto em destaque,
+ * UMA barra de composição na largura toda do cartão e uma grade das situações
+ * com número e participação — legível em qualquer quantidade de situações.
+ *
+ * A cor segue a FASE, e não a ordem: azuis do novo ao em execução, âmbar para
+ * o que espera, verde para o que terminou, cinza para rascunho e cancelada.
+ * O que a lista de OS sabe filtrar pela URL vira link para ela.
  */
+const COR_DA_CATEGORIA: Record<string, string> = {
+  draft: 'var(--color-border-strong)',
+  open: 'var(--color-data-3)',
+  scheduled: 'var(--color-data-1)',
+  in_progress: 'var(--color-data-5)',
+  waiting: 'var(--color-warn)',
+  paused: 'color-mix(in oklab, var(--color-warn) 55%, var(--color-surface))',
+  review: 'var(--color-info)',
+  done: 'var(--color-good)',
+  closed: 'color-mix(in oklab, var(--color-good) 55%, var(--color-surface))',
+  cancelled: 'var(--color-border)',
+};
+const ENCERRADAS = new Set(['done', 'closed', 'cancelled']);
+const FILTRAVEIS = new Set(['open', 'in_progress', 'waiting', 'done']);
+
 function BlocoQuadro({ className }: { className?: string }) {
   const { data, isLoading } = useApiQuery(workOrdersBoard) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
   };
 
-  const colunas = (data?.columns ?? []).filter((c) => c.total > 0);
+  const colunas = (data?.columns ?? []).filter((c) => c.total > 0).sort((a, b) => a.position - b.position);
   const total = colunas.reduce((s, c) => s + c.total, 0);
-
-  const TOM_POR_CATEGORIA: Record<string, 'good' | 'warn' | 'bad' | 'info' | 'accent' | 'neutral'> = {
-    draft: 'neutral',
-    open: 'info',
-    scheduled: 'accent',
-    in_progress: 'accent',
-    waiting: 'warn',
-    paused: 'warn',
-    review: 'info',
-    done: 'good',
-    closed: 'good',
-    cancelled: 'neutral',
-  };
+  const emAberto = colunas.filter((c) => !ENCERRADAS.has(c.category)).reduce((s, c) => s + c.total, 0);
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
 
   return (
     <Card className={cn('flex flex-col', className)}>
       <CardHeader
         title="Onde o trabalho está"
-        description="Cada ordem de serviço em aberto, por situação."
+        description="As ordens de serviço do quadro, por situação."
         actions={<VerTudo to="/ordens">Ver quadro</VerTudo>}
       />
-      <div className="flex min-h-0 flex-1 items-center p-4">
+      <div className="flex min-h-0 flex-1 flex-col p-5">
         {isLoading ? (
           <SkeletonList rows={4} label="ordens de serviço" className="w-full" />
         ) : total === 0 ? (
@@ -331,17 +340,79 @@ function BlocoQuadro({ className }: { className?: string }) {
             description="Quando uma solicitação for aceita, ela aparece aqui."
           />
         ) : (
-          <DonutChart
-            className="w-full"
-            label="Ordens de serviço por situação"
-            centerValue={total}
-            centerLabel={total === 1 ? 'ordem' : 'ordens'}
-            data={colunas.map((c) => ({
-              label: c.label,
-              value: c.total,
-              tone: TOM_POR_CATEGORIA[c.category] ?? 'neutral',
-            }))}
-          />
+          <div className="flex flex-1 flex-col justify-center gap-6">
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+              <p className="flex items-baseline gap-2">
+                <span
+                  data-numeric
+                  className="text-3xl leading-none font-bold tracking-display text-text tabular-nums"
+                >
+                  {emAberto}
+                </span>
+                <span className="text-sm font-medium text-muted">em aberto</span>
+              </p>
+              <p className="text-sm text-subtle" data-numeric>
+                {total - emAberto} {total - emAberto === 1 ? 'encerrada' : 'encerradas'} · {total} no quadro
+              </p>
+            </div>
+
+            {/* Uma barra só, na largura toda: a composição se lê de uma vez. */}
+            <div
+              role="img"
+              aria-label={`Ordens de serviço por situação: ${colunas.map((c) => `${c.label} ${c.total}`).join(', ')}`}
+              className="flex h-3 overflow-hidden rounded-pill bg-surface-sunken"
+            >
+              <div className="aurora-anim-crescer-x flex h-full w-full">
+                {colunas.map((c) => (
+                  <span
+                    key={c.id}
+                    title={`${c.label}: ${c.total}`}
+                    className="h-full border-r-2 border-surface last:border-r-0"
+                    style={{
+                      width: `${(c.total / total) * 100}%`,
+                      backgroundColor: COR_DA_CATEGORIA[c.category],
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
+              {colunas.map((c) => {
+                const conteudo = (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="size-2.5 shrink-0 rounded-[3px]"
+                      style={{ backgroundColor: COR_DA_CATEGORIA[c.category] }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-text">{c.label}</span>
+                    <span data-numeric className="text-sm font-semibold text-text tabular-nums">
+                      {c.total}
+                    </span>
+                    <span data-numeric className="w-9 text-right text-xs text-subtle tabular-nums">
+                      {pct(c.total)}%
+                    </span>
+                  </>
+                );
+                return (
+                  <li key={c.id} className="border-b border-border-subtle">
+                    {FILTRAVEIS.has(c.category) ? (
+                      <Link
+                        to="/ordens"
+                        search={{ vista: 'lista', categoria: c.category } as never}
+                        className="flex min-h-11 items-center gap-2.5 rounded-control px-1 transition-colors hover:bg-surface-hover"
+                      >
+                        {conteudo}
+                      </Link>
+                    ) : (
+                      <div className="flex min-h-11 items-center gap-2.5 px-1">{conteudo}</div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
       </div>
     </Card>
