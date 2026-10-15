@@ -149,9 +149,9 @@ async function novaOs(over: Record<string, unknown> = {}) {
 }
 
 describe('provisionamento das situações', () => {
-  it('cria as dez situações, os catorze motivos e o grafo', async () => {
+  it('cria as onze situações, os catorze motivos e o grafo', async () => {
     const statuses = await withTenant(t.db, ctxA, (s) => loadStatuses(s));
-    expect(statuses).toHaveLength(10);
+    expect(statuses).toHaveLength(11);
     const graph = await withTenant(t.db, ctxA, (s) => loadTransitionGraph(s));
     expect(graph.length).toBeGreaterThanOrEqual(20);
     const [c] = await withTenant(t.db, ctxA, (s) =>
@@ -164,7 +164,7 @@ describe('provisionamento das situações', () => {
     const r = await withTenant(t.db, ctxA, (s) => provisionWorkOrderStates(s));
     expect(r.transitions).toBe(0);
     const statuses = await withTenant(t.db, ctxA, (s) => loadStatuses(s));
-    expect(statuses).toHaveLength(10);
+    expect(statuses).toHaveLength(11);
   });
 
   it('situação de sistema não muda de categoria nem é arquivada', async () => {

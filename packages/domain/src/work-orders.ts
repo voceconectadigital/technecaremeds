@@ -149,11 +149,23 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     customerLabel: 'Agendado',
   },
   {
+    // Entre agendar e executar: a OS está sendo avaliada (diagnóstico, triagem
+    // técnica) antes de alguém pôr a mão no equipamento. Categoria `open`:
+    // conta como ativa, o relógio corre, e o ativo não é dado como parado só
+    // por estar em análise.
+    key: 'in_analysis',
+    label: 'Em análise',
+    category: 'open',
+    color: '#b06000',
+    position: 3,
+    customerLabel: 'Em análise',
+  },
+  {
     key: 'in_progress',
     label: 'Em execução',
     category: 'in_progress',
     color: '#f9ab00',
-    position: 3,
+    position: 4,
     customerLabel: 'Em atendimento',
   },
   {
@@ -161,7 +173,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Aguardando',
     category: 'waiting',
     color: '#e8710a',
-    position: 4,
+    position: 5,
     requiresWaitReason: true,
     // Só "Aguardando": o QUE se aguarda vem do motivo, que tem o rótulo dele.
     customerLabel: 'Aguardando',
@@ -171,7 +183,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Pausada',
     category: 'waiting',
     color: '#c5221f',
-    position: 5,
+    position: 6,
     // "Pausada" é vocabulário de operação — para quem espera, o que está
     // acontecendo é análise.
     customerLabel: 'Em análise',
@@ -181,7 +193,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Concluída',
     category: 'review',
     color: '#188038',
-    position: 6,
+    position: 7,
     customerLabel: 'Concluído',
   },
   {
@@ -189,7 +201,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Validada',
     category: 'done',
     color: '#0d652d',
-    position: 7,
+    position: 8,
     // "Validada" é etapa nossa; para o cliente, concluído é concluído.
     customerLabel: 'Concluído',
   },
@@ -198,7 +210,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Fechada',
     category: 'closed',
     color: '#3c4043',
-    position: 8,
+    position: 9,
     customerLabel: 'Encerrado',
   },
   {
@@ -206,7 +218,7 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     label: 'Cancelada',
     category: 'cancelled',
     color: '#5f6368',
-    position: 9,
+    position: 10,
     customerLabel: 'Cancelado',
   },
 ]);
@@ -397,6 +409,10 @@ const CORE_TRANSITIONS: readonly TransitionDefinition[] = [
   { from: 'open', to: 'in_progress', permission: 'work_order.execute', note: 'atendimento imediato' },
   { from: 'scheduled', to: 'in_progress', permission: 'work_order.execute', note: 'início do atendimento' },
   { from: 'scheduled', to: 'open', permission: 'work_order.schedule', note: 'desagendamento' },
+  { from: 'open', to: 'in_analysis', permission: 'work_order.execute', note: 'início da análise' },
+  { from: 'scheduled', to: 'in_analysis', permission: 'work_order.execute', note: 'início da análise' },
+  { from: 'in_analysis', to: 'in_progress', permission: 'work_order.execute', note: 'análise concluída' },
+  { from: 'in_analysis', to: 'scheduled', permission: 'work_order.schedule', note: 'volta para a agenda' },
   {
     from: 'in_progress',
     to: 'waiting',
@@ -454,6 +470,7 @@ const CANCELLABLE_FROM = [
   'draft',
   'open',
   'scheduled',
+  'in_analysis',
   'in_progress',
   'waiting',
   'paused',

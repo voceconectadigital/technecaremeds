@@ -549,6 +549,17 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
         dias: 7,
         agenda: [-1, 10, 60],
       },
+      // em análise
+      {
+        titulo: 'Desfibrilador com falha intermitente na carga',
+        ativo: 'desf2',
+        natureza: 'corretiva',
+        tecnico: 'marcos',
+        prioridade: 'high',
+        caminho: ['scheduled', 'in_analysis'],
+        dias: 2,
+        agenda: [0, 11, 60],
+      },
       // em execução
       {
         titulo: 'Monitor com alarme intermitente',

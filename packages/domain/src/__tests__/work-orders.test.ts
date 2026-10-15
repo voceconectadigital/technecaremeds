@@ -82,7 +82,7 @@ describe('categorias — o que o software sabe interpretar', () => {
 
 describe('situações e motivos de fábrica', () => {
   it('as dez situações da SPEC, com categoria válida cada', () => {
-    expect(FACTORY_STATUSES).toHaveLength(10);
+    expect(FACTORY_STATUSES).toHaveLength(11);
     for (const s of FACTORY_STATUSES) expect(STATUS_CATEGORIES, s.key).toContain(s.category);
   });
 
