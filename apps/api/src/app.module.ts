@@ -21,6 +21,7 @@ import { CustomersController } from './directory/customers.controller';
 import { TeamsController } from './directory/teams.controller';
 import { CatalogsController } from './catalogs/catalogs.controller';
 import { AssetsController } from './assets/assets.controller';
+import { AssetCatalogController } from './assets/asset-catalog.controller';
 import { QrController } from './assets/qr.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
@@ -93,6 +94,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       TeamsController,
       CatalogsController,
       AssetsController,
+      AssetCatalogController,
       QrController,
       ServiceRequestsController,
       WorkOrdersController,

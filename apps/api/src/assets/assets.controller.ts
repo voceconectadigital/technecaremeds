@@ -28,6 +28,7 @@ import { assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   effectiveSpecs,
@@ -93,6 +94,33 @@ async function conferirClienteESetor(
   }
 }
 
+/**
+ * Chip geolocalizador / etiqueta de localização: tipo e identificador andam
+ * juntos. Só cadastro — nenhuma leitura de hardware acontece aqui.
+ */
+function conferirRastreador(
+  kind: string | null | undefined,
+  tag: string | null | undefined
+): { kind: string; tag: string } | null {
+  const k = kind ?? null;
+  const t = tag ? tag.trim() : null;
+  if (!k && !t) return null;
+  if (!k || !t) {
+    throw new ValidationError('informe o tipo e o identificador do chip juntos (ou nenhum dos dois)', {
+      field: k ? 'tracker_tag' : 'tracker_kind',
+    });
+  }
+  return { kind: k, tag: t };
+}
+
+function rastreadorDuplicado(e: unknown): never {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (msg.includes('assets_tracker_tag_uq')) {
+    throw new ConflictError('este chip/etiqueta de localização já está vinculado a outro equipamento');
+  }
+  throw e;
+}
+
 @Controller('assets')
 export class AssetsController {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -111,7 +139,13 @@ export class AssetsController {
     @Query('location') location?: string,
     @Query('status') status?: string,
     @Query('limit') limit?: string,
-    @Query('customer') customer?: string
+    @Query('customer') customer?: string,
+    @Query('family') family?: string,
+    @Query('category') category?: string,
+    @Query('model') model?: string,
+    @Query('manufacturer') manufacturer?: string,
+    @Query('criticality') criticality?: string,
+    @Query('tracker') tracker?: string
   ): Promise<{ items: unknown[]; asset_label: string }> {
     const ctx = req.auroraContext!;
     if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
@@ -131,9 +165,16 @@ export class AssetsController {
                 c.name AS category_name,
                 l.name AS location_name,
                 m.name AS model_name,
-                f.name AS manufacturer_name
+                f.name AS manufacturer_name,
+                fam.family_key, fam.name AS family_name,
+                a.criticality_id, cr.name AS criticality_name,
+                a.tracker_kind, a.tracker_tag
            FROM aurora.assets a
            JOIN aurora.asset_categories c ON c.id = a.asset_category_id
+           LEFT JOIN aurora.asset_categories fam
+                  ON fam.id = CASE WHEN c.family_key IS NOT NULL THEN c.id ELSE c.parent_id END
+                 AND fam.family_key IS NOT NULL
+           LEFT JOIN aurora.criticality_levels cr ON cr.id = a.criticality_id
            LEFT JOIN aurora.locations l    ON l.id = a.location_id
            LEFT JOIN aurora.asset_models m ON m.id = a.asset_model_id
            LEFT JOIN aurora.manufacturers f ON f.id = m.manufacturer_id
@@ -146,9 +187,29 @@ export class AssetsController {
             AND ($3::text IS NULL OR a.status::text = $3)
             AND ($5::uuid IS NULL OR a.customer_id = $5)
             AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
+            AND ($6::text IS NULL OR fam.family_key = $6)
+            AND ($7::uuid IS NULL OR a.asset_category_id = $7)
+            AND ($8::uuid IS NULL OR a.asset_model_id = $8)
+            AND ($9::text IS NULL OR f.name = $9)
+            AND ($10::uuid IS NULL OR a.criticality_id = $10)
+            AND ($11::text IS NULL
+                 OR ($11 = 'yes' AND a.tracker_tag IS NOT NULL)
+                 OR ($11 = 'no' AND a.tracker_tag IS NULL))
           ORDER BY a.name
           LIMIT $4`,
-        [membershipId, locationId, status ?? null, max, customerId]
+        [
+          membershipId,
+          locationId,
+          status ?? null,
+          max,
+          customerId,
+          family ?? null,
+          category === undefined ? null : uuidParam(category, 'category'),
+          model === undefined ? null : uuidParam(model, 'model'),
+          manufacturer ?? null,
+          criticality === undefined ? null : uuidParam(criticality, 'criticality'),
+          tracker === 'yes' || tracker === 'no' ? tracker : null,
+        ]
       );
       return { items, asset_label: org?.asset_label ?? 'Ativo' };
     });
@@ -163,7 +224,8 @@ export class AssetsController {
   async formOptions(@Req() req: AuroraRequest): Promise<unknown> {
     return withTenant(this.db, req.auroraContext!, async (s) => ({
       categories: await s.query(
-        `SELECT id, name, parent_id FROM aurora.asset_categories WHERE archived_at IS NULL ORDER BY name`
+        `SELECT id, name, parent_id, family_key FROM aurora.asset_categories
+          WHERE archived_at IS NULL ORDER BY position, name`
       ),
       models: await s.query(
         `SELECT m.id, m.name, f.name AS manufacturer_name, m.asset_category_id
@@ -221,9 +283,13 @@ export class AssetsController {
                 CASE WHEN $3::boolean THEN a.currency END AS currency,
                 c.name AS category_name, l.name AS location_name,
                 m.name AS model_name, m.specs AS model_specs,
-                f.name AS manufacturer_name, cu.name AS customer_name
+                f.name AS manufacturer_name, cu.name AS customer_name,
+                fam.family_key, fam.name AS family_name, a.tracker_kind, a.tracker_tag
            FROM aurora.assets a
            JOIN aurora.asset_categories c ON c.id = a.asset_category_id
+           LEFT JOIN aurora.asset_categories fam
+                  ON fam.id = CASE WHEN c.family_key IS NOT NULL THEN c.id ELSE c.parent_id END
+                 AND fam.family_key IS NOT NULL
            JOIN aurora.customers cu ON cu.id = a.customer_id
            LEFT JOIN aurora.locations l    ON l.id = a.location_id
            LEFT JOIN aurora.asset_models m ON m.id = a.asset_model_id
@@ -282,9 +348,10 @@ export class AssetsController {
     if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
     const membershipId = ctx.membershipId;
     const b = parseWith(assetsCreate.body, body);
+    const rastreador = conferirRastreador(b.tracker_kind, b.tracker_tag);
     const id = await withTenant(this.db, ctx, async (s) => {
       await conferirClienteESetor(s, membershipId, b.customer_id, b.location_id);
-      return createAsset(s, {
+      const novo = await createAsset(s, {
         name: requiredText(b.name, 'name'),
         customerId: b.customer_id,
         assetCategoryId: b.asset_category_id,
@@ -295,6 +362,16 @@ export class AssetsController {
         serialNumber: b.serial_number || null,
         assetNumber: b.asset_number || null,
       });
+      if (rastreador) {
+        await s
+          .query(`UPDATE aurora.assets SET tracker_kind = $2, tracker_tag = $3 WHERE id = $1`, [
+            novo,
+            rastreador.kind,
+            rastreador.tag,
+          ])
+          .catch(rastreadorDuplicado);
+      }
+      return novo;
     });
     return { id };
   }
@@ -324,7 +401,13 @@ export class AssetsController {
       tag: 'tag',
       serial_number: 'serial_number',
       asset_number: 'asset_number',
+      tracker_kind: 'tracker_kind',
+      tracker_tag: 'tracker_tag',
     };
+    if (b.tracker_kind !== undefined || b.tracker_tag !== undefined) {
+      // O par vai junto: tipo sem identificador (ou o contrário) não localiza nada.
+      conferirRastreador(b.tracker_kind ?? null, b.tracker_tag ?? null);
+    }
     const sets: string[] = [];
     const valores: unknown[] = [assetId];
     for (const [campo, coluna] of Object.entries(colunas)) {
@@ -346,11 +429,13 @@ export class AssetsController {
       );
       if (!visivel) throw new NotFoundError('Ativo', assetId);
       valores.push(ctx.actorId);
-      await s.query(
-        `UPDATE aurora.assets SET ${sets.join(', ')}, updated_at = now(), updated_by = $${valores.length}
+      await s
+        .query(
+          `UPDATE aurora.assets SET ${sets.join(', ')}, updated_at = now(), updated_by = $${valores.length}
           WHERE id = $1`,
-        valores
-      );
+          valores
+        )
+        .catch(rastreadorDuplicado);
     });
     return { ok: true };
   }

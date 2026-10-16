@@ -435,6 +435,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
     permissions: [
       ...ALL_READ,
       'organization.manage_members',
+      'organization.manage_catalogs',
       'customer.create',
       'customer.update',
       'location.create',
