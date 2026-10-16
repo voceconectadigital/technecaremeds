@@ -291,6 +291,7 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/notificacoes', NotificacoesPage),
   rotaProtegida('/perfil', PerfilPage),
 
+  rotaProtegida('/usuarios', MembrosPage),
   rotaProtegida('/configuracoes', MembrosPage),
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
 ]);

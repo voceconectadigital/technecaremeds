@@ -23,15 +23,41 @@ import {
   inviteMember,
   setMembershipScope,
   suspendMembership,
+  setMembershipStatus,
+  updateMemberDetails,
+  getMember,
   listMembers,
   type Database,
 } from '@aurora/db';
-import { membersInvite, membersSetScope, membersSuspend } from '@aurora/contracts';
+import {
+  membersInvite,
+  membersSetScope,
+  membersSuspend,
+  membersUpdate,
+  membersSetStatus,
+} from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
 import { parseWith } from '../common/contract-validation';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
+
+/** Os dados de cadastro têm o mesmo formato no "Adicionar usuário" e na edição. */
+function cadastroDoCorpo(body: {
+  cpf?: string | null;
+  phone?: string | null;
+  company_name?: string | null;
+  job_title?: string | null;
+  registrations?: { kind: string; number: string; region?: string | null }[];
+}) {
+  return {
+    cpf: body.cpf,
+    phone: body.phone,
+    companyName: body.company_name,
+    jobTitle: body.job_title,
+    registrations: body.registrations,
+  };
+}
 
 /** O escopo tem o mesmo formato no convite e no ajuste — uma leitura só. */
 function escopoDoCorpo(body: {
@@ -81,6 +107,8 @@ export class MembersController {
       inviteMember(s, {
         email: entrada.email,
         name: entrada.name,
+        profileKey: entrada.profile,
+        ...cadastroDoCorpo(entrada),
         seatType: entrada.seat_type,
         roleKeys: entrada.role_keys,
         scope: escopoDoCorpo(entrada),
@@ -89,6 +117,45 @@ export class MembersController {
     );
 
     return { membership_id: r.membershipId, user_id: r.userId, reused_user: r.reusedUser };
+  }
+
+  @Get(':id')
+  @RequirePermissions('organization.manage_members')
+  async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    return withTenant(this.db, ctx, (s) => getMember(s, uuidParam(id, 'id')));
+  }
+
+  @Patch(':id')
+  @RequirePermissions('organization.manage_members')
+  async update(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const entrada = parseWith(membersUpdate.body, body);
+    await withTenant(this.db, ctx, (s) =>
+      updateMemberDetails(s, uuidParam(id, 'id'), cadastroDoCorpo(entrada))
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Ativa, suspende ou bloqueia. A recusa de acesso de quem foi suspenso ou
+   * bloqueado é do servidor (resolução de vínculo), não desta tela.
+   */
+  @Post(':id/status')
+  @RequirePermissions('organization.manage_members')
+  async status(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const { status, reason } = parseWith(membersSetStatus.body, body);
+    await withTenant(this.db, ctx, (s) => setMembershipStatus(s, uuidParam(id, 'id'), status, reason));
+    return { ok: true };
   }
 
   @Patch(':id/scope')

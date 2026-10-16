@@ -31,13 +31,13 @@ test.describe('EPIC-024 · automações', () => {
     await expect(page.getByText(/depois de simulada/)).toBeVisible();
   });
 
-  test('a volta para Pessoas mantém o alternador', async ({ comoCoordenadorA: page }) => {
+  test('a volta para Usuários mantém o alternador', async ({ comoCoordenadorA: page }) => {
     await page.goto('/configuracoes/automacoes');
     await page
       .getByRole('navigation', { name: 'Configurações' })
-      .getByRole('link', { name: 'Pessoas' })
+      .getByRole('link', { name: 'Usuários' })
       .click();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Pessoas');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Usuários');
     await expect(page.getByRole('navigation', { name: 'Configurações' })).toBeVisible();
   });
 });

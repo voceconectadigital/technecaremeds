@@ -105,6 +105,7 @@ describe('migrations (EPIC-001)', () => {
       'manufacturers',
       'measurement_sessions',
       'membership_permission_overrides',
+      'membership_registrations',
       'membership_roles',
       'membership_scopes',
       'memberships',

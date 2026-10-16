@@ -35,6 +35,7 @@ import {
   type ServiceRequestSource,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { escopoRestrito } from '../common/scope-sql';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import { runFieldOperation } from '../common/client-operation';
@@ -115,7 +116,9 @@ export class ServiceRequestsController {
   async queue(@Req() req: AuroraRequest, @Query('limit') limit?: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const max = Math.min(Number.parseInt(limit ?? '200', 10) || 200, 500);
-    const items = await withTenant(this.db, ctx, (s) => triageQueue(s, { limit: max }));
+    const items = await withTenant(this.db, ctx, (s) =>
+      triageQueue(s, { limit: max, scopeMembershipId: escopoRestrito(ctx) ? ctx.membershipId : null })
+    );
     return { items };
   }
 

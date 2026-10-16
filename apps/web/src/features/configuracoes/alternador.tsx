@@ -22,7 +22,7 @@ export function AlternadorDeConfiguracoes() {
     <AlternadorDeTelas
       label="Configurações"
       itens={[
-        { para: '/configuracoes', rotulo: 'Pessoas', ativo: !emAutomacoes },
+        { para: '/usuarios', rotulo: 'Usuários', ativo: !emAutomacoes },
         { para: '/configuracoes/automacoes', rotulo: 'Automações', ativo: emAutomacoes },
       ]}
     />

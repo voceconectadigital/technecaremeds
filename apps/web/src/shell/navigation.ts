@@ -17,6 +17,11 @@
  *   "quanto custa, e o que foi acordado?"→ Contratos
  *   "o que se repete, e está em dia?"    → Planos de manutenção
  *   "como estamos indo?"                 → Painel de Controle
+ *   "quem tem acesso, e a quê?"          → Usuários
+ *
+ * Usuários entrou em 16/10/2026 (reunião com o cliente): quem administra a
+ * conta procurava "onde cadastro o usuário?" e achava uma aba dentro de
+ * Configurações. Agora é item próprio — só para quem gerencia pessoas.
  *
  * Dez itens. O décimo é Planos de manutenção (09/10/2026): preventiva,
  * calibração, TSE e qualificação deixaram de ser uma aba escondida atrás de
@@ -44,6 +49,7 @@ import {
   Package,
   FileText,
   Settings,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -122,6 +128,14 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     icon: Boxes,
     permissions: ['asset.read'],
     hint: 'Equipamentos, locais e histórico',
+    grupo: 'Cadastros',
+  },
+  {
+    to: '/usuarios',
+    label: 'Usuários',
+    icon: UserCog,
+    permissions: ['organization.manage_members'],
+    hint: 'Quem tem acesso, com que perfil (Operador, Solicitante, Gestor) e a quais setores',
     grupo: 'Cadastros',
   },
   {
