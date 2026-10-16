@@ -46,6 +46,8 @@ import { ApiError, Can, useApiMutation, useApiQuery, usePermissions } from '@aur
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { rotuloDoSegmento } from './novo-cliente';
+import { rotuloDaClassificacao } from './classificacao';
+import { DialogoEditarCliente } from './editar-cliente';
 import { DialogoEquipamento } from '../ativos/formulario';
 import { ROTULO_STATUS_ATIVO, TOM_STATUS_ATIVO } from '../painel/rotulos';
 
@@ -64,6 +66,7 @@ export function ClientePage() {
   const [novoSetor, setNovoSetor] = useState<string | null>(null);
   const [renomeando, setRenomeando] = useState<CustomerLocation | null>(null);
   const [equipamentoNoSetor, setEquipamentoNoSetor] = useState<string | null>(null);
+  const [editandoCliente, setEditandoCliente] = useState(false);
 
   const { data, isLoading, isError, error } = useApiQuery(customersDetail, { params: { id } }) as {
     data: { customer: Customer; locations: CustomerLocation[] } | undefined;
@@ -116,22 +119,27 @@ export function ClientePage() {
       title={c.name}
       subtitle={[
         c.trade_name && c.trade_name !== c.name ? c.trade_name : null,
-        rotuloDoSegmento(c.segment),
+        rotuloDaClassificacao(c) ?? rotuloDoSegmento(c.segment),
         c.tax_id,
       ]
         .filter(Boolean)
         .join(' · ')}
       breadcrumbs={[{ label: 'Clientes', href: '/clientes' }, { label: c.name }]}
       actions={
-        <Can permission="asset.create">
-          <Button
-            variant="primary"
-            icon={<Plus className="size-4" />}
-            onClick={() => setEquipamentoNoSetor('')}
-          >
-            Novo equipamento
-          </Button>
-        </Can>
+        <div className="flex flex-wrap gap-2">
+          <Can permission="customer.update">
+            <Button onClick={() => setEditandoCliente(true)}>Editar cliente</Button>
+          </Can>
+          <Can permission="asset.create">
+            <Button
+              variant="primary"
+              icon={<Plus className="size-4" />}
+              onClick={() => setEquipamentoNoSetor('')}
+            >
+              Novo equipamento
+            </Button>
+          </Can>
+        </div>
       }
     >
       <div className="flex flex-col gap-5">
@@ -344,6 +352,7 @@ export function ClientePage() {
         clienteInicial={c.id}
         setorInicial={equipamentoNoSetor || undefined}
       />
+      {editandoCliente && <DialogoEditarCliente cliente={c} onFechar={() => setEditandoCliente(false)} />}
     </AppShell>
   );
 }

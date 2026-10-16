@@ -13,6 +13,13 @@ export const Customer = z.object({
   /** O cliente que É a própria organização — a clínica que atende a si mesma. */
   is_internal: z.boolean(),
   segment: z.string().nullable(),
+  /**
+   * EAS (Estabelecimento Assistencial de Saúde) ou empresa corporativa, e o
+   * subtipo (hospital, clínica… / engenharia clínica, assistência técnica…).
+   * Opcionais: respostas capturadas antes da 0062 (demo) não os têm.
+   */
+  kind: z.enum(['eas', 'corporate']).optional(),
+  subtype: z.string().nullable().optional(),
   status: z.string(),
   location_count: z.number().int(),
   /**
@@ -75,10 +82,37 @@ export const customersCreate = defineOperation({
       code: TextoOpcional(60),
       tax_id: Documento,
       segment: TextoOpcional(60),
+      kind: z.enum(['eas', 'corporate']).optional(),
+      subtype: z.string().trim().max(40).nullable().optional(),
     })
     .strict(),
   response: Customer,
   errors: ['conflict'],
+});
+
+export const customersUpdate = defineOperation({
+  operationId: 'customers.update',
+  method: 'PATCH',
+  path: '/customers/:id',
+  summary: 'Edita o cadastro de um cliente',
+  description:
+    'Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa) e subtipo. ' +
+    'Só o que vier no corpo muda. Cliente fora do escopo responde 404. O subtipo precisa ser da ' +
+    'lista do tipo escolhido.',
+  permissions: ['customer.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(200).optional(),
+      trade_name: TextoOpcional(200),
+      code: TextoOpcional(60),
+      tax_id: Documento,
+      kind: z.enum(['eas', 'corporate']).optional(),
+      subtype: z.string().trim().max(40).nullable().optional(),
+    })
+    .strict(),
+  response: Customer,
+  errors: ['not_found', 'conflict'],
 });
 
 export const CustomerLocation = z.object({

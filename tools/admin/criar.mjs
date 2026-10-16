@@ -480,7 +480,9 @@ try {
       permissions: PERMISSION_KEYS,
     }),
     async (s) => {
-      const papeis = await db.provisionFactoryRoles(s);
+      // Papéis, situações de OS, tipos de local (com "Setor") e catálogos de
+      // partida — idempotente: numa organização existente não duplica nada.
+      const { roles: papeis } = await db.provisionOrganizationBaseline(s);
       await db.assignRole(s, membroFinal, papeis.get(papelEscolhido));
     }
   );

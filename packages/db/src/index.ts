@@ -41,3 +41,4 @@ export * from './imports';
 export * from './painel';
 export * from './plan-board';
 export * from './procedures';
+export * from './provisioning';

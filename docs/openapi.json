@@ -7632,6 +7632,23 @@
                             }
                           ]
                         },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "eas",
+                            "corporate"
+                          ]
+                        },
+                        "subtype": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "status": {
                           "type": "string"
                         },
@@ -7824,6 +7841,255 @@
             "bearer": []
           }
         ]
+      },
+      "patch": {
+        "operationId": "customers.update",
+        "summary": "Edita o cadastro de um cliente",
+        "description": "Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa) e subtipo. Só o que vier no corpo muda. Cliente fora do escopo responde 404. O subtipo precisa ser da lista do tipo escolhido.",
+        "tags": [
+          "Customers"
+        ],
+        "x-aurora-permissions": [
+          "customer.update"
+        ],
+        "x-aurora-source": "apps/api/src/directory/customers.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 200
+                  },
+                  "trade_name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "tax_id": {
+                    "type": "string",
+                    "maxLength": 32
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "eas",
+                      "corporate"
+                    ]
+                  },
+                  "subtype": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "trade_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "code": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "tax_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "is_internal": {
+                      "type": "boolean"
+                    },
+                    "segment": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "eas",
+                        "corporate"
+                      ]
+                    },
+                    "subtype": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "location_count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "asset_count": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "trade_name",
+                    "code",
+                    "tax_id",
+                    "is_internal",
+                    "segment",
+                    "status",
+                    "location_count",
+                    "asset_count"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/customers": {
@@ -7897,6 +8163,23 @@
                             "type": "boolean"
                           },
                           "segment": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "eas",
+                              "corporate"
+                            ]
+                          },
+                          "subtype": {
                             "anyOf": [
                               {
                                 "type": "string"
@@ -8033,6 +8316,24 @@
                   "segment": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "eas",
+                      "corporate"
+                    ]
+                  },
+                  "subtype": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -8096,6 +8397,23 @@
                       "type": "boolean"
                     },
                     "segment": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "eas",
+                        "corporate"
+                      ]
+                    },
+                    "subtype": {
                       "anyOf": [
                         {
                           "type": "string"

@@ -16,7 +16,7 @@
  * está abrindo uma solicitação às pressas fecha e segue.
  */
 import { useState, type FormEvent } from 'react';
-import { Button, Dialog, Field, Input, Select, useToast } from '@aurora/ui';
+import { Button, Dialog, Field, Input, useToast } from '@aurora/ui';
 import {
   customersCreate,
   customersList,
@@ -26,6 +26,7 @@ import {
   type LocationType,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { CamposDeClassificacao, type TipoDeCliente } from './classificacao';
 
 /**
  * Segmentos sugeridos.
@@ -78,7 +79,8 @@ export function DialogoNovoCliente({
   const [fantasia, setFantasia] = useState('');
   const [documento, setDocumento] = useState('');
   const [codigo, setCodigo] = useState('');
-  const [segmento, setSegmento] = useState('');
+  const [tipo, setTipo] = useState<TipoDeCliente>('eas');
+  const [subtipo, setSubtipo] = useState('');
   const [erro, setErro] = useState<Erro | null>(null);
 
   /** Preenchido depois de salvar: o diálogo passa a oferecer a unidade. */
@@ -111,7 +113,8 @@ export function DialogoNovoCliente({
     setFantasia('');
     setDocumento('');
     setCodigo('');
-    setSegmento('');
+    setTipo('eas');
+    setSubtipo('');
     setErro(null);
     setCriado(null);
     setUnidade('');
@@ -137,7 +140,8 @@ export function DialogoNovoCliente({
           trade_name: fantasia.trim() || undefined,
           tax_id: documento.trim() || undefined,
           code: codigo.trim() || undefined,
-          segment: segmento || undefined,
+          kind: tipo,
+          subtype: subtipo || null,
         },
       },
       {
@@ -181,7 +185,7 @@ export function DialogoNovoCliente({
 
   const erroDe = (campo: string) => (erro?.campo === campo ? erro.mensagem : null);
   const erroSolto =
-    erro && !['name', 'trade_name', 'tax_id', 'code', 'segment', 'unidade'].includes(erro.campo ?? '');
+    erro && !['name', 'trade_name', 'tax_id', 'code', 'subtype', 'unidade'].includes(erro.campo ?? '');
 
   if (criado) {
     return (
@@ -243,7 +247,7 @@ export function DialogoNovoCliente({
       open={open}
       onOpenChange={(o) => (o ? onOpenChange(true) : fechar())}
       title="Novo cliente"
-      description="O hospital, a clínica ou a unidade que você atende. Ativos, solicitações e contratos ficam pendurados nele."
+      description="Um EAS (hospital, clínica…) ou uma empresa corporativa (engenharia clínica, assistência técnica…). Ativos, solicitações e contratos ficam pendurados nele."
       footer={
         <>
           <Button onClick={fechar}>Cancelar</Button>
@@ -308,16 +312,13 @@ export function DialogoNovoCliente({
           </Field>
         </div>
 
-        <Field label="Segmento" error={erroDe('segment')}>
-          <Select value={segmento} onChange={(e) => setSegmento(e.target.value)}>
-            <option value="">Não informar</option>
-            {SEGMENTOS.map((s) => (
-              <option key={s.valor} value={s.valor}>
-                {s.rotulo}
-              </option>
-            ))}
-          </Select>
-        </Field>
+        <CamposDeClassificacao
+          tipo={tipo}
+          subtipo={subtipo}
+          onTipo={setTipo}
+          onSubtipo={setSubtipo}
+          erroSubtipo={erroDe('subtype')}
+        />
 
         {erroSolto && (
           <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">

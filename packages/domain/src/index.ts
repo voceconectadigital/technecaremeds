@@ -28,3 +28,4 @@ export * from './medicao';
 export * from './documento-da-sessao';
 export * from './opportunities';
 export * from './profiles';
+export * from './customer-kinds';
