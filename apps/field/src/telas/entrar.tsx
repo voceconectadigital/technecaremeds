@@ -26,6 +26,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Button, Card, Field, Input, Logo } from '@aurora/ui';
 import { useSession, MARCA } from '@aurora/app-kit';
 import { API } from '../campo';
+import { lembrarUsuario } from '../identidade';
 
 type Provedor = 'password' | 'local' | 'desconhecido';
 interface Organizacao {
@@ -87,6 +88,9 @@ export function EntrarPage() {
         return;
       }
       const { token } = (await r.json()) as { token: string };
+      // QUEM entrou, antes de a sessão existir: a fila carimba e confere o dono
+      // de cada comando por isto (ver `Identidade` em `fila.ts`).
+      lembrarUsuario(limpo);
       // `signIn` limpa a organização guardada: ela é escolhida em seguida.
       signIn(token);
       const o = await fetch(`${API}/me/organizations`, { headers: { authorization: `Bearer ${token}` } });
@@ -117,6 +121,7 @@ export function EntrarPage() {
         setErro('Informe a organização — é ela que decide qual dia baixar.');
         return;
       }
+      lembrarUsuario(limpo);
       signIn(`local:${limpo}:${limpo}`);
       chooseOrganization(organizacao.trim());
       void navigate({ to: '/' });

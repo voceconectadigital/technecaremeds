@@ -25,7 +25,9 @@ import { MARCA } from '@aurora/app-kit';
 
 function Pendencias() {
   const { estado, sincronizando, online, ultimaSincronizacao } = useCampo();
-  const total = estado.pendentes + estado.bloqueados;
+  // O trabalho de outra sessão também está no aparelho sem ter chegado: dizer
+  // "tudo enviado" com ele guardado seria a afirmação errada.
+  const total = estado.pendentes + estado.bloqueados + estado.deOutraSessao;
 
   return (
     <div className="flex items-center gap-2">

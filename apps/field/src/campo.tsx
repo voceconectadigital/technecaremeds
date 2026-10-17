@@ -52,7 +52,14 @@ import {
   type Dispositivo,
 } from './dispositivo';
 import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao, type EstadoDaFila } from './fila';
-import { Sincronizacao, type PacoteDoDia, type ResultadoDaSincronizacao } from './sincronizacao';
+import { identidadeAtual } from './identidade';
+import {
+  ErroDeSessaoExpirada,
+  Sincronizacao,
+  type PacoteDoDia,
+  type ResultadoDaSincronizacao,
+} from './sincronizacao';
+import { umaPorVez } from './uma-por-vez';
 
 export const API = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3001/v1';
 
@@ -114,7 +121,16 @@ export interface Campo {
   sincronizando: boolean;
   ultimoResultado: ResultadoDaSincronizacao | null;
   online: boolean;
-  sincronizar(): Promise<void>;
+  /**
+   * O servidor respondeu 401: a sessão venceu. A fila está intacta e PARADA —
+   * os gatilhos automáticos deixam de tentar até a pessoa entrar de novo.
+   */
+  sessaoExpirada: boolean;
+  /**
+   * `manual`: o toque em "Sincronizar agora". É o único gatilho que tenta
+   * mesmo com a sessão vencida — a pessoa pode estar conferindo.
+   */
+  sincronizar(opcoes?: { manual?: boolean }): Promise<void>;
   /** Enfileira um comando e atualiza o indicador. */
   enfileirar(e: {
     agregado: string;
@@ -138,6 +154,8 @@ export interface Campo {
     tipo: string
   ): Promise<AnexoPendente | null>;
   resolverAtencao(id: string, opcoes: { desbloquear: boolean }): Promise<void>;
+  /** Solta os parados de uma OS que não têm pendência à frente. */
+  desbloquear(agregado: string): Promise<void>;
   descartar(id: string): Promise<void>;
   atualizarEstado(): Promise<void>;
 }
@@ -164,6 +182,7 @@ export function CampoProvider({
     pendentes: 0,
     bloqueados: 0,
     atencao: 0,
+    deOutraSessao: 0,
     maisAntigoEm: null,
   });
   const [anexosEstado, setAnexosEstado] = useState<EstadoDosAnexos>({
@@ -233,6 +252,7 @@ export function CampoProvider({
     return new FilaDeSaida(base.colecao<ComandoNaFila>('fila'), base.colecao<PendenciaDeAtencao>('atencao'), {
       agora: () => new Date(),
       novoId,
+      identidade: identidadeAtual,
       async enviar(c) {
         /*
          * O IDENTIFICADOR DA FILA VIRA O CABEÇALHO DA OPERAÇÃO.
@@ -280,10 +300,12 @@ export function CampoProvider({
     if (!base || !fila) return null;
     return new Sincronizacao(base, fila, {
       agora: () => new Date(),
+      identidade: identidadeAtual,
       async baixarPacote(desde) {
         const url = new URL(`${API}/field/sync`);
         if (desde) url.searchParams.set('since', desde);
         const r = await fetch(url.toString(), { headers: cabecalhos() });
+        if (r.status === 401) throw new ErroDeSessaoExpirada();
         if (!r.ok) throw new Error(`o servidor respondeu ${r.status} ao pedir o dia`);
         return (await r.json()) as PacoteDoDia;
       },
@@ -312,8 +334,22 @@ export function CampoProvider({
   const { token, organizationId } = useSession();
   const temSessaoRef = useRef(false);
   temSessaoRef.current = Boolean(token && organizationId);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
-  const sincronizar = useCallback(async () => {
+  /*
+   * A SESSÃO VENCIDA PARA OS GATILHOS AUTOMÁTICOS, e só eles.
+   *
+   * Guardamos o TOKEN que levou o 401. Enquanto for o mesmo, o relógio, o aviso
+   * de rede e os toques não tentam: cada tentativa seria outro 401, e a tela já
+   * disse o que fazer. Entrar de novo troca o token, e a fila volta a andar
+   * sozinha — com os comandos intactos, porque o 401 não tira nada dela.
+   */
+  const [expirouNoToken, setExpirouNoToken] = useState<string | null>(null);
+  const expirouRef = useRef<string | null>(null);
+  const sessaoExpirada = expirouNoToken !== null && expirouNoToken === token;
+
+  const passada = useCallback(async () => {
     if (!sincronizacao || !temSessaoRef.current) return;
     setSincronizando(true);
     try {
@@ -321,6 +357,15 @@ export function CampoProvider({
       setUltimoResultado(r);
       // O que a tentativa descobriu vale mais do que o palpite do sistema.
       setOnline(!r.semRede);
+      if (r.sessaoExpirada) {
+        expirouRef.current = tokenRef.current;
+        setExpirouNoToken(tokenRef.current);
+        return;
+      }
+      if (!r.semRede) {
+        expirouRef.current = null;
+        setExpirouNoToken(null);
+      }
 
       /*
        * AS FOTOS SOBEM DEPOIS DOS COMANDOS, e não junto.
@@ -368,6 +413,24 @@ export function CampoProvider({
       await atualizarEstado();
     }
   }, [sincronizacao, atualizarEstado, anexos, arquivos]);
+
+  /*
+   * UMA SINCRONIZAÇÃO DE CADA VEZ — ver `umaPorVez`. A guarda vive fora do
+   * ciclo de render (`useMemo` sem dependências, chamando pela referência):
+   * recriá-la a cada render daria a cada gatilho uma guarda nova, e a guarda
+   * não guardaria nada.
+   */
+  const passadaRef = useRef(passada);
+  passadaRef.current = passada;
+  const umaSo = useMemo(() => umaPorVez(() => passadaRef.current()), []);
+
+  const sincronizar = useCallback<Campo['sincronizar']>(
+    async (opcoes) => {
+      if (!opcoes?.manual && expirouRef.current !== null && expirouRef.current === tokenRef.current) return;
+      await umaSo();
+    },
+    [umaSo]
+  );
 
   const sincronizarRef = useRef(sincronizar);
   sincronizarRef.current = sincronizar;
@@ -496,6 +559,18 @@ export function CampoProvider({
       if (!fila) return;
       await fila.resolverAtencao(id, opcoes);
       await atualizarEstado();
+      // "Tentar de novo AGORA": o comando voltou à fila, e o botão promete.
+      if (opcoes.desbloquear) void sincronizarRef.current();
+    },
+    [fila, atualizarEstado]
+  );
+
+  const desbloquear = useCallback<Campo['desbloquear']>(
+    async (agregado) => {
+      if (!fila) return;
+      await fila.desbloquearAgregado(agregado);
+      await atualizarEstado();
+      void sincronizarRef.current();
     },
     [fila, atualizarEstado]
   );
@@ -551,11 +626,13 @@ export function CampoProvider({
     sincronizando,
     ultimoResultado,
     online,
+    sessaoExpirada,
     sincronizar,
     enfileirar,
     capturarFoto,
     anexarBytes,
     resolverAtencao,
+    desbloquear,
     descartar,
     atualizarEstado,
   };
