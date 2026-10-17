@@ -16,13 +16,15 @@ import {
   ancestors,
   archiveLocation,
   type Database,
+  type TenantSession,
 } from '@aurora/db';
-import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
+import { ForbiddenError, NotFoundError, ValidationError, type RequestContext } from '@aurora/domain';
 import { locationsCreate, locationsUpdate } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
 
 interface MoveLocationBody {
@@ -41,6 +43,43 @@ function requireMembership(membershipId: string | null): string {
     throw new ForbiddenError('esta rota exige um vínculo de usuário com a organização');
   }
   return membershipId;
+}
+
+/**
+ * Onde o local vai parar — criado ou movido — cabe no escopo de quem pede?
+ * (pente-fino 17/10)
+ *
+ * As rotas por id (`/locations/:id/...`) já passam pelo ScopeGuard; o que
+ * faltava era o DESTINO: o cliente e o pai vêm no corpo. Fora do escopo é 404,
+ * como em qualquer rota. Quem tem escopo por local não cria (nem promove) raiz:
+ * a raiz nova ficaria fora do próprio escopo no instante seguinte.
+ */
+async function destinoNoEscopo(
+  s: TenantSession,
+  ctx: RequestContext,
+  permissao: string,
+  customerId: string | null,
+  parentId: string | null
+): Promise<void> {
+  if (!escopoRestrito(ctx)) return;
+  if (customerId) {
+    const [ok] = await s.query(`SELECT 1 FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`, [
+      ctx.membershipId,
+      customerId,
+    ]);
+    if (!ok) throw new NotFoundError('cliente', customerId);
+  }
+  if (parentId) {
+    const [ok] = await s.query(`SELECT 1 FROM aurora.accessible_location_ids($1) WHERE location_id = $2`, [
+      ctx.membershipId,
+      parentId,
+    ]);
+    if (!ok) throw new NotFoundError('local', parentId);
+  } else if (ctx.scope.locationScope !== 'all') {
+    throw new ForbiddenError(
+      `${permissao} — com escopo por local, o local fica dentro de um local do seu escopo`
+    );
+  }
 }
 
 @Controller('locations')
@@ -100,16 +139,17 @@ export class LocationsController {
     // O formato vem do contrato — o mesmo que tipa a tela de clientes. A regra
     // de aninhamento continua no banco: é ela que sabe quais pais o tipo aceita.
     const b = parseWith(locationsCreate.body, body);
-    const id = await withTenant(this.db, ctx, (s) =>
-      createLocation(s, {
+    const id = await withTenant(this.db, ctx, async (s) => {
+      await destinoNoEscopo(s, ctx, 'location.create', b.customer_id, b.parent_id ?? null);
+      return createLocation(s, {
         customerId: b.customer_id,
         parentId: b.parent_id ?? null,
         locationTypeId: b.location_type_id,
         name: b.name,
         code: b.code || null,
         isMobile: b.is_mobile === true,
-      })
-    );
+      });
+    });
     return { id };
   }
 
@@ -164,9 +204,11 @@ export class LocationsController {
     @Body() body: MoveLocationBody
   ): Promise<{ moved: number }> {
     const ctx = req.auroraContext!;
-    const moved = await withTenant(this.db, ctx, (s) =>
-      moveLocation(s, uuidParam(id, 'id'), optionalUuid(body.parent_id, 'parent_id'))
-    );
+    const novoPai = optionalUuid(body.parent_id, 'parent_id');
+    const moved = await withTenant(this.db, ctx, async (s) => {
+      await destinoNoEscopo(s, ctx, 'location.move', null, novoPai);
+      return moveLocation(s, uuidParam(id, 'id'), novoPai);
+    });
     return { moved };
   }
 

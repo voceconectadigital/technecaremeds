@@ -42,26 +42,117 @@ const ORIGEM = {
                  FROM aurora.time_entries t
                  JOIN aurora.work_orders w ON w.id = t.work_order_id
                 WHERE t.id = $2`,
+  // Pente-fino 17/10: as entidades que tinham cliente e ficaram de fora.
+  //
+  // Documento SEM cliente (interno da organização) tem `customer_id` nulo, e
+  // `NULL IN (...)` não é verdadeiro: quem é restrito não o vê — a mesma regra
+  // do portal (`documentForPdf`), que só mostra documento do cliente dele. O
+  // local vem do equipamento e, sem ele, da OS.
+  document: `SELECT d.customer_id, COALESCE(a.location_id, w.location_id) AS location_id
+               FROM aurora.documents d
+               LEFT JOIN aurora.assets a      ON a.id = d.asset_id
+               LEFT JOIN aurora.work_orders w ON w.id = d.work_order_id
+              WHERE d.id = $2`,
+  contract: `SELECT customer_id, NULL::uuid AS location_id FROM aurora.contracts WHERE id = $2`,
+  opportunity: `SELECT o.customer_id, a.location_id
+                  FROM aurora.opportunities o
+                  LEFT JOIN aurora.assets a ON a.id = o.asset_id
+                 WHERE o.id = $2`,
+  measurement_session: `SELECT w.customer_id, w.location_id
+                          FROM aurora.measurement_sessions m
+                          JOIN aurora.work_orders w ON w.id = m.work_order_id
+                         WHERE m.id = $2`,
+  customer: `SELECT id AS customer_id, NULL::uuid AS location_id FROM aurora.customers WHERE id = $2`,
+  location: `SELECT customer_id, id AS location_id FROM aurora.locations WHERE id = $2`,
+  // O plano é DE um cliente (mesma regra de `planoNoEscopo`); o item do ciclo
+  // é de um equipamento, e o local dele também conta.
+  plan: `SELECT customer_id, NULL::uuid AS location_id FROM aurora.maintenance_plans WHERE id = $2`,
+  plan_task: `SELECT p.customer_id, NULL::uuid AS location_id
+                FROM aurora.plan_tasks t
+                JOIN aurora.maintenance_plans p ON p.id = t.plan_id
+               WHERE t.id = $2`,
+  plan_cycle: `SELECT p.customer_id, NULL::uuid AS location_id
+                 FROM aurora.plan_cycles c
+                 JOIN aurora.maintenance_plans p ON p.id = c.plan_id
+                WHERE c.id = $2`,
+  plan_cycle_item: `SELECT p.customer_id, a.location_id
+                      FROM aurora.plan_cycle_items i
+                      JOIN aurora.plan_cycles c       ON c.id = i.cycle_id
+                      JOIN aurora.maintenance_plans p ON p.id = c.plan_id
+                      LEFT JOIN aurora.assets a       ON a.id = i.asset_id
+                     WHERE i.id = $2`,
 } as const;
 
 type Origem = keyof typeof ORIGEM;
 
-/** Lista fechada: caminho → entidade. A ordem não importa (os padrões não se sobrepõem). */
+/**
+ * Lista fechada: caminho → entidade. A ordem não importa (os padrões não se sobrepõem).
+ *
+ * Os padrões são casados contra o caminho NORMALIZADO (`normalizarCaminho`) e
+ * também sem diferenciar maiúsculas: o Express 5 roteia sem diferenciar e
+ * decodifica os parâmetros, então `/v1/Work-Orders/<id>` ou um id com `%30`
+ * chegavam ao handler sem passar por aqui.
+ */
+const R = (caminho: string): RegExp => new RegExp(`^/v1/${caminho}(?:/|$)`, 'i');
+const TIMELINE = (tipo: string): RegExp => R(`audit/timeline/${tipo}/${UUID}`);
 export const REGRAS_DE_ESCOPO: readonly [RegExp, Origem][] = [
-  [new RegExp(`^/v1/work-orders/${UUID}(?:/|$)`), 'work_order'],
-  [new RegExp(`^/v1/work-orders/from-request/${UUID}(?:/|$)`), 'service_request'],
-  [new RegExp(`^/v1/schedule/work-orders/${UUID}(?:/|$)`), 'work_order'],
-  [new RegExp(`^/v1/inventory/work-orders/${UUID}(?:/|$)`), 'work_order'],
-  [new RegExp(`^/v1/service-requests/${UUID}(?:/|$)`), 'service_request'],
-  [new RegExp(`^/v1/assets/${UUID}(?:/|$)`), 'asset'],
-  [new RegExp(`^/v1/quotes/${UUID}(?:/|$)`), 'quote'],
-  [new RegExp(`^/v1/checklist-responses/${UUID}(?:/|$)`), 'checklist_response'],
-  [new RegExp(`^/v1/time-entries/${UUID}(?:/|$)`), 'time_entry'],
+  [R(`work-orders/${UUID}`), 'work_order'],
+  [R(`work-orders/from-request/${UUID}`), 'service_request'],
+  [R(`schedule/work-orders/${UUID}`), 'work_order'],
+  [R(`inventory/work-orders/${UUID}`), 'work_order'],
+  [R(`service-requests/${UUID}`), 'service_request'],
+  [R(`assets/${UUID}`), 'asset'],
+  [R(`quotes/${UUID}`), 'quote'],
+  [R(`checklist-responses/${UUID}`), 'checklist_response'],
+  [R(`time-entries/${UUID}`), 'time_entry'],
+  [R(`documents/${UUID}`), 'document'],
+  [R(`documents/from-session/${UUID}`), 'measurement_session'],
+  [R(`contracts/${UUID}`), 'contract'],
+  [R(`opportunities/${UUID}`), 'opportunity'],
+  [R(`measurement-sessions/${UUID}`), 'measurement_session'],
+  [R(`locations/${UUID}`), 'location'],
+  [R(`maintenance-plans/${UUID}`), 'plan'],
+  [R(`maintenance-plans/tasks/${UUID}`), 'plan_task'],
+  [R(`maintenance-plans/cycles/${UUID}`), 'plan_cycle'],
+  [R(`maintenance-plans/cycle-items/${UUID}`), 'plan_cycle_item'],
+  // A linha do tempo de um registro tem o escopo DO registro.
+  [TIMELINE('work_orders'), 'work_order'],
+  [TIMELINE('assets'), 'asset'],
+  [TIMELINE('service_requests'), 'service_request'],
+  [TIMELINE('customers'), 'customer'],
+  [TIMELINE('contracts'), 'contract'],
+  [TIMELINE('quotes'), 'quote'],
+  [TIMELINE('documents'), 'document'],
 ];
 
+/**
+ * O caminho como o roteador o enxerga: sem consulta, sem barras repetidas,
+ * cada segmento decodificado e tudo em minúsculas.
+ *
+ * Devolve `null` quando um segmento tem codificação inválida (`%zz`) — quem
+ * chama recusa em vez de deixar a requisição passar sem conferência.
+ */
+export function normalizarCaminho(bruto: string): string | null {
+  const semConsulta = bruto.split('?')[0] ?? '';
+  const partes: string[] = [];
+  for (const segmento of semConsulta.split('/')) {
+    if (segmento === '') continue;
+    let decodificado: string;
+    try {
+      decodificado = decodeURIComponent(segmento);
+    } catch {
+      return null;
+    }
+    partes.push(decodificado.toLowerCase());
+  }
+  return `/${partes.join('/')}`;
+}
+
 export function entidadeDoCaminho(caminho: string): { origem: Origem; id: string } | null {
+  const normalizado = normalizarCaminho(caminho);
+  if (normalizado === null) return null;
   for (const [padrao, origem] of REGRAS_DE_ESCOPO) {
-    const m = padrao.exec(caminho);
+    const m = padrao.exec(normalizado);
     if (m) return { origem, id: m[1]!.toLowerCase() };
   }
   return null;
@@ -78,7 +169,10 @@ export class ScopeGuard implements CanActivate {
     if (!ctx || !ctx.membershipId) return true;
     if (ctx.scope.customerScope === 'all' && ctx.scope.locationScope === 'all') return true;
 
-    const caminho = (req.originalUrl ?? req.url ?? '').split('?')[0] ?? '';
+    const caminho = normalizarCaminho(req.originalUrl ?? req.url ?? '');
+    // Codificação inválida no caminho de quem tem escopo restrito: recusa, em
+    // vez de deixar a requisição passar sem conferência.
+    if (caminho === null) throw new NotFoundError('registro não encontrado');
     const alvo = entidadeDoCaminho(caminho);
     if (!alvo) return true;
 

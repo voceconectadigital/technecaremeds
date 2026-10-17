@@ -87,6 +87,7 @@ export class PortalController {
    * rede numa conexão de hospital, que é a pior que existe.
    */
   @Get('home')
+  @RequirePermissions('service_request.read')
   async home(@Req() req: AuroraRequest): Promise<Record<string, unknown>> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -154,6 +155,7 @@ export class PortalController {
 
   /** As minhas solicitações, com o vocabulário do cliente. */
   @Get('requests')
+  @RequirePermissions('service_request.read')
   async requests(@Req() req: AuroraRequest, @Query('open') open?: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -174,6 +176,7 @@ export class PortalController {
    * ninguém notar.
    */
   @Get('requests/:id')
+  @RequirePermissions('service_request.read')
   async request(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -205,6 +208,7 @@ export class PortalController {
    * `customer_id` do corpo seria deixar alguém abrir chamado em nome de outro.
    */
   @Post('requests')
+  @RequirePermissions('service_request.create')
   async abrir(
     @Req() req: AuroraRequest,
     @Body() body: Record<string, unknown>
@@ -265,6 +269,7 @@ export class PortalController {
 
   /** As ordens de serviço do meu escopo, no vocabulário do cliente. */
   @Get('work-orders')
+  @RequirePermissions('work_order.read')
   async workOrders(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -280,6 +285,7 @@ export class PortalController {
    * campo `visibility` para vazar.
    */
   @Get('work-orders/:id/comments')
+  @RequirePermissions('work_order.read')
   async comments(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -290,6 +296,7 @@ export class PortalController {
 
   /** Os equipamentos do escopo. Nenhum valor financeiro. */
   @Get('assets')
+  @RequirePermissions('asset.read')
   async assets(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -299,6 +306,7 @@ export class PortalController {
 
   /** Os documentos LIBERADOS. Emitido e não liberado ainda é conferência nossa. */
   @Get('documents')
+  @RequirePermissions('document.read')
   async documents(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -313,6 +321,7 @@ export class PortalController {
    * locais do vínculo. Emitido-e-não-liberado é 404 aqui, como é ausente lá.
    */
   @Get('documents/:id/pdf')
+  @RequirePermissions('document.read')
   async documentPdf(@Req() req: AuroraRequest, @Res() res: Response, @Param('id') id: string): Promise<void> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -324,6 +333,7 @@ export class PortalController {
 
   /** Os motivos de recusa que o cliente pode escolher. */
   @Get('quotes/rejection-reasons')
+  @RequirePermissions('quote.read')
   async rejectionReasons(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     meuVinculo(req);
     const items = await withTenant(this.db, req.auroraContext!, (s) => portalRejectionReasons(s));
@@ -378,6 +388,7 @@ export class PortalController {
 
   /** Os orçamentos que chegaram. O total sai; a composição de custo não. */
   @Get('quotes')
+  @RequirePermissions('quote.read')
   async quotes(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);
@@ -387,6 +398,7 @@ export class PortalController {
 
   /** As visitas programadas. Não diz QUEM vai. */
   @Get('schedule')
+  @RequirePermissions('maintenance_plan.read')
   async schedule(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const eu = meuVinculo(req);

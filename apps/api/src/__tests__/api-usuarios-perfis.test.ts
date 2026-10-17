@@ -339,14 +339,37 @@ describe('o que cada perfil NÃO faz', () => {
     expect((await http.post('/v1/customers').set(auth(OPERADOR)).send({ name: 'Novo' })).status).toBe(403);
   });
 
-  it('GESTOR gerencia pessoas, mas não papéis', async () => {
+  it('GESTOR gerencia pessoas, mas não concede papel maior que o seu', async () => {
     expect((await http.get('/v1/organizations/current/members').set(auth(GESTOR))).status).toBe(200);
-    const r = await http
-      .put(`/v1/organizations/current/memberships/${memOperador}/roles`)
+    // A rota real e o corpo real. A versão anterior chamava um caminho que não
+    // existe e passava no 404 — o teste não provava nada (pente-fino 17/10).
+    const papeis = await http.get('/v1/roles').set(auth(ADMIN_A));
+    const idDe = (key: string) => papeis.body.items.find((p: { key: string }) => p.key === key).id as string;
+    expect((await http.get('/v1/roles').set(auth(GESTOR))).status).toBe(403);
+
+    for (const key of ['admin', 'owner']) {
+      const r = await http
+        .put(`/v1/memberships/${memSolicitante}/roles`)
+        .set(auth(GESTOR))
+        .send({ role_ids: [idDe(key)] });
+      expect(r.status, key).toBe(403);
+    }
+    // Operador executa OS e lança horas — o Gestor não. Mas delegar trabalho
+    // operacional não é escalada: o Gestor cadastra a equipe.
+    const op = await http
+      .put(`/v1/memberships/${memSolicitante}/roles`)
       .set(auth(GESTOR))
-      .send({ role_keys: ['admin'] });
-    expect([403, 404]).toContain(r.status);
-    if (r.status === 403) expect(JSON.stringify(r.body)).toContain('organization.manage_roles');
+      .send({ role_ids: [idDe('operator')] });
+    expect(op.status, JSON.stringify(op.body)).toBe(200);
+
+    // Solicitante cabe nas permissões do Gestor: a troca idempotente passa.
+    const ok = await http
+      .put(`/v1/memberships/${memSolicitante}/roles`)
+      .set(auth(GESTOR))
+      .send({ role_ids: [idDe('requester')] });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+    const ficha = await http.get(`/v1/organizations/current/members/${memSolicitante}`).set(auth(ADMIN_A));
+    expect(ficha.body.roles).toEqual(['requester']);
   });
 });
 

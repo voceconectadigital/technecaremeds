@@ -18,6 +18,7 @@ import {
   newId,
   ValidationError,
   ConflictError,
+  ForbiddenError,
   NotFoundError,
   isKnownPermission,
   isValidCpf,
@@ -32,6 +33,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
+import { assertCanGrantRoles } from './roles';
 
 // Os valores do tipo `aurora.seat_type` (0000): `customer` não existe no banco.
 export const SEAT_TYPES = ['staff', 'portal'] as const;
@@ -128,6 +130,29 @@ export async function inviteMember(session: TenantSession, input: InviteInput): 
   const org = session.context.organizationId;
 
   /*
+   * ANTES de gravar qualquer coisa: quem convida só concede o que já tem —
+   * papel (inclusive o que o perfil escolhe) e escopo (pente-fino 17/10).
+   */
+  const papeis: string[] = [];
+  for (const chave of roleKeys) {
+    const [papel] = await session.query<{ id: string }>(
+      `SELECT id FROM aurora.roles WHERE key = $1 AND deleted_at IS NULL`,
+      [chave]
+    );
+    if (!papel) {
+      throw new NotFoundError(`papel "${chave}" não existe nesta organização`);
+    }
+    papeis.push(papel.id);
+  }
+  await assertCanGrantRoles(session, papeis);
+  await conferirEscopoConcedido(session, {
+    customerScope: escopo.customerScope ?? 'all',
+    customerIds: escopo.customerIds ?? [],
+    locationScope: escopo.locationScope ?? 'all',
+    locationIds: escopo.locationIds ?? [],
+  });
+
+  /*
    * A pessoa pode já existir na plataforma — o consultor que atende duas
    * empresas é o caso normal, não a exceção. A resolução por e-mail devolve só
    * o identificador, através de função estreita (0040), porque a RLS de `users`
@@ -208,18 +233,11 @@ export async function inviteMember(session: TenantSession, input: InviteInput): 
     ]
   );
 
-  for (const chave of roleKeys) {
-    const [papel] = await session.query<{ id: string }>(
-      `SELECT id FROM aurora.roles WHERE key = $1 AND deleted_at IS NULL`,
-      [chave]
-    );
-    if (!papel) {
-      throw new NotFoundError(`papel "${chave}" não existe nesta organização`);
-    }
+  for (const papelId of papeis) {
     await session.query(
       `INSERT INTO aurora.membership_roles (membership_id, role_id, organization_id)
        VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-      [membershipId, papel.id, org]
+      [membershipId, papelId, org]
     );
   }
 
@@ -249,6 +267,38 @@ export async function setMembershipScope(
 ): Promise<void> {
   validateScope(scope);
 
+  // O próprio escopo não se ajusta: quem administra pessoas com escopo de um
+  // setor alargaria o dele para a organização inteira (pente-fino 17/10).
+  if (membershipId === session.context.membershipId) {
+    throw new ForbiddenError(
+      'organization.manage_members — o próprio escopo é ajustado por outra pessoa com acesso à organização'
+    );
+  }
+
+  const [atual] = await session.query<{
+    customer_scope: ScopeMode;
+    customer_ids: string[];
+    location_scope: ScopeMode;
+    location_ids: string[];
+  }>(
+    `SELECT customer_scope::text AS customer_scope, customer_ids,
+            location_scope::text AS location_scope, location_ids
+       FROM aurora.membership_scopes WHERE membership_id = $1`,
+    [membershipId]
+  );
+  if (!atual) {
+    throw new NotFoundError('vínculo não encontrado nesta organização');
+  }
+  // O escopo que RESULTA (o pedido sobre o que já existe) é o que precisa caber
+  // no de quem ajusta — trocar só o local de quem enxerga todos os clientes não
+  // pode ser o atalho para manter o "todos".
+  await conferirEscopoConcedido(session, {
+    customerScope: scope.customerScope ?? atual.customer_scope,
+    customerIds: scope.customerIds ?? atual.customer_ids ?? [],
+    locationScope: scope.locationScope ?? atual.location_scope,
+    locationIds: scope.locationIds ?? atual.location_ids ?? [],
+  });
+
   const linhas = await session.query(
     `UPDATE aurora.membership_scopes
         SET customer_scope = COALESCE($2::aurora.scope_mode, customer_scope),
@@ -268,6 +318,68 @@ export async function setMembershipScope(
 
   if (linhas.length === 0) {
     throw new NotFoundError('vínculo não encontrado nesta organização');
+  }
+}
+
+/**
+ * O escopo concedido cabe no de quem concede? (pente-fino 17/10)
+ *
+ * Quem enxerga tudo concede qualquer escopo. Quem é restrito só concede dentro
+ * do que alcança: nunca "todos" no eixo em que ele mesmo não é "todos", e os
+ * clientes e locais listados precisam estar entre os acessíveis a ele — as
+ * mesmas funções (`accessible_*_ids`, 0010) que recortam as telas dele.
+ * Cliente ou local fora do alcance é 404, como em qualquer rota: dizer 403
+ * confirmaria que o id existe.
+ *
+ * Sem vínculo (provisionamento da organização, contexto de sistema) não há de
+ * quem herdar borda — e é o caminho que cria o primeiro administrador.
+ */
+async function conferirEscopoConcedido(
+  session: TenantSession,
+  pedido: {
+    customerScope: ScopeMode;
+    customerIds: readonly string[];
+    locationScope: ScopeMode;
+    locationIds: readonly string[];
+  }
+): Promise<void> {
+  const eu = session.context.membershipId;
+  if (!eu) return;
+  const [meu] = await session.query<{ customer_scope: ScopeMode; location_scope: ScopeMode }>(
+    `SELECT customer_scope::text AS customer_scope, location_scope::text AS location_scope
+       FROM aurora.membership_scopes WHERE membership_id = $1`,
+    [eu]
+  );
+  if (meu && meu.customer_scope === 'all' && meu.location_scope === 'all') return;
+
+  const restritoEmCliente = !meu || meu.customer_scope !== 'all';
+  const restritoEmLocal = !meu || meu.location_scope !== 'all';
+  if (
+    (restritoEmCliente && pedido.customerScope === 'all') ||
+    (restritoEmLocal && pedido.locationScope === 'all')
+  ) {
+    throw new ForbiddenError(
+      'organization.manage_members — não é possível conceder um escopo maior que o seu (todos os clientes ou todos os locais)'
+    );
+  }
+
+  if (pedido.customerScope === 'listed' && pedido.customerIds.length > 0) {
+    const [fora] = await session.query<{ id: string }>(
+      `SELECT x AS id FROM unnest($2::uuid[]) AS x
+        WHERE x NOT IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
+        LIMIT 1`,
+      [eu, pedido.customerIds]
+    );
+    if (fora) throw new NotFoundError('cliente', fora.id);
+  }
+  if (pedido.locationScope === 'listed' && pedido.locationIds.length > 0) {
+    const [fora] = await session.query<{ id: string }>(
+      `SELECT x AS id FROM unnest($2::uuid[]) AS x
+        WHERE x NOT IN (SELECT location_id FROM aurora.accessible_location_ids($1))
+        LIMIT 1`,
+      [eu, pedido.locationIds]
+    );
+    if (fora) throw new NotFoundError('local', fora.id);
   }
 }
 

@@ -47,6 +47,7 @@ import { parseWith } from '../common/contract-validation';
 import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
 
 /** O período do painel/cronograma: datas ISO, no máximo dois anos. */
@@ -322,10 +323,16 @@ export class PlansController {
     const items = await withTenant(this.db, ctx, async (s) => {
       const ids = await resolveTargetAssets(s, id);
       if (ids.length === 0) return [];
+      // O plano é do cliente (o ScopeGuard confere a tarefa); o equipamento
+      // num setor fora do escopo de quem pergunta fica de fora da lista.
       return s.query(
         `SELECT id, name, location_path FROM aurora.assets
-          WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL ORDER BY name`,
-        [ids]
+          WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL
+            AND ($2::uuid IS NULL
+                 OR location_id IS NULL
+                 OR location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))
+          ORDER BY name`,
+        [ids, escopoRestrito(ctx) ? ctx.membershipId : null]
       );
     });
     return { items };

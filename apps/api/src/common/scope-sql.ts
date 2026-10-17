@@ -22,7 +22,17 @@ export function escopoRestrito(ctx: RequestContext): boolean {
  * `n` é a posição do parâmetro que carrega o `membershipId`.
  */
 export function filtroDeEscopo(alias: string, n: number): string {
-  return `(${alias}.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($${n}))
-           AND (${alias}.location_id IS NULL
-                OR ${alias}.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($${n}))))`;
+  return filtroDeEscopoPor(`${alias}.customer_id`, `${alias}.location_id`, n);
+}
+
+/**
+ * A mesma condição, para quando cliente e local vêm de expressões — o
+ * documento, por exemplo, tira o local do equipamento ou da OS. Cliente nulo
+ * não passa (`NULL IN (...)` não é verdadeiro): por isso o fragmento só entra
+ * na consulta de quem é RESTRITO (`escopoRestrito`).
+ */
+export function filtroDeEscopoPor(cliente: string, local: string, n: number): string {
+  return `(${cliente} IN (SELECT customer_id FROM aurora.accessible_customer_ids($${n}))
+           AND (${local} IS NULL
+                OR ${local} IN (SELECT location_id FROM aurora.accessible_location_ids($${n}))))`;
 }

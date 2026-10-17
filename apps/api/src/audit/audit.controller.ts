@@ -40,6 +40,28 @@ const ENTIDADES_COM_LINHA_DO_TEMPO: Record<string, string> = {
   documents: 'document.read',
 };
 
+/**
+ * Campos cuja leitura é permissão de CAMPO (`fieldLevel`): a tela do registro
+ * os esconde, e a linha do tempo não pode ser o caminho lateral para lê-los —
+ * o diff de `monthly_value` é o valor do contrato (pente-fino 17/10).
+ */
+const CAMPOS_PROTEGIDOS: Record<string, Record<string, string>> = {
+  contracts: {
+    monthly_value: 'contract.read_financials',
+    currency: 'contract.read_financials',
+    overage_call_rate: 'contract.read_financials',
+    overage_hour_rate: 'contract.read_financials',
+    penalty_percent_per_breach: 'contract.read_financials',
+    penalty_cap_percent: 'contract.read_financials',
+  },
+  assets: {
+    purchase_value: 'asset.read_financials',
+    residual_value: 'asset.read_financials',
+    replacement_value: 'asset.read_financials',
+    internal_notes: 'asset.read_internal_notes',
+  },
+};
+
 function instant(value: unknown, field: string): Date | null {
   if (value === undefined || value === null || value === '') return null;
   const d = new Date(String(value));
@@ -149,9 +171,22 @@ export class AuditController {
       throw new ForbiddenError(permissao);
     }
 
+    // O escopo do registro (cliente/local) é conferido antes, pelo ScopeGuard:
+    // a rota está na lista fechada dele.
     const items = await withTenant(this.db, ctx, (s) =>
       recordTimeline(s, entityType, uuidParam(entityId, 'entityId'), limit ? Number(limit) : undefined)
     );
-    return { items };
+    const protegidos = Object.entries(CAMPOS_PROTEGIDOS[entityType] ?? {}).filter(
+      ([, p]) => !ctx.permissions.has(p)
+    );
+    if (protegidos.length === 0) return { items };
+    const ocultos = new Set(protegidos.map(([campo]) => campo));
+    return {
+      items: items.map((i) =>
+        i.changes
+          ? { ...i, changes: Object.fromEntries(Object.entries(i.changes).filter(([k]) => !ocultos.has(k))) }
+          : i
+      ),
+    };
   }
 }

@@ -427,7 +427,14 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'Perfil de acesso para quem executa a operação técnica: atende ordens, preenche procedimentos e usa peças. ' +
       'Não cadastra clientes, equipamentos, planos nem checklists. Profissão não define este papel.',
     seatType: 'staff',
-    permissions: [...TECHNICIAN_BASE, 'maintenance_plan.read', 'quote.read'],
+    // Sem `asset.create`: a base do Técnico a concede, e a descrição acima diz
+    // que o Operador não cadastra equipamento (pente-fino 17/10; migration 0070
+    // tira a permissão das organizações que já existem).
+    permissions: [
+      ...TECHNICIAN_BASE.filter((k) => k !== 'asset.create'),
+      'maintenance_plan.read',
+      'quote.read',
+    ],
   },
   {
     key: 'manager',
@@ -676,6 +683,34 @@ export function effectivePermissions(
 }
 
 /**
+ * Permissão de ADMINISTRAÇÃO da organização: tudo de `organization.*` que não é
+ * só leitura — membros, papéis, faturamento, catálogos, campos, integrações.
+ */
+export function isAdministrativePermission(key: string): boolean {
+  return key.startsWith('organization.') && key !== 'organization.read';
+}
+
+/**
+ * A escalada que importa ao CONCEDER PAPEL A OUTRA PESSOA (pente-fino 17/10/2026).
+ *
+ * `escalationCheck` puro exigiria que quem concede tivesse TODA permissão do
+ * papel — e o fluxo desenhado quebraria: o Gestor (e o Coordenador) cadastram
+ * Operador e Solicitante, que executam OS, lançam horas ou aprovam orçamento do
+ * próprio hospital, coisas que quem cadastra não faz. Delegar trabalho
+ * operacional não é escalada.
+ *
+ * Escalada é dar a alguém poder de ADMINISTRAR que o concedente não tem — foi o
+ * defeito real: o Gestor convidava pessoas como Administrador ou Proprietário.
+ * Esta conferência olha só as permissões administrativas do papel pedido.
+ */
+export function administrativeEscalationCheck(
+  granterPermissions: ReadonlySet<string>,
+  requested: readonly string[]
+): string[] {
+  return escalationCheck(granterPermissions, requested.filter(isAdministrativePermission));
+}
+
+/**
  * Um papel não pode conceder o que quem concede não possui (§21).
  * Devolve as permissões que o concedente não tem — vazio significa autorizado.
  */
@@ -683,7 +718,7 @@ export function escalationCheck(
   granterPermissions: ReadonlySet<string>,
   requested: readonly string[]
 ): string[] {
-  return requested.filter((k) => !granterPermissions.has(k));
+  return [...new Set(requested)].filter((k) => !granterPermissions.has(k)).sort();
 }
 
 /**
