@@ -75,7 +75,7 @@ export const OPEN_STATUSES: readonly RequestStatus[] = [
 
 export interface TransitionRule {
   readonly to: RequestStatus;
-  /** Permissão exigida; `null` quando quem move é o próprio solicitante. */
+  /** Permissão exigida; `null` só quando quem move é o próprio solicitante, antes do aceite. */
   readonly permission: string | null;
   /** Campos que a transição exige preenchidos. */
   readonly requires?: readonly string[];
@@ -125,20 +125,31 @@ export const TRANSITIONS: Readonly<Record<RequestStatus, readonly TransitionRule
     { to: 'triage', permission: null, note: 'o solicitante respondeu' },
     { to: 'cancelled', permission: null, requires: ['cancellation_reason'], note: 'o solicitante desiste' },
   ],
+  // Depois do aceite, quem move a solicitação é quem a converteu em trabalho
+  // (`service_request.accept`), e não o solicitante. Com `null` aqui, qualquer
+  // pessoa que enxergasse a solicitação — inclusive pelo portal — podia
+  // marcá-la "Concluída" ou "Encerrada" (liberando a avaliação e distorcendo
+  // os indicadores) ou cancelá-la com as OS já geradas.
   accepted: [
-    { to: 'in_service', permission: null, note: 'derivado: ao menos uma OS em andamento' },
+    {
+      to: 'in_service',
+      permission: 'service_request.accept',
+      note: 'derivado: ao menos uma OS em andamento',
+    },
     {
       to: 'cancelled',
-      permission: null,
+      permission: 'service_request.accept',
       requires: ['cancellation_reason'],
-      note: 'desistência antes do serviço',
+      note: 'desistência antes do serviço (só sem OS ativa)',
     },
   ],
   // Depois de `in_service` não se cancela a solicitação: cancela-se a OS. Se a
   // solicitação pudesse ser cancelada aqui, a OS ficaria órfã em execução, e a
   // pessoa que está com a chave de fenda na mão não saberia disso.
-  in_service: [{ to: 'fulfilled', permission: null, note: 'derivado: todas as OS concluídas' }],
-  fulfilled: [{ to: 'closed', permission: null, note: 'encerrada para o cliente' }],
+  in_service: [
+    { to: 'fulfilled', permission: 'service_request.accept', note: 'derivado: todas as OS concluídas' },
+  ],
+  fulfilled: [{ to: 'closed', permission: 'service_request.accept', note: 'encerrada para o cliente' }],
   closed: [],
   rejected: [],
   duplicate: [],

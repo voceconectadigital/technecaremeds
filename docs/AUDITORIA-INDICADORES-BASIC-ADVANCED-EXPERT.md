@@ -721,3 +721,37 @@ P-01 (MTTR) · P-02 (MTBF) · P-03 (TMPA) · P-04 (população do ICRS) · P-05 
 P-09 (disponibilidade) · P-10 (escopo do Basic e agregação) · P-11 (crítica) · P-12 (formato dos tempos) ·
 P-14 (glosa/IMR) · P-15 (atividades da qualidade e assiduidade) · P-16 (obsolescência). O layout final dos
 três PDFs e a assinatura continuam em rodada posterior.
+
+## 18. Pente-fino de 17/10/2026 (estado atual)
+
+> Histórico acima preservado. Esta seção registra o que o pente-fino conferiu e corrigiu — detalhe e evidência em
+> `docs/AUDITORIA-PENTE-FINO-2026-10-17.md` §6.
+
+**Estado:** catálogo funcional · metas funcionais · avaliação (rating) funcional · AxF funcional · ICRS
+PENDING_DEFINITION · ACM PROVISIONAL · treinamentos pendentes. Nenhuma fórmula pendente foi definida.
+
+**Corrigido (sem mudar fórmula):**
+
+- **Definição impressa das conformidades** (preventiva, calibração, TSE, qualificação): dizia "realizados **no
+  prazo**", mas a conta inclui o item feito com atraso — e "o atraso conta?" é a pergunta aberta **P-06/P-07**. O PDF
+  passou a descrever o que a conta faz ("itens de plano realizados ÷ (programados − dispensados)"); a nota de TSE diz
+  que o atraso conta como realizado enquanto P-06/P-07 estiverem abertas.
+- **Disponibilidade do parque:** relatório e Painel usavam bases diferentes (o relatório incluía baixados e
+  descartados). O relatório adotou a base do Painel; o indicador continua PROVISIONAL (**P-09**).
+- **Painel/TV:** MTTR e MTBF agora dizem "Provisório" (P-01, P-02); "Preventivas vencidas/em dia" passaram a "Itens de
+  plano vencidos"/"Planos em dia", porque o quadro soma todos os tipos de plano.
+- **Relatório:** setor de outro cliente ou fora do escopo é recusado; data impossível devolve 422.
+- **Automações:** duas ações "criar tarefa" na mesma regra são recusadas ao salvar; relatório agendado que não chega a
+  ninguém é registrado como falha.
+
+**Conferido e mantido (VALIDADO):** precedência contrato → cliente → organização; vigência inclusiva nas duas pontas;
+sobreposição barrada; futura/expirada/ausente corretas ("SEM META CONFIGURADA", nunca zero); isolamento entre
+organizações; PENDING_DEFINITION nunca entra; PROVISIONAL só com pedido explícito e marcado; Advanced contém o Basic
+seguro; Expert não herda o Basic; nenhuma meta fixa em relatório; e-mail só em fila.
+
+**Decisões que dependem do cliente (não inventadas):** vínculo restrito a um cliente, sem escolher cliente, é medido
+contra a meta da organização (comportamento atual fixado em teste); relatório mensal agendado usa "slot − N dias", e
+não o mês civil; as cores do Painel usam limiares fixos, e não as metas configuradas (próxima rodada).
+
+**Continua bloqueado aguardando o Anderson:** P-01 · P-02 · P-03 · P-04 · P-05 · P-06 · P-07 · P-08 · P-09 · P-10 ·
+P-11 · P-12 · P-13 · P-14 · P-15 · P-16.

@@ -36218,7 +36218,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "asset.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -36364,7 +36366,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/documents/{id}/pdf": {
@@ -36375,7 +36381,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "document.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [
           {
@@ -36453,7 +36461,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/documents": {
@@ -36464,7 +36476,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "document.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -36627,7 +36641,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/home": {
@@ -36638,7 +36656,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "service_request.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -36923,7 +36943,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/quotes/{id}/decision": {
@@ -37084,7 +37108,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "quote.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -37166,7 +37192,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/quotes": {
@@ -37176,7 +37206,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "quote.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -37287,7 +37319,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/requests/{id}/rating": {
@@ -37438,7 +37474,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "service_request.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [
           {
@@ -37736,7 +37774,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/requests": {
@@ -37746,7 +37788,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "service_request.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [
           {
@@ -37927,7 +37971,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       },
       "post": {
         "operationId": "portal.abrir",
@@ -37936,7 +37984,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "service_request.create"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "requestBody": {
@@ -38077,7 +38127,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/schedule": {
@@ -38088,7 +38142,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "maintenance_plan.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -38224,7 +38280,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/work-orders/{id}/comments": {
@@ -38235,7 +38295,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [
           {
@@ -38345,7 +38407,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/portal/work-orders": {
@@ -38355,7 +38421,9 @@
         "tags": [
           "Portal"
         ],
-        "x-aurora-public": true,
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
         "x-aurora-source": "apps/api/src/portal/portal.controller.ts",
         "parameters": [],
         "responses": {
@@ -38536,7 +38604,11 @@
             }
           }
         },
-        "security": []
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/q/{token}": {

@@ -97,7 +97,7 @@ export function OrdemPage() {
    * roteador. Foi assim que apareceu aqui.
    */
   const { id } = useParams({ strict: false }) as { id: string };
-  const { enfileirar, capturarFoto, anexarBytes, estado, anexos, base } = useCampo();
+  const { enfileirar, capturarFoto, anexarBytes, estado, anexos, base, fila } = useCampo();
 
   const { linhas: ordens, carregando } = useColecaoLocal<OrdemLocal>('ordens');
   const { linhas: transicoes } = useColecaoLocal<TransicaoLocal>('transicoes');
@@ -115,11 +115,47 @@ export function OrdemPage() {
   const [respostas, setRespostas] = useState<Record<string, string>>({});
   const [checklistAtivo, setChecklistAtivo] = useState<string | null>(null);
 
+  /*
+   * AS MUDANÇAS DE SITUAÇÃO QUE AINDA ESTÃO NA FILA desta OS, em ordem.
+   *
+   * Offline, tocar "Iniciar" só enfileirava: a OS local continuava "aberta", a
+   * tela continuava oferecendo "Iniciar" e nunca oferecia "Concluir" — e o
+   * segundo toque em "Iniciar" virava um comando duplicado que voltava como
+   * conflito (409) e ia parar na atenção.
+   *
+   * A situação que a tela usa é a ÚLTIMA pedida na fila, e não a gravada na
+   * OS. A escolha é deliberada, e não apenas reescrever `status_key` no
+   * registro local: o registro é substituído pelo pacote do servidor a cada
+   * sincronização — que pode chegar com o comando ainda na fila, e aí a tela
+   * voltaria a oferecer "Iniciar" — e, se o comando for recusado, uma situação
+   * escrita à mão ficaria mentindo até a próxima descida completa (a
+   * incremental não traz a OS que não mudou no servidor). Lida da fila, ela
+   * vale exatamente enquanto o comando existe, e some junto com ele.
+   */
+  const [situacoesNaFila, setSituacoesNaFila] = useState<string[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    void fila.listar().then((cs) => {
+      if (!vivo) return;
+      setSituacoesNaFila(
+        cs
+          .filter((c) => c.agregado === `work_order:${id}` && c.caminho.endsWith('/transitions'))
+          .map((c) => (c.corpo as { to?: unknown } | null)?.to)
+          .filter((to): to is string => typeof to === 'string')
+      );
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [fila, id, estado.pendentes, estado.bloqueados, estado.atencao]);
+
   const ordem = ordens.find((o) => o.id === id);
   const rotulos = useMemo(() => new Map(situacoes.map((s) => [s.key, s.label])), [situacoes]);
+  const situacaoPendente = situacoesNaFila.length > 0 ? situacoesNaFila[situacoesNaFila.length - 1]! : null;
+  const situacaoEfetiva = situacaoPendente ?? ordem?.status_key;
   const possiveis = useMemo(
-    () => (ordem ? transicoes.filter((t) => t.from_key === ordem.status_key) : []),
-    [transicoes, ordem]
+    () => (situacaoEfetiva ? transicoes.filter((t) => t.from_key === situacaoEfetiva) : []),
+    [transicoes, situacaoEfetiva]
   );
 
   /* Os anexos desta OS — do aparelho, e não da rede. */
@@ -288,6 +324,9 @@ export function OrdemPage() {
         },
         rotulo: `${rotulos.get(para) ?? para} — ${ordemAtual.number ?? ordemAtual.title}`,
       });
+      // A tela anda na hora — ver `situacoesNaFila`. A releitura da fila
+      // confirma em seguida.
+      setSituacoesNaFila((antes) => [...antes, para]);
 
       /*
        * OS RASCUNHOS SÓ SAEM DEPOIS DE VIRAREM COMANDO.
@@ -307,7 +346,9 @@ export function OrdemPage() {
         <p className="text-xs font-medium text-subtle">{ordemAtual.number ?? 'sem número'}</p>
         <h1 className="text-lg font-semibold text-text">{ordemAtual.title}</h1>
         <p className="mt-0.5 text-xs text-muted">
-          {ordemAtual.status_label}
+          {situacaoPendente
+            ? `${rotulos.get(situacaoPendente) ?? situacaoPendente} (no aparelho, aguardando envio)`
+            : ordemAtual.status_label}
           {ordemAtual.asset_name_snapshot ? ` · ${ordemAtual.asset_name_snapshot}` : ''}
           {ordemAtual.location_name_snapshot ? ` · ${ordemAtual.location_name_snapshot}` : ''}
         </p>
@@ -710,8 +751,9 @@ export function OrdemPage() {
            * técnico achar que o aplicativo quebrou.
            */
           <p className="text-sm text-muted">
-            Não há mudança de situação possível a partir de &ldquo;{ordemAtual.status_label}&rdquo; com o que
-            está no aparelho.
+            Não há mudança de situação possível a partir de &ldquo;
+            {situacaoPendente ? (rotulos.get(situacaoPendente) ?? situacaoPendente) : ordemAtual.status_label}
+            &rdquo; com o que está no aparelho.
           </p>
         ) : (
           possiveis.map((t) => (
@@ -719,7 +761,9 @@ export function OrdemPage() {
               key={t.to_key}
               type="button"
               onClick={() => void mudarSituacao(t.to_key)}
-              disabled={enviando !== null}
+              // A mudança que já está na fila não é pedida duas vezes: o
+              // segundo pedido voltaria como conflito e iria para a atenção.
+              disabled={enviando !== null || situacoesNaFila.includes(t.to_key)}
               className="min-h-12 rounded-control border border-border-subtle bg-surface px-3 text-sm font-medium text-text"
             >
               {rotulos.get(t.to_key) ?? t.to_key}

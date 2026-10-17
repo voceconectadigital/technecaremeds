@@ -804,16 +804,31 @@ export async function sweepDocumentExpiry(
 /* leitura                                                                     */
 /* -------------------------------------------------------------------------- */
 
-/** Os documentos de um ativo — a pergunta que a ficha do ativo faz (§07). */
-export async function documentsForAsset(session: TenantSession, assetId: string): Promise<unknown[]> {
+/**
+ * Os documentos de um ativo — a pergunta que a ficha do ativo faz (§07).
+ *
+ * `escopoDe` é o vínculo RESTRITO de quem pergunta (nulo para quem enxerga
+ * tudo): o ativo e o documento precisam estar no cliente e no local dele —
+ * sem cliente no documento, não passa (pente-fino 17/10, regra do ScopeGuard).
+ */
+export async function documentsForAsset(
+  session: TenantSession,
+  assetId: string,
+  escopoDe: string | null = null
+): Promise<unknown[]> {
   return session.query(
     `SELECT d.id, d.number, d.version, d.status, d.verdict, d.issued_at, d.valid_until,
             t.key AS type_key, t.label AS type_label
        FROM aurora.documents d
        JOIN aurora.document_types t ON t.id = d.document_type_id
+       LEFT JOIN aurora.assets a ON a.id = d.asset_id
       WHERE d.asset_id = $1
+        AND ($2::uuid IS NULL OR (
+              d.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+          AND (a.location_id IS NULL
+               OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))))
       ORDER BY d.issued_at DESC NULLS LAST, d.created_at DESC`,
-    [assetId]
+    [assetId, escopoDe]
   );
 }
 

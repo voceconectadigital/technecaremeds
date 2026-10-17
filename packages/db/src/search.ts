@@ -93,7 +93,9 @@ export async function search(
   }
 
   const porEscopo = Math.min(Math.max(opts.perScope ?? 10, 1), 50);
-  const total = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+  // `?limit=abc` chegava como NaN e virava `LIMIT NaN` — 500 (pente-fino 17/10).
+  const pedido = Number.isFinite(opts.limit) ? Math.trunc(opts.limit!) : 30;
+  const total = Math.min(Math.max(pedido, 1), 100);
   const escopos: SearchScope[] = q.scopes.length > 0 ? [...q.scopes] : [...ESCOPOS_PADRAO];
 
   const brutos: RawHit[] = [];
@@ -140,6 +142,19 @@ const ESCOPOS_PADRAO: readonly SearchScope[] = [
   'quote',
   'person',
 ];
+
+/**
+ * O vínculo é restrito (não enxerga todos os clientes e todos os locais)?
+ *
+ * As consultas de documento, orçamento e pessoa recortam só para quem é
+ * restrito: documento SEM cliente existe, e `NULL IN (...)` o esconderia até
+ * de quem enxerga tudo. Sem vínculo (contexto de sistema) conta como restrito —
+ * "sem escopo" nunca significa "tudo", a mesma regra das outras consultas.
+ */
+function restrito(session: TenantSession): boolean {
+  const { membershipId, scope } = session.context;
+  return !membershipId || !(scope.customerScope === 'all' && scope.locationScope === 'all');
+}
 
 interface ScopeQuery {
   permission: string;
@@ -297,6 +312,9 @@ const CONSULTAS: Partial<Record<SearchScope, ScopeQuery>> = {
     },
   },
 
+  // O item de estoque é CATÁLOGO da organização (nome e SKU da peça), sem
+  // cliente nem local: o recorte de escopo não se aplica a ele. Saldo por
+  // almoxarifado de cliente é outra consulta, e lá o escopo vale.
   inventory_item: {
     permission: 'inventory.read',
     async run(session, term, raw, limit) {
@@ -328,11 +346,20 @@ const CONSULTAS: Partial<Record<SearchScope, ScopeQuery>> = {
                 d.updated_at AS touched_at
            FROM aurora.documents d
            JOIN aurora.document_types t ON t.id = d.document_type_id
-          WHERE d.number ILIKE '%' || $2::text || '%'
-             OR aurora.normalize_label(COALESCE(d.title, '')) LIKE '%' || $1::text || '%'
+           LEFT JOIN aurora.assets a      ON a.id = d.asset_id
+           LEFT JOIN aurora.work_orders w ON w.id = d.work_order_id
+          WHERE (d.number ILIKE '%' || $2::text || '%'
+                 OR aurora.normalize_label(COALESCE(d.title, '')) LIKE '%' || $1::text || '%')
+            -- Pente-fino 17/10: a mesma regra do ScopeGuard — cliente do
+            -- escopo, local do equipamento (ou da OS) também; sem cliente, não.
+            AND (NOT $3::boolean OR (
+                  d.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($4::uuid))
+              AND (COALESCE(a.location_id, w.location_id) IS NULL
+                   OR COALESCE(a.location_id, w.location_id)
+                      IN (SELECT location_id FROM aurora.accessible_location_ids($4::uuid)))))
           ORDER BY match_kind, d.updated_at DESC
           LIMIT ${limit}`,
-        [term, raw]
+        [term, raw, restrito(session), session.context.membershipId]
       );
     },
   },
@@ -349,12 +376,14 @@ const CONSULTAS: Partial<Record<SearchScope, ScopeQuery>> = {
            FROM aurora.quotes q
            LEFT JOIN aurora.customers c ON c.id = q.customer_id
           WHERE q.number ILIKE '%' || $1::text || '%'
+            AND (NOT $2::boolean
+                 OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3::uuid)))
           ORDER BY match_kind, q.updated_at DESC
           LIMIT ${limit}`,
-        // Só o termo original: um parâmetro declarado e não usado faz o
+        // O termo original (e não o normalizado): um parâmetro declarado e não usado faz o
         // PostgreSQL recusar a consulta inteira por não conseguir inferir o
         // tipo dele — e o erro não diz qual consulta é.
-        [raw]
+        [raw, restrito(session), session.context.membershipId]
       );
     },
   },
@@ -373,9 +402,18 @@ const CONSULTAS: Partial<Record<SearchScope, ScopeQuery>> = {
           WHERE m.status = 'active'
             AND (aurora.normalize_label(u.name) LIKE '%' || $1::text || '%'
                  OR lower(u.email) LIKE '%' || $1::text || '%')
+            -- Quem é restrito acha a equipe, mas não o usuário de portal de
+            -- OUTRO cliente: nome e e-mail dele são dado daquele cliente.
+            AND (NOT $2::boolean
+                 OR m.seat_type = 'staff'
+                 OR EXISTS (SELECT 1 FROM aurora.membership_scopes ms
+                             WHERE ms.membership_id = m.id
+                               AND ms.customer_scope = 'listed'
+                               AND ms.customer_ids <@ ARRAY(
+                                     SELECT customer_id FROM aurora.accessible_customer_ids($3::uuid))))
           ORDER BY match_kind, u.name
           LIMIT ${limit}`,
-        [term]
+        [term, restrito(session), session.context.membershipId]
       );
     },
   },

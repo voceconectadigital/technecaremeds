@@ -261,7 +261,53 @@ export function franchiseState(included: number | null, used: number): Franchise
 export function overageAmount(included: number | null, used: number, unitRate: number | null): number {
   if (unitRate === null || unitRate <= 0) return 0;
   const excedente = Math.max(used - (included ?? 0), 0);
-  return Number((excedente * unitRate).toFixed(2));
+  return roundedMoneyProduct([excedente, unitRate]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* dinheiro em reais, sem float no arredondamento                              */
+/* -------------------------------------------------------------------------- */
+
+/** Um número como inteiro decimal exato × 10^-escala, a partir da escrita decimal dele. */
+function decimalExato(n: number): { digitos: bigint; escala: number } {
+  if (!Number.isFinite(n)) throw new RangeError(`valor inválido: ${n}`);
+  // `String(n)` é a escrita decimal mais curta que volta ao mesmo número:
+  // 1.005 vira "1.005", e não 1.00499999999999989… como o double guardado.
+  const m = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(n));
+  if (!m) throw new RangeError(`valor inválido: ${n}`);
+  const fracao = m[3] ?? '';
+  let digitos = BigInt(`${m[2]}${fracao}`);
+  let escala = fracao.length - Number(m[4] ?? 0);
+  if (escala < 0) {
+    digitos *= 10n ** BigInt(-escala);
+    escala = 0;
+  }
+  return { digitos: m[1] === '-' ? -digitos : digitos, escala };
+}
+
+/**
+ * Produto de fatores em reais ÷ `divisor`, arredondado a centavos UMA vez,
+ * meio-para-cima (afastando do zero), em aritmética decimal exata.
+ *
+ * `Number((201 * 0.005).toFixed(2))` dá 1.00, porque 1.005 em ponto flutuante
+ * é 1.00499…; a conta certa é 1.01. A diferença é de um centavo — exatamente o
+ * centavo que o cliente encontra ao conferir a fatura.
+ */
+export function roundedMoneyProduct(factors: readonly number[], divisor = 1): number {
+  if (!Number.isInteger(divisor) || divisor <= 0) throw new RangeError(`divisor inválido: ${divisor}`);
+  let digitos = 1n;
+  let escala = 0;
+  for (const f of factors) {
+    const d = decimalExato(f);
+    digitos *= d.digitos;
+    escala += d.escala;
+  }
+  const negativo = digitos < 0n;
+  const numerador = (negativo ? -digitos : digitos) * 100n;
+  const denominador = 10n ** BigInt(escala) * BigInt(divisor);
+  let centavos = numerador / denominador;
+  if ((numerador % denominador) * 2n >= denominador) centavos += 1n;
+  return (negativo ? -Number(centavos) : Number(centavos)) / 100;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -313,11 +359,14 @@ export function penaltyForBreaches(
 
   const bruto = breaches * rule.percentPerBreach;
   const percentual = rule.capPercent === null ? bruto : Math.min(bruto, rule.capPercent);
+  // O percentual aplicado (4 casas) é o que vai para a tela; o valor sai dele,
+  // em centavos exatos — e não do produto em ponto flutuante.
+  const percentApplied = Number(percentual.toFixed(4));
 
   return {
     breaches,
-    percentApplied: Number(percentual.toFixed(4)),
-    amount: Number(((periodAmount * percentual) / 100).toFixed(2)),
+    percentApplied,
+    amount: roundedMoneyProduct([periodAmount, percentApplied], 100),
     cappedAt: rule.capPercent,
     applied: false,
   };

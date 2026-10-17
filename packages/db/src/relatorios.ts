@@ -192,11 +192,18 @@ export async function buildReport(
   let locationPath: string | null = null;
   let sectorName: string | null = null;
   if (b.sector_id) {
-    const [setor] = await s.query<{ path: string; name: string }>(
-      `SELECT path, name FROM aurora.locations WHERE id = $1 AND deleted_at IS NULL`,
+    const [setor] = await s.query<{ path: string; name: string; customer_id: string }>(
+      `SELECT path, name, customer_id FROM aurora.locations WHERE id = $1 AND deleted_at IS NULL`,
       [b.sector_id]
     );
     if (!setor) throw new NotFoundError('setor', b.sector_id);
+    // O setor precisa ser do cliente escolhido e do escopo de quem pede — sem
+    // isso, os números ficavam no escopo, mas o NOME do setor de outro cliente
+    // ia para o cabeçalho do relatório (pente-fino 17/10/2026).
+    if (clienteId && setor.customer_id !== clienteId) {
+      throw new ValidationError('o setor não pertence ao cliente escolhido', { field: 'sector_id' });
+    }
+    await assertCustomerInScope(s, escopo, setor.customer_id);
     locationPath = setor.path;
     sectorName = setor.name;
   }
@@ -251,12 +258,22 @@ export async function buildReport(
     switch (ind.key) {
       case 'park_availability_snapshot': {
         const park = await parkSnapshot(s, f);
+        /*
+         * A MESMA BASE DO PAINEL (`disponibilidadeAgora`, apps/web/src/features/
+         * painel/dados.ts) — pente-fino 17/10/2026. O relatório dividia pelo total
+         * cadastrado, inclusive baixados e descartados, e o Painel não: 90 em
+         * operação, 10 em manutenção e 50 baixados davam 90 % numa tela e 60 % no
+         * PDF. Baixado e descartado saem da base; emprestado fica nela. A
+         * definição de disponibilidade no tempo segue em aberto (P-09).
+         */
         const disponiveis = (park.byStatus.active ?? 0) + (park.byStatus.standby ?? 0);
+        const base = disponiveis + (park.byStatus.under_maintenance ?? 0) + (park.byStatus.loaned ?? 0);
         return {
-          value: park.total > 0 ? Number(((disponiveis / park.total) * 100).toFixed(1)) : null,
-          samples: park.total,
+          value: base > 0 ? Number(((disponiveis / base) * 100).toFixed(1)) : null,
+          samples: base,
           detail: park.byStatus,
-          definition: 'equipamentos em operação ou reserva ÷ equipamentos cadastrados (situação de agora)',
+          definition:
+            'equipamentos em operação ou reserva ÷ equipamentos em uso (operação, reserva, manutenção, emprestados; sem baixados e descartados) — situação de agora',
         };
       }
       case 'mttr': {
@@ -317,7 +334,10 @@ export async function buildReport(
           value: k && denominador > 0 ? Number(((k.done / denominador) * 100).toFixed(1)) : null,
           samples: programados,
           detail: k ?? null,
-          definition: 'itens de plano realizados no prazo ÷ (programados − dispensados), no período',
+          // "No prazo" NÃO: o quadro conta o item feito com atraso como realizado,
+          // e se o atraso conta é pergunta aberta (P-06/P-07). A definição impressa
+          // descreve o que a conta faz — sem decidir a pergunta.
+          definition: 'itens de plano realizados ÷ (programados − dispensados), no período',
         };
       }
       case 'sla_compliance': {

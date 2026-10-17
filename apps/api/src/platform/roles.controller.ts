@@ -24,7 +24,7 @@ import {
   setMemberRoles,
   type Database,
 } from '@aurora/db';
-import { PERMISSIONS, PERMISSION_KEYS, ValidationError } from '@aurora/domain';
+import { ForbiddenError, PERMISSIONS, PERMISSION_KEYS, ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { oneOf, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
@@ -143,6 +143,12 @@ export class RolesController {
     }
 
     const efeito = oneOf(body.effect, ['grant', 'deny'] as const, 'effect');
+    // A exceção que CONCEDE segue a regra do papel (§21): ninguém dá o que não
+    // tem. Sem isto o Administrador se concedia `organization.manage_billing`,
+    // que é do Proprietário, por uma exceção pontual em si mesmo.
+    if (efeito === 'grant' && !ctx.permissions.has(key)) {
+      throw new ForbiddenError(key);
+    }
     const motivo = text(body.reason);
     if (motivo === null || motivo.length < 5) {
       // O banco também recusa (CHECK desde a 0005). A recusa aqui existe para

@@ -51,8 +51,14 @@ type Next = (err?: unknown) => void;
  *                       argumento fixo, e a rota devolve a MESMA resposta para
  *                       token inexistente e para organização que não permite
  *                       acesso anônimo.
+ *
+ * ANCORADO NO INÍCIO (pente-fino 17/10/2026). A versão anterior casava o
+ * segmento em QUALQUER posição: `/v1/assets/health` ou `/v1/x/q/y` pulavam a
+ * resolução de contexto. Hoje isso falha fechado adiante (401/400), mas era uma
+ * armadilha para a próxima rota com um segmento desses no meio. `q/:token` fica
+ * fora do prefixo `v1` (bootstrap.ts).
  */
-const PUBLIC_PATH = /(^|\/)(health(\/|$)|auth\/(config|login|logout)$|me\/organizations$|q\/)/;
+export const PUBLIC_PATH = /^\/(v1\/)?(health(\/|$)|auth\/(config|login|logout)$|me\/organizations$)|^\/q\//;
 
 export function createContextMiddleware(resolver: ContextResolver, logger: StructuredLogger) {
   return async function contextMiddleware(req: AuroraRequest, _res: unknown, next: Next): Promise<void> {

@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { armazenamentoEmMemoria, type ArmazenamentoOffline } from '../armazenamento';
 import { FilaDeSaida, type ComandoNaFila, type PendenciaDeAtencao } from '../fila';
-import { Sincronizacao, type PacoteDoDia } from '../sincronizacao';
+import { ErroDeSessaoExpirada, Sincronizacao, mensagemParaATela, type PacoteDoDia } from '../sincronizacao';
 
 function pacote(over: Partial<PacoteDoDia> = {}): PacoteDoDia {
   return {
@@ -221,5 +221,127 @@ describe('SYNC-004 · a marca do dia', () => {
     });
     await s.rodar();
     expect(await s.ultimaMarca()).toBeNull();
+  });
+});
+
+describe('SYNC-005 · sessão vencida', () => {
+  it('401 ao pedir o dia vira "entre de novo", e não "sem rede" nem erro cru', async () => {
+    const s = sincronizacao(async () => {
+      throw new ErroDeSessaoExpirada();
+    });
+    const r = await s.rodar();
+    expect(r.sessaoExpirada).toBe(true);
+    expect(r.semRede).toBe(false);
+    expect(r.falha).toContain('Entre de novo');
+  });
+
+  it('401 na fila: os comandos ficam, nada vai para a atenção, e o dia nem é pedido', async () => {
+    const naFila = new FilaDeSaida(
+      base.colecao<ComandoNaFila>('fila'),
+      base.colecao<PendenciaDeAtencao>('atencao'),
+      {
+        enviar: async () => ({ status: 401, corpo: null }),
+        agora: () => new Date('2026-08-29T08:00:00.000Z'),
+        novoId: () => 'op-401',
+      }
+    );
+    await naFila.enfileirar({
+      agregado: 'work_order:os-1',
+      metodo: 'POST',
+      caminho: '/x',
+      corpo: {},
+      rotulo: 'Concluir',
+    });
+
+    let pediu = false;
+    const s = new Sincronizacao(base, naFila, {
+      baixarPacote: async () => {
+        pediu = true;
+        return pacote();
+      },
+      agora: () => new Date('2026-08-29T08:00:00.000Z'),
+    });
+    const r = await s.rodar();
+
+    expect(r.sessaoExpirada).toBe(true);
+    expect(pediu).toBe(false);
+    expect(await naFila.listar()).toHaveLength(1);
+    expect(await naFila.listarAtencao()).toEqual([]);
+  });
+});
+
+describe('SYNC-006 · o dia baixado é de uma sessão', () => {
+  it('trocar de pessoa limpa o que foi baixado e pede o dia COMPLETO — sem tocar na fila', async () => {
+    let quem: { organizacao: string; usuario: string } = { organizacao: 'org-a', usuario: 'ana@x.com' };
+    const pedidos: (string | null)[] = [];
+    const s = new Sincronizacao(base, fila, {
+      baixarPacote: async (desde) => {
+        pedidos.push(desde);
+        return pacote({ synced_at: '2026-08-29T09:00:00.000Z' });
+      },
+      agora: () => new Date('2026-08-29T08:00:00.000Z'),
+      identidade: () => quem,
+    });
+    await s.rodar();
+    expect(await base.colecao('ordens').todos()).toHaveLength(2);
+
+    // Um comando de Ana fica na fila (sem rede para ele).
+    await base.colecao<ComandoNaFila>('fila').gravar('op-ana', {
+      id: 'op-ana',
+      seq: 1,
+      agregado: 'work_order:os-1',
+      metodo: 'POST',
+      caminho: '/x',
+      corpo: {},
+      rotulo: 'Concluir',
+      criadoEm: '2026-08-29T08:00:00.000Z',
+      tentativas: 0,
+      proximaTentativaEm: '2099-01-01T00:00:00.000Z',
+      ultimoErro: null,
+      bloqueado: false,
+      identidade: { organizacao: 'org-a', usuario: 'ana@x.com' },
+    });
+
+    quem = { organizacao: 'org-a', usuario: 'bruno@x.com' };
+    const falhando = new Sincronizacao(base, fila, {
+      baixarPacote: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+      agora: () => new Date('2026-08-29T08:00:00.000Z'),
+      identidade: () => quem,
+    });
+    await falhando.rodar();
+
+    // Bruno, mesmo sem rede, não vê as OS de Ana — e a marca dela sumiu.
+    expect(await base.colecao('ordens').todos()).toEqual([]);
+    expect(await falhando.ultimaMarca()).toBeNull();
+    // O trabalho de Ana continua guardado.
+    expect((await fila.listar()).map((c) => c.id)).toEqual(['op-ana']);
+
+    await s.rodar();
+    expect(pedidos).toEqual([null, null]);
+  });
+
+  it('a mesma pessoa de novo NÃO perde o incremental', async () => {
+    const pedidos: (string | null)[] = [];
+    const s = new Sincronizacao(base, fila, {
+      baixarPacote: async (desde) => {
+        pedidos.push(desde);
+        return pacote({ synced_at: '2026-08-29T09:00:00.000Z' });
+      },
+      agora: () => new Date('2026-08-29T08:00:00.000Z'),
+      identidade: () => ({ organizacao: 'org-a', usuario: 'ana@x.com' }),
+    });
+    await s.rodar();
+    await s.rodar();
+    expect(pedidos).toEqual([null, '2026-08-29T09:00:00.000Z']);
+  });
+});
+
+describe('SYNC-007 · a tela fala português', () => {
+  it('"Failed to fetch" vira uma frase que o técnico entende', () => {
+    expect(mensagemParaATela('Failed to fetch')).toMatch(/Sem conexão/);
+    expect(mensagemParaATela('o servidor respondeu 503')).toMatch(/código 503/);
+    expect(mensagemParaATela(null)).toBeNull();
   });
 });

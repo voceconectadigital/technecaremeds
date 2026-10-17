@@ -83,6 +83,12 @@ export function translatePostgresError(err: unknown): DomainError | null {
       return new ValidationError(msg, { ...detalhes, ...(nossoRaise ? {} : { pg_message: pg.message }) });
     }
 
+    // Data impossível (`2026-02-30`) ou mal formada: o dado enviado é inválido,
+    // não o servidor que falhou — 422, e não 500 (pente-fino 17/10/2026).
+    case '22008':
+    case '22007':
+      return new ValidationError('data inválida', { ...detalhes, pg_message: pg.message });
+
     default:
       return null;
   }

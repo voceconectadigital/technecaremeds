@@ -72,7 +72,10 @@ export class ContextResolver {
       },
       requestId,
       source: this.sourceOf(req),
-      clientIp: req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? req.ip ?? null,
+      // `req.ip` e não `x-forwarded-for` cru: o cabeçalho é escrito por quem
+      // chama, e a trilha de auditoria gravava o endereço que o cliente quisesse.
+      // `req.ip` já respeita a lista de proxies confiáveis (bootstrap.ts).
+      clientIp: req.ip ?? null,
       userAgent: req.header('user-agent') ?? null,
     });
   }

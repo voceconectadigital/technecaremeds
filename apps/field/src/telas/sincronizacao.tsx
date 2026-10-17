@@ -17,10 +17,12 @@
  * é sempre a maior.
  */
 import { useEffect, useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import { CloudOff, RefreshCw } from 'lucide-react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { CloudOff, KeyRound, RefreshCw } from 'lucide-react';
+import { useSession } from '@aurora/app-kit';
 import { useCampo } from '../campo';
 import type { ComandoNaFila } from '../fila';
+import { mensagemParaATela } from '../sincronizacao';
 
 const QUANDO = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -41,7 +43,10 @@ export function SincronizacaoPage() {
     ultimaSincronizacao,
     ultimoResultado,
     dispositivo,
+    sessaoExpirada,
   } = useCampo();
+  const { signOut } = useSession();
+  const navigate = useNavigate();
 
   const [comandos, setComandos] = useState<ComandoNaFila[]>([]);
   const [tipoDeRede, setTipoDeRede] = useState<string | null>(null);
@@ -53,12 +58,16 @@ export function SincronizacaoPage() {
     return () => {
       vivo = false;
     };
-  }, [fila, estado.pendentes, estado.bloqueados, estado.atencao, dispositivo]);
+  }, [fila, estado.pendentes, estado.bloqueados, estado.atencao, estado.deOutraSessao, dispositivo]);
+
+  const meus = comandos.filter((c) => fila.daSessaoAtual(c));
+  const deOutros = comandos.filter((c) => !fila.daSessaoAtual(c));
 
   const tudoEnviado =
     estado.pendentes === 0 &&
     estado.bloqueados === 0 &&
     estado.atencao === 0 &&
+    estado.deOutraSessao === 0 &&
     anexosEstado.pendentes === 0 &&
     anexosEstado.falhados === 0;
 
@@ -94,11 +103,43 @@ export function SincronizacaoPage() {
             ? `Último pacote do dia às ${QUANDO.format(new Date(ultimaSincronizacao))}.`
             : 'Este aparelho ainda não baixou o seu dia.'}
         </p>
-        {ultimoResultado?.falha && <p className="mt-1 text-xs text-danger">{ultimoResultado.falha}</p>}
+        {ultimoResultado?.falha && !sessaoExpirada && (
+          <p className="mt-1 text-xs text-danger">{mensagemParaATela(ultimoResultado.falha)}</p>
+        )}
+
+        {sessaoExpirada && (
+          /*
+           * SESSÃO VENCIDA É UM ESTADO, e não um erro de comando.
+           *
+           * A fila está inteira e parada; o que falta é a pessoa entrar de
+           * novo. Os comandos continuam neste aparelho, carimbados com quem os
+           * fez (ver `Identidade`), e saem sozinhos quando a MESMA pessoa entra
+           * de novo — sair aqui não apaga nada.
+           */
+          <div role="alert" className="mt-2 rounded-control border border-danger p-2">
+            <p className="flex items-center gap-2 text-sm font-medium text-danger">
+              <KeyRound aria-hidden className="size-4" />
+              Sessão expirada — entre de novo
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              O seu trabalho continua guardado neste aparelho e será enviado assim que você entrar.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                signOut();
+                void navigate({ to: '/entrar' });
+              }}
+              className="mt-2 min-h-12 w-full rounded-control border border-danger px-3 text-sm font-medium text-danger"
+            >
+              Entrar de novo
+            </button>
+          </div>
+        )}
 
         <button
           type="button"
-          onClick={() => void sincronizar()}
+          onClick={() => void sincronizar({ manual: true })}
           disabled={sincronizando}
           className="mt-3 min-h-12 w-full rounded-control bg-accent px-4 text-sm font-semibold text-on-accent"
         >
@@ -127,7 +168,7 @@ export function SincronizacaoPage() {
                 Esperando rede ({estado.pendentes})
               </h2>
               <ul className="flex flex-col gap-1">
-                {comandos
+                {meus
                   .filter((c) => !c.bloqueado)
                   .map((c) => (
                     <li
@@ -139,9 +180,39 @@ export function SincronizacaoPage() {
                         desde {QUANDO.format(new Date(c.criadoEm))}
                         {c.tentativas > 0 && ` · ${c.tentativas} tentativas`}
                       </p>
-                      {c.ultimoErro && <p className="text-xs text-muted">{c.ultimoErro}</p>}
+                      {c.ultimoErro && (
+                        <p className="text-xs text-muted">{mensagemParaATela(c.ultimoErro)}</p>
+                      )}
                     </li>
                   ))}
+              </ul>
+            </section>
+          )}
+
+          {deOutros.length > 0 && (
+            /*
+             * TRABALHO DE OUTRA SESSÃO: guardado, listado, e NÃO enviado.
+             *
+             * Mandá-lo com a credencial de quem está agora poria o nome errado
+             * no trabalho, ou o mandaria para a organização errada. Apagar
+             * seria perder o dia de alguém. Ele fica aqui, à vista, até o dono
+             * entrar de novo neste aparelho.
+             */
+            <section aria-labelledby="outra-sessao" className="flex flex-col gap-2">
+              <h2 id="outra-sessao" className="text-sm font-semibold text-text">
+                De outra sessão ({deOutros.length})
+              </h2>
+              <p className="text-sm text-muted">
+                Feito por outra pessoa ou em outra organização neste aparelho. Continua guardado e é enviado
+                quando quem fez entrar de novo.
+              </p>
+              <ul className="flex flex-col gap-1">
+                {deOutros.map((c) => (
+                  <li key={c.id} className="rounded-control border border-border-subtle bg-surface px-3 py-2">
+                    <p className="text-sm text-text">{c.rotulo}</p>
+                    <p className="text-xs text-subtle">desde {QUANDO.format(new Date(c.criadoEm))}</p>
+                  </li>
+                ))}
               </ul>
             </section>
           )}

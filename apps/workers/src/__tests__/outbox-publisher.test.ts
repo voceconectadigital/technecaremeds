@@ -120,6 +120,22 @@ describe('publicador do outbox', () => {
     expect(row!.published_at, 'evento esgotado foi descartado').toBeNull();
   });
 
+  it('eventos esgotados não ocupam o lote dos novos', async () => {
+    // Antes, o lote trazia os esgotados de novo e de novo: com o lote cheio
+    // deles, nenhum evento novo saía mais.
+    sink.failOn.add('asset.updated');
+    const publisher = new OutboxPublisher(t.db, sink, { maxAttempts: 1, batchSize: 2 });
+    for (let i = 0; i < 2; i++) {
+      await withTenant(t.db, ctxA, (s) => emitEvent(s, { type: 'asset.updated', aggregateId: newId() }));
+    }
+    await publisher.runOnce(); // os dois falham e esgotam
+    await withTenant(t.db, ctxA, (s) => emitEvent(s, { type: 'asset.created', aggregateId: newId() }));
+
+    const run = await publisher.runOnce();
+    expect(run.published).toBe(1);
+    expect(sink.received.map((e) => e.type)).toEqual(['asset.created']);
+  });
+
   it('respeita o tamanho do lote', async () => {
     for (let i = 0; i < 5; i++) {
       await withTenant(t.db, ctxA, (s) => emitEvent(s, { type: 'asset.created', aggregateId: newId() }));

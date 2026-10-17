@@ -378,9 +378,15 @@ describe('FILA-004 · o conflito para a OS, e só ela', () => {
     expect(r).toEqual({ enviados: 2, recusados: 1 });
   });
 
-  it('decidir o conflito solta os comandos parados da mesma OS', async () => {
-    await fila.enfileirar(comando(1));
-    await fila.enfileirar(comando(2));
+  it('"Tentar de novo" REENVIA o recusado — mesmo id, mesmo corpo, à frente dos parados', async () => {
+    /*
+     * O DEFEITO QUE ESTE CASO PRENDE: o botão apagava a pendência e soltava só
+     * os comandos SEGUINTES. O recusado — o "concluir" com a resolução de duas
+     * horas — nunca voltava à fila, e a asserção antiga (`enviados: 1`)
+     * celebrava exatamente isso.
+     */
+    const idRecusado = await fila.enfileirar(comando(1));
+    const idSeguinte = await fila.enfileirar(comando(2));
 
     net.responder((c) =>
       c.rotulo === 'Passo 1'
@@ -392,12 +398,46 @@ describe('FILA-004 · o conflito para a OS, e só ela', () => {
     const [pendencia] = await fila.listarAtencao();
     await fila.resolverAtencao(pendencia!.id, { desbloquear: true });
 
+    // Voltou à fila ANTES do que estava parado atrás dele, pronto para sair.
+    const naFila = await fila.listar();
+    expect(naFila.map((c) => c.id)).toEqual([idRecusado, idSeguinte]);
+    expect(naFila[0]).toMatchObject({ corpo: { passo: 1 }, bloqueado: false, tentativas: 0 });
+
+    net.enviados.length = 0;
     net.responder(() => ({ status: 200, corpo: {} }));
-    t.avancar(MINUTO);
     const r = await fila.escoar();
 
-    expect(r.enviados).toBe(1);
+    expect(r.enviados).toBe(2);
+    /*
+     * O MESMO identificador: é ele que vira `x-aurora-client-operation`, e é o
+     * que faz o servidor reconhecer a operação se ela chegou a ser aplicada.
+     */
+    expect(net.enviados.map((c) => c.id)).toEqual([idRecusado, idSeguinte]);
+    expect(net.enviados[0]!.corpo).toEqual({ passo: 1 });
     expect(await fila.listarAtencao()).toEqual([]);
+    expect(await fila.listar()).toEqual([]);
+  });
+
+  it('pendência de versão anterior (sem o comando guardado) também é reenviada', async () => {
+    const idSeguinte = await fila.enfileirar(comando(2));
+    const parado = (await fila.listar())[0]!;
+    await base.colecao<ComandoNaFila>('fila').gravar(idSeguinte, { ...parado, bloqueado: true });
+    await base.colecao<PendenciaDeAtencao>('atencao').gravar('op-antiga', {
+      id: 'op-antiga',
+      agregado: 'work_order:os-1',
+      rotulo: 'Passo 1',
+      caminho: '/v1/work-orders/os-1/acao-1',
+      corpo: { passo: 1 },
+      codigo: 'conflict',
+      mensagem: 'não dá',
+      recusadoEm: '2026-08-29T07:00:00.000Z',
+    });
+
+    await fila.resolverAtencao('op-antiga', { desbloquear: true });
+    await fila.escoar();
+
+    expect(net.enviados.map((c) => c.id)).toEqual(['op-antiga', idSeguinte]);
+    expect(net.enviados[0]).toMatchObject({ metodo: 'POST', corpo: { passo: 1 } });
   });
 
   it('decidir sem desbloquear deixa os parados parados — de propósito', async () => {
@@ -517,6 +557,7 @@ describe('FILA-006 · o indicador permanente diz a verdade', () => {
       pendentes: 0,
       bloqueados: 0,
       atencao: 0,
+      deOutraSessao: 0,
       maisAntigoEm: null,
     });
   });
@@ -623,5 +664,157 @@ describe('FILA-008 · a rede voltando zera a espera', () => {
 
     expect(net.enviados).toHaveLength(0);
     expect((await fila.listar())[0]!.bloqueado).toBe(true);
+  });
+});
+
+describe('FILA-009 · sessão vencida não é recusa', () => {
+  it('401 pausa a fila: nada vai para a atenção, nada sai, e tudo volta a andar ao entrar de novo', async () => {
+    /*
+     * A sessão dura doze horas sem uso no servidor — o turno de quem passou o
+     * dia no subsolo. Tratar 401 como recusa despejava o dia inteiro na tela
+     * de atenção no estacionamento, um comando "recusado" de cada vez.
+     */
+    const a = await fila.enfileirar(comando(1, 'work_order:os-1'));
+    const b = await fila.enfileirar(comando(1, 'work_order:os-2'));
+    const c = await fila.enfileirar(comando(2, 'work_order:os-1'));
+
+    net.responder(() => ({ status: 401, corpo: { code: 'unauthenticated' } }));
+    const r = await fila.escoar();
+
+    expect(r).toEqual({ enviados: 0, recusados: 0, sessaoExpirada: true });
+    expect(await fila.listarAtencao()).toEqual([]);
+    // PARA TUDO no primeiro 401: os outros levariam a mesma resposta.
+    expect(net.enviados).toHaveLength(1);
+    const guardados = await fila.listar();
+    expect(guardados.map((x) => x.id)).toEqual([a, b, c]);
+    expect(guardados.every((x) => !x.bloqueado && x.tentativas === 0)).toBe(true);
+    expect(guardados[0]!.ultimoErro).toContain('sessão expirou');
+
+    // Entrou de novo: mesmos comandos, mesmos identificadores.
+    net.enviados.length = 0;
+    net.responder(() => ({ status: 200, corpo: {} }));
+    const depois = await fila.escoar();
+    expect(depois).toEqual({ enviados: 3, recusados: 0 });
+    expect(net.enviados.map((x) => x.id).sort()).toEqual([a, b, c].sort());
+  });
+
+  it('403 continua indo para a atenção — e "Tentar de novo" o devolve inteiro', async () => {
+    const id = await fila.enfileirar(comando(1));
+    net.responder(() => ({ status: 403, corpo: { code: 'forbidden', message: 'sem permissão' } }));
+    await fila.escoar();
+
+    const [p] = await fila.listarAtencao();
+    expect(p!.id).toBe(id);
+    expect(await fila.listar()).toEqual([]);
+
+    await fila.resolverAtencao(id, { desbloquear: true });
+    net.responder(() => ({ status: 200, corpo: {} }));
+    net.enviados.length = 0;
+    await fila.escoar();
+    expect(net.enviados.map((x) => x.id)).toEqual([id]);
+  });
+});
+
+describe('FILA-010 · o trabalho tem dono', () => {
+  function filaDe(identidade: { organizacao: string | null; usuario: string | null } | null) {
+    return new FilaDeSaida(base.colecao<ComandoNaFila>('fila'), base.colecao<PendenciaDeAtencao>('atencao'), {
+      enviar: (c) => net.enviar(c),
+      agora: () => t.agora(),
+      novoId: () => `op-${String(++contador).padStart(3, '0')}`,
+      identidade: () => identidade,
+    });
+  }
+
+  it('o comando nasce carimbado com a sessão que o criou', async () => {
+    const daAna = filaDe({ organizacao: 'org-a', usuario: 'ana@x.com' });
+    await daAna.enfileirar(comando(1));
+    expect((await daAna.listar())[0]!.identidade).toEqual({ organizacao: 'org-a', usuario: 'ana@x.com' });
+  });
+
+  it('outra pessoa no aparelho NÃO envia o trabalho de quem saiu — e ele não some', async () => {
+    net.desligar();
+    const daAna = filaDe({ organizacao: 'org-a', usuario: 'ana@x.com' });
+    const idAna = await daAna.enfileirar(comando(1));
+
+    // Ana sai; Bruno entra no mesmo aparelho, com rede.
+    net.ligar();
+    const doBruno = filaDe({ organizacao: 'org-a', usuario: 'bruno@x.com' });
+    const idBruno = await doBruno.enfileirar(comando(1, 'work_order:os-9'));
+    const r = await doBruno.escoar();
+
+    expect(r.enviados).toBe(1);
+    expect(net.enviados.map((c) => c.id)).toEqual([idBruno]);
+    expect((await doBruno.listar()).map((c) => c.id)).toEqual([idAna]);
+    expect(await doBruno.estado()).toMatchObject({ pendentes: 0, deOutraSessao: 1 });
+
+    // Ana volta: o trabalho dela sai, com o mesmo identificador.
+    const anaDeNovo = filaDe({ organizacao: 'org-a', usuario: 'ana@x.com' });
+    await anaDeNovo.escoar();
+    expect(net.enviados.map((c) => c.id)).toEqual([idBruno, idAna]);
+  });
+
+  it('a mesma pessoa em OUTRA organização também não envia', async () => {
+    net.desligar();
+    await filaDe({ organizacao: 'org-a', usuario: 'ana@x.com' }).enfileirar(comando(1));
+    net.ligar();
+    const naOrgB = filaDe({ organizacao: 'org-b', usuario: 'ana@x.com' });
+    await naOrgB.escoar();
+    expect(net.enviados).toHaveLength(0);
+    expect(await naOrgB.listar()).toHaveLength(1);
+  });
+
+  it('comando de versão anterior, sem dono, é da sessão atual (compatibilidade)', async () => {
+    // `fila` (do beforeEach) não carimba identidade: é o aparelho de ontem.
+    const id = await fila.enfileirar(comando(1));
+    expect((await fila.listar())[0]!.identidade).toBeUndefined();
+
+    const hoje = filaDe({ organizacao: 'org-a', usuario: 'ana@x.com' });
+    await hoje.escoar();
+    expect(net.enviados.map((c) => c.id)).toEqual([id]);
+  });
+});
+
+describe('FILA-011 · concorrência dentro do aparelho', () => {
+  it('cinco toques simultâneos ganham cinco posições diferentes, na ordem do toque', async () => {
+    /*
+     * `enfileirar` lê a maior posição e grava a seguinte. Em paralelo, todos
+     * liam o mesmo máximo — e a ordem por OS passava a depender do desempate
+     * do armazenamento.
+     */
+    const ids = await Promise.all([1, 2, 3, 4, 5].map((n) => fila.enfileirar(comando(n))));
+    const guardados = await fila.listar();
+    expect(guardados.map((c) => c.seq)).toEqual([1, 2, 3, 4, 5]);
+    expect(guardados.map((c) => c.id)).toEqual(ids);
+  });
+
+  it('escoamentos simultâneos mandam cada comando UMA vez', async () => {
+    await fila.enfileirar(comando(1));
+    await fila.enfileirar(comando(2));
+
+    const [a, b, c] = await Promise.all([fila.escoar(), fila.escoar(), fila.escoar()]);
+    expect(net.enviados).toHaveLength(2);
+    expect(a).toEqual({ enviados: 2, recusados: 0 });
+    expect(b).toEqual(a);
+    expect(c).toEqual(a);
+  });
+});
+
+describe('FILA-012 · parados sem pendência não ficam presos', () => {
+  it('"Já resolvi de outro jeito" deixa parados — e eles podem ser soltos depois', async () => {
+    await fila.enfileirar(comando(1));
+    const idSeguinte = await fila.enfileirar(comando(2));
+    net.responder((c) =>
+      c.rotulo === 'Passo 1' ? { status: 409, corpo: { code: 'conflict' } } : { status: 200, corpo: {} }
+    );
+    await fila.escoar();
+    const [p] = await fila.listarAtencao();
+    await fila.resolverAtencao(p!.id, { desbloquear: false });
+
+    expect(await fila.estado()).toMatchObject({ bloqueados: 1, atencao: 0 });
+
+    await fila.desbloquearAgregado('work_order:os-1');
+    net.enviados.length = 0;
+    await fila.escoar();
+    expect(net.enviados.map((c) => c.id)).toEqual([idSeguinte]);
   });
 });

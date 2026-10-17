@@ -11,6 +11,7 @@ import {
   InvalidTransitionError,
   ValidationError,
   NotFoundError,
+  ConflictError,
   type RequestStatus,
   type ServiceRequestSource,
   type RequestPriority,
@@ -216,8 +217,11 @@ export async function transitionRequest(
   to: RequestStatus,
   input: TransitionInput = {}
 ): Promise<{ status: RequestStatus; version: number }> {
+  // FOR UPDATE: duas transições simultâneas (dois aceites do mesmo pedido, por
+  // exemplo) leriam o mesmo estado e passariam as duas. Com a linha travada, a
+  // segunda espera a primeira terminar e já lê o estado novo — e é recusada.
   const [atual] = await session.query<{ status: RequestStatus; version: number; number: string }>(
-    `SELECT status::text AS status, version, number FROM aurora.service_requests WHERE id = $1`,
+    `SELECT status::text AS status, version, number FROM aurora.service_requests WHERE id = $1 FOR UPDATE`,
     [requestId]
   );
   if (!atual) throw new NotFoundError('Solicitação', requestId);
@@ -246,6 +250,22 @@ export async function transitionRequest(
     );
   }
 
+  // Cancelar a solicitação aceita deixaria órfãs as OS que ela gerou: só com
+  // todas elas canceladas antes.
+  if (atual.status === 'accepted' && to === 'cancelled') {
+    const [ativas] = await session.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM aurora.work_orders
+        WHERE service_request_id = $1 AND status_category <> 'cancelled'`,
+      [requestId]
+    );
+    if ((ativas?.n ?? 0) > 0) {
+      throw new ConflictError(
+        `a solicitação tem ${ativas!.n} ordem(ns) de serviço ativa(s); cancele as OS antes de cancelar a solicitação`,
+        { active_work_orders: ativas!.n }
+      );
+    }
+  }
+
   const rows = await session.query<{ status: RequestStatus; version: number }>(
     `UPDATE aurora.service_requests
         SET status = $2::aurora.request_status,
@@ -256,7 +276,7 @@ export async function transitionRequest(
             priority = coalesce($7::aurora.request_priority, priority),
             updated_by = $8,
             rejection_note = coalesce($9, rejection_note)
-      WHERE id = $1
+      WHERE id = $1 AND status = $10::aurora.request_status
       RETURNING status::text AS status, version`,
     [
       requestId,
@@ -268,8 +288,17 @@ export async function transitionRequest(
       input.priority ?? null,
       session.context.actorId,
       input.rejectionNote ?? null,
+      atual.status,
     ]
   );
+  // Rede de segurança do FOR UPDATE: se o estado mudou entre a leitura e a
+  // escrita, nada foi gravado — e quem chamou precisa saber.
+  if (rows.length === 0) {
+    throw new ConflictError(
+      'a solicitação mudou de estado enquanto esta transição era feita; recarregue e tente de novo',
+      { expected_status: atual.status }
+    );
+  }
 
   // O relógio de resposta encerra na TRIAGEM: o compromisso é olhar, não
   // resolver. Encerrá-lo no aceite mediria outra coisa e esconderia o tempo que

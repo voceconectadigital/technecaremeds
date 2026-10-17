@@ -22,6 +22,21 @@ createRoot(raiz).render(
 );
 
 /*
+ * O ARMAZENAMENTO PEDE PARA NÃO SER DESPEJADO.
+ *
+ * Sem este pedido, a base local é "melhor esforço": com o disco apertado, o
+ * navegador pode apagar o IndexedDB de um site pouco visitado — e a fila de um
+ * dia offline mora ali. `persist()` pede ao navegador que só apague com a
+ * pessoa mandando. Ele pode negar, e navegador antigo nem conhece a função: os
+ * dois casos seguem como antes, sem erro e sem aviso.
+ */
+try {
+  void navigator.storage?.persist?.().catch(() => undefined);
+} catch {
+  /* sem `navigator.storage`: segue como sempre foi */
+}
+
+/*
  * `import.meta.env.PROD`: em desenvolvimento o Vite serve módulos que mudam a
  * cada salvamento, e um `service worker` cacheando isso faria a tela mostrar a
  * versão de dez minutos atrás — o defeito mais confuso que existe, porque o

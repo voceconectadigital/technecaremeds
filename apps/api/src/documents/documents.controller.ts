@@ -48,6 +48,7 @@ import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permi
 // caso raro, que é onde ninguém olha.
 import { oneOf, optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { escopoRestrito, filtroDeEscopoPor } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
 
 @Controller('documents')
@@ -157,6 +158,7 @@ export class DocumentsController {
            FROM aurora.documents d
            JOIN aurora.document_types dt ON dt.id = d.document_type_id
            LEFT JOIN aurora.assets a     ON a.id = d.asset_id
+           LEFT JOIN aurora.work_orders w ON w.id = d.work_order_id
           WHERE ($1::text IS NULL OR d.status::text = $1)
             AND ($2::uuid IS NULL OR d.asset_id = $2)
             -- Sem validade não vence: fica de fora do recorte de vencimento, e
@@ -164,9 +166,13 @@ export class DocumentsController {
             AND ($3::int IS NULL
                  OR (d.valid_until IS NOT NULL
                      AND d.valid_until <= (current_date + ($3::int || ' days')::interval)))
+            -- Escopo de quem é restrito (pente-fino 17/10): documento de outro
+            -- cliente, ou sem cliente, fica de fora — a mesma regra do ScopeGuard.
+            AND ($4::uuid IS NULL
+                 OR ${filtroDeEscopoPor('d.customer_id', 'COALESCE(a.location_id, w.location_id)', 4)})
           ORDER BY d.valid_until NULLS LAST, d.issued_at DESC NULLS LAST
           LIMIT 500`,
-        [status ?? null, optionalUuid(asset, 'asset'), dias]
+        [status ?? null, optionalUuid(asset, 'asset'), dias, escopoRestrito(ctx) ? ctx.membershipId : null]
       )
     );
     return { items };
@@ -179,7 +185,9 @@ export class DocumentsController {
     @Query('assetId') assetId?: string
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
-    const items = await withTenant(this.db, ctx, (s) => documentsForAsset(s, uuidParam(assetId, 'assetId')));
+    const items = await withTenant(this.db, ctx, (s) =>
+      documentsForAsset(s, uuidParam(assetId, 'assetId'), escopoRestrito(ctx) ? ctx.membershipId : null)
+    );
     return { items };
   }
 

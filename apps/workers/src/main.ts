@@ -13,7 +13,7 @@
 import { Pool } from 'pg';
 import { PgBoss } from 'pg-boss';
 import { loadEnv } from '@aurora/config';
-import { pgPoolAdapter } from '@aurora/db';
+import { pgPoolAdapter, protegerPool, OPCOES_DE_POOL } from '@aurora/db';
 import { OutboxPublisher, type EventSink } from './outbox-publisher';
 import { JobRuntime } from './jobs/runtime';
 
@@ -35,7 +35,11 @@ const REGISTRO: EventSink = {
 export async function main(): Promise<void> {
   const env = loadEnv(process.env);
 
-  const pool = new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX });
+  // Ouvinte de `error`: uma conexão ociosa caída não derruba o worker no meio do trabalho.
+  const pool = protegerPool(
+    new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX, ...OPCOES_DE_POOL }),
+    (e) => process.stderr.write(JSON.stringify({ nivel: 'error', origem: 'pool', erro: e.message }) + '\n')
+  );
   const db = pgPoolAdapter(pool, 'aurora_app');
   // Conexão sem papel fixado: cada rotina de plataforma assume o SEU papel.
   const platformDb = pgPoolAdapter(pool, null);

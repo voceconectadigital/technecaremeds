@@ -127,4 +127,25 @@ describe('os quatro ambientes, e as travas do que é exposto', () => {
       expect(out.AURORA_AUTH_PROVIDER).toBe('local');
     }
   });
+
+  it('sem NODE_ENV, sem AURORA_AMBIENTE e sem provedor, banco remoto não sobe com o provedor local', () => {
+    // O caso que as travas por ambiente não pegavam: nenhuma variável definida
+    // e o padrão `local` apontado para o banco conectado.
+    expect(() =>
+      loadEnv({
+        DATABASE_URL: 'postgresql://u:p@db.exemplo.com.br:5432/aurora',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toThrow(/só é aceito com banco local/);
+    for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+      const out = loadEnv({
+        DATABASE_URL: `postgresql://u:p@${host}:5432/aurora`,
+      } as unknown as NodeJS.ProcessEnv);
+      expect(out.AURORA_AUTH_PROVIDER).toBe('local');
+    }
+    const real = loadEnv({
+      DATABASE_URL: 'postgresql://u:p@db.exemplo.com.br:5432/aurora',
+      AURORA_AUTH_PROVIDER: 'password',
+    } as unknown as NodeJS.ProcessEnv);
+    expect(real.AURORA_AUTH_PROVIDER).toBe('password');
+  });
 });

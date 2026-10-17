@@ -60,19 +60,42 @@ export async function armazenamentoIndexedDb(nome = 'aurora-campo'): Promise<Arm
     fn: (loja: IDBObjectStore) => IDBRequest
   ): Promise<T> {
     return new Promise<T>((resolver, recusar) => {
-      const tx = db.transaction(colecao, modo);
-      const pedido = fn(tx.objectStore(colecao));
-      pedido.onsuccess = () => resolver(pedido.result as T);
-      pedido.onerror = () => recusar(pedido.error ?? new Error('IndexedDB recusou a operação'));
       /*
-       * O erro da TRANSAÇÃO também precisa ser ouvido, e não só o do pedido.
-       *
-       * Cota estourada — o caso de borda que a SPEC lista como "dispositivo sem
-       * espaço para as fotos" — chega como `QuotaExceededError` na transação, e
-       * não no pedido. Sem este ouvinte, a gravação falharia em silêncio: a
-       * promessa resolveria com sucesso e a fila acharia que guardou.
+       * ESCRITA PEDE DURABILIDADE ESTRITA. O padrão do Chromium é "relaxada":
+       * a transação se diz completa antes de o disco confirmar, e uma bateria
+       * que acaba logo depois do toque leva o comando junto. Navegador que não
+       * conhece a opção a ignora.
        */
-      tx.onerror = () => recusar(tx.error ?? new Error('IndexedDB abortou a transação'));
+      const tx =
+        modo === 'readwrite'
+          ? db.transaction(colecao, modo, { durability: 'strict' })
+          : db.transaction(colecao, modo);
+      const pedido = fn(tx.objectStore(colecao));
+      const escrita = modo === 'readwrite';
+      /*
+       * A LEITURA RESOLVE NO PEDIDO; A ESCRITA, SÓ NO FIM DA TRANSAÇÃO.
+       *
+       * O `onsuccess` do pedido quer dizer "a operação foi aceita na
+       * transação", e não "está no disco". A transação ainda pode ABORTAR ao
+       * consolidar — e é exatamente aí que chega a cota estourada, o caso de
+       * borda que a SPEC lista como "dispositivo sem espaço para as fotos". A
+       * primeira versão resolvia no `onsuccess`: a promessa dizia "guardado",
+       * a fila seguia, a transação abortava depois — e o comando nunca tinha
+       * existido. Ouvir `onabort` depois de resolver não adiantava: uma
+       * promessa resolvida não volta atrás.
+       *
+       * Agora a gravação só resolve em `oncomplete`, quando o navegador
+       * confirma a consolidação; `onerror`/`onabort` recusam, e quem chamou
+       * fica sabendo que NÃO guardou.
+       */
+      pedido.onsuccess = () => {
+        if (!escrita) resolver(pedido.result as T);
+      };
+      pedido.onerror = () => recusar(pedido.error ?? new Error('IndexedDB recusou a operação'));
+      tx.oncomplete = () => {
+        if (escrita) resolver(pedido.result as T);
+      };
+      tx.onerror = () => recusar(tx.error ?? pedido.error ?? new Error('IndexedDB abortou a transação'));
       tx.onabort = () => recusar(tx.error ?? new Error('IndexedDB abortou a transação'));
     });
   }

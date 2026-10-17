@@ -145,3 +145,18 @@ describe('validação de chave', () => {
     expect(isKnownPermission('asset.teleport')).toBe(false);
   });
 });
+
+describe('administrativeEscalationCheck (pente-fino 17/10/2026)', () => {
+  it('bloqueia conceder administração que não se tem; deixa delegar trabalho operacional', async () => {
+    const { administrativeEscalationCheck, FACTORY_ROLES, permissionsOfRole } =
+      await import('../permissions');
+    const de = (k: string) => permissionsOfRole(FACTORY_ROLES.find((r) => r.key === k)!);
+    const gestor = new Set(de('manager'));
+    expect(administrativeEscalationCheck(gestor, de('operator'))).toEqual([]);
+    expect(administrativeEscalationCheck(gestor, de('requester'))).toEqual([]);
+    expect(administrativeEscalationCheck(gestor, de('admin'))).toContain('organization.manage_roles');
+    expect(administrativeEscalationCheck(new Set(de('admin')), de('owner'))).toContain(
+      'organization.manage_billing'
+    );
+  });
+});

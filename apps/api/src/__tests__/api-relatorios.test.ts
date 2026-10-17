@@ -22,6 +22,7 @@ import {
   createCustomer,
   createLocation,
   createWorkOrder,
+  createAsset,
   provisionOrganizationBaseline,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
@@ -224,6 +225,63 @@ describe('geração com dados reais', () => {
     expect(axf.detail).toMatchObject({ numerator: 0, denominator: 4, opened: 4, closed: 0 });
     expect(axf.value).toBe(0);
     expect(axf.unit).toBe('percent');
+  });
+
+  it('disponibilidade do parque: a mesma base do Painel (baixados e descartados fora)', async () => {
+    // Antes: o PDF dividia pelo total cadastrado e o Painel não — 2 em operação,
+    // 1 em manutenção e 1 descomissionado davam 66,7 % numa tela e 50 % no PDF.
+    await withTenant(
+      t.db,
+      buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'parque' }),
+      async (s) => {
+        const base = await provisionOrganizationBaseline(s);
+        const categoria = base.families.get('support')!;
+        for (const [name, status] of [
+          ['Monitor 1', 'active'],
+          ['Monitor 2', 'active'],
+          ['Monitor 3', 'under_maintenance'],
+        ] as const) {
+          await createAsset(s, { name, customerId: hospitalA, assetCategoryId: categoria, status });
+        }
+        // Descomissionado: status e data andam juntos (0014).
+        const baixado = await createAsset(s, {
+          name: 'Monitor 4',
+          customerId: hospitalA,
+          assetCategoryId: categoria,
+        });
+        await s.query(
+          `UPDATE aurora.assets SET status = 'decommissioned', decommissioned_at = now(),
+                                  decommission_reason = 'fim da vida útil' WHERE id = $1`,
+          [baixado]
+        );
+      }
+    );
+    const r = await gerar(GESTORA, { tier: 'basic', indicators: ['park_availability_snapshot'] });
+    expect(r.status).toBe(201);
+    const sec = r.body.sections.find((x: { key: string }) => x.key === 'park_availability_snapshot');
+    expect(sec.state).toBe('PROVISIONAL');
+    expect(sec.value).toBe(66.7);
+    expect(sec.samples).toBe(3);
+  });
+
+  it('o setor de outro cliente (ou fora do escopo) é recusado', async () => {
+    const [setorB] = await t.raw(
+      `SELECT id FROM aurora.locations WHERE customer_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [hospitalB]
+    );
+    const misturado = await gerar(GESTORA, {
+      tier: 'basic',
+      indicators: ['work_orders_opened'],
+      customer_id: hospitalA,
+      sector_id: setorB!.id,
+    });
+    expect(misturado.status).toBe(422);
+    const foraDoEscopo = await gerar(RESTRITA, {
+      tier: 'basic',
+      indicators: ['work_orders_opened'],
+      sector_id: setorB!.id,
+    });
+    expect(foraDoEscopo.status).toBe(404);
   });
 
   it('avaliação da qualidade: sem avaliação, média nula e distribuição zerada', async () => {

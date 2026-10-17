@@ -73,9 +73,33 @@ async function travar(tx: SqlClient): Promise<void> {
   await tx.query('SELECT pg_advisory_xact_lock($1)', [TRAVA_DE_MIGRACAO]);
 }
 
+/**
+ * O papel que migra precisa ATRAVESSAR a RLS (pente-fino 17/10/2026).
+ *
+ * As migrations de dado (0061–0069, e as de antes) fazem UPDATE/INSERT…SELECT
+ * sobre tabelas com FORCE RLS. Rodadas por um papel sem BYPASSRLS — o próprio
+ * `aurora_owner`, por exemplo —, o contexto de organização é nulo, toda consulta
+ * enxerga zero linhas e a migration "passa" sem ter feito nada: fica registrada
+ * como aplicada, e a deriva não tem volta. A recusa acontece antes de tudo, com
+ * o motivo.
+ */
+async function exigirPapelQueAtravessaRls(db: Database): Promise<void> {
+  const [papel] = await db.query<{ papel: string; ok: boolean }>(
+    `SELECT current_user AS papel, (rolsuper OR rolbypassrls) AS ok FROM pg_roles WHERE rolname = current_user`
+  );
+  if (papel && !papel.ok) {
+    throw new Error(
+      `o papel "${papel.papel}" não tem SUPERUSER nem BYPASSRLS: as migrations de dado rodariam sob a RLS, ` +
+        `enxergariam zero linhas e seriam registradas como aplicadas sem efeito. ` +
+        `Rode as migrations com o superusuário do banco (ou um papel com BYPASSRLS).`
+    );
+  }
+}
+
 export async function migrate(db: Database, dir?: string): Promise<MigrateResult> {
   const migrations = loadMigrations(dir);
   const result: MigrateResult = { applied: [], skipped: [] };
+  await exigirPapelQueAtravessaRls(db);
 
   await db.transaction(async (tx) => {
     /*

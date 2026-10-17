@@ -23,6 +23,7 @@
  * ela — e é a procedência que permite corrigir no lugar certo, em vez de
  * empilhar mais uma exceção por cima.
  */
+import { ForbiddenError, NotFoundError, administrativeEscalationCheck } from '@aurora/domain';
 import type { TenantSession } from './client';
 
 /* -------------------------------------------------------------------------- */
@@ -231,6 +232,27 @@ export async function setMemberRoles(
   membershipId: string,
   roleIds: readonly string[]
 ): Promise<void> {
+  const [alvo] = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.memberships WHERE id = $1 AND deleted_at IS NULL`,
+    [membershipId]
+  );
+  if (!alvo) throw new NotFoundError('vínculo', membershipId);
+
+  // Confere o que MUDA — o que entra e o que sai. Papel que fica como estava
+  // não é concessão de ninguém; retirar, sim: quem não poderia conceder o papel
+  // de Administrador também não pode tirá-lo de quem o tem.
+  const atuais = (
+    await session.query<{ role_id: string }>(
+      `SELECT role_id FROM aurora.membership_roles WHERE membership_id = $1`,
+      [membershipId]
+    )
+  ).map((r) => r.role_id);
+  const pedidos = new Set(roleIds);
+  await assertCanGrantRoles(session, [
+    ...roleIds.filter((r) => !atuais.includes(r)),
+    ...atuais.filter((r) => !pedidos.has(r)),
+  ]);
+
   await session.query(`DELETE FROM aurora.membership_roles WHERE membership_id = $1`, [membershipId]);
   for (const roleId of roleIds) {
     await session.query(
@@ -239,4 +261,43 @@ export async function setMemberRoles(
       [session.context.organizationId, membershipId, roleId, session.context.actorId]
     );
   }
+}
+
+/**
+ * Um papel só é concedido (ou retirado) por quem já tem todas as permissões de
+ * ADMINISTRAÇÃO dele (§21 · pente-fino 17/10) — ver
+ * `administrativeEscalationCheck`: delegar trabalho operacional (Operador,
+ * Solicitante) segue com quem gerencia pessoas.
+ *
+ * Sem isto, `organization.manage_members` valia por `manage_roles` e mais um
+ * pouco: o Gestor convidava alguém como Administrador ou Proprietário. As
+ * permissões vêm de `role_permissions`, e não de `FACTORY_ROLES`, porque papel
+ * próprio existe e é o banco que sabe o que ele concede. O Proprietário tem
+ * `organization.manage_billing`, que nem o Administrador tem: a mesma regra
+ * impede os dois de criar outro Proprietário.
+ *
+ * Papel inexistente (ou de outra organização, que a RLS esconde) é 404.
+ */
+export async function assertCanGrantRoles(session: TenantSession, roleIds: readonly string[]): Promise<void> {
+  const ids = [...new Set(roleIds)];
+  if (ids.length === 0) return;
+  const existentes = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.roles WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [ids]
+  );
+  const achados = new Set(existentes.map((r) => r.id));
+  const inexistente = ids.find((id) => !achados.has(id));
+  if (inexistente) throw new NotFoundError('papel', inexistente);
+
+  const chaves = await session.query<{ permission_key: string }>(
+    `SELECT DISTINCT permission_key FROM aurora.role_permissions WHERE role_id = ANY($1::uuid[])`,
+    [ids]
+  );
+  const faltam = administrativeEscalationCheck(
+    session.context.permissions,
+    chaves.map((c) => c.permission_key)
+  );
+  // A mensagem nomeia o que falta: "não pode" sem dizer o quê manda a pessoa
+  // pedir um papel maior, em vez do papel certo a quem pode concedê-lo.
+  if (faltam.length > 0) throw new ForbiddenError(faltam.join(', '));
 }

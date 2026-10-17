@@ -201,7 +201,40 @@ export const envSchema = z
           'em homologação e em produção a identidade precisa vir de um provedor real; o provedor local entra sem senha',
       });
     }
+
+    /*
+     * E O PROVEDOR LOCAL SÓ CONVERSA COM BANCO LOCAL (pente-fino 17/10/2026).
+     *
+     * As duas travas acima dependem de alguém ter definido `NODE_ENV` ou
+     * `AURORA_AMBIENTE`. Um processo subido fora do Dockerfile, sem nenhuma das
+     * duas e sem `AURORA_AUTH_PROVIDER` — o padrão é `local` —, apontado para o
+     * banco de verdade, aceitava `local:<sujeito>:<e-mail>` sem senha. A
+     * ausência de três variáveis não pode abrir a porta da produção conectada.
+     *
+     * O sinal que não depende de ninguém lembrar de nada é o próprio destino:
+     * banco fora desta máquina (ou do contêiner ao lado, no CI) é banco
+     * conectado, e banco conectado exige identidade real.
+     */
+    if (env.AURORA_AUTH_PROVIDER === 'local' && !bancoLocal(env.DATABASE_URL)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AURORA_AUTH_PROVIDER'],
+        message:
+          'o provedor local (entra sem senha) só é aceito com banco local (localhost); com banco remoto use AURORA_AUTH_PROVIDER=password',
+      });
+    }
   });
+
+/** O banco desta URL está nesta máquina? Só os nomes de laço local contam. */
+function bancoLocal(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+}
 
 export type AuroraEnv = z.infer<typeof envSchema>;
 

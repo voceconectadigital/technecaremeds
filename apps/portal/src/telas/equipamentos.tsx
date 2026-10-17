@@ -28,11 +28,14 @@ import {
 import { Casca } from '../casca';
 import { data as formatarData, quando, reais } from '../formato';
 import { BaixarDocumento, DecisaoDoOrcamento } from './decisoes';
+import { FalhaDeCarga } from './falha-de-carga';
 
 export function EquipamentosPage() {
-  const { data, isLoading } = useApiQuery(portalAssets) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(portalAssets) as {
     data: { items: PortalAsset[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const itens = data?.items ?? [];
@@ -44,6 +47,8 @@ export function EquipamentosPage() {
           <div className="p-3">
             <SkeletonList rows={6} label="equipamentos" />
           </div>
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : itens.length === 0 ? (
           <EmptyState
             icon={<Wrench className="size-5" />}
@@ -94,9 +99,11 @@ export function EquipamentosPage() {
 /* -------------------------------------------------------------------------- */
 
 export function DocumentosPage() {
-  const { data, isLoading } = useApiQuery(portalDocuments) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(portalDocuments) as {
     data: { items: PortalDocument[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const itens = data?.items ?? [];
@@ -108,6 +115,8 @@ export function DocumentosPage() {
           <div className="p-3">
             <SkeletonList rows={5} label="documentos" />
           </div>
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : itens.length === 0 ? (
           <EmptyState
             icon={<FileCheck2 className="size-5" />}
@@ -156,9 +165,11 @@ export function DocumentosPage() {
 /* -------------------------------------------------------------------------- */
 
 export function OrcamentosPage() {
-  const { data, isLoading } = useApiQuery(portalQuotes) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(portalQuotes) as {
     data: { items: PortalQuote[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const itens = data?.items ?? [];
@@ -207,6 +218,8 @@ export function OrcamentosPage() {
             <div className="p-3">
               <SkeletonList rows={4} label="orçamentos" />
             </div>
+          ) : isError ? (
+            <FalhaDeCarga onTentar={() => void refetch()} />
           ) : itens.length === 0 ? (
             <EmptyState
               icon={<Receipt className="size-5" />}

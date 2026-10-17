@@ -15,15 +15,40 @@
  * de portal, e o que muda é o ESCOPO — que o servidor resolve pelo vínculo, e
  * que nenhuma decisão de interface pode ampliar.
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
-import { ApiError, ApiProvider, SessionProvider, ThemeProvider } from '@aurora/app-kit';
+import {
+  ApiError,
+  ApiProvider,
+  CHAVE_ORG,
+  CHAVE_TOKEN,
+  SessionProvider,
+  ThemeProvider,
+} from '@aurora/app-kit';
 import { router } from './rotas';
+
+/**
+ * Sessão que o servidor não reconhece mais (expirada ou revogada): descarta o
+ * token e volta para a entrada — o mesmo que a aplicação interna faz
+ * (pente-fino 17/10/2026). Sem isto, o portal ficava de pé recebendo 401 em tudo
+ * e mostrando "Nada aguardando você" ao cliente.
+ */
+function descartarSessaoInvalida(erro: unknown) {
+  if (!(erro instanceof ApiError) || erro.status !== 401) return;
+  try {
+    localStorage.removeItem(CHAVE_TOKEN);
+    localStorage.removeItem(CHAVE_ORG);
+  } catch {
+    /* armazenamento bloqueado: não há o que limpar */
+  }
+  if (window.location.pathname !== '/entrar') window.location.assign('/entrar');
+}
 
 function criarQueryClient() {
   return new QueryClient({
+    queryCache: new QueryCache({ onError: descartarSessaoInvalida }),
     defaultOptions: {
       queries: {
         // Negativa do servidor não muda por insistência; falha de rede, sim.

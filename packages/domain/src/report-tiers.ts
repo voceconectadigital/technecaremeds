@@ -245,7 +245,7 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     state: 'ACTIVE',
     targetDirection: 'HIGHER_IS_BETTER',
     source: 'plan-board.byKind',
-    note: 'Execução no prazo dos planos de TSE. Não é veredito elétrico: limites de TSE seguem bloqueados (especialista).',
+    note: 'Execução dos planos de TSE (o item feito com atraso conta como realizado; P-06/P-07 em aberto). Não é veredito elétrico: limites de TSE seguem bloqueados (especialista).',
   },
   {
     key: 'compliance_qualification',

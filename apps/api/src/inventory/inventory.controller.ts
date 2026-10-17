@@ -30,8 +30,8 @@ import {
   reverseMovement,
   setMinimum,
   workOrderParts,
-  reserve,
-  consume,
+  consumeForWorkOrder,
+  assertWarehouseVisible,
   type Database,
 } from '@aurora/db';
 import { ValidationError } from '@aurora/domain';
@@ -108,7 +108,12 @@ export class InventoryController {
     const itemId = uuidParam(item, 'item');
     const warehouseId = uuidParam(warehouse, 'warehouse');
     const max = Math.min(Number.parseInt(limit ?? '100', 10) || 100, 500);
-    const items = await withTenant(this.db, ctx, (s) => ledger(s, itemId, warehouseId, max));
+    const items = await withTenant(this.db, ctx, async (s) => {
+      // Almoxarifado de cliente fora do escopo → 404, como nas demais rotas.
+      await assertWarehouseVisible(s, warehouseId, ctx.membershipId);
+      // Custo unitário só com `inventory.read_costs`, como em `balances`.
+      return ledger(s, itemId, warehouseId, max, ctx.permissions.has('inventory.read_costs'));
+    });
     return { items };
   }
 
@@ -161,10 +166,14 @@ export class InventoryController {
       });
     }
 
+    const ctx = req.auroraContext!;
     return runFieldOperation(this.db, req, 'POST /work-orders/:id/parts', body, async (s) => {
-      const reservationId = await reserve(s, woId, itemId, warehouseId, qty);
-      const movementId = await consume(s, reservationId, qty);
-      return { movement_id: movementId, reservation_id: reservationId };
+      await assertWarehouseVisible(s, warehouseId, ctx.membershipId);
+      // Consome primeiro a reserva já aberta da OS (a da aprovação do
+      // orçamento) e só reserva o que passar dela — senão a peça sai duas vezes
+      // (aqui e no faturamento). Almoxarifado de outro cliente é recusado.
+      const r = await consumeForWorkOrder(s, woId, itemId, warehouseId, qty);
+      return { movement_id: r.movementId, reservation_id: r.reservationId };
     });
   }
 
@@ -199,7 +208,10 @@ export class InventoryController {
       );
     }
 
-    const id = await withTenant(this.db, ctx, (s) => adjust(s, itemId, warehouseId, qty, motivo));
+    const id = await withTenant(this.db, ctx, async (s) => {
+      await assertWarehouseVisible(s, warehouseId, ctx.membershipId);
+      return adjust(s, itemId, warehouseId, qty, motivo);
+    });
     return { id };
   }
 
@@ -227,9 +239,11 @@ export class InventoryController {
     }
     const qty = Number(quantidade(body.qty, 'qty'));
 
-    const r = await withTenant(this.db, ctx, (s) =>
-      transfer(s, itemId, de, para, qty, text(body.reason) ?? undefined)
-    );
+    const r = await withTenant(this.db, ctx, async (s) => {
+      await assertWarehouseVisible(s, de, ctx.membershipId);
+      await assertWarehouseVisible(s, para, ctx.membershipId);
+      return transfer(s, itemId, de, para, qty, text(body.reason) ?? undefined);
+    });
     return { out_id: r.out, in_id: r.in };
   }
 
@@ -253,7 +267,14 @@ export class InventoryController {
     if (motivo === null || motivo.length < 5) {
       throw new ValidationError('o estorno exige motivo', { field: 'reason' });
     }
-    const novo = await withTenant(this.db, ctx, (s) => reverseMovement(s, movimentoId, motivo));
+    const novo = await withTenant(this.db, ctx, async (s) => {
+      const [mov] = await s.query<{ warehouse_id: string }>(
+        `SELECT warehouse_id FROM aurora.stock_movements WHERE id = $1`,
+        [movimentoId]
+      );
+      if (mov) await assertWarehouseVisible(s, mov.warehouse_id, ctx.membershipId);
+      return reverseMovement(s, movimentoId, motivo);
+    });
     return { id: novo };
   }
 
@@ -274,7 +295,10 @@ export class InventoryController {
     if (!Number.isFinite(min) || min < 0) {
       throw new ValidationError('min_qty deve ser zero ou positivo', { field: 'min_qty' });
     }
-    await withTenant(this.db, ctx, (s) => setMinimum(s, itemId, warehouseId, min));
+    await withTenant(this.db, ctx, async (s) => {
+      await assertWarehouseVisible(s, warehouseId, ctx.membershipId);
+      await setMinimum(s, itemId, warehouseId, min);
+    });
     return { ok: true };
   }
 }

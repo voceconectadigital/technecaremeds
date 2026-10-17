@@ -37,6 +37,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
+import { ROTULO_CONTRATO } from '../planos/novo-plano';
 
 const ROTULO: Record<ContractStatus, string> = {
   draft: 'Rascunho',
@@ -332,7 +333,7 @@ export function ContratoPage() {
                 rotulo="Vigência"
                 valor={`${formatarData(c.starts_on)} → ${c.ends_on ? formatarData(c.ends_on) : 'sem fim'}`}
               />
-              <Info rotulo="Natureza" valor={c.kind} />
+              <Info rotulo="Natureza" valor={ROTULO_CONTRATO[c.kind] ?? c.kind} />
               <Info
                 rotulo="Chamados inclusos"
                 valor={c.included_calls === null ? null : String(c.included_calls)}

@@ -16,7 +16,19 @@
  * ele serve só para a TELA dizer o que provavelmente está acontecendo.
  */
 import type { ArmazenamentoOffline } from './armazenamento';
-import type { FilaDeSaida } from './fila';
+import { MENSAGEM_SESSAO_EXPIRADA, mesmaIdentidade, type FilaDeSaida, type Identidade } from './fila';
+
+/**
+ * A credencial venceu ao pedir o dia (401). Lançada por quem baixa o pacote,
+ * para esta camada não confundir "entre de novo" com "sem rede" nem com
+ * "o servidor caiu" — as três pedem coisas diferentes de quem está em campo.
+ */
+export class ErroDeSessaoExpirada extends Error {
+  constructor() {
+    super(MENSAGEM_SESSAO_EXPIRADA);
+    this.name = 'ErroDeSessaoExpirada';
+  }
+}
 
 /** O que o servidor devolve em `/field/sync`. Só o que esta camada usa. */
 export interface PacoteDoDia {
@@ -54,6 +66,32 @@ export interface ResultadoDaSincronizacao {
    * nada. O aplicativo sabe que está sem rede porque TENTOU.
    */
   semRede: boolean;
+  /**
+   * O servidor respondeu 401: a sessão venceu. A fila fica INTACTA e parada, e
+   * a tela pede para entrar de novo — em vez de mandar o dia para a atenção.
+   */
+  sessaoExpirada: boolean;
+}
+
+/**
+ * O que a tela mostra no lugar do texto cru do erro.
+ *
+ * "Failed to fetch" é a mensagem do navegador para "não houve resposta", em
+ * inglês, e ela aparecia literalmente na tela da sincronização e embaixo de
+ * cada comando esperando. Para quem está no subsolo, a informação útil é outra:
+ * o trabalho está guardado e vai sozinho. O texto original continua no comando
+ * (é o que diagnostica); só a TELA traduz.
+ */
+export function mensagemParaATela(falha: string | null | undefined): string | null {
+  if (!falha) return null;
+  if (ehFalhaDeRede(new Error(falha))) {
+    return 'Sem conexão com o servidor. O trabalho fica guardado no aparelho e é enviado quando a rede voltar.';
+  }
+  const status = /o servidor respondeu (\d{3})/.exec(falha)?.[1];
+  if (status) {
+    return `O servidor não conseguiu atender agora (código ${status}). O aparelho tenta de novo sozinho.`;
+  }
+  return falha;
 }
 
 /**
@@ -104,6 +142,8 @@ const DESTINOS: {
 export interface DependenciasDaSincronizacao {
   baixarPacote(desde: string | null): Promise<PacoteDoDia>;
   agora(): Date;
+  /** A identidade da sessão atual. Ver `conferirIdentidade`. */
+  identidade?(): Identidade | null;
 }
 
 export class Sincronizacao {
@@ -119,16 +159,64 @@ export class Sincronizacao {
     return (await meta.ler('synced_at'))?.valor ?? null;
   }
 
+  /**
+   * O DIA BAIXADO É DE UMA SESSÃO, e não do aparelho.
+   *
+   * O servidor filtra o pacote por quem pediu (as OS atribuídas a ela, na
+   * organização escolhida), mas a marca `synced_at` era uma só por aparelho.
+   * Trocar de pessoa ou de organização fazia a próxima sincronização ser
+   * INCREMENTAL a partir da marca do outro: o novo dono via as OS de quem saiu
+   * e não recebia as dele que não mudaram desde então.
+   *
+   * Quando a identidade muda, o que foi BAIXADO é limpo e a marca some — a
+   * próxima descida é completa. A fila, a atenção, os anexos e os rascunhos NÃO
+   * são tocados: são trabalho de alguém, e a fila sabe de quem (ver
+   * `Identidade` em `fila.ts`).
+   *
+   * Marca sem identidade gravada (aparelho que veio da versão anterior) é
+   * adotada pela sessão atual, sem limpar — é o que a versão anterior faria.
+   */
+  private async conferirIdentidade(atual: Identidade): Promise<void> {
+    const meta = this.base.colecao<Identidade>('meta');
+    const anterior = await meta.ler('identidade');
+    if (anterior && mesmaIdentidade(anterior, atual)) {
+      // Completa o que a sessão antiga não sabia (o e-mail), sem limpar nada.
+      if (!anterior.usuario && atual.usuario) await meta.gravar('identidade', atual);
+      return;
+    }
+    if (anterior) {
+      for (const d of DESTINOS) await this.base.colecao(d.colecao).limpar();
+      await this.base.colecao('meta').apagar('synced_at');
+    }
+    await meta.gravar('identidade', atual);
+  }
+
   async rodar(): Promise<ResultadoDaSincronizacao> {
     const em = this.deps.agora().toISOString();
 
+    const identidade = this.deps.identidade?.() ?? null;
+    if (identidade) await this.conferirIdentidade(identidade);
+
     // SUBIR PRIMEIRO. Ver a nota do cabeçalho.
-    const { enviados, recusados } = await this.fila.escoar();
+    const { enviados, recusados, sessaoExpirada } = await this.fila.escoar();
+
+    const expirou = (): ResultadoDaSincronizacao => ({
+      enviados,
+      recusados,
+      baixados: {},
+      em,
+      falha: MENSAGEM_SESSAO_EXPIRADA,
+      semRede: false,
+      sessaoExpirada: true,
+    });
+    // Com a credencial vencida, pedir o dia só traria outro 401.
+    if (sessaoExpirada) return expirou();
 
     let pacote: PacoteDoDia;
     try {
       pacote = await this.deps.baixarPacote(await this.ultimaMarca());
     } catch (e) {
+      if (e instanceof ErroDeSessaoExpirada) return expirou();
       /*
        * O QUE SUBIU, SUBIU. Falhar ao descer não desfaz o que foi enviado — e
        * o número precisa aparecer na tela, ou o técnico veria "falhou" depois
@@ -141,6 +229,7 @@ export class Sincronizacao {
         em,
         falha: e instanceof Error ? e.message : 'não foi possível baixar o dia',
         semRede: ehFalhaDeRede(e),
+        sessaoExpirada: false,
       };
     }
 
@@ -171,6 +260,6 @@ export class Sincronizacao {
      */
     await this.base.colecao<{ valor: string }>('meta').gravar('synced_at', { valor: pacote.synced_at });
 
-    return { enviados, recusados, baixados, em, falha: null, semRede: false };
+    return { enviados, recusados, baixados, em, falha: null, semRede: false, sessaoExpirada: false };
   }
 }

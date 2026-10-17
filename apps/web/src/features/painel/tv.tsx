@@ -217,7 +217,7 @@ function Corpo({ d }: { d: ControlPanel }) {
           valor={k.backlog.data.count}
           tom={k.backlog.data.count > 0 ? 'warn' : 'neutral'}
         />
-        <Numero rotulo="MTTR" valor={mttr.valor} unidade={mttr.unidade} tom="info" />
+        <Numero rotulo="MTTR (provisório)" valor={mttr.valor} unidade={mttr.unidade} tom="info" />
         <Numero rotulo="SLA" valor={k.sla.data.rate} unidade="%" tom={tomSla} />
         <Numero
           rotulo="Disponíveis"
@@ -259,10 +259,10 @@ function Corpo({ d }: { d: ControlPanel }) {
                   />
                   <RateRing
                     value={k.plan_compliance.data.rate}
-                    label="Preventivas em dia"
+                    label="Planos em dia"
                     tone="good"
                     size={tam}
-                    caption="Preventivas em dia"
+                    caption="Planos em dia"
                   />
                 </div>
               );

@@ -82,7 +82,8 @@ const UNIDADES: Array<{ v: Unidade; um: string; varios: string }> = [
   { v: 'day', um: 'dia', varios: 'dias' },
 ];
 
-const ROTULO_CONTRATO: Record<string, string> = {
+/** Natureza do contrato (enum `contract_kind`, 0031) → rótulo de tela. */
+export const ROTULO_CONTRATO: Record<string, string> = {
   full_service: 'Serviço completo',
   preventive_only: 'Só preventiva',
   on_demand: 'Sob demanda',

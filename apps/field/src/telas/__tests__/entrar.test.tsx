@@ -79,6 +79,8 @@ describe('entrar no campo com senha', () => {
     expect((orgs.init?.headers as Record<string, string>).authorization).toBe('Bearer tok-opaco');
     expect(localStorage.getItem('aurora:token')).toBe('tok-opaco');
     expect(localStorage.getItem('aurora:organizacao')).toBe(ORG_A.organization_id);
+    // Quem entrou: é por isto que a fila confere o dono de cada comando.
+    expect(localStorage.getItem('aurora:campo:usuario')).toBe('tecnico@prestadora.com.br');
   });
 
   it('com mais de uma organização, a pessoa escolhe antes de baixar o dia', async () => {

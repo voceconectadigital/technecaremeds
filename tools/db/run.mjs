@@ -38,7 +38,7 @@ const url = process.env.DATABASE_URL;
 conferirOuSair(url);
 
 const { Pool } = require('pg');
-const { pgPoolAdapter, migrate } = carregarFonte(raiz, 'packages', 'db', 'src', 'index.ts');
+const { pgPoolAdapter, migrateAndSyncCatalogs } = carregarFonte(raiz, 'packages', 'db', 'src', 'index.ts');
 const { seed } = carregarFonte(raiz, 'packages', 'db', 'src', 'seeds', 'index.ts');
 
 const command = process.argv[2] ?? 'status';
@@ -47,9 +47,14 @@ const db = pgPoolAdapter(pool, null); // operações administrativas: sem SET RO
 
 try {
   if (command === 'migrate') {
-    const r = await migrate(db);
+    // Migrations + os catálogos que são espelho do código (permissões e
+    // definições de catálogo) — ver packages/db/src/schema-sync.ts.
+    const r = await migrateAndSyncCatalogs(db);
     console.log(`aplicadas: ${r.applied.length}, já presentes: ${r.skipped.length}`);
     r.applied.forEach((n) => console.log('  + ' + n));
+    console.log(
+      `catálogos do código: permissões +${r.permissions.inserted}, definições +${r.catalogs.inserted}`
+    );
   } else if (command === 'seed') {
     const r = await seed(db);
     console.log(`organizações: ${r.organizations}, usuários: ${r.users}, vínculos: ${r.memberships}`);

@@ -40,6 +40,7 @@ import {
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
 
 /**
@@ -160,8 +161,12 @@ export class ContractsController {
           WHERE archived_at IS NULL
             AND ($1::uuid IS NULL OR customer_id = $1)
             AND ($2::text  IS NULL OR status::text = $2)
+            -- Quem é restrito vê só os contratos dos clientes do seu escopo
+            -- (pente-fino 17/10); as rotas por id ficam com o ScopeGuard.
+            AND ($3::uuid IS NULL
+                 OR customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3)))
           ORDER BY starts_on DESC, number`,
-        [customerId ?? null, status ?? null]
+        [customerId ?? null, status ?? null, escopoRestrito(ctx) ? ctx.membershipId : null]
       )
     );
     return { items };
@@ -228,9 +233,16 @@ export class ContractsController {
     const items = await withTenant(this.db, ctx, async (s) => {
       const ids = await coveredAssets(s, contractId);
       if (ids.length === 0) return [];
+      // O contrato é do cliente; o equipamento coberto pode estar num setor
+      // fora do escopo de quem pergunta — esse fica de fora da lista.
       return s.query(
-        `SELECT id, name, location_path FROM aurora.assets WHERE id = ANY($1::uuid[]) ORDER BY name`,
-        [ids]
+        `SELECT id, name, location_path FROM aurora.assets
+          WHERE id = ANY($1::uuid[])
+            AND ($2::uuid IS NULL
+                 OR location_id IS NULL
+                 OR location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))
+          ORDER BY name`,
+        [ids, escopoRestrito(ctx) ? ctx.membershipId : null]
       );
     });
     return { items };

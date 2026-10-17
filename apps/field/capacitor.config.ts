@@ -20,7 +20,9 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const identificador = process.env.AURORA_APP_ID ?? 'br.com.aurora.field';
-const nome = process.env.AURORA_APP_NAME ?? 'Aurora Campo';
+// O nome INSTALADO no aparelho é público: o padrão é o da marca
+// (`marca.config.json` → `campo.nomeNaTela`), nunca o codinome interno.
+const nome = process.env.AURORA_APP_NAME ?? 'Téchne Care Campo';
 
 /**
  * O servidor da API, e a lista de origens que o WebView pode alcançar.

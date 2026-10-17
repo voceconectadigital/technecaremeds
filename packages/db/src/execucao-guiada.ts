@@ -23,6 +23,9 @@ export interface PontoDeVisita {
 
 const ENCERRADAS = new Set(['done', 'closed', 'cancelled']);
 
+/** Precisão máxima aceita para a posição do aparelho, em metros. */
+const ACCURACY_MAX_M = 100_000;
+
 async function osDaVisita(
   session: TenantSession,
   workOrderId: string
@@ -56,8 +59,10 @@ function posicao(p: PontoDeVisita): {
       throw new ValidationError('longitude fora de -180..180', { field: 'longitude' });
     }
     const acc = p.accuracyM === undefined || p.accuracyM === null ? null : Number(p.accuracyM);
-    if (acc !== null && (!Number.isFinite(acc) || acc < 0)) {
-      throw new ValidationError('precisão inválida', { field: 'accuracy_m' });
+    // Teto de 100 km: acima disso a "posição" não diz nem a cidade, e a coluna
+    // (numeric(10,2)) recusaria com erro de banco valores ainda maiores.
+    if (acc !== null && (!Number.isFinite(acc) || acc < 0 || acc > ACCURACY_MAX_M)) {
+      throw new ValidationError(`precisão inválida (0 a ${ACCURACY_MAX_M} m)`, { field: 'accuracy_m' });
     }
     return { source: 'device', lat, lng, acc, justification: justificativa };
   }
@@ -87,7 +92,9 @@ async function ultimaVisita(
 /**
  * CHECK-IN: registra a chegada e abre o cronômetro. Recusa um segundo check-in
  * da mesma pessoa na mesma OS sem check-out — dois relógios correndo juntos
- * dobrariam as horas.
+ * dobrariam as horas. E recusa o check-in em OUTRA OS enquanto houver
+ * cronômetro aberto (conferido em `startTimer`, com o número da OS onde ele
+ * está): a pessoa está num lugar só.
  */
 export async function checkIn(
   session: TenantSession,

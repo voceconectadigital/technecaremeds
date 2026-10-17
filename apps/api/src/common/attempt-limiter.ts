@@ -79,6 +79,19 @@ export class AttemptLimiter {
     atual.count += 1;
   }
 
+  /**
+   * Devolve a falha provisória de uma tentativa que deu certo.
+   *
+   * O login registra a tentativa ANTES de ir ao banco (`registrarFalha`) e só a
+   * devolve no acerto. Registrar só depois da resposta deixava uma rajada
+   * paralela inteira passar pela conferência antes de a primeira falha contar.
+   */
+  perdoarFalha(key: string, now = Date.now()): void {
+    const atual = this.hits.get(key);
+    if (!atual || now >= atual.resetAt) return;
+    atual.count = Math.max(0, atual.count - 1);
+  }
+
   /** Quantos segundos até a janela virar. Para o `retry_after` da resposta. */
   retryAfterSeconds(key: string, now = Date.now()): number {
     const atual = this.hits.get(key);

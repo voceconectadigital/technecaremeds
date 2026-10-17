@@ -68,7 +68,40 @@ interface PoolLike {
 }
 interface PoolClientLike {
   query<T>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
-  release(): void;
+  /** `release(true)` descarta a conexão em vez de devolvê-la ao pool (node-postgres). */
+  release(destruir?: boolean): void;
+}
+
+/**
+ * Opções de pool comuns à API e ao worker (pente-fino 17/10/2026).
+ *
+ * `connectionTimeoutMillis`: o padrão do node-postgres é ZERO — esperar para
+ * sempre. Com o pool esgotado, a requisição ficava pendurada em vez de falhar, e
+ * a API parecia viva enquanto ninguém conseguia usar. `idleTimeoutMillis` devolve
+ * ao banco a conexão ociosa antes que um NAT ou o pooler a cortem por fora.
+ *
+ * `statement_timeout` NÃO entra aqui de propósito: ele iria como parâmetro de
+ * inicialização, e o pooler em modo transação do Supabase recusa parâmetros de
+ * inicialização. Fica como decisão de infraestrutura, junto com o destino.
+ */
+export const OPCOES_DE_POOL = { connectionTimeoutMillis: 10_000, idleTimeoutMillis: 30_000 } as const;
+
+interface PoolComEventos {
+  on(evento: 'error', ouvinte: (e: Error) => void): unknown;
+}
+
+/**
+ * Instala o ouvinte de `error` do pool.
+ *
+ * O node-postgres EMITE `error` quando uma conexão OCIOSA cai — reinício do
+ * pooler, corte de NAT, `pg_terminate_backend`. Sem ouvinte, o Node transforma o
+ * evento em exceção não tratada e o processo inteiro morre: a API derrubava todas
+ * as requisições em andamento, o worker morria no meio do trabalho. A conexão
+ * perdida já foi descartada pelo pool; registrar e seguir é o certo.
+ */
+export function protegerPool<P extends PoolComEventos>(pool: P, aoErro: (e: Error) => void): P {
+  pool.on('error', aoErro);
+  return pool;
 }
 
 /** Adaptador para node-postgres com pool. */
@@ -81,6 +114,7 @@ export function pgPoolAdapter(pool: PoolLike, appRole: string | null = 'aurora_a
     },
     async transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> {
       const client = await pool.connect();
+      let quebrada = false;
       try {
         await client.query('BEGIN');
         const out = await fn({
@@ -90,12 +124,18 @@ export function pgPoolAdapter(pool: PoolLike, appRole: string | null = 'aurora_a
         await client.query('COMMIT');
         return out;
       } catch (e) {
-        await client.query('ROLLBACK');
+        // Se o próprio ROLLBACK falhar (conexão caída), o erro que interessa
+        // continua sendo o original — e a conexão não volta ao pool.
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          quebrada = true;
+        }
         throw e;
       } finally {
         // devolve a conexão ao pool — é exatamente aqui que um contexto de
         // sessão vazaria para o próximo tenant se não fosse transaction-local
-        client.release();
+        client.release(quebrada);
       }
     },
     async close() {

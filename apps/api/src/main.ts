@@ -5,7 +5,7 @@
 import 'reflect-metadata';
 import { Pool } from 'pg';
 import { loadEnv, describe as describeEnv } from '@aurora/config';
-import { pgPoolAdapter, assertAppRoleIsSafe } from '@aurora/db';
+import { pgPoolAdapter, assertAppRoleIsSafe, protegerPool, OPCOES_DE_POOL } from '@aurora/db';
 import { createApp } from './bootstrap';
 import { escolherProvedorDeAutenticacao } from './auth/escolher-provedor';
 import { createLogger } from './common/logger';
@@ -15,7 +15,10 @@ async function main(): Promise<void> {
   const logger = createLogger(env.AURORA_LOG_LEVEL, { app: 'aurora-api' });
   logger.info('configuração carregada', describeEnv(env));
 
-  const pool = new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX });
+  const pool = protegerPool(
+    new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX, ...OPCOES_DE_POOL }),
+    (e) => logger.error('conexão ociosa do banco caiu; o pool a descartou', { erro: e.message })
+  );
   const db = pgPoolAdapter(pool, env.AURORA_DB_APP_ROLE);
 
   // o boot falha se o papel do banco puder ignorar RLS (§37)
@@ -35,6 +38,7 @@ async function main(): Promise<void> {
       void app
         .close()
         .then(() => db.close())
+        .catch((e: unknown) => logger.error('falha ao encerrar', { erro: String(e) }))
         .then(() => process.exit(0));
     });
   }
