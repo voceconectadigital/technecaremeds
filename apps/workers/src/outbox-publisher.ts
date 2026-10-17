@@ -54,7 +54,7 @@ export class OutboxPublisher {
     return this.db.transaction(async (tx) => {
       await tx.query('SET LOCAL ROLE aurora_publisher');
 
-      const pending = await fetchUnpublished(tx, this.batchSize);
+      const pending = await fetchUnpublished(tx, this.batchSize, this.maxAttempts);
       const delivered: string[] = [];
       let failed = 0;
 

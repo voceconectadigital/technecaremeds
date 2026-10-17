@@ -1,0 +1,9 @@
+# Cabeçalhos de segurança no Cloudflare Pages (pente-fino 17/10/2026).
+# Sem CSP de propósito: a origem da API muda por implantação (VITE_API_URL) e uma
+# CSP errada derruba a aplicação inteira; fica como decisão junto com o destino.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), geolocation=(self), microphone=()
+  Strict-Transport-Security: max-age=31536000

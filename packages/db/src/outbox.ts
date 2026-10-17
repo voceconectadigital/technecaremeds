@@ -95,17 +95,24 @@ export interface PendingEvent {
  */
 export async function fetchUnpublished(
   client: { query<T>(sql: string, params?: readonly unknown[]): Promise<T[]> },
-  limit = 100
+  limit = 100,
+  /**
+   * Eventos que já esgotaram as tentativas ficam FORA do lote (pente-fino
+   * 17/10/2026). Sem este corte, cem eventos esgotados ocupavam todo lote para
+   * sempre, e nenhum evento novo saía mais — o publicador girava em vão.
+   */
+  maxAttempts = 2_147_483_647
 ): Promise<PendingEvent[]> {
   return client.query<PendingEvent>(
     `SELECT id, organization_id, type, aggregate_type, aggregate_id, payload,
             occurred_at, publish_attempts
        FROM aurora.domain_events
       WHERE published_at IS NULL
+        AND publish_attempts < $2
       ORDER BY occurred_at, sequence
       LIMIT $1
       FOR UPDATE SKIP LOCKED`,
-    [limit]
+    [limit, maxAttempts]
   );
 }
 
