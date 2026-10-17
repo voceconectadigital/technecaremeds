@@ -15,7 +15,7 @@
  */
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { ToastProvider, TooltipProvider } from '@aurora/ui';
 import {
   ApiError,
@@ -24,11 +24,13 @@ import {
   PermissionsProvider,
   SessionProvider,
   ThemeProvider,
-  useSessionQuery,
+  useApiQuery,
 } from '@aurora/app-kit';
+import { meSession, type Session } from '@aurora/contracts';
 import { router } from './routes/router';
 import { ErrorBoundary } from './shell/error-boundary';
 import { DataProvider } from './dados/provedor';
+import { ehRotaPublica } from './features/apresentacao/rota';
 
 /**
  * Sessão que o SERVIDOR não reconhece (expirada, revogada ou o token fictício
@@ -104,6 +106,19 @@ export function App({ children }: { children?: ReactNode }) {
  * piscarem e sumirem, que é pior do que aparecerem um instante depois.
  */
 function ComPermissoes({ children }: { children: ReactNode }) {
-  const { data } = useSessionQuery();
+  /*
+   * Numa rota PÚBLICA (a apresentação) a sessão não é perguntada: sem conta, a
+   * resposta seria 401, e o 401 manda para `/entrar`. O endereço é lido do
+   * histórico do roteador, então sair da rota pública volta a perguntar.
+   */
+  const caminho = useSyncExternalStore(
+    (avisar) => router.history.subscribe(avisar),
+    () => router.history.location.pathname
+  );
+  const { data } = useApiQuery(meSession, undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    enabled: !ehRotaPublica(caminho),
+  }) as { data: Session | undefined };
   return <PermissionsProvider permissions={data?.permissions ?? []}>{children}</PermissionsProvider>;
 }

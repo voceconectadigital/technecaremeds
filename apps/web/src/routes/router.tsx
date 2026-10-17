@@ -21,6 +21,7 @@ import { lerSessaoGuardada } from '@aurora/app-kit';
 import { MODO_DEMO } from '../dados/ambiente';
 import { EntrarDemoPage } from '../demo/entrar';
 import { entrarNaDemonstracao, estaNaDemonstracao } from '../demo/sessao';
+import { ROTA_APRESENTACAO } from '../features/apresentacao/rota';
 
 /* -------------------------------------------------------------------------- */
 
@@ -159,6 +160,9 @@ const TarefasPage = preguicosa(() =>
 const RelatorioAgendadoPage = preguicosa(() =>
   import('../features/automacoes/tarefas').then((m) => ({ default: m.RelatorioAgendadoPage }))
 );
+const ApresentacaoPage = preguicosa(() =>
+  import('../features/apresentacao/pagina').then((m) => ({ default: m.ApresentacaoPage }))
+);
 
 const raiz = createRootRoute({ component: Outlet });
 
@@ -229,6 +233,13 @@ export const routeTree = raiz.addChildren([
   entrar,
   login,
   organizacoes,
+
+  /*
+   * PÚBLICA: apresentação comercial, sem `beforeLoad` e fora da moldura. Não
+   * pede sessão e não chama a API — nem a pergunta pela sessão que a
+   * composição da aplicação faz (ver `ehRotaPublica` em app.tsx).
+   */
+  createRoute({ getParentRoute: () => raiz, path: ROTA_APRESENTACAO, component: ApresentacaoPage }),
 
   rotaProtegida('/', HojePage),
 
