@@ -10,7 +10,7 @@ test.describe('Clientes: classificação e edição', () => {
     const nome = `EngClin ${Date.now()}`;
     await page.goto('/clientes?novo=sim');
     const dialogo = page.getByRole('dialog');
-    await dialogo.getByLabel('Nome', { exact: true }).fill(nome);
+    await dialogo.getByPlaceholder('Ex.: Hospital São Lucas').fill(nome);
     await dialogo.getByRole('radio', { name: /Empresa corporativa/ }).check();
     await dialogo.getByLabel('Subtipo').selectOption('engenharia_clinica');
     await dialogo.getByRole('button', { name: 'Cadastrar cliente' }).click();
