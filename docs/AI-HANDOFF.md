@@ -17,7 +17,32 @@
 >    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
 >    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 09/10/2026 (rodada "overdelivery visual + operacional") · **HEAD de partida:**
+**Atualizado em:** 16/10/2026 (rodada "reunião com Anderson de 16/10/2026", branch
+`feat/anderson-2026-10-16`, PR #22 — controle item a item em `docs/ROADMAP-ANDERSON-2026-10-16.md`) ·
+**Migration mais recente:** `0068_novo_negocio.sql` · **69 migrations** · **110 tabelas** (lista de
+`migrations.test.ts`) · **265 rotas** (205 com contrato Zod) · **118 permissões** · **13 papéis**
+(+ `operator`, `manager`) · **2104 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
+**121 testes de navegador** (32 arquivos)
+
+> **Rodada 16/10/2026 — o que mudou (resumo; evidência por item no ROADMAP):**
+> perfis de negócio OPERADOR/SOLICITANTE/GESTOR sobre o RBAC, cadastro com CPF e registros
+> profissionais, ATIVO/SUSPENSO/BLOQUEADO, **escopo cliente/setor aplicado no backend** de OS,
+> solicitações, agenda, execução e ativos por id (`common/scope.guard.ts`, 404 fora do escopo) ·
+> cliente EAS × empresa corporativa + edição (0062) · família × tipo de equipamento, chip
+> geolocalizador só como cadastro, vincular etiqueta QR existente (0063) · solicitação Cliente →
+> Equipamento → Tipo (7 tipos) → Urgência, sem Sintoma (0064) · OS sem rascunho, situação
+> **Negada**, assistente **▶ Executar** com check-in/out geográfico (posição do aparelho ou
+> justificativa; sem rastreio contínuo), preencher OS, peça do cliente, fotos, resultado
+> LIBERADO/PARADO; aba Conversa fora da navegação (0065) · planos: filtro de tipo, executar item,
+> gráficos por plano/procedimento · orçamento gerado da OS com trilha (centavos, sem float) ·
+> estoque com dono/máximo/curva ABC/relatório de período e **Store** sem checkout (0066) · "Gerar
+> relatório" Basic/Advanced/Expert — **fundação**; layout AGUARDANDO MODELO PDF OFICIAL ·
+> **automações agendadas** (relatório, lembrete, tarefa, 5W2H, PDCA) com agendador idempotente no
+> worker; **e-mail só em fila** (sem transporte) (0067) · **Novo Negócio**: provisionamento de
+> tenant pelo admin global de plataforma (concessão só por DBA) (0068) · menu **Ferramentas**
+> (vitrine, sem backend).
+>
+> **Rodada anterior (09/10/2026):** HEAD de partida
 `dc4c6c4` (`origin/main`, PR #9) · branch `feat/overdelivery-painel` — confira com `git log -1`
 **Migration mais recente:** `0058_importacao_rastreavel.sql` · **59 migrations** (nenhuma nova nesta rodada) ·
 **103 tabelas** · **230 rotas HTTP** (229 no OpenAPI + `/health`; **160 com contrato Zod**) ·
@@ -124,33 +149,33 @@ emite documento, mede SLA e produz indicador.
 
 | Domínio | Estado | Observação |
 | --- | --- | --- |
-| Identidade / organizações | ✅ | `organizations`, `users`, `memberships`, `membership_scopes` |
+| Identidade / organizações | ✅ | `organizations`, `users`, `memberships`, `membership_scopes`. **16/10:** vínculo ATIVO/SUSPENSO/BLOQUEADO; CPF, telefone, empresa e registros profissionais (0061); **Novo Negócio** — `POST /platform/tenants` só para o admin global de plataforma (`platform_admins`, concedido por DBA), base de fábrica + marca + 1º admin numa transação; domínio próprio fica `pending_dns` (0068) |
 | **Autenticação por senha** | ✅ | **Novo em 29/09/2026.** Ver §7 |
 | MFA | ⬜ | `users.mfa_enabled` existe e é sempre `false` |
 | SSO | ⬜ | A porta `AuthProvider` existe para isso |
 | RBAC | ✅ / 🟡 | 110 permissões, 11 papéis de fábrica, `deny` individual, escopos. **Falta:** criar/editar papel personalizado (schema aceita, sem rota) e tela de escopo |
 | RLS / isolamento | ✅ | `FORCE` em todas as tabelas tenant-scoped; 24 suítes adversariais |
-| Clientes (cadastro) | ✅ / 🟡 | `customers` + `customer_contacts` (0008). Lista `/clientes`, cadastro (`POST /customers`) e **ficha `/clientes/$id`** com a seção **Setores** (criar, renomear, atalhos de nome livre) e equipamentos por setor. **Sem edição do cliente** |
+| Clientes (cadastro) | ✅ | `customers` + `customer_contacts` (0008). Lista `/clientes`, cadastro (`POST /customers`), **edição** (`PATCH /customers/:id`, 16/10), classificação **EAS × empresa corporativa** + subtipo (0062) e **ficha `/clientes/$id`** com a seção **Setores** e equipamentos por setor |
 | **Setores** | ✅ | **São `locations` do tipo `setor`** (escada inicial, 0008) — sem tabela nova. Criar: `POST /locations`; renomear: `PATCH /locations/:id` (`location.update`, 404 fora do escopo) |
 | Ativos | ✅ / 🟡 | Criar com **Cliente\* e Setor\*** conferidos no servidor (`POST /assets`: setor de outro cliente/tenant/fora do escopo → 422; tipo que não recebe equipamento → 422), **editar dados cadastrais** (`PATCH /assets/:id`; mudar de setor = transferência com motivo), transferir, baixar, importar, QR, ficha, linha do tempo (API) e substituição (0056). `location_id` **continua anulável** no banco (importação, comodato). **Sem depreciação**, **sem disponibilidade** |
-| QR Code do ativo | 🟡 | Token, resolução pública, leitura no Field, rotação, dados de etiqueta. **Sem imagem de QR e sem tela de etiqueta** — §22-A |
+| QR Code do ativo | 🟡 | Token, resolução pública, leitura no Field, rotação, dados de etiqueta e **vincular etiqueta já impressa** (`POST /assets/:id/qr`, 16/10). **Sem imagem de QR e sem tela de etiqueta** — §22-A |
 | Chamados (`service_requests`) | ✅ | Entidade separada da OS (ADR-002) |
 | Ordens de serviço | ✅ / 🟡 | Estados × motivos configuráveis (ADR-003). **Sem edição de campos** (sem PATCH), **sem baixar/imprimir/enviar** |
 | SLA | ✅ | Tempo útil por fuso e feriado, pausa por motivo |
 | Agenda | ✅ | Projeção da OS (ADR-011); confere antes de salvar |
 | Checklists | ✅ / 🟡 | Motor versionado e imutável, 8 tipos de item (`measurement` desde a 0052), execução no Field. **Resposta não se sobrescreve** (0047). **Criar com itens, revisar (versão seguinte) e publicar** pela API e pela tela (`/checklist-templates*`, aba Procedimentos de `/planos`), com tipo de procedimento; o checklist da tarefa do plano é anexado à OS da preventiva; `default_checklist_key` continua não lido |
 | Planos de manutenção | ✅ / 🟡 | Módulo `/planos` (item próprio no menu): **criação orientada** (`POST /maintenance-plans`: cliente → setor → equipamentos → tipo → procedimento → periodicidade), **painel** (`/board`), **cronograma** com previstos (`/schedule`), procedimentos. Varredura gera ciclo e OS (gatilho **calendário** apenas); alvo por categoria/local/ativo + filtros 0055, recortado pelo cliente do plano; lista/detalhe respeitam o escopo de cliente; **ciclo nunca fecha** — §32; educação continuada ⬜ |
-| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, **imagem e categoria por item** (0046). Sem rota para criar depósito/item |
+| Estoque | ✅ | Razão imutável, saldo por gatilho, reserva, imagem e categoria por item (0046). **16/10:** criar item/depósito por HTTP, depósito com dono (organização ou cliente), máximo, valorização, curva ABC e relatório de período (0066). **Store** (`/store`): catálogo publicado e pedido de proposta (vira oportunidade) — sem checkout, sem saldo de outro tenant |
 | Contratos | ✅ | Cobertura por expressão, medição congelada. Tela só de leitura |
 | Orçamentos | ✅ | Versionado, dinheiro em centavos |
 | Documentos | ✅ / 🟡 | Motor completo; 7 tipos (aceite desde esta rodada) com `payloadFields` técnicos **vazios** (norma); **rascunho a partir da sessão de medição** por cópia; **PDF** (interno e portal); tela web só lista — §15 |
 | Indicadores | ✅ / 🟡 | 14 métricas com definição, **recortadas pelo escopo do vínculo**; **Painel de Controle** (`/painel`, gráficos de série e composição, filtros período/cliente/setor) e **Modo Exibição** (`/painel/tv`); "Indicadores detalhados" (`/indicadores`) com as definições — §15-A |
 | Portal | ✅ | Com varredura anti-vazamento (§21). Leitura + abrir chamado + **decidir orçamento** + **avaliar atendimento** + **baixar PDF** do documento liberado |
 | Field / offline | ✅ | Idempotência provada sob concorrência |
-| Notificações | 🟡 | Tabelas e roteamento existem; **nenhum transporte**, e nada as dispara em produção — §18 |
-| Automações | 🟡 | Motor de regras com salvaguardas, API e tela de simular/ativar. **Não está ligado**: `runAutomations` só é chamado em teste; gatilho `schedule` sem motor — §18 |
+| Notificações | 🟡 | Tabelas e roteamento existem; **nenhum transporte de e-mail**. Desde 16/10 as automações agendadas gravam aviso na caixa de entrada (`in_app` = entregue) e a entrega de e-mail como `pending` com motivo `awaiting_email_transport` — **BLOQUEADO — INFRA** — §18 |
+| Automações | ✅ / 🟡 | Motor de regras com salvaguardas, API e tela. **Agendadas (16/10):** "Nova automação" (relatório agendado, lembrete, tarefa, 5W2H, PDCA), cron no fuso da regra, trabalho `aurora.automations.schedule` (5 min) idempotente por (regra, passada) com log, "Executar agora"; relatório gerado no escopo de cada destinatário; tarefas em `/tarefas`. **Regras de evento continuam não ligadas** (`runAutomations` só em teste) — §18 |
 | Busca global | ✅ | `tsvector` nativo (ADR-027). Todo resultado leva a uma tela que existe (cliente → contratos, pessoa → configurações: não há ficha própria) |
-| Geolocalização / check-in | ⬜ | `locations.geo_lat/geo_lng` existem e ninguém lê nem escreve |
+| Geolocalização / check-in | ✅ / ⬜ | **Check-in/check-out na OS** (16/10, `work_order_visits`, 0065): posição do aparelho (lat/lng/precisão) ou justificativa, abre/fecha o cronômetro, append-only, sem rastreio contínuo. Chip geolocalizador: **só cadastro** no equipamento. Mapa/geocodificação e leitura do chip: BLOQUEADO — INFRA |
 | Engenharia clínica | 🟡 | Criticidade, ciclo de vida, substituição, tipo de documento de aceite, protocolos de calibração/TSE/qualificação/aceite como dado; **campos técnicos por norma e critérios: BLOQUEADO — ESPECIALISTA** |
 | **Metrologia N0** | ✅ (registro) / 🔒 (ciência) | Instrumento, certificado externo, protocolo, sessão, leituras, dado bruto, envelope neutro — §16. **Cinco decisões continuam bloqueadas** — §17 |
 | Oportunidade (núcleo) | ✅ API / ⬜ tela | Necessidade, origem, prazo, prioridade, fornecedor, autorização comercial com trilha (0057) |
@@ -159,7 +184,7 @@ emite documento, mede SLA e produz indicador.
 | Migração Arkmeds | 🟡 | **Pipeline rastreável genérico existe** (0058: lote, linha crua, arquivo original, amostra/oficial, relatório). **Parser do formato Arkmeds: BLOQUEADO — CLIENTE** |
 | Integrações (Omie, WhatsApp, BI…) | ⬜ | Nada. Ver §30 |
 | IA | ⬜ | Nada (nenhuma biblioteca, nenhuma chamada). Ver §30 |
-| Deploy | ✅ | **Produção conectada no ar** (09/10/2026): web, portal e campo no Cloudflare Pages (upload direto) e API + workers + PostgreSQL no runtime do HostPanel. A demo segue em `technecaremeds.pages.dev`. §27 |
+| Deploy | ✅ / 🔒 | **Produção conectada no ar** (09/10/2026): web, portal e campo no Cloudflare Pages (upload direto) e API + workers + PostgreSQL no runtime do HostPanel. A demo segue em `technecaremeds.pages.dev`. **16/10:** produção conferida só por leitura (`/v1/health/version` → impressão `60dcde92fd08`, construída em 15/10; HTTPS, 5432/6432 fechados) — **a rodada de 16/10 NÃO foi publicada**: deploy no HostPanel exige autorização explícita; backup/restore sem prova. Ver `docs/PRODUCAO-VERIFICACAO-2026-10-16.md`. §27 |
 
 ---
 
