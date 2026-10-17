@@ -10,6 +10,7 @@
  * precisam valer igual na web, no aplicativo de campo e no servidor — e três
  * implementações da mesma regra divergem na primeira mudança.
  */
+import { roundedMoneyProduct } from './contracts';
 
 export const CHECKLIST_ITEM_KINDS = [
   'text',
@@ -330,5 +331,7 @@ export function entryMinutes(entry: TimeInterval): number {
  */
 export function entryCost(entry: TimeInterval, hourlyCost: number | null): number | null {
   if (hourlyCost == null) return null;
-  return Number(((entryMinutes(entry) / 60) * hourlyCost).toFixed(2));
+  // minutos × valor/hora ÷ 60, arredondado a centavos uma vez, sem float
+  // (`(minutos / 60) * custo` com `toFixed(2)` perdia o meio centavo).
+  return roundedMoneyProduct([entryMinutes(entry), hourlyCost], 60);
 }

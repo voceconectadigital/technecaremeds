@@ -306,8 +306,15 @@ export async function fieldSyncBundle(
        JOIN aurora.warehouses w      ON w.id = b.warehouse_id
       WHERE b.on_hand > 0
         AND i.archived_at IS NULL
+        AND w.archived_at IS NULL
+        -- Almoxarifado de cliente só vai para quem tem aquele cliente no escopo
+        -- (mesma regra de listWarehouses): o saldo do Hospital B não desce
+        -- para o aparelho de quem só atende o Hospital A.
+        AND (w.customer_id IS NULL
+             OR w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1)))
       ORDER BY i.name
-      LIMIT 1000`
+      LIMIT 1000`,
+    [membershipId]
   );
 
   return {

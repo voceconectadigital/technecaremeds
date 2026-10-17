@@ -32,12 +32,12 @@ import {
   isUuid,
   ValidationError,
   ForbiddenError,
+  NotFoundError,
   canTransitionQuote,
   allowedQuoteTransitions,
   QUOTE_STATUSES,
   QUOTE_NATURES,
   QUOTE_ITEM_KINDS,
-  toCents,
   centsFromDecimal,
   type QuoteStatus,
   type QuoteNature,
@@ -45,6 +45,7 @@ import {
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
+import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
 
 function uuidParam(value: unknown, field: string): string {
@@ -82,7 +83,55 @@ function money(value: unknown, field: string): number {
   if (!Number.isFinite(n) || n < 0) {
     throw new ValidationError(`${field} deve ser um valor monetário não negativo`, { field });
   }
-  return toCents(n);
+  return centavosDeNumero(n, field);
+}
+
+/**
+ * Número (clientes antigos) → centavos, arredondando meio-para-cima na
+ * representação DECIMAL do número, e não no produto em ponto flutuante:
+ * `Math.round(1.005 * 100)` dá 100 (porque 1.005 × 100 = 100.49999…), e o
+ * certo é 101. `String(n)` é a escrita decimal mais curta que volta ao mesmo
+ * número — "1.005" —, então o arredondamento sai como a pessoa digitou.
+ *
+ * Mesmo teto do texto decimal (12 dígitos inteiros): acima disso a soma dos
+ * centavos deixa de ser exata e a coluna estouraria com 500.
+ */
+function centavosDeNumero(n: number, field: string): number {
+  const m = /^(\d{1,12})(?:\.(\d+))?$/.exec(String(n));
+  if (!m) {
+    throw new ValidationError(`${field} deve ser um valor monetário não negativo de até 12 dígitos`, {
+      field,
+    });
+  }
+  const fracao = (m[2] ?? '').padEnd(3, '0');
+  const centavos = Number(m[1]) * 100 + Number(fracao.slice(0, 2));
+  return Number(fracao[2]) >= 5 ? centavos + 1 : centavos;
+}
+
+/**
+ * Quantidade da linha: positiva, até 3 casas decimais (a coluna é
+ * `numeric(12,3)`) e no máximo 9 dígitos inteiros. Com 4 casas, o banco
+ * truncaria a quantidade e o valor da linha — calculado com a quantidade
+ * inteira — deixaria de bater com quantidade × preço no papel.
+ */
+function quantidadeDaLinha(value: unknown): number {
+  const s = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  if (!/^\d{1,9}(\.\d{1,3})?$/.test(s) || !(Number(s) > 0)) {
+    throw new ValidationError('quantity deve ser positiva, com até 3 casas decimais', {
+      field: 'quantity',
+    });
+  }
+  return Number(s);
+}
+
+/** Dias (garantia, prazo): inteiro de 0 a 36500, ou nulo. */
+function dias(value: unknown, field: string): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > 36_500) {
+    throw new ValidationError(`${field} deve ser um número inteiro de dias`, { field });
+  }
+  return n;
 }
 
 @Controller('quotes')
@@ -137,15 +186,21 @@ export class QuotesController {
     if (status && !QUOTE_STATUSES.includes(status as QuoteStatus)) {
       throw new ValidationError(`status desconhecido: ${status}`, { field: 'status' });
     }
+    const cliente = customerId ? uuidParam(customerId, 'customerId') : null;
     const items = await withTenant(this.db, ctx, (s) =>
       s.query(
+        // Escopo do vínculo: o `ScopeGuard` cobre só `/quotes/:id`; a LISTA se
+        // recorta aqui. O orçamento não tem local próprio (o guard usa local
+        // nulo), então o recorte é pelo cliente.
         `SELECT id, number, version, status, customer_id, work_order_id,
                 valid_until::text, total_cents::text, created_at
-           FROM aurora.quotes
-          WHERE ($1::uuid IS NULL OR customer_id = $1)
-            AND ($2::text IS NULL OR status::text = $2)
+           FROM aurora.quotes q
+          WHERE ($1::uuid IS NULL OR q.customer_id = $1)
+            AND ($2::text IS NULL OR q.status::text = $2)
+            AND ($3::uuid IS NULL
+                 OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3)))
           ORDER BY created_at DESC`,
-        [customerId ?? null, status ?? null]
+        [cliente, status ?? null, escopoRestrito(ctx) ? ctx.membershipId : null]
       )
     );
     return { items };
@@ -160,14 +215,21 @@ export class QuotesController {
     @Query('contractId') contractId?: string
   ): Promise<{ price: unknown }> {
     const ctx = req.auroraContext!;
-    const preco = await withTenant(this.db, ctx, (s) =>
-      priceFor(
-        s,
-        uuidParam(itemId, 'itemId'),
-        uuidParam(customerId, 'customerId'),
-        contractId ? uuidParam(contractId, 'contractId') : null
-      )
-    );
+    const item = uuidParam(itemId, 'itemId');
+    const cliente = uuidParam(customerId, 'customerId');
+    const contrato = contractId ? uuidParam(contractId, 'contractId') : null;
+    const preco = await withTenant(this.db, ctx, async (s) => {
+      // O preço acordado com um cliente é informação DELE: fora do escopo, 404
+      // — a mesma resposta de "não existe".
+      if (escopoRestrito(ctx)) {
+        const [ok] = await s.query(
+          `SELECT 1 FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+          [ctx.membershipId, cliente]
+        );
+        if (!ok) throw new NotFoundError('cliente', cliente);
+      }
+      return priceFor(s, item, cliente, contrato);
+    });
     return { price: preco };
   }
 
@@ -239,10 +301,7 @@ export class QuotesController {
     }
   ): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
-    const quantidade = Number(body.quantity);
-    if (!Number.isFinite(quantidade) || quantidade <= 0) {
-      throw new ValidationError('quantity deve ser positiva', { field: 'quantity' });
-    }
+    const quantidade = quantidadeDaLinha(body.quantity);
     const itemId = await withTenant(this.db, ctx, (s) =>
       addQuoteItem(s, {
         quoteId: uuidParam(id, 'id'),
@@ -254,8 +313,8 @@ export class QuotesController {
         unitPriceCents: body.unitPrice == null ? undefined : money(body.unitPrice, 'unitPrice'),
         discountCents: body.discount == null ? undefined : money(body.discount, 'discount'),
         unit: typeof body.unit === 'string' ? body.unit : undefined,
-        warrantyDays: body.warrantyDays == null ? null : Number(body.warrantyDays),
-        deliveryDays: body.deliveryDays == null ? null : Number(body.deliveryDays),
+        warrantyDays: dias(body.warrantyDays, 'warrantyDays'),
+        deliveryDays: dias(body.deliveryDays, 'deliveryDays'),
       })
     );
     return { id: itemId };
@@ -263,9 +322,15 @@ export class QuotesController {
 
   @Post(':id/items/:itemId/remove')
   @RequirePermissions('quote.update')
-  async removeItem(@Req() req: AuroraRequest, @Param('itemId') itemId: string): Promise<{ removed: true }> {
+  async removeItem(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Param('itemId') itemId: string
+  ): Promise<{ removed: true }> {
     const ctx = req.auroraContext!;
-    await withTenant(this.db, ctx, (s) => removeQuoteItem(s, uuidParam(itemId, 'itemId')));
+    const quoteId = uuidParam(id, 'id');
+    // A linha precisa ser DESTE orçamento: o `ScopeGuard` conferiu o `:id`, não a linha.
+    await withTenant(this.db, ctx, (s) => removeQuoteItem(s, uuidParam(itemId, 'itemId'), quoteId));
     return { removed: true };
   }
 
@@ -278,10 +343,18 @@ export class QuotesController {
   ): Promise<unknown> {
     const ctx = req.auroraContext!;
     const quoteId = uuidParam(id, 'id');
+    let percent: number | undefined;
+    if (body.percent != null) {
+      percent = Number(body.percent);
+      if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
+        throw new ValidationError('percent deve ser um percentual entre 0 e 100', { field: 'percent' });
+      }
+    }
     return withTenant(this.db, ctx, async (s) => {
+      // Só em rascunho (conferido em `setQuoteDiscount`, 409 fora dele).
       await setQuoteDiscount(s, quoteId, {
         cents: body.value == null ? undefined : money(body.value, 'value'),
-        percent: body.percent == null ? undefined : Number(body.percent),
+        percent,
         additionsCents: body.additions == null ? undefined : money(body.additions, 'additions'),
         taxesCents: body.taxes == null ? undefined : money(body.taxes, 'taxes'),
       });

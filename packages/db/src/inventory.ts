@@ -223,24 +223,34 @@ export async function reverseMovement(
   if (jaEstornado) throw new ConflictError('este movimento já foi estornado');
 
   const id = newId();
-  await session.query(
-    `INSERT INTO aurora.stock_movements
-       (id, organization_id, item_id, warehouse_id, lot_id, kind, qty, unit_cost,
-        reason, reverses_id, actor_id)
-     VALUES ($1, $2, $3, $4, $5, 'adjustment', $6, $7, $8, $9, $10)`,
-    [
-      id,
-      session.context.organizationId,
-      original.item_id,
-      original.warehouse_id,
-      original.lot_id,
-      -Number(original.qty),
-      original.unit_cost === null ? null : Number(original.unit_cost),
-      `Estorno: ${reason.trim()}`,
-      movementId,
-      session.context.actorId,
-    ]
-  );
+  try {
+    await session.query(
+      `INSERT INTO aurora.stock_movements
+         (id, organization_id, item_id, warehouse_id, lot_id, kind, qty, unit_cost,
+          reason, reverses_id, actor_id)
+       VALUES ($1, $2, $3, $4, $5, 'adjustment', $6, $7, $8, $9, $10)`,
+      [
+        id,
+        session.context.organizationId,
+        original.item_id,
+        original.warehouse_id,
+        original.lot_id,
+        -Number(original.qty),
+        original.unit_cost === null ? null : Number(original.unit_cost),
+        `Estorno: ${reason.trim()}`,
+        movementId,
+        session.context.actorId,
+      ]
+    );
+  } catch (e) {
+    // A leitura acima não segura dois estornos simultâneos; o índice único
+    // parcial `movements_reverses_once_uq` (migration 0071) segura.
+    const pg = e as { code?: string; constraint?: string } | null;
+    if (pg?.code === '23505' && pg.constraint === 'movements_reverses_once_uq') {
+      throw new ConflictError('este movimento já foi estornado');
+    }
+    throw e;
+  }
   return id;
 }
 
@@ -264,22 +274,41 @@ export async function reserve(
   workOrderId: string,
   itemId: string,
   warehouseId: string,
-  qty: number
+  qty: number,
+  /** Orçamento cuja aprovação gerou a reserva (migration 0071). Nulo: reserva do campo/escritório. */
+  quoteId: string | null = null
 ): Promise<string> {
   if (qty <= 0) throw new ValidationError('a quantidade reservada deve ser positiva', { field: 'qty' });
 
   const id = newId();
   await session.query(
     `INSERT INTO aurora.stock_reservations
-       (id, organization_id, work_order_id, item_id, warehouse_id, qty, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [id, session.context.organizationId, workOrderId, itemId, warehouseId, qty, session.context.actorId]
+       (id, organization_id, work_order_id, item_id, warehouse_id, qty, created_by, quote_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      id,
+      session.context.organizationId,
+      workOrderId,
+      itemId,
+      warehouseId,
+      qty,
+      session.context.actorId,
+      quoteId,
+    ]
   );
-  await session.query(
+  const saldo = await session.query(
     `UPDATE aurora.stock_balances SET reserved = reserved + $3
-      WHERE item_id = $1 AND warehouse_id = $2`,
+      WHERE item_id = $1 AND warehouse_id = $2
+      RETURNING item_id`,
     [itemId, warehouseId, qty]
   );
+  // Sem linha de saldo não há o que reservar. Antes, a reserva nascia "no ar":
+  // não segurava nada, e o disponível dizia uma coisa e a reserva outra.
+  if (saldo.length === 0) {
+    throw new ValidationError('não há saldo deste item neste almoxarifado para reservar', {
+      field: 'warehouse_id',
+    });
+  }
   return id;
 }
 
@@ -290,7 +319,12 @@ export async function reserve(
  * peça reservada para sempre — e o disponível iria minguando sem que o físico
  * mudasse, até alguém descobrir que "tem no estoque mas não pode usar".
  */
-export async function releaseReservations(session: TenantSession, workOrderId: string): Promise<number> {
+export async function releaseReservations(
+  session: TenantSession,
+  workOrderId: string,
+  /** Só as reservas deste orçamento: cancelar um orçamento não solta a peça do campo nem a de outro. */
+  quoteId: string | null = null
+): Promise<number> {
   const abertas = await session.query<{
     id: string;
     item_id: string;
@@ -299,8 +333,11 @@ export async function releaseReservations(session: TenantSession, workOrderId: s
     consumed_qty: string;
   }>(
     `SELECT id, item_id, warehouse_id, qty, consumed_qty
-       FROM aurora.stock_reservations WHERE work_order_id = $1 AND released_at IS NULL`,
-    [workOrderId]
+       FROM aurora.stock_reservations
+      WHERE work_order_id = $1 AND released_at IS NULL
+        AND ($2::uuid IS NULL OR quote_id = $2)
+      FOR UPDATE`,
+    [workOrderId, quoteId]
   );
 
   for (const r of abertas) {
@@ -381,6 +418,84 @@ export async function consume(session: TenantSession, reservationId: string, qty
     refType: 'work_order',
     refId: reserva.work_order_id,
   });
+}
+
+/**
+ * O TÉCNICO PEGOU A PEÇA: consome primeiro o que já estava reservado para a OS
+ * naquele item e almoxarifado (a reserva da aprovação do orçamento, por
+ * exemplo) e só reserva-e-consome o que passar disso.
+ *
+ * Antes, o campo sempre criava uma reserva NOVA e a consumia; no faturamento, o
+ * orçamento consumia a reserva dele também — e a mesma peça saía do estoque
+ * duas vezes.
+ *
+ * Almoxarifado de cliente só abastece OS daquele cliente: a peça do Hospital B
+ * não é consumida numa OS do Hospital A.
+ */
+export async function consumeForWorkOrder(
+  session: TenantSession,
+  workOrderId: string,
+  itemId: string,
+  warehouseId: string,
+  qty: number
+): Promise<{ movementId: string; reservationId: string }> {
+  if (!(qty > 0)) throw new ValidationError('a quantidade consumida deve ser positiva', { field: 'qty' });
+
+  const [os] = await session.query<{ customer_id: string }>(
+    `SELECT customer_id FROM aurora.work_orders WHERE id = $1`,
+    [workOrderId]
+  );
+  if (!os) throw new NotFoundError('ordem de serviço', workOrderId);
+  await assertWarehouseServesCustomer(session, warehouseId, os.customer_id);
+
+  const abertas = await session.query<{ id: string; pendente: string }>(
+    `SELECT id, (qty - consumed_qty)::text AS pendente
+       FROM aurora.stock_reservations
+      WHERE work_order_id = $1 AND item_id = $2 AND warehouse_id = $3
+        AND released_at IS NULL AND consumed_qty < qty
+      ORDER BY created_at, id
+      FOR UPDATE`,
+    [workOrderId, itemId, warehouseId]
+  );
+
+  let restante = qty;
+  let primeiro: { movementId: string; reservationId: string } | null = null;
+  for (const r of abertas) {
+    if (restante <= 0) break;
+    const parte = Math.min(restante, Number(r.pendente));
+    const movementId = await consume(session, r.id, parte);
+    primeiro ??= { movementId, reservationId: r.id };
+    // A coluna é numeric(16,4): arredondar na mesma escala evita sobra de float
+    // (0,3 − 0,1 − 0,2 ≠ 0) virando uma reserva de 0,0000000001.
+    restante = Number((restante - parte).toFixed(4));
+  }
+  if (restante > 0) {
+    const reservationId = await reserve(session, workOrderId, itemId, warehouseId, restante);
+    const movementId = await consume(session, reservationId, restante);
+    primeiro ??= { movementId, reservationId };
+  }
+  return primeiro!;
+}
+
+/**
+ * Almoxarifado de cliente (0066) só abastece aquele cliente; o da prestadora
+ * (sem cliente) abastece qualquer um.
+ */
+export async function assertWarehouseServesCustomer(
+  session: TenantSession,
+  warehouseId: string,
+  customerId: string
+): Promise<void> {
+  const [w] = await session.query<{ customer_id: string | null }>(
+    `SELECT customer_id FROM aurora.warehouses WHERE id = $1 AND archived_at IS NULL`,
+    [warehouseId]
+  );
+  if (!w) throw new NotFoundError('almoxarifado', warehouseId);
+  if (w.customer_id !== null && w.customer_id !== customerId) {
+    throw new ValidationError('este almoxarifado é de outro cliente e não abastece esta OS', {
+      field: 'warehouse_id',
+    });
+  }
 }
 
 /**
@@ -548,16 +663,19 @@ export async function ledger(
   session: TenantSession,
   itemId: string,
   warehouseId: string,
-  limit = 100
+  limit = 100,
+  /** Sem `inventory.read_costs`, o custo sai da CONSULTA (vem nulo), como em `balances`. */
+  withCosts = true
 ): Promise<Array<Record<string, unknown>>> {
   return session.query(
-    `SELECT sequence, kind::text AS kind, qty, unit_cost, ref_type, ref_id, reason,
-            reverses_id, occurred_at
+    `SELECT sequence, kind::text AS kind, qty,
+            CASE WHEN $4::boolean THEN unit_cost END AS unit_cost,
+            ref_type, ref_id, reason, reverses_id, occurred_at
        FROM aurora.stock_movements
       WHERE item_id = $1 AND warehouse_id = $2
       ORDER BY sequence DESC
       LIMIT $3`,
-    [itemId, warehouseId, limit]
+    [itemId, warehouseId, limit, withCosts]
   );
 }
 

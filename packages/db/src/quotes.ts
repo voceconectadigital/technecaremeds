@@ -108,12 +108,28 @@ export async function createQuote(session: TenantSession, input: QuoteInput): Pr
 
   let contractId: string | null = null;
   if (input.workOrderId) {
-    const [os] = await session.query<{ contract_id: string | null }>(
-      `SELECT contract_id FROM aurora.work_orders WHERE id = $1`,
+    const [os] = await session.query<{ contract_id: string | null; customer_id: string }>(
+      `SELECT contract_id, customer_id FROM aurora.work_orders WHERE id = $1`,
       [input.workOrderId]
     );
     if (!os) throw new NotFoundError('ordem de serviço não encontrada');
+    // Orçamento de um cliente sobre a OS de outro faria a aprovação reservar
+    // peça (e o faturamento baixar estoque) na OS errada.
+    if (os.customer_id !== input.customerId) {
+      throw new ValidationError('a ordem de serviço é de outro cliente', { field: 'workOrderId' });
+    }
     contractId = os.contract_id;
+  }
+
+  if (input.approverContactId) {
+    const [contato] = await session.query<{ customer_id: string }>(
+      `SELECT customer_id FROM aurora.customer_contacts WHERE id = $1`,
+      [input.approverContactId]
+    );
+    if (!contato) throw new NotFoundError('contato aprovador não encontrado');
+    if (contato.customer_id !== input.customerId) {
+      throw new ValidationError('o contato aprovador é de outro cliente', { field: 'approverContactId' });
+    }
   }
 
   await session.query(
@@ -209,13 +225,26 @@ export async function addQuoteItem(session: TenantSession, args: QuoteItemArgs):
     throw new ValidationError('a linha precisa de descrição', { field: 'description' });
   }
 
-  const totais = itemTotal({
-    kind: args.kind,
-    description: descricao,
-    quantity: args.quantity,
-    unitPriceCents: precoCents,
-    discountCents: args.discountCents,
-  });
+  let totais: ReturnType<typeof itemTotal>;
+  try {
+    totais = itemTotal({
+      kind: args.kind,
+      description: descricao,
+      quantity: args.quantity,
+      unitPriceCents: precoCents,
+      discountCents: args.discountCents,
+    });
+  } catch (e) {
+    // Regra de linha violada é pedido errado (422), não falha do servidor.
+    if (e instanceof RangeError) throw new ValidationError(e.message, { field: 'quantity' });
+    throw e;
+  }
+  // Quantidade enorme × preço enorme estoura a coluna `bigint` e chegaria como 500.
+  if (!Number.isSafeInteger(totais.grossCents)) {
+    throw new ValidationError('valor da linha grande demais: confira quantidade e preço', {
+      field: 'quantity',
+    });
+  }
 
   const [pos] = await session.query<{ next: string }>(
     `SELECT (COALESCE(max(position), 0) + 1)::text AS next FROM aurora.quote_items WHERE quote_id = $1`,
@@ -254,11 +283,29 @@ export async function addQuoteItem(session: TenantSession, args: QuoteItemArgs):
   return id;
 }
 
-export async function removeQuoteItem(session: TenantSession, itemId: string): Promise<void> {
-  const linhas = await session.query(`DELETE FROM aurora.quote_items WHERE id = $1 RETURNING id`, [itemId]);
+/**
+ * Remove uma linha. Com `quoteId`, só se a linha for DAQUELE orçamento — a rota
+ * `/quotes/:id/items/:itemId/remove` não pode apagar linha de outro orçamento
+ * (fora do escopo de quem chama) só porque o id da linha veio junto.
+ */
+export async function removeQuoteItem(
+  session: TenantSession,
+  itemId: string,
+  quoteId: string | null = null
+): Promise<void> {
+  const linhas = await session.query(
+    `DELETE FROM aurora.quote_items WHERE id = $1 AND ($2::uuid IS NULL OR quote_id = $2) RETURNING id`,
+    [itemId, quoteId]
+  );
   if (linhas.length === 0) throw new NotFoundError('linha do orçamento não encontrada');
 }
 
+/**
+ * Desconto geral, acréscimos e impostos do cabeçalho — só em rascunho.
+ *
+ * Campo ausente mantém o valor gravado: mandar só `additions` não zera o
+ * desconto geral. Valor e percentual são excludentes; informar um limpa o outro.
+ */
 export async function setQuoteDiscount(
   session: TenantSession,
   quoteId: string,
@@ -267,10 +314,22 @@ export async function setQuoteDiscount(
   if (discount.cents != null && discount.percent != null) {
     throw new ValidationError('informe desconto geral em valor OU em percentual, não os dois');
   }
+  const quote = await loadQuote(session, quoteId, { forUpdate: true });
+  if (quote.status !== 'draft') {
+    throw new ConflictError(
+      `orçamento ${quote.number} não está em rascunho: desconto, acréscimo e imposto só mudam antes do envio — revise para criar uma versão nova`
+    );
+  }
   await session.query(
     `UPDATE aurora.quotes
-        SET general_discount_cents = COALESCE($2, 0),
-            general_discount_percent = $3,
+        SET general_discount_cents = CASE
+              WHEN $2::bigint IS NOT NULL THEN $2::bigint
+              WHEN $3::numeric IS NOT NULL THEN 0
+              ELSE general_discount_cents END,
+            general_discount_percent = CASE
+              WHEN $2::bigint IS NOT NULL THEN NULL
+              WHEN $3::numeric IS NOT NULL THEN $3::numeric
+              ELSE general_discount_percent END,
             additions_cents = COALESCE($4, additions_cents),
             taxes_cents = COALESCE($5, taxes_cents),
             updated_by = $6
@@ -302,11 +361,19 @@ export interface QuoteRow {
   total_cents: string;
 }
 
-export async function loadQuote(session: TenantSession, id: string): Promise<QuoteRow> {
+/**
+ * Lê o cabeçalho. `forUpdate` trava a linha até o fim da transação: é o que
+ * serializa duas transições (ou revisão e transição) sobre o mesmo orçamento.
+ */
+export async function loadQuote(
+  session: TenantSession,
+  id: string,
+  opts: { forUpdate?: boolean } = {}
+): Promise<QuoteRow> {
   const [q] = await session.query<QuoteRow>(
     `SELECT id, number, version, status, customer_id, work_order_id,
             valid_until::text, approver_contact_id, total_cents::text
-       FROM aurora.quotes WHERE id = $1`,
+       FROM aurora.quotes WHERE id = $1${opts.forUpdate ? ' FOR UPDATE' : ''}`,
     [id]
   );
   if (!q) throw new NotFoundError('orçamento não encontrado');
@@ -351,7 +418,9 @@ export async function transitionQuote(
   to: QuoteStatus,
   options: TransitionOptions = {}
 ): Promise<void> {
-  const quote = await loadQuote(session, quoteId);
+  // Travada: duas aprovações simultâneas reservariam a peça duas vezes, e
+  // aprovar e recusar ao mesmo tempo deixariam o efeito de um com o estado do outro.
+  const quote = await loadQuote(session, quoteId, { forUpdate: true });
   const from = currentStatus(quote);
 
   const transicao = canTransitionQuote(from, to);
@@ -389,7 +458,10 @@ export async function transitionQuote(
     );
   }
 
-  await session.query(
+  // `AND status = $10`: a situação gravada ainda é a que foi lida. Com a trava
+  // acima isso já vale; a condição é a segunda linha de defesa, e transforma
+  // uma leitura velha em conflito em vez de efeito duplicado.
+  const mudou = await session.query(
     `UPDATE aurora.quotes
         SET status = $2::aurora.quote_status,
             sent_at   = CASE WHEN $2 = 'sent'   THEN now() ELSE sent_at END,
@@ -402,7 +474,8 @@ export async function transitionQuote(
             rejection_reason_id = COALESCE($7, rejection_reason_id),
             rejection_note = COALESCE($8, rejection_note),
             updated_by = $9
-      WHERE id = $1`,
+      WHERE id = $1 AND status = $10::aurora.quote_status
+      RETURNING id`,
     [
       quoteId,
       to,
@@ -413,8 +486,14 @@ export async function transitionQuote(
       options.rejectionReasonId ?? null,
       to === 'rejected' ? (options.note ?? null) : null,
       session.context.actorId,
+      quote.status,
     ]
   );
+  if (mudou.length === 0) {
+    throw new ConflictError(
+      `orçamento ${quote.number} mudou de situação enquanto este pedido era processado; recarregue e tente de novo`
+    );
+  }
 
   await applyEffects(session, quote, to);
 }
@@ -464,7 +543,9 @@ async function applyEffects(session: TenantSession, quote: QuoteRow, to: QuoteSt
       break;
 
     case 'cancelled':
-      if (quote.work_order_id) await releaseReservations(session, quote.work_order_id);
+      // Só as reservas DESTE orçamento: as do campo e as de outro orçamento da
+      // mesma OS continuam onde estão.
+      if (quote.work_order_id) await releaseReservations(session, quote.work_order_id, quote.id);
       break;
 
     case 'invoiced':
@@ -504,26 +585,44 @@ async function reserveApprovedParts(session: TenantSession, quote: QuoteRow): Pr
   );
 
   for (const peca of pecas) {
+    // Almoxarifado de cliente (0066) é estoque DAQUELE cliente: a aprovação só
+    // reserva no da prestadora (sem cliente) ou no do próprio cliente do orçamento.
     const [saldo] = await session.query<{ warehouse_id: string }>(
-      `SELECT warehouse_id FROM aurora.stock_balances
-        WHERE item_id = $1 AND (on_hand - reserved) >= $2
-        ORDER BY (on_hand - reserved) DESC LIMIT 1`,
-      [peca.item_id, Number(peca.quantity)]
+      `SELECT b.warehouse_id FROM aurora.stock_balances b
+         JOIN aurora.warehouses w ON w.id = b.warehouse_id
+        WHERE b.item_id = $1 AND (b.on_hand - b.reserved) >= $2
+          AND w.archived_at IS NULL
+          AND (w.customer_id IS NULL OR w.customer_id = $3)
+        ORDER BY (b.on_hand - b.reserved) DESC LIMIT 1`,
+      [peca.item_id, Number(peca.quantity), quote.customer_id]
     );
     if (!saldo) continue;
 
-    await reserve(session, quote.work_order_id, peca.item_id, saldo.warehouse_id, Number(peca.quantity));
+    await reserve(
+      session,
+      quote.work_order_id,
+      peca.item_id,
+      saldo.warehouse_id,
+      Number(peca.quantity),
+      quote.id
+    );
   }
 }
 
-/** Baixa as reservas do orçamento faturado. */
+/**
+ * Baixa as reservas do orçamento faturado — só as DELE (migration 0071).
+ *
+ * O que o técnico já consumiu em campo contra essas reservas não sai de novo:
+ * só o pendente de cada uma é consumido aqui.
+ */
 async function consumeApprovedParts(session: TenantSession, quote: QuoteRow): Promise<void> {
   if (!quote.work_order_id) return;
 
   const reservas = await session.query<{ id: string; qty: string; consumed_qty: string }>(
     `SELECT id, qty::text, consumed_qty::text FROM aurora.stock_reservations
-      WHERE work_order_id = $1 AND released_at IS NULL`,
-    [quote.work_order_id]
+      WHERE work_order_id = $1 AND quote_id = $2 AND released_at IS NULL
+      FOR UPDATE`,
+    [quote.work_order_id, quote.id]
   );
 
   for (const r of reservas) {
@@ -608,12 +707,25 @@ async function resumeWorkOrder(session: TenantSession, workOrderId: string | nul
  * são duas propostas diferentes com o mesmo nome na mão do cliente.
  */
 export async function reviseQuote(session: TenantSession, quoteId: string): Promise<string> {
-  const quote = await loadQuote(session, quoteId);
+  const quote = await loadQuote(session, quoteId, { forUpdate: true });
   if (quote.status === 'superseded') {
     throw new ConflictError(`o orçamento ${quote.number} v${quote.version} já foi revisado`);
   }
   if (quote.status === 'invoiced' || quote.status === 'closed') {
     throw new ConflictError('orçamento já faturado não se revisa: abra uma proposta nova');
+  }
+  // Em execução, a peça já está sendo usada contra esta versão: superá-la
+  // deixaria o trabalho feito sem orçamento para faturar.
+  if (quote.status === 'in_execution') {
+    throw new ConflictError(
+      'orçamento em execução não se revisa: fature-o ou abra uma proposta nova para o que mudou'
+    );
+  }
+  // Aprovado pode ser revisado (a versão aprovada fica registrada como era),
+  // mas a reserva que a aprovação fez é DESTA versão: sem soltá-la, ficaria
+  // presa a uma versão morta e a nova, ao ser aprovada, reservaria de novo.
+  if (quote.status === 'approved' && quote.work_order_id) {
+    await releaseReservations(session, quote.work_order_id, quote.id);
   }
 
   await session.query(`UPDATE aurora.quotes SET status = 'superseded' WHERE id = $1`, [quoteId]);
@@ -676,8 +788,15 @@ export async function sweepExpiredQuotes(session: TenantSession, today = hoje())
     [today]
   );
 
+  let expirados = 0;
   for (const q of vencidos) {
-    await session.query(`UPDATE aurora.quotes SET status = 'expired' WHERE id = $1`, [q.id]);
+    // Só expira se ainda estiver aberto: uma aprovação concorrente vence a varredura.
+    const mudou = await session.query(
+      `UPDATE aurora.quotes SET status = 'expired' WHERE id = $1 AND status IN ('sent', 'viewed') RETURNING id`,
+      [q.id]
+    );
+    if (mudou.length === 0) continue;
+    expirados += 1;
     await emitEvent(session, {
       type: 'quote.expired',
       aggregateId: q.id,
@@ -685,7 +804,7 @@ export async function sweepExpiredQuotes(session: TenantSession, today = hoje())
     });
   }
 
-  return vencidos.length;
+  return expirados;
 }
 
 /* -------------------------------------------------------------------------- */

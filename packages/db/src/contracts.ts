@@ -513,17 +513,22 @@ export async function measurePeriod(
   const excedenteChamados = chamados ? Math.max(resumo.workOrders - chamados.included, 0) : 0;
   const excedenteHoras = horas ? Number((resumo.laborHours - horas.included).toFixed(2)) : 0;
 
-  const valorExcedente =
-    overageAmount(
-      contrato.included_calls,
-      resumo.workOrders,
-      contrato.overage_call_rate === null ? null : Number(contrato.overage_call_rate)
+  const centavosExcedente =
+    Math.round(
+      overageAmount(
+        contrato.included_calls,
+        resumo.workOrders,
+        contrato.overage_call_rate === null ? null : Number(contrato.overage_call_rate)
+      ) * 100
     ) +
-    overageAmount(
-      contrato.included_hours === null ? null : Number(contrato.included_hours),
-      resumo.laborHours,
-      contrato.overage_hour_rate === null ? null : Number(contrato.overage_hour_rate)
+    Math.round(
+      overageAmount(
+        contrato.included_hours === null ? null : Number(contrato.included_hours),
+        resumo.laborHours,
+        contrato.overage_hour_rate === null ? null : Number(contrato.overage_hour_rate)
+      ) * 100
     );
+  const valorExcedente = centavosExcedente / 100;
 
   const glosa = penaltyForBreaches(
     {
@@ -543,7 +548,9 @@ export async function measurePeriod(
     endsOn,
     overageCalls: excedenteChamados,
     overageHours: Math.max(excedenteHoras, 0),
-    overageAmount: Number(valorExcedente.toFixed(2)),
+    // Cada parcela já vem em centavos exatos; somar em centavos inteiros evita
+    // que a soma de dois `float` decida o arredondamento.
+    overageAmount: valorExcedente,
     penaltyAmount: glosa === null ? null : glosa.amount,
     closedAt: null,
   };
