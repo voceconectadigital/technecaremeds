@@ -116,9 +116,10 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-019 | Setores do hospital · Cliente → Setor → Equipamento | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
 | NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026 |
 | NS-021 | Reunião 16/10/2026: demandas consolidadas | IMPLEMENTADA (por item: ROADMAP) | ALTA | Entregue 16/10/2026 |
+| NS-022 | Página pública de apresentação (cliente/investidor) | IMPLEMENTADA | ALTA | Entregue 17/10/2026 |
 
-**Contagem:** 21 no total · JÁ EXISTE 0 · PARCIAL 11 · NOVA 1 · FUTURA FASE 1 ·
-BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 7.
+**Contagem:** 22 no total · JÁ EXISTE 0 · PARCIAL 11 · NOVA 1 · FUTURA FASE 1 ·
+BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 8.
 
 ---
 
@@ -535,3 +536,17 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 7.
 | **Evidência** | Commits `0fbe25e` · `12b3794` · `38d13e3` · `2f8e819` · `7aa15c9` · `00ade81` · `32bd136` · `957e2bd` · `090bd84` · `f2d58b5` · `7891ec7` · `c6c7d52` (+ ajustes de teste `f47a3d5`, `76b966c`, `66ab8c2`, `923974d`) · migrations `0060`–`0068` · testes de API `api-usuarios-perfis`, `api-clientes-classificacao`, `api-equipamentos-catalogo`, `api-solicitacoes-fluxo`, `api-execucao-guiada`, `api-planos-executar`, `api-orcamento-da-os`, `api-estoque-store`, `api-relatorios`, `api-automacoes-agendadas`, `api-novo-negocio` · E2E nos specs de mesmo tema |
 | **Bloqueado** | Fórmulas FHEMIG/Expert e layout dos PDFs (BLOQUEADA — CLIENTE: aguardando PDFs oficiais) · disponibilidade no tempo (definição de "parado") · critérios metrológicos/TSE (BLOQUEADA — ESPECIALISTA) · e-mail real, mapa, leitura do chip, domínio "htec.b", backup/restore comprovado e publicação no HostPanel (INFRA / autorização) |
 | **Observações** | Nada de preço, gateway, IA real, hardware ou dado de produção foi inventado |
+
+## NS-022 — Página pública de apresentação (cliente/investidor)
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-022 |
+| **Data** | 17/10/2026 |
+| **Origem** | Anderson (Be Care), apresentação para cliente/investidor na terça-feira |
+| **Descrição original (resumo)** | Página pública premium, sem login e sem API, explicando o que é a Téchne Care, o que já existe e a visão futura: hero, visão do produto, módulos atuais, Painel de Controle, operação em campo, multiempresa, ecossistema em evolução (EM DESENVOLVIMENTO / FUTURO), IA (roadmap), segurança/governança e chamada final |
+| **Status** | **IMPLEMENTADA** |
+| **O que foi entregue** | Rota pública `/apresentacao` na aplicação web, fora da casca autenticada e carregada sob demanda; a raiz não consulta a sessão nessa rota. Só capacidades existentes; o que não existe aparece como EM DESENVOLVIMENTO, FUTURO ou ROADMAP |
+| **Evidência de implementação** | `apps/web/src/features/apresentacao/*`, rota em `apps/web/src/routes/router.tsx`, `apps/web/src/app.tsx` · testes `apresentacao.test.tsx` (sem fetch, sem "Aurora", selos de futuro) e `e2e/specs/apresentacao.spec.ts` (deep link, recarga, sem chamada à API, sem estouro a 375 px) · capturas em `docs/relatorios/apresentacao/` · **sem migration** |
+| **Publicação** | Demonstração ligada ao GitHub (`technecaremeds.pages.dev/apresentacao`) publica a partir da `main`. O front de produção (upload direto) não foi publicado — sem autorização de deploy |
+| **Observações** | Nenhum preço, checkout, e-mail enviado, fórmula pendente, leitura de chip, mapa ou IA apresentado como existente |

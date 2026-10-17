@@ -17,13 +17,41 @@
 >    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
 >    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 17/10/2026 (indicadores e metas, §15-A) · 16/10/2026 (rodada "reunião com Anderson de 16/10/2026", branch
+**Atualizado em:** 17/10/2026 (**pente-fino** — `docs/AUDITORIA-PENTE-FINO-2026-10-17.md`; e indicadores e metas, §15-A) · 16/10/2026 (rodada "reunião com Anderson de 16/10/2026", branch
 `feat/anderson-2026-10-16`, PR #22 — controle item a item em `docs/ROADMAP-ANDERSON-2026-10-16.md`) ·
 **Migration mais recente:** `0069_metas_de_indicadores.sql` · **70 migrations** · **111 tabelas** (lista de
 `migrations.test.ts`) · **265 rotas** (205 com contrato Zod) · **119 permissões** · **13 papéis**
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Pente-fino 17/10/2026 — estado REAL (branch `audit/pente-fino-2026-10-17`, partiu de `511ec1f`):**
+> **Migration mais recente:** `0073_endurecimento_de_autenticacao.sql` · **74 migrations** (0070–0073 novas,
+> **não aplicadas em banco remoto**) · 111 tabelas (nenhuma nova) · 272 rotas (212 com contrato Zod).
+> O que mudou e você precisa saber antes de mexer:
+> · **Conceder/retirar papel** exige ter as permissões ADMINISTRATIVAS do papel (`organization.*`, exceto leitura) —
+>   `assertCanGrantRoles` (`packages/db/src/roles.ts`) + `administrativeEscalationCheck` (domain). Delegar papel
+>   operacional (Operador, Solicitante) continua com quem gerencia pessoas. Ninguém altera o próprio escopo; gestor
+>   restrito só concede dentro do seu.
+> · **`ScopeGuard`** normaliza o caminho (caixa, `%XX`, `//`) e cobre também documentos, contratos, oportunidades,
+>   sessões de medição, planos, locais e linha do tempo de auditoria. Listas de documentos, contratos, orçamentos,
+>   oportunidades e a busca filtram por escopo.
+> · **Auth:** provedor `local` só com banco em localhost; `scrypt` assíncrono no login; mensagem única de recusa;
+>   bloqueio por conta com teto real (0073); `aurora_app` não apaga `users`.
+> · **`npm run db:migrate`** agora é `migrateAndSyncCatalogs` (sincroniza permissões e definições de catálogo antes e
+>   depois); o migrator **recusa** papel sem SUPERUSER/BYPASSRLS. `admin:criar` sincroniza as definições de catálogo.
+> · **Estoque/orçamento:** reservas ligadas ao orçamento (`stock_reservations.quote_id`, 0071); peça de campo consome
+>   a reserva aberta da OS; só almoxarifado sem cliente ou do cliente da OS/orçamento; totais congelados fora de
+>   rascunho; dinheiro de contrato em centavos inteiros.
+> · **OS:** local/ativo só do próprio cliente (gatilho 0072); transições de OS/solicitação com `FOR UPDATE`;
+>   cronômetro fecha em OS encerrada/cancelada; checklist bloqueado em OS fechada sem `edit_closed`.
+> · **Campo offline:** "Tentar de novo" reenvia o mesmo comando (antes apagava); 401 pausa a fila; IndexedDB confirma
+>   só no commit; comando carimbado com organização + pessoa.
+> · **Infra:** pool com ouvinte de `error` e tempo de espera (API e worker); outbox não estagna; `_headers` de
+>   segurança nos três apps do Pages; `proxy-addr` 2.0.8 e Capacitor 8.5.2.
+> · **Página pública** `/apresentacao` (sem login, sem API) — NS-022.
+> Decisões pendentes do cliente desta rodada: PF-14, PF-15, PF-34, PF-41, PF-50, PF-52 (relatório §9).
+> **Teste de upgrade** `packages/db/src/__tests__/migrations-upgrade.test.ts`: banco na 0059 com dado → rodada nova.
+>
 > **Rodada 16/10/2026 — o que mudou (resumo; evidência por item no ROADMAP):**
 > perfis de negócio OPERADOR/SOLICITANTE/GESTOR sobre o RBAC, cadastro com CPF e registros
 > profissionais, ATIVO/SUSPENSO/BLOQUEADO, **escopo cliente/setor aplicado no backend** de OS,

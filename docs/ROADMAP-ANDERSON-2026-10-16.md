@@ -243,6 +243,16 @@ interno × externo, crítico, obsolescência, assiduidade, glosa, layout final d
 | Z-04 | Todos os gates (spec, typecheck, lint, marca, openapi, unit, PG real, RLS, RBAC, contratos, build, Playwright, portal, field, a11y, secret scan, format) | PARCIAL | VALIDADO | spec:audit, typecheck, lint, format, openapi:check, marca:check, segredos, unit, PG 16 real, Playwright (desktop/portal/campo), a11y | — | CI run 38992481765: Estático ✓ · PostgreSQL 16 ✓ · Ponta a ponta ✓ | ac20895 | |
 | Z-05 | Atualizar AI-HANDOFF, NOVAS-SOLICITACOES e este roadmap | — | VALIDADO | `AI-HANDOFF.md`, `NOVAS-SOLICITACOES.md` (NS-021), este roadmap | — | — | (commit de docs) | |
 
+## Pente-fino de 17/10/2026 (fechamento técnico da rodada)
+
+Auditoria completa do sistema — achados, correções e evidência em `docs/AUDITORIA-PENTE-FINO-2026-10-17.md`.
+
+| ID | Demanda | Anterior | Status | Arquivos | Migration | Testes | Commit | Bloqueio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| PF | Pente-fino: RBAC/escopo, auth, RLS/migrations, OS/solicitação/execução, estoque/orçamento, indicadores, campo offline, infra | — | VALIDADO | ver relatório (PF-01…PF-85) | 0070–0073 (locais) | `pente-fino-*`, `migrations-upgrade`, `pool-resiliente`, `caminho-publico` + suítes existentes | PR do pente-fino | decisões de regra listadas no relatório §9 |
+| NS-022 | Página pública `/apresentacao` para cliente/investidor | NOVO | IMPLEMENTADO | `apps/web/src/features/apresentacao/*` | — | `apresentacao.test`, `apresentacao.spec` | PR do pente-fino | |
+| I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | migrations **0060–0073** não aplicadas em banco remoto; sem deploy de backend (decisão de 16/10 mantida) |
+
 ---
 
 ## Não inventar (registro)
