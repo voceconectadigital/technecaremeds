@@ -44,6 +44,12 @@ export const AutomationRule = z.object({
    */
   quarantine_reason: z.string().nullable(),
   action_count: z.union([z.number(), z.string()]),
+  /** Regra agendada (Fase 10): expressão, fuso, primeira ação e próxima passada. */
+  trigger_cron: z.string().nullable().optional(),
+  trigger_timezone: z.string().nullable().optional(),
+  activated_at: Timestamp.nullable().optional(),
+  first_action: z.string().nullable().optional(),
+  next_run: Timestamp.nullable().optional(),
 });
 export type AutomationRule = z.infer<typeof AutomationRule>;
 
@@ -62,7 +68,8 @@ export const RuleRun = z.object({
   aggregate_id: Uuid.nullable(),
   /** `applied`, `skipped` ou `failed` — e a distinção entre os três importa. */
   outcome: z.string(),
-  actions_run: z.number().int().nullable(),
+  /** As ações executadas (lista), ou a contagem em respostas antigas. */
+  actions_run: z.union([z.number().int(), z.array(z.unknown())]).nullable(),
   error: z.string().nullable(),
   duration_ms: z.number().int().nullable(),
   ran_at: Timestamp,
@@ -132,4 +139,120 @@ export const automationVocabulary = defineOperation({
     'programação que ninguém revisa, dentro de um sistema que ninguém testa.',
   permissions: ['automation.read'],
   response: z.record(z.string(), z.unknown()),
+});
+
+/* -------------------------------------------------------------------------- */
+/* Nova automação e agendamento (reunião 16/10/2026, Fase 10)                  */
+/* -------------------------------------------------------------------------- */
+
+export const automationsCreate = defineOperation({
+  operationId: 'automations.create',
+  method: 'POST',
+  path: '/automations',
+  summary: 'Cria a regra — sempre em rascunho, até ser simulada e ligada',
+  description:
+    'Regra agendada (`triggerKind: schedule`) usa cron de cinco campos no fuso informado (padrão ' +
+    'America/Sao_Paulo) e só aceita ações de relógio: relatório, lembrete, tarefa (tarefa, 5W2H, PDCA) e ' +
+    'abrir OS. E-mail: fica na fila — não há transporte configurado (BLOQUEADO — INFRA).',
+  permissions: ['automation.create'],
+  body: z.object({
+    name: z.string().min(1).max(200),
+    description: z.string().max(2000).nullable().optional(),
+    triggerKind: z.enum(['event', 'schedule', 'condition_watch']).optional(),
+    triggerEvent: z.string().nullable().optional(),
+    triggerCron: z.string().max(120).nullable().optional(),
+    triggerTimezone: z.string().max(64).nullable().optional(),
+    conditions: z.record(z.string(), z.unknown()).nullable().optional(),
+    priority: z.number().int().optional(),
+    rateMax: z.number().int().positive().optional(),
+    rateWindowMinutes: z.number().int().positive().optional(),
+    actions: z.array(z.object({ kind: z.string(), params: z.record(z.string(), z.unknown()) })).min(1),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['validation_failed'],
+});
+
+export const automationRunNow = defineOperation({
+  operationId: 'automations.runNow',
+  method: 'POST',
+  path: '/automations/:id/run-now',
+  summary: 'Executa agora a regra agendada (a passada do minuto corrente)',
+  description: 'Repetir no mesmo minuto não duplica: a passada é única por regra.',
+  permissions: ['automation.run_now'],
+  params: z.object({ id: Uuid }),
+  response: z.object({
+    executed: z.boolean(),
+    outcome: z.string().nullable(),
+    actions: z.array(z.object({ kind: z.string(), ok: z.boolean(), detail: z.string().optional() })),
+  }),
+  status: 201,
+  errors: ['validation_failed', 'conflict'],
+});
+
+export const AutomationTask = z.object({
+  id: Uuid,
+  rule_id: Uuid.nullable(),
+  rule_name: z.string().nullable(),
+  method: z.enum(['task', '5w2h', 'pdca']),
+  title: z.string(),
+  why: z.string().nullable(),
+  where_text: z.string().nullable(),
+  how: z.string().nullable(),
+  how_much_cents: z.number().int().nullable(),
+  owner_membership_id: Uuid,
+  owner_name: z.string().nullable(),
+  due_date: z.string().nullable(),
+  pdca_phase: z.enum(['plan', 'do', 'check', 'act']).nullable(),
+  state: z.enum(['open', 'done', 'cancelled']),
+  created_at: Timestamp,
+  completed_at: Timestamp.nullable(),
+});
+export type AutomationTask = z.infer<typeof AutomationTask>;
+
+export const automationTasksList = defineOperation({
+  operationId: 'automationTasks.list',
+  method: 'GET',
+  path: '/automation-tasks',
+  summary: 'Tarefas, 5W2H e PDCA gerados pelas automações',
+  description: 'Cada pessoa vê as suas; quem lê automações (`automation.read`) vê todas, com `all=true`.',
+  query: z.object({
+    state: z.enum(['open', 'done', 'cancelled']).optional(),
+    all: z.enum(['true', 'false']).optional(),
+  }),
+  response: z.object({ items: z.array(AutomationTask) }),
+});
+
+export const automationTaskAdvance = defineOperation({
+  operationId: 'automationTasks.advance',
+  method: 'POST',
+  path: '/automation-tasks/:id/advance',
+  summary: 'Avança a tarefa (PDCA: uma fase por vez) ou cancela',
+  params: z.object({ id: Uuid }),
+  body: z.object({ action: z.enum(['advance', 'cancel']) }),
+  response: z.object({ state: z.string(), pdca_phase: z.string().nullable() }),
+  status: 201,
+  errors: ['validation_failed', 'not_found', 'conflict'],
+});
+
+export const automationReportOutput = defineOperation({
+  operationId: 'automationReports.detail',
+  method: 'GET',
+  path: '/automation-report-outputs/:id',
+  summary: 'Um relatório agendado entregue',
+  description: 'Só ao destinatário: o conteúdo foi gerado no recorte de escopo dele.',
+  params: z.object({ id: Uuid }),
+  response: z.object({
+    id: Uuid,
+    rule_id: Uuid,
+    rule_name: z.string(),
+    schedule_slot: Timestamp,
+    recipient_membership_id: Uuid,
+    tier: z.enum(['basic', 'advanced', 'expert']),
+    filters: z.record(z.string(), z.unknown()),
+    sections: z.array(z.record(z.string(), z.unknown())),
+    email_state: z.string(),
+    created_at: Timestamp,
+  }),
+  errors: ['not_found'],
 });

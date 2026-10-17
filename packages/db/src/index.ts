@@ -44,3 +44,4 @@ export * from './procedures';
 export * from './provisioning';
 export * from './execucao-guiada';
 export * from './estoque-gestao';
+export * from './relatorios';

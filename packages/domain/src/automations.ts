@@ -186,6 +186,10 @@ export const ACTION_KINDS = [
   'change_status',
   'add_comment',
   'create_work_order',
+  // Reunião 16/10/2026 (Fase 10): ações das regras AGENDADAS.
+  'send_report',
+  'reminder',
+  'create_task',
 ] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
@@ -196,6 +200,12 @@ export interface ActionDefinition {
   readonly required: readonly string[];
   /** A permissão que o ator de sistema precisa carregar para executá-la. */
   readonly permission: string;
+  /**
+   * Em que espécie de gatilho a ação faz sentido. As ações que agem SOBRE a OS
+   * do evento (atribuir, mudar situação, comentar) não têm OS nenhuma numa
+   * regra de relógio — aceitá-las seria a regra que falha calada toda semana.
+   */
+  readonly triggers: readonly TriggerKind[];
 }
 
 /**
@@ -214,18 +224,21 @@ export const ACTIONS: readonly ActionDefinition[] = Object.freeze([
     label: 'Notificar',
     required: ['audience'],
     permission: 'work_order.read',
+    triggers: ['event'],
   },
   {
     kind: 'assign',
     label: 'Atribuir',
     required: [],
     permission: 'work_order.assign',
+    triggers: ['event'],
   },
   {
     kind: 'change_status',
     label: 'Mudar situação',
     required: ['statusKey'],
     permission: 'work_order.update',
+    triggers: ['event'],
   },
   {
     kind: 'add_comment',
@@ -235,14 +248,112 @@ export const ACTIONS: readonly ActionDefinition[] = Object.freeze([
     // inventar uma aqui criaria uma chave que o RBAC não conhece — a ação
     // ficaria permanentemente sem poder executar, calada.
     permission: 'work_order.update',
+    triggers: ['event'],
   },
   {
     kind: 'create_work_order',
     label: 'Abrir OS',
     required: ['workOrderTypeId', 'title'],
     permission: 'work_order.create',
+    // A OS aberta pelo relógio cai no quadro de OS existente: é a tarefa
+    // operacional com correspondência real no Kanban (Fase 10).
+    triggers: ['event', 'schedule'],
+  },
+  {
+    kind: 'send_report',
+    label: 'Enviar relatório',
+    required: ['recipients', 'tier'],
+    permission: 'insight.read',
+    triggers: ['schedule'],
+  },
+  {
+    kind: 'reminder',
+    label: 'Lembrete',
+    required: ['recipients', 'title'],
+    permission: 'automation.read',
+    triggers: ['schedule'],
+  },
+  {
+    kind: 'create_task',
+    label: 'Criar tarefa (tarefa, 5W2H, PDCA)',
+    required: ['method', 'title', 'ownerMembershipId'],
+    permission: 'automation.read',
+    triggers: ['schedule'],
   },
 ]);
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Checagens de forma das ações novas — além do "obrigatório" genérico. */
+function validarParametros(kind: string, p: Record<string, unknown>, path: string): string[] {
+  const erros: string[] = [];
+  if (kind === 'send_report' || kind === 'reminder') {
+    const r = p.recipients;
+    if (
+      !Array.isArray(r) ||
+      r.length === 0 ||
+      r.length > 50 ||
+      !r.every((x) => typeof x === 'string' && UUID.test(x))
+    ) {
+      erros.push(`${path}: "recipients" é uma lista de 1 a 50 pessoas (vínculos)`);
+    }
+  }
+  if (kind === 'send_report') {
+    if (!['basic', 'advanced', 'expert'].includes(String(p.tier))) {
+      erros.push(`${path}: "tier" é basic, advanced ou expert`);
+    }
+    const dias = p.periodDays === undefined ? 30 : Number(p.periodDays);
+    if (!Number.isInteger(dias) || dias < 1 || dias > 366) {
+      erros.push(`${path}: "periodDays" é de 1 a 366`);
+    }
+    for (const k of ['customerId', 'sectorId', 'assetCategoryId']) {
+      if (p[k] !== undefined && p[k] !== null && (typeof p[k] !== 'string' || !UUID.test(p[k] as string))) {
+        erros.push(`${path}: "${k}" inválido`);
+      }
+    }
+  }
+  if (kind === 'create_task') {
+    if (!['task', '5w2h', 'pdca'].includes(String(p.method))) {
+      erros.push(`${path}: "method" é task, 5w2h ou pdca`);
+    }
+    if (typeof p.ownerMembershipId === 'string' && !UUID.test(p.ownerMembershipId)) {
+      erros.push(`${path}: "ownerMembershipId" inválido`);
+    }
+    const prazo = p.dueInDays === undefined ? 7 : Number(p.dueInDays);
+    if (!Number.isInteger(prazo) || prazo < 0 || prazo > 365) {
+      erros.push(`${path}: "dueInDays" é de 0 a 365`);
+    }
+    if (p.method === '5w2h') {
+      for (const k of ['why', 'where', 'how']) {
+        if (typeof p[k] !== 'string' || (p[k] as string).trim() === '') {
+          erros.push(`${path}: o 5W2H exige "${k}"`);
+        }
+      }
+      if (
+        p.howMuch !== undefined &&
+        p.howMuch !== null &&
+        !/^\d{1,12}(,\d{1,2}|\.\d{1,2})?$/.test(String(p.howMuch))
+      ) {
+        erros.push(`${path}: "howMuch" é valor em reais, como 1500,00`);
+      }
+    }
+  }
+  return erros;
+}
+
+/** As ações da regra cabem na espécie de gatilho dela? */
+export function validateActionsForTrigger(
+  trigger: TriggerKind,
+  actions: ReadonlyArray<{ kind?: unknown }>
+): string[] {
+  return actions.flatMap((a, i) => {
+    const def = typeof a.kind === 'string' ? actionDefinition(a.kind) : undefined;
+    if (!def || def.triggers.includes(trigger)) return [];
+    return [
+      `actions[${i}]: "${def.label}" não se aplica a gatilho ${trigger === 'schedule' ? 'agendado' : 'de evento'}`,
+    ];
+  });
+}
 
 export function actionDefinition(kind: string): ActionDefinition | undefined {
   return ACTIONS.find((a) => a.kind === kind);
@@ -263,9 +374,10 @@ export function validateAction(action: unknown, path = 'action'): string[] {
   }
 
   const params = (a.params ?? {}) as Record<string, unknown>;
-  return def.required
+  const faltando = def.required
     .filter((r) => params[r] === undefined || params[r] === null || params[r] === '')
     .map((r) => `${path}: "${r}" é obrigatório para a ação ${def.kind}`);
+  return faltando.length > 0 ? faltando : validarParametros(def.kind, params, path);
 }
 
 /* -------------------------------------------------------------------------- */

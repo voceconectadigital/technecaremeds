@@ -36,7 +36,11 @@ import { ScheduleController } from './schedule/schedule.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { InsightsController } from './insights/insights.controller';
 import { NotificationsController } from './notifications/notifications.controller';
-import { AutomationsController } from './automations/automations.controller';
+import {
+  AutomationsController,
+  AutomationTasksController,
+  AutomationReportsController,
+} from './automations/automations.controller';
 import { SearchController } from './search/search.controller';
 import { AuditController } from './audit/audit.controller';
 import { FieldUploadController } from './work-orders/field-upload.controller';
@@ -115,6 +119,8 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       InsightsController,
       NotificationsController,
       AutomationsController,
+      AutomationTasksController,
+      AutomationReportsController,
       SearchController,
       AuditController,
       InstrumentsController,

@@ -144,6 +144,12 @@ const PerfilPage = preguicosa(() =>
 const AutomacoesPage = preguicosa(() =>
   import('../features/automacoes/lista').then((m) => ({ default: m.AutomacoesPage }))
 );
+const TarefasPage = preguicosa(() =>
+  import('../features/automacoes/tarefas').then((m) => ({ default: m.TarefasPage }))
+);
+const RelatorioAgendadoPage = preguicosa(() =>
+  import('../features/automacoes/tarefas').then((m) => ({ default: m.RelatorioAgendadoPage }))
+);
 
 const raiz = createRootRoute({ component: Outlet });
 
@@ -305,6 +311,13 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/usuarios', MembrosPage),
   rotaProtegida('/configuracoes', MembrosPage),
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
+  rotaProtegida('/tarefas', TarefasPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/relatorios/agendados/$id',
+    component: RelatorioAgendadoPage,
+    beforeLoad: exigirSessao,
+  }),
 ]);
 
 export const router = createRouter({
