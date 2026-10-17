@@ -112,7 +112,15 @@ PR. Nenhuma tinha sido aplicada fora de bancos de teste.
   Com a exigência ligada, a conclusão feita pelo campo cai em "Atenção". Por isso o padrão é desligado.
 - **PF-56:** nenhum código de produção marca `email_verified_at`, então todo e-mail, de automação ou não, fica
   `suppressed: unverified_email`. É coerente com o que já acontecia, e não há transporte de e-mail.
-- **PF-80:** a CSP só passa a bloquear depois da conferência no ambiente publicado.
+- **PF-80:** a CSP só passa a bloquear depois da conferência no ambiente publicado. Já está conferida em parte.
+  - **Demonstração publicada** (Report-Only), depois do merge da PR #28: o hash do script de tema bateu, e a única
+    violação foi a sonda `Function('')` do Zod 4. Ela foi eliminada com `jitless` (`apps/*/src/sem-eval.ts`,
+    importado primeiro em cada `main.tsx`).
+  - **Build local servido com a política em modo de BLOQUEIO:** início, `/apresentacao`, `/entrar`, Painel,
+    Equipamentos e Ordens rodaram com o console vazio. Esse teste também revelou que um build feito em checkout
+    Windows calculava o hash com CRLF; o gerador passou a normalizar para LF, como o navegador.
+  - **Falta:** conferir a **produção conectada**, com a origem real da API e imagens servidas pelo armazenamento,
+    antes de trocar `REPORT_ONLY` para `false`.
 - **Demonstração:** as capturas gravadas (`capturas.json`) têm fatias à meia-noite UTC; os rótulos do gráfico da
   demo aparecem um dia antes até as capturas serem refeitas.
 
