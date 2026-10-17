@@ -342,7 +342,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         </label>
         {(modelo === 'scheduled_report' || modelo === 'reminder') && (
           <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-            Entrega na caixa de entrada do Téchne Care. E-mail: fica na fila — não há transporte de e-mail
+            Entrega na caixa de entrada do sistema. E-mail: fica na fila — não há transporte de e-mail
             configurado nesta instalação.
           </p>
         )}
