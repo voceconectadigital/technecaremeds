@@ -21,6 +21,14 @@ describe('CSP do Pages', () => {
     expect(hashesDosScriptsInline(html)).toEqual([esperado]);
   });
 
+  it('o hash é o do navegador também num checkout Windows (CRLF vira LF)', () => {
+    const comLf = '\n  window.x = 1;\n';
+    const comCrlf = comLf.replace(/\n/g, '\r\n');
+    expect(hashesDosScriptsInline(`<script>${comCrlf}</script>`)).toEqual(
+      hashesDosScriptsInline(`<script>${comLf}</script>`)
+    );
+  });
+
   it('sem unsafe-inline em script, sem moldura, API só onde precisa', () => {
     const p: string = politica({ apiOrigem: 'https://api.x.test', hashes: ["'sha256-abc'"] });
     expect(p).toContain("script-src 'self' 'sha256-abc'");
