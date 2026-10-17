@@ -10,7 +10,7 @@
  * variável que sobrevivesse ao COMMIT apareceria imediatamente na próxima
  * transação. Um pool com N conexões esconderia o problema atrás da sorte.
  */
-import type { Database, SqlClient } from './client';
+import type { Database, SqlClient, LimitesDeTransacao } from './client';
 
 interface PGliteLike {
   query<T>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
@@ -105,9 +105,14 @@ export function protegerPool<P extends PoolComEventos>(pool: P, aoErro: (e: Erro
 }
 
 /** Adaptador para node-postgres com pool. */
-export function pgPoolAdapter(pool: PoolLike, appRole: string | null = 'aurora_app'): Database {
+export function pgPoolAdapter(
+  pool: PoolLike,
+  appRole: string | null = 'aurora_app',
+  limites?: LimitesDeTransacao
+): Database {
   return {
     appRole,
+    ...(limites ? { limites } : {}),
     async query<T = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<T[]> {
       const r = await pool.query<T>(sql, params ? [...params] : undefined);
       return r.rows;

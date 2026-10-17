@@ -67,3 +67,26 @@ describe('erros de dado do PostgreSQL', () => {
     }
   });
 });
+
+describe('tempo-limite por transação de tenant (PF-75)', () => {
+  it('vale dentro da transação e não vaza para a seguinte', async () => {
+    const { createTestDatabase } = await import('../testing/harness');
+    const { withTenant } = await import('../client');
+    const { buildContext, newId } = await import('@aurora/domain');
+    const t = await createTestDatabase();
+    const comLimite = { ...t.db, limites: { consultaMs: 1234, ociosaNaTransacaoMs: 5678 } };
+    const ctx = buildContext({ organizationId: newId(), requestId: 'limite' });
+    const [dentro] = await withTenant(comLimite, ctx, (s) =>
+      s.query<{ c: string; o: string }>(
+        `SELECT current_setting('statement_timeout') c, current_setting('idle_in_transaction_session_timeout') o`
+      )
+    );
+    expect(dentro).toEqual({ c: '1234ms', o: '5678ms' });
+    // sem limite configurado: o padrão (0) — e nada sobrou da transação anterior
+    const [depois] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ c: string }>(`SELECT current_setting('statement_timeout') c`)
+    );
+    expect(depois?.c).toBe('0');
+    await t.close();
+  });
+});

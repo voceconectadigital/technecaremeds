@@ -19,7 +19,10 @@ async function main(): Promise<void> {
     new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX, ...OPCOES_DE_POOL }),
     (e) => logger.error('conexão ociosa do banco caiu; o pool a descartou', { erro: e.message })
   );
-  const db = pgPoolAdapter(pool, env.AURORA_DB_APP_ROLE);
+  const db = pgPoolAdapter(pool, env.AURORA_DB_APP_ROLE, {
+    consultaMs: env.AURORA_DB_TIMEOUT_MS,
+    ociosaNaTransacaoMs: env.AURORA_DB_TIMEOUT_MS,
+  });
 
   // o boot falha se o papel do banco puder ignorar RLS (§37)
   const role = await assertAppRoleIsSafe(db, env.AURORA_ALLOW_UNSAFE_DEV);

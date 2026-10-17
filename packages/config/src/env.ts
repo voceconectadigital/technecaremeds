@@ -45,6 +45,12 @@ export const envSchema = z
       .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, 'nome de papel inválido')
       .default('aurora_app'),
     AURORA_DB_POOL_MAX: z.coerce.number().int().positive().max(100).default(10),
+    /**
+     * Tempo-limite de cada transação de tenant, em ms (0 desliga). Vale para
+     * consulta e para transação ociosa. A API usa este valor; o worker, cinco
+     * vezes ele — varredura de organização grande é legitimamente mais longa.
+     */
+    AURORA_DB_TIMEOUT_MS: z.coerce.number().int().min(0).max(3_600_000).default(60_000),
 
     /**
      * Qual adaptador da porta `AuthProvider` este processo usa.
