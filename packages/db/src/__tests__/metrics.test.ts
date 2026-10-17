@@ -28,7 +28,10 @@ import {
   laborHours,
   firstResponseTime,
   rebuildFacts,
+  serviceRating,
+  openedVsClosed,
 } from '../metrics';
+import { createServiceRequest } from '../service-requests';
 import { createTestDatabase, seedOrganization, seedMember, type TestDatabase } from '../testing/harness';
 
 const ORG = newId(),
@@ -440,6 +443,120 @@ describe('tempo de primeira resposta', () => {
     const r = await withTenant(t.db, ctx, (s) => firstResponseTime(s, PERIODO));
     expect(r.data.value).toBeNull();
     expect(r.definition.comparability).toMatch(/TMAC/);
+  });
+});
+
+describe('avaliação da qualidade (service_rating)', () => {
+  const nota = async (n: number | null, opts: { customerId?: string; local?: string } = {}) =>
+    withTenant(t.db, ctx, async (s) => {
+      const r = await createServiceRequest(s, {
+        customerId: opts.customerId ?? cliente,
+        summary: 'Solicitação avaliada',
+        locationId: opts.customerId ? null : (opts.local ?? uti),
+      });
+      if (n !== null)
+        await s.query(`UPDATE aurora.service_requests SET rating = $2 WHERE id = $1`, [r.id, n]);
+      return r.id;
+    });
+
+  it('sem avaliação a média é nula — e não zero —, com a lista vazia', async () => {
+    const r = await withTenant(t.db, ctx, (s) => serviceRating(s, PERIODO));
+    expect(r.data.average).toBeNull();
+    expect(r.data.count).toBe(0);
+    expect(r.data.distribution).toEqual({ '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 });
+  });
+
+  it('média, quantidade e distribuição saem da MESMA lista; solicitação sem nota fica de fora', async () => {
+    for (const n of [5, 5, 5, 4, 3]) await nota(n);
+    await nota(null);
+    const r = await withTenant(t.db, ctx, (s) => serviceRating(s, PERIODO));
+    expect(r.data.count).toBe(5);
+    expect(r.data.average).toBe(4.4);
+    expect(r.data.distribution).toEqual({ '1': 0, '2': 0, '3': 1, '4': 1, '5': 3 });
+    const soma = Object.values(r.data.distribution).reduce((a, b) => a + b, 0);
+    expect(soma).toBe(r.data.count);
+    expect(r.definition.unit).toBe('score');
+  });
+
+  it('o período recorta: fora dele não conta', async () => {
+    const passado = {
+      from: new Date(Date.now() - 400 * 86_400_000),
+      to: new Date(Date.now() - 390 * 86_400_000),
+    };
+    const r = await withTenant(t.db, ctx, (s) => serviceRating(s, passado));
+    expect(r.data.count).toBe(0);
+    expect(r.data.average).toBeNull();
+  });
+
+  it('filtro de cliente e escopo do vínculo recortam a lista', async () => {
+    const outro = await withTenant(t.db, ctx, (s) => createCustomer(s, { name: 'Outro Hospital' }));
+    await nota(1, { customerId: outro });
+    const so = await withTenant(t.db, ctx, (s) => serviceRating(s, PERIODO, { customerId: outro }));
+    expect(so.data.count).toBe(1);
+    expect(so.data.average).toBe(1);
+    const escopado = await withTenant(t.db, ctx, (s) =>
+      serviceRating(s, PERIODO, { scopeCustomerIds: [cliente] })
+    );
+    expect(escopado.data.count).toBe(5);
+    expect(escopado.data.average).toBe(4.4);
+  });
+});
+
+describe('Chamados Abertos x Encerrados (AxF)', () => {
+  const dias = (n: number) => new Date(Date.now() - n * 86_400_000);
+
+  /** Cria `abertas` OS dentro da janela e `encerradas` concluídas dentro dela, datando o fato. */
+  async function cenario(janela: { from: Date; to: Date }, abertas: number, encerradas: number) {
+    const meio = new Date((janela.from.getTime() + janela.to.getTime()) / 2);
+    const antes = new Date(janela.from.getTime() - 5 * 86_400_000);
+    const ids: string[] = [];
+    for (let i = 0; i < Math.max(abertas, encerradas); i++) ids.push(await os({ concluir: i < encerradas }));
+    await withTenant(t.db, ctx, async (s) => {
+      for (let i = 0; i < ids.length; i++) {
+        const abertaNaJanela = i < abertas;
+        await s.query(
+          `UPDATE aurora.fact_work_order SET opened_at = $2::timestamptz, completed_at = CASE WHEN $4::boolean THEN $3::timestamptz ELSE NULL END
+            WHERE work_order_id = $1`,
+          [ids[i], abertaNaJanela ? meio : antes, meio, i < encerradas]
+        );
+      }
+    });
+  }
+
+  it('abaixo de 100 %: 1 encerrada para 4 abertas = 25 %', async () => {
+    const j = { from: dias(300), to: dias(290) };
+    await cenario(j, 4, 1);
+    const r = await withTenant(t.db, ctx, (s) => openedVsClosed(s, j));
+    expect(r.data).toMatchObject({ opened: 4, closed: 1, numerator: 1, denominator: 4, percent: 25 });
+  });
+
+  it('exatamente 100 %', async () => {
+    const j = { from: dias(250), to: dias(240) };
+    await cenario(j, 2, 2);
+    const r = await withTenant(t.db, ctx, (s) => openedVsClosed(s, j));
+    expect(r.data).toMatchObject({ opened: 2, closed: 2, percent: 100 });
+  });
+
+  it('acima de 100 %: encerrar no período o que foi aberto antes conta (fluxo, não coorte)', async () => {
+    const j = { from: dias(200), to: dias(190) };
+    await cenario(j, 1, 3); // 1 aberta na janela, 3 encerradas nela (2 abertas antes)
+    const r = await withTenant(t.db, ctx, (s) => openedVsClosed(s, j));
+    expect(r.data).toMatchObject({ opened: 1, closed: 3, percent: 300 });
+  });
+
+  it('é composto pelas MESMAS contagens do Painel — sem terceira fórmula', async () => {
+    const r = await withTenant(t.db, ctx, (s) => openedVsClosed(s, PERIODO));
+    const ab = await withTenant(t.db, ctx, (s) => workOrdersOpened(s, PERIODO));
+    const en = await withTenant(t.db, ctx, (s) => workOrdersCompleted(s, PERIODO));
+    expect(r.data.opened).toBe(ab.data.count);
+    expect(r.data.closed).toBe(en.data.count);
+  });
+
+  it('sem OS aberta no período, o percentual é nulo (sem dado), não 0 % nem 100 %', async () => {
+    const vazio = { from: dias(100), to: dias(90) };
+    const r = await withTenant(t.db, ctx, (s) => openedVsClosed(s, vazio));
+    expect(r.data.percent).toBeNull();
+    expect(r.definition.exclusions.join(' ')).toMatch(/100 %/);
   });
 });
 

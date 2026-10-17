@@ -6,7 +6,7 @@ O estado real do produto continua sendo `docs/AI-HANDOFF.md`; o histórico de
 pedidos, `docs/NOVAS-SOLICITACOES.md`.
 
 **HEAD inicial:** `5207188` (main) · **Na main:** `27a5e8c` (PR #22 + #23, CI verde, run 38994905170) — fases 1–12 **VALIDADAS NA MAIN**; Fase 9 = **FUNDAÇÃO IMPLEMENTADA, REFINAMENTO AGUARDANDO PDFs**; Fase 13 **BLOQUEADA** · **CI verde do PR:** `ac20895` (run 38992481765) · **VALIDADO** = teste de API e/ou E2E passando no CI com PostgreSQL 16 real · **Migration mais recente na partida:** `0059` ·
-**Próxima livre:** `0060` · Baseline: `npm run typecheck` verde.
+**Próxima livre na partida:** `0060` (usada até `0068`; a Fase 9-B usou `0069`) · Baseline: `npm run typecheck` verde.
 
 Precedência em conflito: (1) decisão mais recente do cliente · (2) código/migrations
 · (3) documentação anterior.
@@ -171,6 +171,28 @@ P2/BLOQUEADOS: Expert (fórmulas) · hardware/geolocalizador · IA real · integ
 | R-06 | PDF/engine de relatório (reutiliza escritor próprio) | PARCIAL | VALIDADO | api `reports.controller` (`?format=pdf`, escritor próprio) | — | `api-relatorios` | 090bd84 | PDF provisório com faixa |
 
 > **Decisão do cliente (16/10/2026, mensagem posterior à reunião):** "Refinamento dos relatórios Basic / Advanced / Expert será realizado em rodada dedicada após análise dos PDFs oficiais fornecidos pelo cliente." Nesta rodada só a **fundação**: níveis, estrutura de geração, filtros, seleção de métricas, dados reais já disponíveis, arquitetura de PDF, permissões, UI e contratos. **Não** reproduzir layout final, fórmulas, gráficos inexistentes, composição de páginas nem indicadores Expert não formalizados. Onde faltar definição: `AGUARDANDO MODELO PDF OFICIAL`.
+
+## Fase 9-B — Indicadores e metas dos relatórios (17/10/2026 — Fase 1 segura)
+
+Base: `docs/AUDITORIA-INDICADORES-BASIC-ADVANCED-EXPERT.md` (§17 registra a implementação). **Só o que não
+depende das respostas do Anderson.** Nada de MTTR/MTBF novos, TMPA, TMRG, disponibilidade temporal,
+interno × externo, crítico, obsolescência, assiduidade, glosa, layout final de PDF ou deploy.
+
+| ID | Demanda | Status | Arquivos | Migration | Testes | Bloqueio |
+| --- | --- | --- | --- | --- | --- | --- |
+| RI-01 | Catálogo central de indicadores (código, nome, descrição, unidade, categoria, modelos, ACTIVE/PROVISIONAL/PENDING_DEFINITION, sentido, fonte); Basic/Advanced/Expert preservados; Expert sem herança | IMPLEMENTADO | domain `report-tiers.ts` | — | `report-catalog.test`, `api-relatorios` | — |
+| RI-02 | Metas configuráveis por indicador × organização × cliente × contrato × vigência (contrato → cliente → organização; SEM META CONFIGURADA) | IMPLEMENTADO | db `indicator-targets.ts`; api `indicator-targets.controller.ts`; domain `indicator-targets.ts` | 0069 | `indicator-targets.test` (RLS adversarial), `api-metas-indicadores` | — |
+| RI-03 | RBAC: gestor/admin configuram; operador só lê; solicitante sem acesso | IMPLEMENTADO | permissão `insight.manage_targets` | 0069 | `api-metas-indicadores`, `permissions.test` | — |
+| RI-04 | Avaliação da qualidade (`service_requests.rating`): média, quantidade, distribuição 1–5 | IMPLEMENTADO | db `metrics.serviceRating` | — | `metrics.test`, `api-relatorios` | — |
+| RI-05 | AxF — Chamados Abertos x Encerrados (numerador/denominador; pode passar de 100 %), separado do ICRS | IMPLEMENTADO | db `metrics.openedVsClosed` | — | `metrics.test` (<100, =100, >100, sem dado) | — |
+| RI-06 | ICRS: calculadora genérica de razão; população NÃO fixada | PENDENTE | domain `ratioPercent` | — | `report-catalog.test` | BLOQUEADO — CLIENTE (P-04) |
+| RI-07 | ACM / conformidades: reutilizam `planBoard`; preventiva PROVISIONAL; calibração/TSE/qualificação separadas e ACTIVE | IMPLEMENTADO | db `relatorios.ts` | — | `api-relatorios` | P-06, P-07, P-10 |
+| RI-08 | Treinamentos realizados/solicitados | PENDENTE (DATA_MODEL) | catálogo `training_ratio` | — | `report-catalog.test` | sem vínculo solicitado → realizado (auditoria §17.4) |
+| RI-09 | Relatório lê catálogo e metas; PENDING_DEFINITION nunca entra; PROVISIONAL só explícito e marcado | IMPLEMENTADO | db `relatorios.ts`; api `reports.controller.ts` | — | `api-relatorios`, `api-metas-indicadores` | — |
+| RI-10 | UI: Gerar relatório (modelo → período → cliente → contrato → indicadores) e Configurações › Metas | IMPLEMENTADO | web `painel/relatorio.tsx`, `configuracoes/metas.tsx` | — | e2e `relatorios.spec`, `metas-indicadores.spec` (CI) | — |
+| RI-11 | Expert: estrutura dos 16 itens do IMR registrada, todos bloqueados | IMPLEMENTADO (estrutura) | catálogo | — | `report-catalog.test` | P-03, P-05, P-08, P-09, P-11, P-14, P-15 |
+| RI-12 | Glosa / desconto do IMR | BLOQUEADO — CLIENTE | — | — | — | P-14 |
+| RI-13 | PDF oficial dos três modelos, narrativa, assinatura | FUTURO | — | — | — | rodada posterior |
 
 ## Fase 10 — Automações (P1)
 

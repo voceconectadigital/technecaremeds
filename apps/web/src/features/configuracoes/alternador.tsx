@@ -20,6 +20,7 @@ export function AlternadorDeConfiguracoes() {
   const caminho = useRouterState({ select: (s) => s.location.pathname });
   const emAutomacoes = caminho.startsWith('/configuracoes/automacoes');
   const emNegocios = caminho.startsWith('/configuracoes/negocios');
+  const emMetas = caminho.startsWith('/configuracoes/metas');
   // "Novo negócio" só aparece para o admin global de plataforma (Fase 11).
   const { data: eu } = useApiQuery(platformMe) as { data: { platform_admin: boolean } | undefined };
 
@@ -27,7 +28,8 @@ export function AlternadorDeConfiguracoes() {
     <AlternadorDeTelas
       label="Configurações"
       itens={[
-        { para: '/usuarios', rotulo: 'Usuários', ativo: !emAutomacoes && !emNegocios },
+        { para: '/usuarios', rotulo: 'Usuários', ativo: !emAutomacoes && !emNegocios && !emMetas },
+        { para: '/configuracoes/metas', rotulo: 'Metas', ativo: emMetas },
         { para: '/configuracoes/automacoes', rotulo: 'Automações', ativo: emAutomacoes },
         ...(eu?.platform_admin
           ? [{ para: '/configuracoes/negocios', rotulo: 'Novo negócio', ativo: emNegocios }]

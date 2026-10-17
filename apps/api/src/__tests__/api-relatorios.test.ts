@@ -147,20 +147,24 @@ const gerar = (quem: string, body: Record<string, unknown>, pdf = false) =>
     .send({ from: DE, to: ATE, ...body });
 
 describe('catálogo', () => {
-  it('três modelos; layout aguardando o modelo oficial; Expert sem fórmula marcado', async () => {
+  it('três modelos; layout aguardando o modelo oficial; cada indicador com código, unidade, situação e sentido', async () => {
     const r = await http.get('/v1/reports/catalog').set(auth(GESTORA));
     expect(r.status).toBe(200);
     expect(reportsCatalog.response.safeParse(r.body).success).toBe(true);
     expect(r.body.tiers.map((x: { label: string }) => x.label)).toEqual(['Basic', 'Advanced', 'Expert']);
     expect(r.body.layout_status).toBe('awaiting_official_model');
-    const fhemig = r.body.indicators.find((i: { key: string }) => i.key === 'fhemig_indicators');
-    expect(fhemig.status).toBe('awaiting_official_model');
-    expect(fhemig.note).toMatch(/AGUARDANDO MODELO PDF OFICIAL/);
+    const tmpa = r.body.indicators.find((i: { key: string }) => i.key === 'first_response_time');
+    expect(tmpa.state).toBe('PENDING_DEFINITION');
+    expect(tmpa.tiers).toEqual(['expert']);
+    expect(tmpa.target_direction).toBe('LOWER_IS_BETTER');
+    expect(tmpa.note).toMatch(/P-03/);
+    const rating = r.body.indicators.find((i: { key: string }) => i.key === 'service_rating');
+    expect(rating).toMatchObject({ state: 'ACTIVE', unit: 'score', tiers: ['basic', 'advanced', 'expert'] });
   });
 });
 
 describe('geração com dados reais', () => {
-  it('BASIC: chamados abertos = o número do Painel, com o mesmo filtro', async () => {
+  it('BASIC sem seleção: só ACTIVE; chamados abertos = o número do Painel, com o mesmo filtro', async () => {
     const r = await gerar(GESTORA, { tier: 'basic' });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(reportsGenerate.response.safeParse(r.body).success).toBe(true);
@@ -168,31 +172,118 @@ describe('geração com dados reais', () => {
     const painel = await http.get(`/v1/insights/control-panel?from=${DE}&to=${ATE}`).set(auth(GESTORA));
     expect(abertos.value).toBe(painel.body.kpis.opened.data.count);
     expect(abertos.value).toBe(4);
-    expect(r.body.sections.some((x: { key: string }) => x.key === 'sla_compliance')).toBe(false);
+    const chaves = r.body.sections.map((x: { key: string }) => x.key);
+    expect(chaves).not.toContain('sla_compliance'); // é do Advanced
+    expect(chaves).not.toContain('mttr'); // PROVISIONAL: só se pedido
+    r.body.sections.forEach((x: { state: string }) => expect(x.state).toBe('ACTIVE'));
   });
 
-  it('ADVANCED herda o Basic e acrescenta SLA; obsolescência sem valor (aguardando definição)', async () => {
+  it('BASIC: PENDING_DEFINITION nunca entra; fica listado em "pending", sem número', async () => {
+    const r = await gerar(GESTORA, { tier: 'basic' });
+    const pend = r.body.pending.map((x: { key: string }) => x.key);
+    expect(pend).toEqual(expect.arrayContaining(['requests_fulfilled_ratio', 'training_ratio']));
+    const chaves = r.body.sections.map((x: { key: string }) => x.key);
+    expect(chaves).not.toContain('requests_fulfilled_ratio');
+    expect(chaves).not.toContain('training_ratio');
+    const pedido = await gerar(GESTORA, { tier: 'basic', indicators: ['training_ratio'] });
+    expect(pedido.status).toBe(422);
+    expect(pedido.body.message).toMatch(/aguardando definição/);
+  });
+
+  it('PROVISIONAL só com pedido explícito, e sai marcado', async () => {
+    const r = await gerar(GESTORA, { tier: 'basic', indicators: ['mttr', 'compliance_preventive'] });
+    expect(r.status).toBe(201);
+    r.body.sections.forEach((x: { state: string }) => expect(x.state).toBe('PROVISIONAL'));
+    const mttr = r.body.sections.find((x: { key: string }) => x.key === 'mttr');
+    expect(mttr.unit).toBe('minutes');
+    expect(mttr.note).toMatch(/P-01/);
+  });
+
+  it('ADVANCED herda o Basic seguro e acrescenta SLA, evolução, backlog, OS por situação e AxF', async () => {
     const r = await gerar(GESTORA, { tier: 'advanced' });
     const chaves = r.body.sections.map((x: { key: string }) => x.key);
-    expect(chaves).toContain('mttr');
-    expect(chaves).toContain('sla_compliance');
-    const obs = r.body.sections.find((x: { key: string }) => x.key === 'obsolescence');
-    expect(obs.status).toBe('awaiting_definition');
-    expect(obs.value).toBeNull();
+    for (const k of [
+      'work_orders_opened',
+      'service_rating',
+      'sla_compliance',
+      'work_order_evolution',
+      'backlog',
+      'work_orders_by_status',
+      'opened_vs_closed',
+    ]) {
+      expect(chaves, k).toContain(k);
+    }
+    expect(chaves).not.toContain('obsolescence');
+    expect(r.body.pending.map((x: { key: string }) => x.key)).toContain('obsolescence');
   });
 
-  it('EXPERT: indicadores sem modelo saem SEM número', async () => {
+  it('AxF: numerador e denominador expostos; é o mesmo número do Painel (4 abertas, 0 encerradas)', async () => {
+    const r = await gerar(GESTORA, { tier: 'advanced', indicators: ['opened_vs_closed'] });
+    const axf = r.body.sections[0];
+    expect(axf.key).toBe('opened_vs_closed');
+    expect(axf.detail).toMatchObject({ numerator: 0, denominator: 4, opened: 4, closed: 0 });
+    expect(axf.value).toBe(0);
+    expect(axf.unit).toBe('percent');
+  });
+
+  it('avaliação da qualidade: sem avaliação, média nula e distribuição zerada', async () => {
+    const r = await gerar(GESTORA, { tier: 'basic', indicators: ['service_rating'] });
+    const sec = r.body.sections[0];
+    expect(sec.value).toBeNull();
+    expect(sec.samples).toBe(0);
+    expect(sec.unit).toBe('score');
+    expect(sec.detail.distribution).toEqual({ '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 });
+  });
+
+  it('EXPERT não herda o Basic: só o conjunto do IMR; os bloqueados saem do relatório', async () => {
     const r = await gerar(GESTORA, { tier: 'expert' });
-    const fhemig = r.body.sections.find((x: { key: string }) => x.key === 'fhemig_indicators');
-    expect(fhemig.value).toBeNull();
-    expect(fhemig.status).toBe('awaiting_official_model');
+    expect(r.status).toBe(201);
+    const chaves = r.body.sections.map((x: { key: string }) => x.key);
+    expect(chaves).toEqual(['service_rating']); // único ACTIVE do IMR; ACM é PROVISIONAL
+    for (const k of ['mttr', 'mtbf', 'work_orders_opened', 'sla_compliance']) expect(chaves).not.toContain(k);
+    const pend = r.body.pending.map((x: { key: string }) => x.key);
+    expect(pend).toEqual(
+      expect.arrayContaining([
+        'first_response_time',
+        'availability_global',
+        'tmrg_internal',
+        'critical_resolution_global',
+        'quality_activities_on_time',
+        'attendance',
+        'imr_penalty',
+        'requests_fulfilled_ratio',
+        'training_ratio',
+      ])
+    );
+    const glosa = await gerar(GESTORA, { tier: 'expert', indicators: ['imr_penalty'] });
+    expect(glosa.status).toBe(422);
+    const acm = await gerar(GESTORA, { tier: 'expert', indicators: ['compliance_preventive'] });
+    expect(acm.status).toBe(201);
+    expect(acm.body.sections[0].state).toBe('PROVISIONAL');
   });
 
-  it('seleção de indicadores; indicador de outro modelo → 422', async () => {
+  it('seleção de indicadores (na ordem do catálogo); indicador de outro modelo → 422', async () => {
     const ok = await gerar(GESTORA, { tier: 'basic', indicators: ['mttr', 'work_orders_completed'] });
-    expect(ok.body.sections.map((x: { key: string }) => x.key)).toEqual(['mttr', 'work_orders_completed']);
+    expect(ok.body.sections.map((x: { key: string }) => x.key)).toEqual(['work_orders_completed', 'mttr']);
     const fora = await gerar(GESTORA, { tier: 'basic', indicators: ['sla_compliance'] });
     expect(fora.status).toBe(422);
+    const ghost = await gerar(GESTORA, { tier: 'advanced', indicators: ['nao_existe'] });
+    expect(ghost.status).toBe(422);
+  });
+
+  it('todo indicador reportável de cada modelo tem cálculo ligado (catálogo ↔ relatório)', async () => {
+    const cat = await http.get('/v1/reports/catalog').set(auth(GESTORA));
+    for (const tier of ['basic', 'advanced', 'expert'] as const) {
+      const chaves = cat.body.indicators
+        .filter(
+          (i: { tiers: string[]; state: string }) =>
+            i.tiers.includes(tier) && i.state !== 'PENDING_DEFINITION'
+        )
+        .map((i: { key: string }) => i.key);
+      const r = await gerar(GESTORA, { tier, indicators: chaves });
+      expect(r.status, `${tier}: ${JSON.stringify(r.body)}`).toBe(201);
+      expect(r.body.sections.map((x: { key: string }) => x.key)).toEqual(chaves);
+    }
   });
 
   it('filtro de cliente; quem só vê o Hospital A conta só A; B fora do escopo → 404', async () => {
