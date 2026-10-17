@@ -168,6 +168,42 @@ export const NOTIFICATION_TYPES: readonly NotificationTypeDefinition[] = Object.
     dedupeMinutes: 1440,
     bypassesQuietHours: false,
   },
+  /*
+   * AVISOS DE AUTOMAÇÃO (pente-fino 17/10/2026). Não nascem de evento de
+   * domínio — a regra já sabe quem recebe —, mas precisam estar no catálogo:
+   * sem isto, a pessoa não conseguia desligar o e-mail do relatório agendado,
+   * porque a rota de preferências recusa tipo desconhecido.
+   */
+  {
+    key: 'automation.scheduled_report',
+    label: 'Relatório agendado',
+    event: 'automation.schedule',
+    audiences: [],
+    channels: ['in_app', 'email'],
+    phase: 'F2',
+    dedupeMinutes: 0,
+    bypassesQuietHours: false,
+  },
+  {
+    key: 'automation.reminder',
+    label: 'Lembrete de automação',
+    event: 'automation.schedule',
+    audiences: [],
+    channels: ['in_app', 'email'],
+    phase: 'F2',
+    dedupeMinutes: 0,
+    bypassesQuietHours: false,
+  },
+  {
+    key: 'automation.task',
+    label: 'Tarefa de automação (5W2H/PDCA)',
+    event: 'automation.schedule',
+    audiences: [],
+    channels: ['in_app', 'email'],
+    phase: 'F2',
+    dedupeMinutes: 0,
+    bypassesQuietHours: false,
+  },
 ]);
 
 const POR_EVENTO = new Map<string, NotificationTypeDefinition[]>();

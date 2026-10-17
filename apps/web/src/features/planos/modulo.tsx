@@ -103,9 +103,11 @@ interface Board {
 /* recortes de tempo                                                           */
 /* -------------------------------------------------------------------------- */
 
+// Meia-noite LOCAL, e não UTC: em Brasília, a meia-noite UTC é 21h do dia
+// anterior, e os recortes começavam um dia antes (PF-72).
 function dia(d: Date): Date {
   const x = new Date(d);
-  x.setUTCHours(0, 0, 0, 0);
+  x.setHours(0, 0, 0, 0);
   return x;
 }
 const DIA = 86_400_000;
@@ -114,8 +116,8 @@ const RECORTES_VISAO = {
   ano: {
     rotulo: 'Ano corrente',
     calc: () => ({
-      from: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)),
-      to: new Date(Date.UTC(new Date().getUTCFullYear() + 1, 0, 1)),
+      from: new Date(new Date().getFullYear(), 0, 1),
+      to: new Date(new Date().getFullYear() + 1, 0, 1),
     }),
   },
   '90d': {
@@ -434,9 +436,11 @@ function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; 
                     <RateRing
                       value={b.rate}
                       label="Conformidade dos planos"
-                      tone={
-                        b.rate === null ? 'neutral' : b.rate >= 90 ? 'good' : b.rate >= 70 ? 'warn' : 'bad'
-                      }
+                      // Sem cor de bom/ruim (PF-55): a taxa soma todos os tipos de
+                      // plano, e não existe UMA meta para essa soma — 90/70 fixos
+                      // seriam uma meta inventada. As metas por tipo estão nos
+                      // indicadores de conformidade do relatório.
+                      tone="neutral"
                       size={140}
                       caption={`${b.totals.done} de ${b.totals.scheduled - b.totals.skipped}`}
                     />

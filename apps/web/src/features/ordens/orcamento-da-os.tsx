@@ -26,7 +26,7 @@ import {
   type InventoryItem,
   type WorkOrderDetail,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { ApiError, diaLocalDaqui, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 
 interface Linha {
   tipo: 'service' | 'part';
@@ -71,7 +71,8 @@ export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; on
     { tipo: 'service', itemId: '', descricao: 'Hora técnica', quantidade: '1', unitario: '' },
   ]);
   const { can } = usePermissions();
-  const em15dias = new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10);
+  // Dia LOCAL: depois das 21h em Brasília, o dia UTC já é amanhã (PF-72).
+  const em15dias = diaLocalDaqui(15);
   const [validade, setValidade] = useState(em15dias);
   const [aprovador, setAprovador] = useState('');
   const [novoContato, setNovoContato] = useState({ nome: '', email: '' });

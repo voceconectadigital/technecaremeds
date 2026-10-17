@@ -362,6 +362,10 @@ async function deliverTo(
  * desligado, e-mail não verificado ou bloqueado, resumo e silêncio.
  */
 function tipoDeAutomacao(typeKey: string): NotificationTypeDefinition {
+  // O catálogo tem os três tipos de automação; o objeto abaixo só cobre um tipo
+  // de automação novo que ainda não tenha entrado lá.
+  const doCatalogo = notificationType(typeKey);
+  if (doCatalogo) return doCatalogo;
   return {
     key: typeKey,
     label: 'Automação',

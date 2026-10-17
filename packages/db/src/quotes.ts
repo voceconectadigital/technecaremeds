@@ -779,12 +779,16 @@ async function waitForCustomer(session: TenantSession, workOrderId: string | nul
  * envia (o financeiro, o gestor) não precisa poder executar OS para que ela
  * passe a aguardar o cliente: a sessão do efeito recebe SÓ a permissão da
  * aresta (`work_order.execute`), e só durante esta chamada.
+ *
+ * `work_order.execute_any` vai junto (PF-14): `execute` sozinho passou a valer
+ * só para a OS atribuída a quem executa, e esta mudança não é execução pessoal
+ * de ninguém — é efeito comercial sobre a OS, qualquer que seja o responsável.
  */
 function efeitoDoOrcamento(session: TenantSession): TenantSession {
   return {
     context: {
       ...session.context,
-      permissions: new Set([...session.context.permissions, 'work_order.execute']),
+      permissions: new Set([...session.context.permissions, 'work_order.execute', 'work_order.execute_any']),
     },
     query: (sql, params) => session.query(sql, params),
   };
