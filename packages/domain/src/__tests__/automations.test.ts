@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  validateActionsForTrigger,
   readField,
   evaluateComparison,
   evaluateConditions,
@@ -237,5 +238,15 @@ describe('simulação obrigatória', () => {
   it('o corte de inundação é o declarado', () => {
     expect(summarizeSimulation(FLOOD_THRESHOLD - 1, 1).floodRisk).toBe(false);
     expect(summarizeSimulation(FLOOD_THRESHOLD, 1).floodRisk).toBe(true);
+  });
+});
+
+describe('uma tarefa por execução', () => {
+  it('duas ações "criar tarefa" na mesma regra são recusadas ao salvar', () => {
+    const tarefa = { kind: 'create_task', params: { method: 'task', title: 'x' } };
+    expect(validateActionsForTrigger('schedule', [tarefa])).toEqual([]);
+    expect(validateActionsForTrigger('schedule', [tarefa, tarefa]).join(' ')).toMatch(
+      /no máximo uma tarefa por execução/
+    );
   });
 });

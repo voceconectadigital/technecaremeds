@@ -346,13 +346,23 @@ export function validateActionsForTrigger(
   trigger: TriggerKind,
   actions: ReadonlyArray<{ kind?: unknown }>
 ): string[] {
-  return actions.flatMap((a, i) => {
+  const erros = actions.flatMap((a, i) => {
     const def = typeof a.kind === 'string' ? actionDefinition(a.kind) : undefined;
     if (!def || def.triggers.includes(trigger)) return [];
     return [
       `actions[${i}]: "${def.label}" não se aplica a gatilho ${trigger === 'schedule' ? 'agendado' : 'de evento'}`,
     ];
   });
+  /*
+   * UMA tarefa por execução (pente-fino 17/10/2026). A ocorrência é a chave da
+   * tarefa (`automation_tasks`: regra + horário, 0067). Duas ações "criar tarefa"
+   * na mesma regra batiam nessa unicidade em TODA execução: a primeira tarefa
+   * ficava, a segunda falhava, e a regra aparecia como falha para sempre.
+   */
+  if (actions.filter((a) => a.kind === 'create_task').length > 1) {
+    erros.push('uma regra cria no máximo uma tarefa por execução; use uma regra para cada tarefa');
+  }
+  return erros;
 }
 
 export function actionDefinition(kind: string): ActionDefinition | undefined {

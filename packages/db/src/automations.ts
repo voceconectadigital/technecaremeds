@@ -881,6 +881,13 @@ async function enviarRelatorio(
     );
     gerados++;
   }
+  // Ninguém recebeu: é falha, não sucesso com zero (pente-fino 17/10/2026). Sem
+  // isto, uma regra cujo setor foi apagado ficava "executada" todo mês, vazia.
+  if (gerados === 0 && pulados.length > 0) {
+    throw new ValidationError(
+      `nenhum relatório gerado: ${pulados.length} destinatário(s) pulado(s) — ${[...new Set(pulados)].join(', ')}`
+    );
+  }
   return (
     `${gerados} relatório(s) na caixa de entrada; e-mail na fila (sem transporte configurado)` +
     (pulados.length > 0

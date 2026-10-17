@@ -256,7 +256,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
               valor={mttr.valor}
               unidade={mttr.unidade}
               icone={Timer}
-              dica={k.mttr.coverage?.note ?? `${k.mttr.data.samples} corretivas concluídas`}
+              // PROVISÓRIO no catálogo (P-01): a tela diz, como o relatório diz.
+              dica={`Provisório · ${k.mttr.coverage?.note ?? `${k.mttr.data.samples} corretivas concluídas`}`}
               vazio={SEM_DADOS}
               link="/indicadores"
             />
@@ -265,7 +266,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
               valor={mtbf.valor}
               unidade={mtbf.unidade}
               icone={Activity}
-              dica={`${k.mtbf.data.assetsWithInterval} equipamentos com 2+ falhas`}
+              // PROVISÓRIO no catálogo (P-02).
+              dica={`Provisório · ${k.mtbf.data.assetsWithInterval} equipamentos com 2+ falhas`}
               vazio="Precisa de 2+ falhas por equipamento."
               link="/indicadores"
             />
@@ -310,7 +312,9 @@ function Conteudo({ d }: { d: ControlPanel }) {
               link="/ordens?vista=lista&categoria=done"
             />
             <Kpi
-              rotulo="Preventivas vencidas"
+              // O quadro soma TODOS os tipos de plano (preventiva, calibração, TSE,
+              // qualificação); "Preventivas" prometia menos do que conta.
+              rotulo="Itens de plano vencidos"
               valor={prev && prev.totals.scheduled > 0 ? prev.totals.late : null}
               icone={TriangleAlert}
               tom={prev && prev.totals.late > 0 ? 'bad' : 'neutral'}
