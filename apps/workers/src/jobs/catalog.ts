@@ -29,6 +29,7 @@ import {
   sweepExpiredQuotes,
   sweepContractAlerts,
   sweepDocumentExpiry,
+  runScheduledAutomations,
 } from '@aurora/db';
 
 /** O que um trabalho devolve: números para o registro, nunca a linha inteira. */
@@ -70,6 +71,19 @@ function dataDe(now: Date): string {
 }
 
 export const TENANT_JOBS: readonly TenantJob[] = Object.freeze([
+  {
+    name: 'aurora.automations.schedule',
+    scope: 'tenant',
+    // De cinco em cinco minutos. A regra agendada diz "segunda 08:00"; a
+    // varredura acha a passada devida mais recente e a reivindica uma vez só
+    // (índice único regra × passada) — atraso de minutos, nunca duplicata.
+    cron: '*/5 * * * *',
+    description: 'Roda as automações agendadas (relatório, lembrete, tarefa, 5W2H, PDCA)',
+    async run(session, now) {
+      const r = await runScheduledAutomations(session, now);
+      return { rules: r.rules, ran: r.ran, failed: r.failed, skipped: r.skipped };
+    },
+  },
   {
     name: 'aurora.sla.sweep',
     scope: 'tenant',
@@ -155,13 +169,5 @@ export function findJob(name: string): JobDefinition | undefined {
  *     emita o resumo. A §26 diz "resumo diário ou semanal" e não diz a que
  *     hora; escolher a hora aqui seria inventar requisito. Falta a função,
  *     não o agendamento.
- *
- *   · **automação com gatilho de agenda** — o §29 prevê regra do tipo
- *     `schedule` ("toda segunda 07:00"), mas o motor de automação hoje só
- *     responde a EVENTO (`runAutomations` recebe um evento de entrada). Não há
- *     onde o agendador pendurar a regra periódica.
  */
-export const JOBS_SEM_FUNCAO_DE_DOMINIO = Object.freeze([
-  'digest de notificações (§26)',
-  'automação com gatilho de agenda (§29)',
-]);
+export const JOBS_SEM_FUNCAO_DE_DOMINIO = Object.freeze(['digest de notificações (§26)']);

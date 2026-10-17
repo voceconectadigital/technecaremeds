@@ -68,8 +68,8 @@ export async function provisionWorkOrderStates(session: TenantSession): Promise<
         // palavra da equipe, ou nada.
         `INSERT INTO aurora.work_order_statuses
            (id, organization_id, key, label, customer_label, category, color, position,
-            requires_wait_reason, is_system, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6::aurora.status_category, $7, $8, $9, true, $10)`,
+            requires_wait_reason, is_system, created_by, visible_on_board)
+         VALUES ($1, $2, $3, $4, $5, $6::aurora.status_category, $7, $8, $9, true, $10, $11)`,
         [
           id,
           org,
@@ -81,6 +81,7 @@ export async function provisionWorkOrderStates(session: TenantSession): Promise<
           s.position,
           s.requiresWaitReason ?? false,
           session.context.actorId,
+          s.visibleOnBoard ?? true,
         ]
       );
     }

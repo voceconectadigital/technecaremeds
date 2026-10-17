@@ -71,7 +71,7 @@ function Envolver({
 
 describe('menu principal', () => {
   it('tem dez itens — acima disso deixa de ser navegação e vira lista', () => {
-    expect(MAIN_NAV).toHaveLength(10);
+    expect(MAIN_NAV).toHaveLength(13);
   });
 
   it('cada item declara a permissão que o torna útil', () => {

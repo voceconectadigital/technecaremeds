@@ -27,6 +27,7 @@ export * from './operations/auth';
 export * from './operations/platform';
 export * from './operations/session';
 export * from './operations/members';
+export * from './operations/execucao-guiada';
 export * from './operations/catalogs';
 export * from './operations/work-order-detail';
 export * from './operations/assets';

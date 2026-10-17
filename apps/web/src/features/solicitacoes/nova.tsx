@@ -9,8 +9,12 @@
  * preenchido de qualquer jeito só para o botão liberar.
  *
  * Por isso o obrigatório é o mínimo que torna o pedido acionável: para quem, e
- * o que está acontecendo. Equipamento, local e sintoma ajudam a triagem e não
- * travam o envio.
+ * o que está acontecendo.
+ *
+ * A ORDEM É A DO CLIENTE (reunião 16/10/2026): Cliente → Equipamento → Tipo →
+ * Detalhes → Urgência. Escolhido o cliente, a lista de equipamentos é SÓ a dele
+ * — e só dos setores que esta pessoa alcança (o servidor recorta e confere de
+ * novo ao gravar). O campo "Sintoma" saiu da tela; o dado antigo continua.
  *
  * O AVISO DE DUPLICIDADE VEM DEPOIS, e não bloqueia (§08). Entre "consultar" e
  * "enviar" alguém pode ter aberto a mesma; avisar depois, apontando a
@@ -21,8 +25,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button, Card, Field, Input, Select, Skeleton, Textarea, useToast } from '@aurora/ui';
-import { requestCreate, requestsQueue, catalogItems, type CatalogItem } from '@aurora/contracts';
-import { customersList, type Customer } from '@aurora/contracts';
+import {
+  requestCreate,
+  requestsQueue,
+  assetsList,
+  customersList,
+  SERVICE_REQUEST_TYPE_KEYS,
+  type AssetRow,
+  type Customer,
+} from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { DialogoNovoCliente } from '../clientes/novo-cliente';
@@ -35,6 +46,16 @@ const PRIORIDADES = [
   { valor: 'emergency', rotulo: 'Emergência' },
 ] as const;
 
+export const TIPOS_DE_SOLICITACAO: Record<(typeof SERVICE_REQUEST_TYPE_KEYS)[number], string> = {
+  corrective: 'Corretiva',
+  preventive: 'Preventiva',
+  technical_instruction: 'Instrução Técnica',
+  training: 'Treinamento',
+  calibration: 'Calibração',
+  electrical_safety: 'Teste de Segurança Elétrica',
+  qualification: 'Qualificação',
+};
+
 export function NovaSolicitacaoPage() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -43,7 +64,8 @@ export function NovaSolicitacaoPage() {
   const [resumo, setResumo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [prioridade, setPrioridade] = useState<string>('none');
-  const [sintoma, setSintoma] = useState('');
+  const [equipamento, setEquipamento] = useState('');
+  const [tipo, setTipo] = useState<string>('corrective');
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
   const [cadastrandoCliente, setCadastrandoCliente] = useState(false);
   /** O cliente cadastrado aqui mesmo, enquanto a lista ainda não voltou com ele. */
@@ -54,12 +76,6 @@ export function NovaSolicitacaoPage() {
   const { data: clientes, isLoading: carregandoClientes } = useApiQuery(customersList, undefined, {
     staleTime: 5 * 60_000,
   }) as { data: { items: Customer[]; single_customer: boolean } | undefined; isLoading: boolean };
-
-  const { data: sintomas } = useApiQuery(
-    catalogItems,
-    { params: { catalog: 'failure_symptom' } },
-    { staleTime: 10 * 60_000 }
-  ) as { data: { items: CatalogItem[] } | undefined };
 
   const carregados = clientes?.items ?? [];
   // O recém-cadastrado entra na lista na hora. Esperar a recarga deixaria o
@@ -73,6 +89,13 @@ export function NovaSolicitacaoPage() {
   // entre uma opção não é escolha, é obstáculo. Até ela cadastrar o segundo.
   const clienteUnico = clientes?.single_customer && !clienteNovo ? lista[0] : undefined;
   const clienteEscolhido = clienteUnico?.id ?? cliente;
+
+  // SÓ os equipamentos do cliente escolhido — já recortados pelo escopo no servidor.
+  const { data: ativos, isLoading: carregandoAtivos } = useApiQuery(
+    assetsList,
+    { query: { customer: clienteEscolhido, limit: 500 } },
+    { enabled: Boolean(clienteEscolhido) && can('asset.read') }
+  ) as { data: { items: AssetRow[] } | undefined; isLoading: boolean };
 
   const criar = useApiMutation(requestCreate, {
     invalidates: [requestsQueue],
@@ -100,7 +123,8 @@ export function NovaSolicitacaoPage() {
           description: descricao.trim() || undefined,
           source: 'phone',
           requested_priority: prioridade as never,
-          reported_failure_code_id: sintoma || null,
+          requested_type: tipo as (typeof SERVICE_REQUEST_TYPE_KEYS)[number],
+          asset_id: equipamento || null,
         },
       },
       {
@@ -166,7 +190,11 @@ export function NovaSolicitacaoPage() {
                 <div className="flex items-center gap-2">
                   <Select
                     value={cliente}
-                    onChange={(e) => setCliente(e.target.value)}
+                    onChange={(e) => {
+                      setCliente(e.target.value);
+                      // Equipamento é sempre DE um cliente: trocar o cliente o descarta.
+                      setEquipamento('');
+                    }}
                     className="min-w-0 flex-1"
                   >
                     <option value="">Selecione…</option>
@@ -188,6 +216,41 @@ export function NovaSolicitacaoPage() {
                 </div>
               </Field>
             )}
+
+            <Field
+              label="Equipamento"
+              error={erro?.campo === 'asset_id' ? erro.mensagem : null}
+              hint={
+                !clienteEscolhido
+                  ? 'Escolha o cliente primeiro.'
+                  : !carregandoAtivos && (ativos?.items.length ?? 0) === 0
+                    ? 'Nenhum equipamento deste cliente nos setores que você alcança.'
+                    : 'Só os equipamentos deste cliente, nos setores que você alcança.'
+              }
+            >
+              <Select
+                value={equipamento}
+                disabled={!clienteEscolhido}
+                onChange={(e) => setEquipamento(e.target.value)}
+              >
+                <option value="">Sem equipamento específico</option>
+                {(ativos?.items ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {[a.name, a.tag, a.location_name].filter(Boolean).join(' · ')}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Tipo" required error={erro?.campo === 'requested_type' ? erro.mensagem : null}>
+              <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                {SERVICE_REQUEST_TYPE_KEYS.map((t) => (
+                  <option key={t} value={t}>
+                    {TIPOS_DE_SOLICITACAO[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
             <Field
               label="O que está acontecendo"
@@ -212,30 +275,17 @@ export function NovaSolicitacaoPage() {
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Urgência" hint="É o que VOCÊ percebe. A prioridade final é definida na triagem.">
-                <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
-                  {PRIORIDADES.map((p) => (
-                    <option key={p.valor} value={p.valor}>
-                      {p.rotulo}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+            <Field label="Urgência" hint="É o que VOCÊ percebe. A prioridade final é definida na triagem.">
+              <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
+                {PRIORIDADES.map((p) => (
+                  <option key={p.valor} value={p.valor}>
+                    {p.rotulo}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
-              <Field label="Sintoma" hint="Ajuda a triagem a agrupar problemas parecidos.">
-                <Select value={sintoma} onChange={(e) => setSintoma(e.target.value)}>
-                  <option value="">Não sei dizer</option>
-                  {(sintomas?.items ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-
-            {erro && !erro.campo && (
+            {erro && !['customer_id', 'summary', 'asset_id', 'requested_type'].includes(erro.campo ?? '') && (
               <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
                 {erro.mensagem}
               </p>

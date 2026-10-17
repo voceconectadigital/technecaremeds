@@ -92,7 +92,7 @@ const TELAS: Array<[string, RegExp]> = [
   ['/planos?aba=cronograma', /Planos de manutenção/],
   ['/planos?aba=procedimentos', /Planos de manutenção/],
   ['/clientes', /Clientes/],
-  ['/configuracoes', /Configurações|Pessoas|Membros/],
+  ['/configuracoes', /Configurações|Usuários|Pessoas|Membros/],
 ];
 
 test('entra na demonstração e percorre todas as telas principais', async ({ page, baseURL }) => {

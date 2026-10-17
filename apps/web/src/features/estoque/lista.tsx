@@ -49,10 +49,13 @@ import { ApiError, Can, useApiMutation, useApiQuery, useUrlState } from '@aurora
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
+import { PainelDeGestao } from './gestao';
 
 const ABAS = [
   { id: 'faltando', label: 'Abaixo do mínimo' },
   { id: 'tudo', label: 'Todos os saldos' },
+  // Entrada, mínimo/máximo, valor, curva ABC e relatório por período (16/10/2026).
+  { id: 'gestao', label: 'Gestão' },
 ] as const;
 
 export function EstoquePage() {
@@ -129,7 +132,9 @@ export function EstoquePage() {
         </div>
 
         <div role="tabpanel" id={tabIds('estoque', aba).painel} aria-labelledby={tabIds('estoque', aba).aba}>
-          {isLoading ? (
+          {aba === 'gestao' ? (
+            <PainelDeGestao />
+          ) : isLoading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 6 }, (_, i) => (
                 <div

@@ -408,7 +408,14 @@ export interface AgendaEntry {
 /** Lente CALENDÁRIO: o que está marcado num intervalo. */
 export async function agenda(
   session: TenantSession,
-  range: { from: Date; to: Date; membershipId?: string | null; teamId?: string | null }
+  range: {
+    from: Date;
+    to: Date;
+    membershipId?: string | null;
+    teamId?: string | null;
+    /** Vínculo cujo escopo (cliente/setor) recorta a agenda; nulo = sem recorte. */
+    scopeMembershipId?: string | null;
+  }
 ): Promise<AgendaEntry[]> {
   return session.query<AgendaEntry>(
     `SELECT w.id AS work_order_id, w.number, w.title, w.status_category::text AS status_category,
@@ -427,8 +434,12 @@ export async function agenda(
         AND COALESCE(w.scheduled_end, w.scheduled_start) > $1
         AND ($3::uuid IS NULL OR w.assignee_membership_id = $3)
         AND ($4::uuid IS NULL OR w.team_id = $4)
+        AND ($5::uuid IS NULL
+             OR (w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($5))
+                 AND (w.location_id IS NULL
+                      OR w.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($5)))))
       ORDER BY w.scheduled_start`,
-    [range.from, range.to, range.membershipId ?? null, range.teamId ?? null]
+    [range.from, range.to, range.membershipId ?? null, range.teamId ?? null, range.scopeMembershipId ?? null]
   );
 }
 

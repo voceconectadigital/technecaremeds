@@ -17,6 +17,11 @@
  *   "quanto custa, e o que foi acordado?"→ Contratos
  *   "o que se repete, e está em dia?"    → Planos de manutenção
  *   "como estamos indo?"                 → Painel de Controle
+ *   "quem tem acesso, e a quê?"          → Usuários
+ *
+ * Usuários entrou em 16/10/2026 (reunião com o cliente): quem administra a
+ * conta procurava "onde cadastro o usuário?" e achava uma aba dentro de
+ * Configurações. Agora é item próprio — só para quem gerencia pessoas.
  *
  * Dez itens. O décimo é Planos de manutenção (09/10/2026): preventiva,
  * calibração, TSE e qualificação deixaram de ser uma aba escondida atrás de
@@ -44,6 +49,9 @@ import {
   Package,
   FileText,
   Settings,
+  UserCog,
+  ShoppingBag,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -125,11 +133,28 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     grupo: 'Cadastros',
   },
   {
+    to: '/usuarios',
+    label: 'Usuários',
+    icon: UserCog,
+    permissions: ['organization.manage_members'],
+    hint: 'Quem tem acesso, com que perfil (Operador, Solicitante, Gestor) e a quais setores',
+    grupo: 'Cadastros',
+  },
+  {
     to: '/estoque',
     label: 'Estoque',
     icon: Package,
     permissions: ['inventory.read'],
     hint: 'Peças, saldos e requisições',
+    grupo: 'Cadastros',
+  },
+  {
+    // Store ≠ Estoque (16/10/2026): catálogo comercial, sem saldo interno.
+    to: '/store',
+    label: 'Store',
+    icon: ShoppingBag,
+    permissions: ['store.read'],
+    hint: 'Catálogo comercial: produtos e ofertas, com pedido de proposta',
     grupo: 'Cadastros',
   },
   {
@@ -150,6 +175,17 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     hint: 'Como estamos indo: indicadores, gráficos e Modo Exibição',
     grupo: 'Inteligência',
     tambem: ['/indicadores'],
+  },
+  {
+    // 16/10/2026 (Fase 12): vitrine do que está a caminho — temperatura,
+    // geolocalização, CME, gases, simuladores, integrações, IA. Sem backend e
+    // sem número: cada cartão diz EM BREVE, FUTURO ou INTEGRAÇÃO PLANEJADA.
+    to: '/ferramentas',
+    label: 'Ferramentas',
+    icon: Wrench,
+    permissions: ['asset.read', 'work_order.read'],
+    hint: 'O que está a caminho: sensores, rastreabilidade, integrações e IA',
+    grupo: 'Inteligência',
   },
 ]);
 

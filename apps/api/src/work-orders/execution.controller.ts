@@ -81,6 +81,14 @@ export class ExecutionController {
           ...r,
           items: await loadChecklistItems(s, r.template_id),
           status: await checklistStatus(s, r.id),
+          // As respostas já dadas: o assistente da web retoma de onde parou —
+          // o progresso mora no servidor, não num rascunho da tela.
+          answers: await s.query(
+            `SELECT item_id, value_text, value_number::float8 AS value_number, value_boolean,
+                    value_options, value_date::text AS value_date, photo_count, verdict::text AS verdict
+               FROM aurora.checklist_answers WHERE response_id = $1`,
+            [r.id]
+          ),
         }))
       );
     });

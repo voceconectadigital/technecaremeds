@@ -6,6 +6,8 @@ import type { INestApplication } from '@nestjs/common';
 import { createAppModule, type AppDeps } from './app.module';
 import { DomainErrorFilter } from './common/error.filter';
 import { PermissionsGuard } from './common/permissions.guard';
+import { ScopeGuard } from './common/scope.guard';
+import { DATABASE } from './common/tokens';
 import { Reflector } from '@nestjs/core';
 import { createLogger } from './common/logger';
 import { json, raw, urlencoded } from 'express';
@@ -85,7 +87,8 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   }
 
   app.useGlobalFilters(new DomainErrorFilter(logger));
-  app.useGlobalGuards(new PermissionsGuard(app.get(Reflector)));
+  // Permissão primeiro (403 que nomeia a permissão), depois o escopo da entidade (404).
+  app.useGlobalGuards(new PermissionsGuard(app.get(Reflector)), new ScopeGuard(app.get(DATABASE)));
   // A rota do QR fica fora de `/v1`: o endereço vai impresso numa etiqueta que
   // ficará colada num equipamento por anos, e versão de API numa etiqueta
   // física é uma promessa que não temos como cumprir.

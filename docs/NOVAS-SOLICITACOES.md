@@ -33,6 +33,24 @@ como "set/2026" quando não informado.
 > Branch `feat/overdelivery-painel` (commits `35b924d`, `fc4f2c6`, `87f44cf`,
 > `1f334e4`, `1ba85dd`).
 
+> **Revisão de 16/10/2026 (reunião com Anderson — rodada consolidada).** Controle item a
+> item, com arquivos, migration, testes e commit, em **`docs/ROADMAP-ANDERSON-2026-10-16.md`**
+> (branch `feat/anderson-2026-10-16`, PR #22). Pedido novo registrado como **NS-021**.
+> Efeito sobre as solicitações anteriores:
+>
+> | NS | Antes | Agora | O que mudou (16/10) |
+> | --- | --- | --- | --- |
+> | NS-001 Cliente | PARCIAL | PARCIAL | EAS × corporativa + subtipo, edição (`PATCH /customers/:id`) |
+> | NS-002 Ficha do equipamento | PARCIAL | PARCIAL | família × tipo, chip (cadastro), vincular QR existente |
+> | NS-008 Níveis de indicadores | NOVA | PARCIAL | fundação Basic/Advanced/Expert; Expert e layout: AGUARDANDO MODELO PDF OFICIAL |
+> | NS-009 IA | FUTURA FASE | FUTURA FASE | só o cartão "Inteligência Artificial — FUTURO" em Ferramentas; nada de IA ativa |
+> | NS-010 Automação | PARCIAL | PARCIAL | automações agendadas implementadas; e-mail BLOQUEADO — INFRA (sem transporte) |
+> | NS-011 Hierarquia/acessos | PARCIAL | IMPLEMENTADA | perfis OPERADOR/SOLICITANTE/GESTOR, escopo cliente/setor no backend, ATIVO/SUSPENSO/BLOQUEADO |
+> | NS-012 Estoque | NOVA | IMPLEMENTADA | dono, máximo, ABC, relatório de período, saída só pela OS |
+> | NS-013 Loja | FUTURA FASE | PARCIAL | Store: catálogo + pedido de proposta; sem checkout (decisão do cliente) |
+> | NS-015 QR | PARCIAL | PARCIAL | vincular etiqueta existente; imagem de QR continua fora |
+> | NS-016 Check-in/out | NOVA | IMPLEMENTADA | check-in/out com posição ou justificativa na OS; mapa: BLOQUEADO — INFRA |
+
 ---
 
 ## Status permitidos
@@ -84,22 +102,23 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-005 | Ações em Ordem de Serviço | PARCIAL | MÉDIA | Próxima |
 | NS-006 | Indicadores de ativos por cliente | PARCIAL | MÉDIA | Após NS-002 |
 | NS-007 | Indicadores integrados (app, FHEMIG, robô) | BLOQUEADA — CLIENTE | ALTA | Quando o material chegar |
-| NS-008 | Níveis de indicadores (Básico/Completo/Expert) | NOVA | MÉDIA | Após NS-006 |
+| NS-008 | Níveis de indicadores (Básico/Completo/Expert) | PARCIAL | MÉDIA | Fundação 16/10; refino com os PDFs oficiais |
 | NS-009 | IA dentro do sistema | FUTURA FASE | ALTA | Futura |
 | NS-010 | Automação de tarefas e relatórios | PARCIAL | ALTA | Após ligar o motor |
-| NS-011 | Hierarquia / acessos | PARCIAL | MÉDIA | Próxima |
-| NS-012 | Estoque Be Care × estoque do cliente | NOVA | ALTA | Média |
-| NS-013 | Loja / e-commerce Be Care | FUTURA FASE | ALTA | Futura |
+| NS-011 | Hierarquia / acessos | IMPLEMENTADA | MÉDIA | Entregue 16/10/2026 |
+| NS-012 | Estoque Be Care × estoque do cliente | IMPLEMENTADA | ALTA | Entregue 16/10/2026 |
+| NS-013 | Loja / e-commerce Be Care | PARCIAL | ALTA | Store 16/10 (sem checkout) |
 | NS-014 | Comprador hospitalar | NOVA | ALTA | Média (após NS-012) |
 | NS-015 | QR Code do equipamento (etiqueta) | PARCIAL | BAIXA | Próxima |
-| NS-016 | Check-in / check-out no hospital | NOVA | MÉDIA | Média |
+| NS-016 | Check-in / check-out no hospital | IMPLEMENTADA | MÉDIA | Entregue 16/10/2026 |
 | NS-017 | App / mobile (validação) | PARCIAL | MÉDIA | Próxima (demonstrar) |
 | NS-018 | Painel de Controle + Modo Exibição (TV) | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
 | NS-019 | Setores do hospital · Cliente → Setor → Equipamento | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
 | NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026 |
+| NS-021 | Reunião 16/10/2026: demandas consolidadas | IMPLEMENTADA (por item: ROADMAP) | ALTA | Entregue 16/10/2026 |
 
-**Contagem:** 20 no total · JÁ EXISTE 0 · PARCIAL 10 · NOVA 4 · FUTURA FASE 2 ·
-BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
+**Contagem:** 21 no total · JÁ EXISTE 0 · PARCIAL 11 · NOVA 1 · FUTURA FASE 1 ·
+BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 7.
 
 ---
 
@@ -262,7 +281,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Perfis BÁSICO, COMPLETO e EXPERT, configurados por cliente + tipo de contrato; futuramente gráficos, relatórios padrão e personalizados conforme o perfil contratado |
 | **Interpretação funcional** | Um catálogo de perfis que define quais indicadores/relatórios cada cliente vê, derivado do contrato |
-| **Status** | **NOVA** |
+| **Status** | **PARCIAL** (revisão 16/10/2026 — ver NS-021 e o ROADMAP) |
 | **O que já existe** | Nada de perfil. Mais próximo: metas por contrato (`sla_target_percent`, `plan_target_percent`), medição congelada em `contract_periods`, permissão `insight.manage_dashboards` sem uso |
 | **O que falta** | Modelo de perfil, vínculo com contrato/cliente, aplicação no web e no portal (o portal não tem indicadores) |
 | **Impacto** | Comercial — vira produto em camadas |
@@ -322,7 +341,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Configuração por cargo, função, permissões, criação e edição de usuários, acesso a módulos |
 | **Interpretação funcional** | A administração define cargos com conjuntos de permissões e controla quem acessa o quê |
-| **Status** | **PARCIAL** |
+| **Status** | **IMPLEMENTADA** (revisão 16/10/2026 — ver NS-021 e o ROADMAP) |
 | **O que já existe** | RBAC completo no backend: 110 permissões, 11 papéis de fábrica, permissão/negação individual com motivo e validade, escopo por cliente/local (`migrations/0006`, `0039`, `0040`). API e tela para convidar, suspender, atribuir papéis e conceder/negar permissão (`/configuracoes`, `membros.tsx`, `acesso.tsx`). API de escopo |
 | **O que falta** | Criar/editar/excluir **papel personalizado** (o schema aceita — `roles.copied_from_key` —, sem rota nem função); "cargo/função" como conceito (hoje papel = cargo); tela de escopo; edição de dados do usuário pela administração; "acesso a módulo" como agrupamento visível de permissões |
 | **Impacto** | Alto |
@@ -342,7 +361,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Separar: (A) estoque Be Care; (B) estoque do cliente/hospital; (C) cliente com contrato que inclui peças; (D) cliente com estoque próprio gerenciado pela plataforma |
 | **Interpretação funcional** | Propriedade do estoque (prestadora × cliente) e regra de cobrança/consumo de peça conforme o contrato |
-| **Status** | **NOVA** |
+| **Status** | **IMPLEMENTADA** (revisão 16/10/2026 — ver NS-021 e o ROADMAP) |
 | **O que já existe** | Estoque completo da prestadora (`migrations/0030`): depósitos (`central`, `satellite`, `van`, `consignment`), razão imutável, saldos, reservas por OS, lotes com fornecedor, imagem e categoria. Apelido e preço por cliente (`customer_item_aliases`). Custo de peças medido por período de contrato (`contract_periods.parts_cost`) |
 | **O que falta** | Dono do depósito (cliente × prestadora) — não há `customer_id` em `warehouses`; cobertura de peças no contrato (`contract_coverages`/`contract_services` não falam de peça); regra de consumo por tipo (A–D); visão do cliente sobre o próprio estoque no portal |
 | **Impacto** | Alto — muda faturamento |
@@ -362,7 +381,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Produtos/estoque Be Care expostos ao cliente para compra, com experiência de e-commerce |
 | **Interpretação funcional** | Vitrine no portal com catálogo, preço do cliente e pedido |
-| **Status** | **FUTURA FASE** |
+| **Status** | **PARCIAL** (revisão 16/10/2026 — ver NS-021 e o ROADMAP) |
 | **O que já existe** | Catálogo com imagem e categoria; preço por cliente e por lista; orçamento versionado (prestadora → cliente) |
 | **O que falta** | Vitrine, carrinho, pedido, pagamento/faturamento, logística |
 | **Impacto** | Novo canal de receita |
@@ -422,7 +441,7 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Origem** | Anderson (Be Care) |
 | **Descrição original (resumo)** | Técnico chega, o app pede localização, identifica o hospital provável ("Você está no Hospital X?"), técnico confirma o CHECK-IN, vê equipamentos/OS/tarefas/agenda daquele hospital, executa, faz CHECK-OUT. Dados: técnico, cliente, local, horários, localização, precisão, trabalhos e duração. Localização **pontual**, sem rastreamento contínuo; fallback manual com justificativa e auditoria |
 | **Interpretação funcional** | Entidade "visita" com dois eventos de localização pontual, operando offline como o resto do Field |
-| **Status** | **NOVA** |
+| **Status** | **IMPLEMENTADA** (revisão 16/10/2026 — ver NS-021 e o ROADMAP) |
 | **O que já existe** | `locations.geo_lat`/`geo_lng`/`address`/`is_mobile` (`0008`) — **nunca lidos nem escritos** fora da migration e de um teste. Field offline com fila idempotente, base local e porta de recursos do aparelho — **compatível** com registrar check-in/out como operação de fila. OS e agenda já filtráveis por local/cliente na base local. O app **não pede localização** hoje |
 | **O que falta** | Entidade de visita; geolocalização (`navigator.geolocation` / plugin Capacitor de geolocalização, não instalado); cadastro de coordenadas dos hospitais; sugestão por proximidade; check-in/out manual com justificativa auditada; tela "neste hospital"; relatório de visitas |
 | **Impacto** | Médio-alto (produtividade e comprovação de presença) |
@@ -502,3 +521,17 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 3.
 | **Fora do entregue** | **Educação continuada**: não existe no domínio (não é manutenção de ativo); aparece desabilitada e o gap segue em NS-004. Regras automáticas por Básico/Completo/Expert: fora (NS-008). Veredito de medição: continua `na` (BLOQUEADA — ESPECIALISTA) |
 | **Evidência de implementação** | Commit `87f44cf` · rotas `POST /v1/maintenance-plans`, `GET /v1/maintenance-plans/form-options`, `/board`, `/schedule`, `GET/POST /v1/checklist-templates`, `GET /v1/checklist-templates/:id`, `POST /:id/revisions`, `POST /:id/publish` · `packages/db/src/plan-board.ts`, `packages/db/src/procedures.ts` · `apps/web/src/features/planos/{modulo,novo-plano,procedimentos}.tsx` · testes `api-painel-planejamento.test.ts` (recusas de setor/equipamento de outro cliente e de outro tenant, procedimento de outro tipo, escopo do hospital) e `painel-planejamento.spec.ts` · **sem migration** |
 | **Observações** | "Programado" é item de ciclo que existe; o futuro é **previsto** pela frequência e marcado como tal — nada de histórico inventado. As OS geradas continuam na Agenda de sempre |
+
+## NS-021 — Reunião de 16/10/2026: demandas consolidadas
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-021 |
+| **Data** | 16/10/2026 |
+| **Origem** | Anderson (Be Care), reunião de 16/10/2026 |
+| **Descrição original (resumo)** | Usuários (3 perfis, cadastro, escopo, bloqueio), clientes EAS × corporativa, equipamentos (família × tipo, chip, QR), solicitação simplificada, OS sem rascunho com assistente de execução e check-in, planos, orçamento da OS, estoque e Store, relatórios Basic/Advanced/Expert, automações, Novo Negócio, Ferramentas, ambiente de produção |
+| **Status** | **IMPLEMENTADA** nos itens marcados IMPLEMENTADO/VALIDADO do roadmap; os demais seguem com o status de lá |
+| **Controle por item** | `docs/ROADMAP-ANDERSON-2026-10-16.md` (IDs U-, C-, E-, S-, O-, P-, Q-, ST-, R-, A-, T-, F-, I-, Z-) |
+| **Evidência** | Commits `0fbe25e` · `12b3794` · `38d13e3` · `2f8e819` · `7aa15c9` · `00ade81` · `32bd136` · `957e2bd` · `090bd84` · `f2d58b5` · `7891ec7` · `c6c7d52` (+ ajustes de teste `f47a3d5`, `76b966c`, `66ab8c2`, `923974d`) · migrations `0060`–`0068` · testes de API `api-usuarios-perfis`, `api-clientes-classificacao`, `api-equipamentos-catalogo`, `api-solicitacoes-fluxo`, `api-execucao-guiada`, `api-planos-executar`, `api-orcamento-da-os`, `api-estoque-store`, `api-relatorios`, `api-automacoes-agendadas`, `api-novo-negocio` · E2E nos specs de mesmo tema |
+| **Bloqueado** | Fórmulas FHEMIG/Expert e layout dos PDFs (BLOQUEADA — CLIENTE: aguardando PDFs oficiais) · disponibilidade no tempo (definição de "parado") · critérios metrológicos/TSE (BLOQUEADA — ESPECIALISTA) · e-mail real, mapa, leitura do chip, domínio "htec.b", backup/restore comprovado e publicação no HostPanel (INFRA / autorização) |
+| **Observações** | Nada de preço, gateway, IA real, hardware ou dado de produção foi inventado |

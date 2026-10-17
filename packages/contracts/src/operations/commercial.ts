@@ -156,6 +156,10 @@ export const quoteTransition = defineOperation({
   body: z.object({
     to: z.enum(QUOTE_STATUSES),
     reason: z.string().nullable().optional(),
+    note: z.string().nullable().optional(),
+    /** Obrigatório para REPROVAR: motivo do catálogo `rejection_reason`. */
+    rejectionReasonId: Uuid.optional(),
+    acceptanceNote: z.string().nullable().optional(),
   }),
   response: z.object({ status: z.enum(QUOTE_STATUSES) }),
   status: 201,
@@ -296,4 +300,59 @@ export const contractAssets = defineOperation({
       })
     ),
   }),
+});
+
+/* -------------------------------------------------------------------------- */
+/* Gerar orçamento a partir da OS (reunião 16/10/2026, Fase 7)                 */
+/* -------------------------------------------------------------------------- */
+
+/** Dinheiro como TEXTO decimal ("150.50"): nunca float entre a tela e o banco. */
+const Dinheiro = z
+  .string()
+  .trim()
+  .regex(/^\d{1,12}([.,]\d{1,2})?$/, 'valor como "1234.56"');
+
+export const quotesCreate = defineOperation({
+  operationId: 'quotes.create',
+  method: 'POST',
+  path: '/quotes',
+  summary: 'Cria um orçamento (em elaboração), opcionalmente ligado a uma OS',
+  permissions: ['quote.create'],
+  body: z.object({
+    customerId: Uuid,
+    workOrderId: Uuid.nullable().optional(),
+    nature: z.enum(['parts', 'services', 'parts_and_services']).optional(),
+    validUntil: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    paymentTerms: z.string().nullable().optional(),
+    customerNotes: z.string().nullable().optional(),
+    internalNotes: z.string().nullable().optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
+});
+
+export const quotesAddItem = defineOperation({
+  operationId: 'quotes.addItem',
+  method: 'POST',
+  path: '/quotes/:id/items',
+  summary: 'Acrescenta uma linha: serviço/hora técnica ou peça, quantidade e valor unitário',
+  description: 'Totais calculados no servidor, em centavos. Valor unitário como texto decimal.',
+  permissions: ['quote.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    kind: z.enum(['part', 'service']),
+    itemId: Uuid.nullable().optional(),
+    description: z.string().trim().min(2).max(300).optional(),
+    quantity: z.number().positive(),
+    unitPrice: z.union([Dinheiro, z.number().min(0)]).optional(),
+    unit: z.string().trim().max(20).optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'conflict'],
 });

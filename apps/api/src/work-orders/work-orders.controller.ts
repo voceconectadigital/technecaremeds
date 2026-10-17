@@ -38,6 +38,7 @@ import {
   type RequestPriority,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { escopoRestrito, filtroDeEscopo } from '../common/scope-sql';
 import { oneOf, optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import { runFieldOperation } from '../common/client-operation';
@@ -101,6 +102,7 @@ export class WorkOrdersController {
                             WHERE w2.status_id = st.id
                               AND w2.wait_reason_id IS NOT NULL
                               AND ($1::uuid IS NULL OR w2.customer_id = $1)
+                              AND ($2::uuid IS NULL OR ${filtroDeEscopo('w2', 2)})
                             GROUP BY w2.wait_reason_id) sub
                      JOIN aurora.wait_reasons wr ON wr.id = sub.wait_reason_id),
                   '[]'::json
@@ -108,10 +110,11 @@ export class WorkOrdersController {
            FROM aurora.work_order_statuses st
            LEFT JOIN aurora.work_orders w
                   ON w.status_id = st.id AND ($1::uuid IS NULL OR w.customer_id = $1)
+                 AND ($2::uuid IS NULL OR ${filtroDeEscopo('w', 2)})
           WHERE st.archived_at IS NULL AND st.visible_on_board
           GROUP BY st.id, st.key, st.label, st.category, st.color, st.position
           ORDER BY st.position`,
-        [customerId]
+        [customerId, escopoRestrito(ctx) ? ctx.membershipId : null]
       )
     );
     return { columns };
@@ -180,6 +183,11 @@ export class WorkOrdersController {
       // cem mil ordens, significa não trazer.
       params.push(uuidParam(asset, 'asset'));
       condicoes.push(`w.asset_id = $${params.length}`);
+    }
+
+    if (escopoRestrito(ctx)) {
+      params.push(ctx.membershipId);
+      condicoes.push(filtroDeEscopo('w', params.length));
     }
 
     params.push(max);
@@ -258,6 +266,15 @@ export class WorkOrdersController {
                 w.started_at, w.completed_at, w.validated_at, w.closed_at,
                 w.cancellation_reason, w.rework_reason, w.reopen_reason,
                 w.wait_note, w.created_at, w.updated_at,
+                w.service_description, w.service_observations, w.operational_result,
+                w.final_opinion, w.service_report_updated_at,
+                -- O orçamento vivo desta OS (16/10/2026): é por ele que a ficha mostra
+                -- "aguardando aprovação", "aprovado" ou "reprovado" sem estado redundante.
+                (SELECT json_build_object('id', q.id, 'number', q.number, 'version', q.version,
+                                          'status', q.status::text, 'total_cents', q.total_cents::text)
+                   FROM aurora.quotes q
+                  WHERE q.work_order_id = w.id AND q.status::text <> 'superseded'
+                  ORDER BY q.created_at DESC LIMIT 1) AS quote_summary,
                 st.key AS status_key, st.label AS status_label,
                 st.requires_wait_reason,
                 wr.key AS wait_reason_key, wr.label AS wait_reason_label, wr.pauses_sla,
@@ -368,7 +385,8 @@ export class WorkOrdersController {
                     allowed: REQUEST_PRIORITIES,
                   });
                 })(),
-        publish: body.publish !== false,
+        // Sem rascunho (reunião 16/10/2026): a OS criada pela API nasce aberta.
+        publish: true,
       })
     );
   }

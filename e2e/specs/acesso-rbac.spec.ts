@@ -16,7 +16,7 @@ const cab = {
 test.describe('EPIC-002 · acesso e permissões', () => {
   test('a gaveta diz de qual papel vem cada permissão', async ({ comoCoordenadorA: page }) => {
     await page.goto('/configuracoes');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Pessoas');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Usuários');
 
     await page.getByRole('button', { name: /Ações para Rafael/ }).click();
     await page.getByRole('menuitem', { name: /Ver acesso e permissões/ }).click();

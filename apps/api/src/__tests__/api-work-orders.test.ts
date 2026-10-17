@@ -150,7 +150,7 @@ describe('situações e quadro', () => {
   it('as situações vêm com categoria — é o que o Kanban usa como coluna', async () => {
     const r = await http.get('/v1/work-orders/statuses').set(auth(EMAIL_COORD));
     expect(r.status).toBe(200);
-    expect(r.body.items).toHaveLength(11);
+    expect(r.body.items).toHaveLength(12);
     const aguardando = r.body.items.find((x: { key: string }) => x.key === 'waiting');
     const pausada = r.body.items.find((x: { key: string }) => x.key === 'paused');
     expect(aguardando.category).toBe('waiting');

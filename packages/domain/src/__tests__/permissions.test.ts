@@ -92,7 +92,8 @@ describe('papéis de fábrica', () => {
   it('Solicitante só escreve solicitação e aprova orçamento', () => {
     const req = permissionsOfRole(FACTORY_ROLES.find((r) => r.key === 'requester')!);
     const writes = req.filter((k) => !k.endsWith('.read'));
-    expect(writes.sort()).toEqual(['quote.approve', 'service_request.create']);
+    // Pedir proposta na Store (16/10/2026) é a terceira escrita — vira oportunidade, não pedido.
+    expect(writes.sort()).toEqual(['quote.approve', 'service_request.create', 'store.request_quote']);
   });
 });
 

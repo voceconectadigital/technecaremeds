@@ -6,7 +6,7 @@
  * que inunda a caixa de entrada de toda a equipe é sempre a que alguém ligou
  * com pressa.
  */
-import { Body, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createRule,
@@ -15,6 +15,10 @@ import {
   pauseRule,
   ruleRuns,
   listRules,
+  runScheduledRuleNow,
+  listAutomationTasks,
+  advanceAutomationTask,
+  getReportOutput,
   type Database,
 } from '@aurora/db';
 import {
@@ -22,6 +26,9 @@ import {
   ACTIONS,
   OPERATORS,
   TRIGGER_KINDS,
+  AUTOMATION_TEMPLATES,
+  DEFAULT_AUTOMATION_TIMEZONE,
+  nextRuns,
   type ActionKind,
   type TriggerKind,
   type ConditionNode,
@@ -44,15 +51,33 @@ export class AutomationsController {
    */
   @Get('vocabulary')
   @RequirePermissions('automation.read')
-  vocabulary(): { actions: unknown[]; operators: readonly string[]; triggers: readonly string[] } {
-    return { actions: [...ACTIONS], operators: OPERATORS, triggers: TRIGGER_KINDS };
+  vocabulary(): Record<string, unknown> {
+    return {
+      actions: [...ACTIONS],
+      operators: OPERATORS,
+      triggers: TRIGGER_KINDS,
+      templates: AUTOMATION_TEMPLATES,
+      default_timezone: DEFAULT_AUTOMATION_TIMEZONE,
+      // Sem provedor de e-mail configurado: a entrega fica na fila (BLOQUEADO — INFRA).
+      email_transport: 'not_configured',
+    };
   }
 
   @Get()
   @RequirePermissions('automation.read')
   async list(@Req() req: AuroraRequest): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
-    return { items: await withTenant(this.db, ctx, (s) => listRules(s)) };
+    const itens = (await withTenant(this.db, ctx, (s) => listRules(s))) as Array<Record<string, unknown>>;
+    const agora = new Date();
+    return {
+      items: itens.map((r) => ({
+        ...r,
+        next_run:
+          r.state === 'active' && typeof r.trigger_cron === 'string'
+            ? (nextRuns(r.trigger_cron, r.trigger_timezone as string | null, agora, 1)[0] ?? null)
+            : null,
+      })),
+    };
   }
 
   @Post()
@@ -131,6 +156,15 @@ export class AutomationsController {
     return { state: 'active' };
   }
 
+  /** Executa agora a regra AGENDADA — a passada do minuto corrente, uma vez só. */
+  @Post(':id/run-now')
+  @RequirePermissions('automation.run_now')
+  async runNow(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const r = await withTenant(this.db, ctx, (s) => runScheduledRuleNow(s, uuidParam(id, 'id')));
+    return { executed: r !== null, outcome: r?.outcome ?? null, actions: r?.actionsRun ?? [] };
+  }
+
   @Post(':id/pause')
   @RequirePermissions('automation.update')
   async pause(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ state: string }> {
@@ -151,5 +185,67 @@ export class AutomationsController {
   async runs(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     return { items: await withTenant(this.db, ctx, (s) => ruleRuns(s, uuidParam(id, 'id'))) };
+  }
+}
+
+/**
+ * Tarefas, 5W2H e PDCA gerados pelas automações (Fase 10). Cada pessoa vê e
+ * avança as SUAS; quem administra automações vê todas.
+ */
+@Controller('automation-tasks')
+export class AutomationTasksController {
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  @Get()
+  async list(
+    @Req() req: AuroraRequest,
+    @Query('state') state?: string,
+    @Query('all') all?: string
+  ): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    if (state && !['open', 'done', 'cancelled'].includes(state)) {
+      throw new ValidationError('state é open, done ou cancelled', { field: 'state' });
+    }
+    const todas = all === 'true' && ctx.permissions.has('automation.read');
+    const items = await withTenant(this.db, ctx, (s) =>
+      listAutomationTasks(s, {
+        ownerMembershipId: todas ? null : (ctx.membershipId ?? '00000000-0000-0000-0000-000000000000'),
+        state: state ?? null,
+      })
+    );
+    return { items };
+  }
+
+  @Post(':id/advance')
+  async advance(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: { action?: unknown }
+  ): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const acao = body?.action;
+    if (acao !== 'advance' && acao !== 'cancel') {
+      throw new ValidationError('action é advance ou cancel', { field: 'action' });
+    }
+    return withTenant(this.db, ctx, (s) =>
+      advanceAutomationTask(s, uuidParam(id, 'id'), acao, {
+        membershipId: ctx.membershipId,
+        canManage: ctx.permissions.has('automation.update'),
+      })
+    );
+  }
+}
+
+/** O relatório agendado entregue: só ao destinatário (foi gerado no recorte dele). */
+@Controller('automation-report-outputs')
+export class AutomationReportsController {
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  @Get(':id')
+  async detail(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    return withTenant(this.db, ctx, (s) =>
+      getReportOutput(s, uuidParam(id, 'id'), { membershipId: ctx.membershipId })
+    );
   }
 }

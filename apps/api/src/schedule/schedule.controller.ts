@@ -31,6 +31,7 @@ import {
   type BlockKind,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
+import { escopoRestrito } from '../common/scope-sql';
 import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -135,6 +136,7 @@ export class ScheduleController {
         to: fim,
         membershipId: membershipId ? uuidParam(membershipId, 'membershipId') : null,
         teamId: teamId ? uuidParam(teamId, 'teamId') : null,
+        scopeMembershipId: escopoRestrito(ctx) ? ctx.membershipId : null,
       })
     );
     return { items };

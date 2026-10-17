@@ -105,6 +105,8 @@ const FiltroDoPlano = z.object({
   to: z.string(),
   customer: Uuid.optional(),
   sector: Uuid.optional(),
+  /** Tipo do plano, combinável com cliente e setor (reunião 16/10/2026). */
+  kind: z.enum(PLAN_KINDS).optional(),
 });
 
 export const plansBoard = defineOperation({
@@ -125,6 +127,9 @@ export const plansBoard = defineOperation({
     byCustomer: z.array(Estados.extend({ key: z.string(), label: z.string() })),
     bySector: z.array(Estados.extend({ key: z.string(), label: z.string() })),
     byMonth: z.array(Estados.extend({ key: z.string() })),
+    /** Opcionais: capturas da demo anteriores a 16/10/2026 não os têm. */
+    byPlan: z.array(Estados.extend({ key: z.string(), label: z.string() })).optional(),
+    byProcedure: z.array(Estados.extend({ key: z.string(), label: z.string() })).optional(),
     plans: z.object({ active: z.number().int(), tasks: z.number().int() }),
   }),
   errors: ['not_found', 'validation_failed'],
@@ -147,6 +152,8 @@ export const ScheduleEntry = z.object({
   asset_name: z.string(),
   work_order_id: Uuid.nullable(),
   work_order_number: z.string().nullable(),
+  /** Situação da OS do item, quando há — o "▶ Executar" só aparece para OS em aberto. */
+  work_order_category: z.string().nullable().optional(),
 });
 export type ScheduleEntry = z.infer<typeof ScheduleEntry>;
 
@@ -298,4 +305,20 @@ export const checklistTemplatesPublish = defineOperation({
   params: z.object({ id: Uuid }),
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const plansExecuteItem = defineOperation({
+  operationId: 'plans.executeItem',
+  method: 'POST',
+  path: '/maintenance-plans/cycle-items/:itemId/execute',
+  summary: '▶ Executar um item do plano: devolve a OS dele, gerando-a se ainda não existe',
+  description:
+    'Cliente → plano → setor → equipamento → procedimento: a OS nasce pela mesma geração da ' +
+    'varredura, com o procedimento/checklist da versão da tarefa. Item dispensado → 422; fora ' +
+    'do escopo → 404. Exige `maintenance_plan.generate_cycle` ou `work_order.execute`.',
+  permissions: ['maintenance_plan.read'],
+  params: z.object({ itemId: Uuid }),
+  response: z.object({ work_order_id: Uuid, created: z.boolean() }),
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'forbidden'],
 });

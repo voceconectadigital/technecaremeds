@@ -59,14 +59,51 @@ export const Member = z.object({
   user_id: Uuid,
   name: NonEmpty,
   email: z.string(),
-  status: z.enum(['invited', 'active', 'suspended', 'removed']),
+  status: z.enum(['invited', 'active', 'suspended', 'blocked', 'removed']),
   seat_type: z.enum(SEAT_TYPES),
   is_owner: z.boolean(),
   roles: z.array(z.string()),
   customer_scope: z.enum(SCOPE_MODES).nullable(),
   location_scope: z.enum(SCOPE_MODES).nullable(),
+  /** Profissão — texto de cadastro; NÃO concede permissão. */
+  // Opcionais: respostas capturadas antes da 0061 (demo) não os têm.
+  job_title: z.string().nullable().optional(),
+  company_name: z.string().nullable().optional(),
+  /** Só a presença: o CPF em si sai apenas na ficha da pessoa. */
+  has_cpf: z.boolean().optional(),
 });
 export type Member = z.infer<typeof Member>;
+
+/** Os três perfis de acesso de negócio (reunião 16/10/2026). */
+export const PROFILE_KEYS = ['operator', 'requester', 'manager'] as const;
+export const ACCESS_STATES = ['active', 'suspended', 'blocked'] as const;
+export const REGISTRATION_KIND_KEYS = ['CRM', 'COREN', 'CREA', 'CFT', 'CREFITO', 'OAB', 'OUTRO'] as const;
+
+export const ProfessionalRegistration = z.object({
+  kind: z.enum(REGISTRATION_KIND_KEYS),
+  number: z.string().trim().min(2).max(24),
+  region: z.string().trim().length(2).nullable().optional(),
+});
+
+/** Dados de cadastro do vínculo — iguais no "Adicionar usuário" e na edição. */
+const camposDeCadastro = {
+  cpf: z.string().trim().max(14).nullable().optional(),
+  phone: z.string().trim().max(32).nullable().optional(),
+  company_name: z.string().trim().max(160).nullable().optional(),
+  job_title: z.string().trim().max(80).nullable().optional(),
+  registrations: z.array(ProfessionalRegistration).max(10).optional(),
+};
+
+export const MemberDetail = Member.extend({
+  cpf: z.string().nullable(),
+  phone: z.string().nullable(),
+  status_reason: z.string().nullable(),
+  status_changed_at: z.string().nullable(),
+  customer_ids: z.array(Uuid),
+  location_ids: z.array(Uuid),
+  registrations: z.array(z.object({ kind: z.string(), number: z.string(), region: z.string().nullable() })),
+});
+export type MemberDetail = z.infer<typeof MemberDetail>;
 
 export const membersList = defineOperation({
   operationId: 'members.list',
@@ -84,6 +121,12 @@ export const InviteInput = comRegrasDeEscopo(
   z.object({
     email: Email,
     name: NonEmpty,
+    /**
+     * Perfil de acesso (Operador, Solicitante, Gestor). Quando vem, decide papel
+     * e assento — prevalece sobre `seat_type`/`role_keys`.
+     */
+    profile: z.enum(PROFILE_KEYS).optional(),
+    ...camposDeCadastro,
     seat_type: z.enum(SEAT_TYPES).optional(),
     role_keys: z.array(NonEmpty).optional(),
     daily_hours: z.number().positive().max(24).optional(),
@@ -95,7 +138,7 @@ export const membersInvite = defineOperation({
   operationId: 'members.invite',
   method: 'POST',
   path: '/organizations/current/members',
-  summary: 'Convida uma pessoa para a organização',
+  summary: 'Adiciona uma pessoa à organização',
   description:
     'Cria pessoa, vínculo, escopo e papéis numa transação só. O escopo é parte do convite e ' +
     'não um segundo passo: sem ele a pessoa entra numa tela vazia e não consegue distinguir ' +
@@ -141,6 +184,50 @@ export const membersSuspend = defineOperation({
   permissions: ['organization.manage_members'],
   params: z.object({ id: Uuid }),
   body: z.object({ reason: z.string().trim().min(5) }),
+  response: Ok,
+  status: 201,
+  errors: ['not_found', 'conflict'],
+});
+
+export const membersDetail = defineOperation({
+  operationId: 'members.detail',
+  method: 'GET',
+  path: '/organizations/current/members/:id',
+  summary: 'Ficha de uma pessoa: cadastro, registros profissionais, perfil, escopo e situação',
+  description: 'O CPF completo só aparece aqui, para quem gerencia pessoas; a lista mostra apenas se existe.',
+  permissions: ['organization.manage_members'],
+  params: z.object({ id: Uuid }),
+  response: MemberDetail,
+  errors: ['not_found'],
+});
+
+export const membersUpdate = defineOperation({
+  operationId: 'members.update',
+  method: 'PATCH',
+  path: '/organizations/current/members/:id',
+  summary: 'Edita os dados de cadastro de uma pessoa',
+  description:
+    'CPF, telefone, empresa, profissão e registros profissionais (tipo + número, 0..N). Enviar ' +
+    '`registrations` substitui a lista inteira. Profissão é texto de cadastro e não altera permissão.',
+  permissions: ['organization.manage_members'],
+  params: z.object({ id: Uuid }),
+  body: z.object(camposDeCadastro).strict(),
+  response: Ok,
+  errors: ['not_found', 'conflict'],
+});
+
+export const membersSetStatus = defineOperation({
+  operationId: 'members.setStatus',
+  method: 'POST',
+  path: '/organizations/current/members/:id/status',
+  summary: 'Ativa, suspende ou bloqueia o acesso de uma pessoa',
+  description:
+    'Motivo obrigatório. Suspenso e bloqueado NÃO acessam: a resolução de vínculo só aceita vínculo ' +
+    'ativo, então a próxima requisição com qualquer token é recusada no servidor. Nada é apagado. ' +
+    'Ninguém muda a própria situação, e o último proprietário ativo não pode ser suspenso nem bloqueado.',
+  permissions: ['organization.manage_members'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ status: z.enum(ACCESS_STATES), reason: z.string().trim().min(5) }),
   response: Ok,
   status: 201,
   errors: ['not_found', 'conflict'],

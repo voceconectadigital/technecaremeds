@@ -19,6 +19,16 @@ import {
   canReact,
   checkRateLimit,
   summarizeSimulation,
+  validateActionsForTrigger,
+  validateCron,
+  isValidTimezone,
+  countRuns,
+  nextRuns,
+  dueSlot,
+  centsFromDecimal,
+  DEFAULT_AUTOMATION_TIMEZONE,
+  REPORT_TIER_LABEL,
+  type ReportTier,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -30,6 +40,7 @@ import {
 import type { TenantSession } from './client';
 import { routeEvent } from './notifications';
 import { transitionWorkOrder, createWorkOrder } from './work-orders';
+import { buildReport } from './relatorios';
 
 /* -------------------------------------------------------------------------- */
 /* cadastro                                                                    */
@@ -70,6 +81,15 @@ export async function createRule(session: TenantSession, input: RuleInput): Prom
   if (kind === 'schedule' && !input.triggerCron) {
     throw new ValidationError('gatilho agendado exige a expressão cron', { field: 'triggerCron' });
   }
+  const errosDeGatilho = validateActionsForTrigger(kind, input.actions);
+  if (kind === 'schedule') {
+    errosDeGatilho.push(...validateCron(input.triggerCron!));
+    if (input.triggerTimezone && !isValidTimezone(input.triggerTimezone)) {
+      errosDeGatilho.push(`fuso desconhecido: ${input.triggerTimezone}`);
+    }
+  }
+  if (errosDeGatilho.length > 0) throw new ValidationError(errosDeGatilho.join('; '));
+  await conferirPessoasDasAcoes(session, input.actions);
 
   const id = newId();
   await session.query(
@@ -85,8 +105,10 @@ export async function createRule(session: TenantSession, input: RuleInput): Prom
       input.priority ?? 100,
       kind,
       kind === 'event' ? input.triggerEvent : null,
-      kind === 'schedule' ? input.triggerCron : null,
-      input.triggerTimezone ?? null,
+      kind === 'schedule' ? input.triggerCron!.trim() : null,
+      kind === 'schedule'
+        ? (input.triggerTimezone ?? DEFAULT_AUTOMATION_TIMEZONE)
+        : (input.triggerTimezone ?? null),
       input.conditions ? JSON.stringify(input.conditions) : null,
       input.rateMax ?? 100,
       input.rateWindowMinutes ?? 60,
@@ -106,10 +128,58 @@ export async function createRule(session: TenantSession, input: RuleInput): Prom
   return id;
 }
 
+/**
+ * Destinatários e responsáveis das ações agendadas existem, estão ATIVOS e são
+ * desta organização (a RLS garante a última parte). Destinatário de relatório
+ * precisa ver indicadores — senão a regra entregaria a quem não pode ler.
+ */
+async function conferirPessoasDasAcoes(session: TenantSession, actions: RuleInput['actions']): Promise<void> {
+  for (const [i, a] of actions.entries()) {
+    const p = a.params as Record<string, unknown>;
+    const ids =
+      a.kind === 'send_report' || a.kind === 'reminder'
+        ? (p.recipients as string[])
+        : a.kind === 'create_task'
+          ? [p.ownerMembershipId as string]
+          : [];
+    if (ids.length === 0) continue;
+    const unicos = [...new Set(ids)];
+    const ativos = await session.query<{ id: string }>(
+      `SELECT id FROM aurora.memberships WHERE id = ANY($1::uuid[]) AND status = 'active'`,
+      [unicos]
+    );
+    if (ativos.length !== unicos.length) {
+      throw new ValidationError(`actions[${i}]: pessoa inexistente ou sem acesso ativo`, {
+        field: a.kind === 'create_task' ? 'ownerMembershipId' : 'recipients',
+      });
+    }
+    if (a.kind === 'send_report') {
+      for (const id of unicos) {
+        if (!(await temPermissao(session, id, 'insight.read'))) {
+          throw new ValidationError(`actions[${i}]: um dos destinatários não pode ver indicadores`, {
+            field: 'recipients',
+          });
+        }
+      }
+    }
+  }
+}
+
+async function temPermissao(session: TenantSession, membershipId: string, chave: string): Promise<boolean> {
+  const [r] = await session.query<{ ok: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM aurora.effective_permissions($1) p WHERE p.permission_key = $2) AS ok`,
+    [membershipId, chave]
+  );
+  return Boolean(r?.ok);
+}
+
 interface RuleRow {
   id: string;
   name: string;
   state: string;
+  trigger_kind?: string;
+  trigger_cron?: string | null;
+  trigger_timezone?: string | null;
   trigger_event: string | null;
   conditions: ConditionNode | null;
   rate_max: number;
@@ -119,8 +189,8 @@ interface RuleRow {
 
 async function loadRule(session: TenantSession, id: string): Promise<RuleRow> {
   const [row] = await session.query<RuleRow>(
-    `SELECT id, name, state::text AS state, trigger_event, conditions,
-            rate_max, rate_window_minutes, simulated_at
+    `SELECT id, name, state::text AS state, trigger_kind::text AS trigger_kind, trigger_cron,
+            trigger_timezone, trigger_event, conditions, rate_max, rate_window_minutes, simulated_at
        FROM aurora.automation_rules WHERE id = $1`,
     [id]
   );
@@ -143,9 +213,26 @@ async function loadRule(session: TenantSession, id: string): Promise<RuleRow> {
 export async function simulateRule(
   session: TenantSession,
   ruleId: string,
-  days = 30
-): Promise<SimulationResult> {
+  days = 30,
+  now: Date = new Date()
+): Promise<SimulationResult & { next_runs?: string[] }> {
   const regra = await loadRule(session, ruleId);
+  if (regra.trigger_kind === 'schedule' && regra.trigger_cron) {
+    // A regra de relógio não tem histórico de evento para contar: a simulação
+    // é a AGENDA — quantas vezes ela vai rodar e quando. Conta, não palpite.
+    const dias = Math.min(days, 60);
+    const total = countRuns(regra.trigger_cron, regra.trigger_timezone, now, dias);
+    await session.query(
+      `UPDATE aurora.automation_rules SET simulated_at = now(), simulated_matches = $2 WHERE id = $1`,
+      [ruleId, total]
+    );
+    const r = summarizeSimulation(total, total, dias);
+    return {
+      ...r,
+      summary: `esta regra vai rodar ${total} vez(es) nos próximos ${dias} dias${r.floodRisk ? ' — volume alto: confira a periodicidade' : ''}`,
+      next_runs: nextRuns(regra.trigger_cron, regra.trigger_timezone, now, 5).map((d) => d.toISOString()),
+    };
+  }
   if (!regra.trigger_event) {
     throw new ConflictError('só regras de evento podem ser simuladas contra o histórico');
   }
@@ -186,7 +273,8 @@ export async function activateRule(session: TenantSession, ruleId: string): Prom
   }
   await session.query(
     `UPDATE aurora.automation_rules
-        SET state = 'active', quarantined_at = NULL, quarantine_reason = NULL, updated_by = $2
+        SET state = 'active', quarantined_at = NULL, quarantine_reason = NULL, updated_by = $2,
+            activated_at = now()
       WHERE id = $1`,
     [ruleId, session.context.actorId]
   );
@@ -463,6 +551,15 @@ async function executeAction(
       return `OS ${nova.number ?? nova.id} criada`;
     }
 
+    case 'send_report':
+      return enviarRelatorio(session, ruleId, params, event);
+
+    case 'reminder':
+      return lembrar(session, ruleId, params, event);
+
+    case 'create_task':
+      return criarTarefa(session, ruleId, params, event);
+
     default:
       throw new ValidationError(`ação sem execução implementada: ${kind}`);
   }
@@ -484,9 +581,506 @@ export async function ruleRuns(session: TenantSession, ruleId: string, limit = 5
 export async function listRules(session: TenantSession): Promise<unknown[]> {
   return session.query(
     `SELECT r.id, r.name, r.state, r.priority, r.trigger_kind, r.trigger_event,
+            r.trigger_cron, r.trigger_timezone, r.activated_at,
             r.simulated_at, r.simulated_matches, r.quarantine_reason,
+            (SELECT a.kind FROM aurora.automation_actions a WHERE a.rule_id = r.id ORDER BY a.position LIMIT 1) AS first_action,
             (SELECT count(*) FROM aurora.automation_actions a WHERE a.rule_id = r.id) AS action_count
        FROM aurora.automation_rules r
       ORDER BY r.priority, r.name`
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* agendamento (reunião 16/10/2026, Fase 10)                                   */
+/* -------------------------------------------------------------------------- */
+
+/** O transporte de e-mail não existe nesta instalação: a entrega fica na fila. */
+export const EMAIL_SEM_TRANSPORTE = 'awaiting_email_transport';
+
+export interface ScheduledSweep {
+  rules: number;
+  ran: number;
+  failed: number;
+  skipped: number;
+}
+
+/**
+ * Roda as regras AGENDADAS cuja passada está devida.
+ *
+ * Idempotente por (regra, passada): a passada é REIVINDICADA com um INSERT que
+ * respeita o índice único antes de qualquer efeito. Quem chega depois — a
+ * varredura concorrente, a retentativa — não reivindica e não faz nada.
+ */
+export async function runScheduledAutomations(
+  session: TenantSession,
+  now: Date = new Date()
+): Promise<ScheduledSweep> {
+  const regras = await session.query<
+    RuleRow & {
+      trigger_cron: string;
+      trigger_timezone: string | null;
+      activated_at: Date | null;
+      last_slot: Date | null;
+    }
+  >(
+    `SELECT r.id, r.name, r.state::text AS state, r.trigger_event, r.conditions,
+            r.rate_max, r.rate_window_minutes, r.simulated_at, r.trigger_cron, r.trigger_timezone,
+            r.activated_at,
+            (SELECT max(schedule_slot) FROM aurora.rule_runs x WHERE x.rule_id = r.id) AS last_slot
+       FROM aurora.automation_rules r
+      WHERE r.state = 'active' AND r.trigger_kind = 'schedule'
+      ORDER BY r.priority, r.name`
+  );
+  const saida: ScheduledSweep = { rules: regras.length, ran: 0, failed: 0, skipped: 0 };
+  for (const regra of regras) {
+    const depois =
+      [regra.activated_at, regra.last_slot]
+        .filter((d): d is Date => d !== null)
+        .map((d) => new Date(d))
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+    const slot = dueSlot(regra.trigger_cron, regra.trigger_timezone, now, depois);
+    if (!slot) continue;
+    const r = await runScheduledRule(session, regra, slot);
+    if (r === null) saida.skipped++;
+    else if (r.outcome === 'matched') saida.ran++;
+    else saida.failed++;
+  }
+  return saida;
+}
+
+/**
+ * "Executar agora" (permissão `automation.run_now`): roda a regra agendada na
+ * passada do minuto corrente. Repetir no mesmo minuto não duplica.
+ */
+export async function runScheduledRuleNow(
+  session: TenantSession,
+  ruleId: string,
+  now: Date = new Date()
+): Promise<RuleExecution | null> {
+  const regra = await loadRule(session, ruleId);
+  if (regra.trigger_kind !== 'schedule') {
+    throw new ConflictError('só regras agendadas podem ser executadas agora');
+  }
+  if (regra.state === 'quarantined') {
+    throw new ConflictError('a regra está em quarentena: revise antes de executar');
+  }
+  const slot = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
+  return runScheduledRule(session, regra, slot);
+}
+
+async function runScheduledRule(
+  session: TenantSession,
+  regra: RuleRow,
+  slot: Date
+): Promise<RuleExecution | null> {
+  const inicio = Date.now();
+  const evento: IncomingEvent = {
+    type: 'automation.schedule',
+    aggregateType: 'automation_rule',
+    aggregateId: regra.id,
+    payload: { slot: slot.toISOString(), ruleName: regra.name },
+  };
+
+  const [janela] = await session.query<{ total: string }>(
+    `SELECT count(*)::text AS total FROM aurora.rule_runs
+      WHERE rule_id = $1 AND outcome = 'matched'
+        AND ran_at > now() - ($2 || ' minutes')::interval`,
+    [regra.id, regra.rate_window_minutes]
+  );
+  const limite = checkRateLimit(Number(janela!.total), {
+    max: Number(regra.rate_max),
+    windowMinutes: Number(regra.rate_window_minutes),
+  });
+  if (!limite.allowed) {
+    await session.query(
+      `UPDATE aurora.automation_rules
+          SET state = 'quarantined', quarantined_at = now(), quarantine_reason = $2
+        WHERE id = $1`,
+      [regra.id, limite.detail]
+    );
+    return { ruleId: regra.id, ruleName: regra.name, outcome: 'skipped_rate_limit', actionsRun: [] };
+  }
+
+  const runId = newId();
+  const reivindicada = await session.query<{ id: string }>(
+    `INSERT INTO aurora.rule_runs
+       (id, organization_id, rule_id, event_type, aggregate_id, outcome, facts, schedule_slot)
+     VALUES ($1, $2, $3, 'automation.schedule', $3, 'matched', $4::jsonb, $5)
+     ON CONFLICT (rule_id, schedule_slot) WHERE schedule_slot IS NOT NULL DO NOTHING
+     RETURNING id`,
+    [runId, session.context.organizationId, regra.id, JSON.stringify(evento.payload), slot]
+  );
+  if (reivindicada.length === 0) return null;
+
+  const acoes = await session.query<{ kind: string; params: Record<string, unknown> }>(
+    `SELECT kind, params FROM aurora.automation_actions WHERE rule_id = $1 ORDER BY position`,
+    [regra.id]
+  );
+  const feitas: RuleExecution['actionsRun'] = [];
+  let erro: string | null = null;
+  for (const acao of acoes) {
+    // SAVEPOINT por ação: a que falha desfaz SÓ o que ela fez, e o registro da
+    // execução (com o erro) continua gravável na mesma transação.
+    await session.query('SAVEPOINT acao_agendada');
+    try {
+      const detalhe = await executeAction(session, regra.id, acao.kind, acao.params, evento);
+      await session.query('RELEASE SAVEPOINT acao_agendada');
+      feitas.push({ kind: acao.kind, ok: true, detail: detalhe });
+    } catch (e) {
+      await session.query('ROLLBACK TO SAVEPOINT acao_agendada');
+      erro = e instanceof Error ? e.message : String(e);
+      feitas.push({ kind: acao.kind, ok: false, detail: erro });
+      break;
+    }
+  }
+  const resultado = erro === null ? 'matched' : 'failed';
+  await session.query(
+    `UPDATE aurora.rule_runs
+        SET outcome = $2::aurora.run_outcome, actions_run = $3::jsonb, error = $4, duration_ms = $5
+      WHERE id = $1`,
+    [runId, resultado, JSON.stringify(feitas), erro, Date.now() - inicio]
+  );
+  return {
+    ruleId: regra.id,
+    ruleName: regra.name,
+    outcome: resultado,
+    actionsRun: feitas,
+    ...(erro ? { error: erro } : {}),
+  };
+}
+
+/** Avisa na caixa de entrada e põe o e-mail na FILA — sem transporte, não sai. */
+async function avisar(
+  session: TenantSession,
+  membershipId: string,
+  aviso: {
+    typeKey: string;
+    aggregateType: string;
+    aggregateId: string;
+    title: string;
+    body: string | null;
+    link: string | null;
+    dedupe: string;
+    email: boolean;
+  }
+): Promise<string> {
+  const id = newId();
+  await session.query(
+    `INSERT INTO aurora.notifications
+       (id, organization_id, membership_id, type_key, aggregate_type, aggregate_id, title, body, link, dedupe_key)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      id,
+      session.context.organizationId,
+      membershipId,
+      aviso.typeKey,
+      aviso.aggregateType,
+      aviso.aggregateId,
+      aviso.title,
+      aviso.body,
+      aviso.link,
+      aviso.dedupe,
+    ]
+  );
+  await session.query(
+    `INSERT INTO aurora.notification_deliveries (id, organization_id, notification_id, channel, state, sent_at)
+     VALUES ($1, $2, $3, 'in_app', 'sent', now())`,
+    [newId(), session.context.organizationId, id]
+  );
+  if (aviso.email) {
+    await session.query(
+      `INSERT INTO aurora.notification_deliveries (id, organization_id, notification_id, channel, state, reason)
+       VALUES ($1, $2, $3, 'email', 'pending', $4)`,
+      [newId(), session.context.organizationId, id, EMAIL_SEM_TRANSPORTE]
+    );
+  }
+  return id;
+}
+
+async function destinatariosAtivos(session: TenantSession, ids: unknown): Promise<string[]> {
+  const lista = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : [];
+  if (lista.length === 0) return [];
+  const r = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.memberships WHERE id = ANY($1::uuid[]) AND status = 'active' ORDER BY id`,
+    [lista]
+  );
+  return r.map((x) => x.id);
+}
+
+const dataISO = (d: Date): string => d.toISOString().slice(0, 10);
+
+async function enviarRelatorio(
+  session: TenantSession,
+  ruleId: string,
+  p: Record<string, unknown>,
+  event: IncomingEvent
+): Promise<string> {
+  const slot = new Date(String(event.payload.slot));
+  const dias = p.periodDays === undefined ? 30 : Number(p.periodDays);
+  const tier = String(p.tier) as ReportTier;
+  const entrada = {
+    tier,
+    indicators: Array.isArray(p.indicators) ? (p.indicators as string[]) : undefined,
+    from: new Date(slot.getTime() - dias * 86_400_000).toISOString(),
+    to: slot.toISOString(),
+    ...(typeof p.customerId === 'string' ? { customer_id: p.customerId } : {}),
+    ...(typeof p.sectorId === 'string' ? { sector_id: p.sectorId } : {}),
+    ...(typeof p.planKind === 'string' ? { plan_kind: p.planKind } : {}),
+    ...(typeof p.assetCategoryId === 'string' ? { asset_category_id: p.assetCategoryId } : {}),
+  };
+  let gerados = 0;
+  const pulados: string[] = [];
+  for (const membershipId of await destinatariosAtivos(session, p.recipients)) {
+    if (!(await temPermissao(session, membershipId, 'insight.read'))) {
+      pulados.push('sem permissão de indicadores');
+      continue;
+    }
+    // Cada destinatário recebe o relatório no SEU recorte: quem só vê o
+    // Hospital A não recebe número do Hospital B porque a regra é de outra pessoa.
+    await session.query('SAVEPOINT relatorio_destinatario');
+    let r: Awaited<ReturnType<typeof buildReport>>;
+    try {
+      r = await buildReport(session, membershipId, entrada);
+      await session.query('RELEASE SAVEPOINT relatorio_destinatario');
+    } catch (e) {
+      await session.query('ROLLBACK TO SAVEPOINT relatorio_destinatario');
+      if (e instanceof NotFoundError) {
+        pulados.push('filtro fora do escopo do destinatário');
+        continue;
+      }
+      throw e;
+    }
+    const saidaId = newId();
+    const nome = String(event.payload.ruleName ?? 'automação');
+    const notificacao = await avisar(session, membershipId, {
+      typeKey: 'automation.scheduled_report',
+      aggregateType: 'automation_report_output',
+      aggregateId: saidaId,
+      title: `Relatório ${REPORT_TIER_LABEL[tier]} — ${nome}`,
+      body: `Período: ${dataISO(new Date(entrada.from))} a ${dataISO(slot)}`,
+      link: `/relatorios/agendados/${saidaId}`,
+      dedupe: `automation.scheduled_report:${membershipId}:${ruleId}:${slot.toISOString()}`,
+      email: true,
+    });
+    await session.query(
+      `INSERT INTO aurora.automation_report_outputs
+         (id, organization_id, rule_id, schedule_slot, recipient_membership_id, tier, filters, sections,
+          notification_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)`,
+      [
+        saidaId,
+        session.context.organizationId,
+        ruleId,
+        slot,
+        membershipId,
+        tier,
+        JSON.stringify(r.filters),
+        JSON.stringify(r.sections),
+        notificacao,
+      ]
+    );
+    gerados++;
+  }
+  return (
+    `${gerados} relatório(s) na caixa de entrada; e-mail na fila (sem transporte configurado)` +
+    (pulados.length > 0
+      ? `; ${pulados.length} destinatário(s) pulado(s): ${[...new Set(pulados)].join(', ')}`
+      : '')
+  );
+}
+
+async function lembrar(
+  session: TenantSession,
+  ruleId: string,
+  p: Record<string, unknown>,
+  event: IncomingEvent
+): Promise<string> {
+  const slot = String(event.payload.slot);
+  const pessoas = await destinatariosAtivos(session, p.recipients);
+  for (const membershipId of pessoas) {
+    await avisar(session, membershipId, {
+      typeKey: 'automation.reminder',
+      aggregateType: 'automation_rule',
+      aggregateId: ruleId,
+      title: String(p.title),
+      body: typeof p.message === 'string' && p.message.trim() ? p.message : null,
+      link: null,
+      dedupe: `automation.reminder:${membershipId}:${ruleId}:${slot}`,
+      email: true,
+    });
+  }
+  return `${pessoas.length} lembrete(s); e-mail na fila (sem transporte configurado)`;
+}
+
+async function criarTarefa(
+  session: TenantSession,
+  ruleId: string,
+  p: Record<string, unknown>,
+  event: IncomingEvent
+): Promise<string> {
+  const slot = new Date(String(event.payload.slot));
+  const [dono] = await destinatariosAtivos(session, [p.ownerMembershipId]);
+  if (!dono) throw new ValidationError('o responsável da tarefa não tem mais acesso ativo');
+  const metodo = String(p.method);
+  const prazo = p.dueInDays === undefined ? 7 : Number(p.dueInDays);
+  const texto = (k: string): string | null =>
+    typeof p[k] === 'string' && (p[k] as string).trim() ? (p[k] as string).trim() : null;
+  const id = newId();
+  await session.query(
+    `INSERT INTO aurora.automation_tasks
+       (id, organization_id, rule_id, schedule_slot, method, title, why, where_text, how, how_much_cents,
+        owner_membership_id, due_date, pdca_phase)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::date, $13)`,
+    [
+      id,
+      session.context.organizationId,
+      ruleId,
+      slot,
+      metodo,
+      String(p.title).trim(),
+      texto('why'),
+      texto('where'),
+      texto('how'),
+      p.howMuch === undefined || p.howMuch === null || p.howMuch === ''
+        ? null
+        : centsFromDecimal(String(p.howMuch)),
+      dono,
+      dataISO(new Date(slot.getTime() + prazo * 86_400_000)),
+      metodo === 'pdca' ? 'plan' : null,
+    ]
+  );
+  await avisar(session, dono, {
+    typeKey: 'automation.task',
+    aggregateType: 'automation_task',
+    aggregateId: id,
+    title: `Nova tarefa: ${String(p.title).trim()}`,
+    body: metodo === '5w2h' ? 'Plano de ação 5W2H' : metodo === 'pdca' ? 'Ciclo PDCA — fase Planejar' : null,
+    link: '/tarefas',
+    dedupe: `automation.task:${dono}:${ruleId}:${slot.toISOString()}`,
+    email: false,
+  });
+  return `tarefa ${metodo} criada`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* tarefas e relatórios entregues                                              */
+/* -------------------------------------------------------------------------- */
+
+export interface AutomationTask {
+  id: string;
+  rule_id: string | null;
+  rule_name: string | null;
+  method: string;
+  title: string;
+  why: string | null;
+  where_text: string | null;
+  how: string | null;
+  how_much_cents: number | null;
+  owner_membership_id: string;
+  owner_name: string | null;
+  due_date: string | null;
+  pdca_phase: string | null;
+  state: string;
+  created_at: Date;
+  completed_at: Date | null;
+}
+
+/** As tarefas: as minhas, ou todas para quem administra automações. */
+export async function listAutomationTasks(
+  session: TenantSession,
+  filtro: { ownerMembershipId: string | null; state?: string | null }
+): Promise<AutomationTask[]> {
+  const params: unknown[] = [];
+  const onde: string[] = [];
+  if (filtro.ownerMembershipId) {
+    params.push(filtro.ownerMembershipId);
+    onde.push(`t.owner_membership_id = $${params.length}`);
+  }
+  if (filtro.state) {
+    params.push(filtro.state);
+    onde.push(`t.state = $${params.length}`);
+  }
+  const linhas = await session.query<AutomationTask>(
+    `SELECT t.id, t.rule_id, r.name AS rule_name, t.method, t.title, t.why, t.where_text, t.how,
+            t.how_much_cents, t.owner_membership_id, u.name AS owner_name,
+            to_char(t.due_date, 'YYYY-MM-DD') AS due_date, t.pdca_phase, t.state, t.created_at, t.completed_at
+       FROM aurora.automation_tasks t
+       LEFT JOIN aurora.automation_rules r ON r.id = t.rule_id
+       LEFT JOIN aurora.memberships m ON m.id = t.owner_membership_id
+       LEFT JOIN aurora.users u ON u.id = m.user_id
+      ${onde.length ? 'WHERE ' + onde.join(' AND ') : ''}
+      ORDER BY (t.state = 'open') DESC, t.due_date NULLS LAST, t.created_at DESC
+      LIMIT 200`,
+    params
+  );
+  return linhas.map((l) => ({
+    ...l,
+    how_much_cents: l.how_much_cents === null ? null : Number(l.how_much_cents),
+  }));
+}
+
+const PROXIMA_FASE: Record<string, string> = { plan: 'do', do: 'check', check: 'act' };
+
+/**
+ * Avança a tarefa. PDCA anda uma fase por vez (Planejar → Executar → Checar →
+ * Agir) e só conclui depois de Agir; as outras concluem direto. Só o
+ * responsável, ou quem administra automações.
+ */
+export async function advanceAutomationTask(
+  session: TenantSession,
+  taskId: string,
+  acao: 'advance' | 'cancel',
+  quem: { membershipId: string | null; canManage: boolean }
+): Promise<{ state: string; pdca_phase: string | null }> {
+  const [t] = await session.query<{
+    owner_membership_id: string;
+    method: string;
+    pdca_phase: string | null;
+    state: string;
+  }>(
+    `SELECT owner_membership_id, method, pdca_phase, state FROM aurora.automation_tasks WHERE id = $1 FOR UPDATE`,
+    [taskId]
+  );
+  if (!t) throw new NotFoundError('tarefa', taskId);
+  if (!quem.canManage && t.owner_membership_id !== quem.membershipId)
+    throw new NotFoundError('tarefa', taskId);
+  if (t.state !== 'open') throw new ConflictError('a tarefa já foi encerrada');
+  if (acao === 'cancel') {
+    await session.query(`UPDATE aurora.automation_tasks SET state = 'cancelled' WHERE id = $1`, [taskId]);
+    return { state: 'cancelled', pdca_phase: t.pdca_phase };
+  }
+  if (t.method === 'pdca' && t.pdca_phase && PROXIMA_FASE[t.pdca_phase]) {
+    const fase = PROXIMA_FASE[t.pdca_phase]!;
+    await session.query(`UPDATE aurora.automation_tasks SET pdca_phase = $2 WHERE id = $1`, [taskId, fase]);
+    return { state: 'open', pdca_phase: fase };
+  }
+  await session.query(
+    `UPDATE aurora.automation_tasks SET state = 'done', completed_at = now(), completed_by = $2 WHERE id = $1`,
+    [taskId, quem.membershipId]
+  );
+  return { state: 'done', pdca_phase: t.pdca_phase };
+}
+
+/**
+ * Um relatório entregue — SÓ ao destinatário. O conteúdo foi gerado no recorte
+ * de escopo dele; mostrar a um gestor de escopo menor vazaria o que esse
+ * gestor não vê no Painel. Quem administra acompanha pelo log da regra.
+ */
+export async function getReportOutput(
+  session: TenantSession,
+  id: string,
+  quem: { membershipId: string | null }
+): Promise<Record<string, unknown>> {
+  const [o] = await session.query<Record<string, unknown> & { recipient_membership_id: string }>(
+    `SELECT o.id, o.rule_id, r.name AS rule_name, o.schedule_slot, o.recipient_membership_id, o.tier,
+            o.filters, o.sections, o.email_state, o.created_at
+       FROM aurora.automation_report_outputs o
+       JOIN aurora.automation_rules r ON r.id = o.rule_id
+      WHERE o.id = $1`,
+    [id]
+  );
+  if (!o || o.recipient_membership_id !== quem.membershipId) {
+    throw new NotFoundError('relatório', id);
+  }
+  return o;
 }

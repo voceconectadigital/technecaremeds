@@ -245,6 +245,7 @@ async function main() {
     assignRole,
     provisionWorkOrderStates,
     provisionStarterLocationTypes,
+    provisionAssetFamilies,
     createCustomer,
     createLocation,
     createCatalogItem,
@@ -351,7 +352,12 @@ async function main() {
         systemKey: 'corrective',
       });
 
-      const categoria = await createAssetCategory(s, { name: 'Ventilador pulmonar' });
+      // As cinco famílias do cliente (16/10/2026); o tipo do equipamento é filho de uma delas.
+      const familias = await provisionAssetFamilies(s);
+      const categoria = await createAssetCategory(s, {
+        name: 'Ventilador pulmonar',
+        parentId: familias.get('life_support'),
+      });
       await createAsset(s, {
         name: org === E2E.orgA ? 'Ventilador Alfa-1' : 'Ventilador Beta-1',
         customerId: clienteId,

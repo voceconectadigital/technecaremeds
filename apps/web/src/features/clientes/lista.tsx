@@ -20,6 +20,7 @@ import { Can, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { DialogoNovoCliente, rotuloDoSegmento } from './novo-cliente';
+import { rotuloDaClassificacao } from './classificacao';
 
 export function ClientesPage() {
   // Na URL: o atalho "Novo cliente" do Painel de Controle abre o diálogo direto (?novo=sim).
@@ -162,7 +163,7 @@ export function ClientesPage() {
 /* -------------------------------------------------------------------------- */
 
 function LinhaCliente({ cliente: c, primeira }: { cliente: Customer; primeira: boolean }) {
-  const segmento = rotuloDoSegmento(c.segment);
+  const segmento = rotuloDaClassificacao(c) ?? rotuloDoSegmento(c.segment);
   const detalhes = [c.trade_name && c.trade_name !== c.name ? c.trade_name : null, segmento, c.tax_id, c.code]
     .filter(Boolean)
     .join(' · ');

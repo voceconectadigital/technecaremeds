@@ -21,7 +21,8 @@ import {
   workOrdersFromRequest,
   type ServiceRequestDetail,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { TIPOS_DE_SOLICITACAO } from './nova';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
@@ -34,6 +35,8 @@ export function SolicitacaoPage() {
   const toast = useToast();
   const [aceiteAberto, setAceiteAberto] = useState(false);
   const [recusaAberta, setRecusaAberta] = useState(false);
+  const [pedindoInfo, setPedindoInfo] = useState(false);
+  const { can } = usePermissions();
 
   const { data, isLoading, isError, error } = useApiQuery(requestDetail, { params: { id } }) as {
     data: ServiceRequestDetail | undefined;
@@ -62,7 +65,10 @@ export function SolicitacaoPage() {
 
   const podeAceitar = data.available_transitions.some((t) => t.to === 'accepted');
   const podeRecusar = data.available_transitions.some((t) => t.to === 'rejected');
-  const podeTriar = data.available_transitions.some((t) => t.to === 'triage');
+  // "Assumir triagem" é ato de quem tria (reunião 16/10/2026): o solicitante
+  // acompanha a própria solicitação e não vê este botão.
+  const podeTriar =
+    can('service_request.triage') && data.available_transitions.some((t) => t.to === 'triage');
   const podePedirInfo = data.available_transitions.some((t) => t.to === 'info_needed');
 
   return (
@@ -82,18 +88,7 @@ export function SolicitacaoPage() {
               Assumir triagem
             </Button>
           )}
-          {podePedirInfo && (
-            <Button
-              onClick={() =>
-                transicao.mutate({
-                  params: { id },
-                  body: { to: 'info_needed', version: data.version },
-                })
-              }
-            >
-              Pedir informação
-            </Button>
-          )}
+          {podePedirInfo && <Button onClick={() => setPedindoInfo(true)}>Pedir informação</Button>}
           {podeRecusar && (
             <Button variant="ghost" icon={<X className="size-4" />} onClick={() => setRecusaAberta(true)}>
               Recusar
@@ -132,7 +127,14 @@ export function SolicitacaoPage() {
                 <Info rotulo="Cliente" valor={data.customer_name} />
                 <Info rotulo="Local" valor={data.location_name} />
                 <Info rotulo="Equipamento" valor={data.asset_name} />
-                <Info rotulo="Sintoma relatado" valor={data.reported_failure_label} />
+                <Info
+                  rotulo="Tipo"
+                  valor={data.requested_type ? TIPOS_DE_SOLICITACAO[data.requested_type] : null}
+                />
+                {/* O campo saiu da abertura (16/10/2026); o dado antigo continua visível. */}
+                {data.reported_failure_label && (
+                  <Info rotulo="Sintoma relatado" valor={data.reported_failure_label} />
+                )}
                 <Info rotulo="Quem pediu" valor={data.requester_name} />
                 <Info rotulo="Aberta" valor={formatarDataRelativa(data.created_at)} />
               </dl>
@@ -184,18 +186,93 @@ export function SolicitacaoPage() {
       <DialogoRecusa
         open={recusaAberta}
         onOpenChange={setRecusaAberta}
-        onConfirmar={(motivoId) =>
+        onConfirmar={(motivoId, observacao) =>
           transicao.mutate(
             {
               params: { id },
-              body: { to: 'rejected', rejection_reason_id: motivoId, version: data.version },
+              body: {
+                to: 'rejected',
+                rejection_reason_id: motivoId,
+                ...(observacao.trim() ? { rejection_note: observacao.trim() } : {}),
+                version: data.version,
+              },
             },
             // A confirmação nomeia o registro: "salvo" sozinho não diz o quê.
             { onSuccess: () => toast.success(`${data.number} recusada`) }
           )
         }
       />
+      <DialogoPedirInfo
+        open={pedindoInfo}
+        onOpenChange={setPedindoInfo}
+        enviando={transicao.isPending}
+        onConfirmar={(pergunta) =>
+          transicao.mutate(
+            { params: { id }, body: { to: 'info_needed', info_request: pergunta, version: data.version } },
+            {
+              onSuccess: () => {
+                toast.success(`${data.number}: pedido de informação enviado`);
+                setPedindoInfo(false);
+              },
+            }
+          )
+        }
+      />
     </AppShell>
+  );
+}
+
+/** A pergunta é obrigatória: "aguardando informação" sem dizer qual não destrava nada. */
+function DialogoPedirInfo({
+  open,
+  onOpenChange,
+  onConfirmar,
+  enviando,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onConfirmar: (pergunta: string) => void;
+  enviando: boolean;
+}) {
+  const [pergunta, setPergunta] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Pedir informação"
+      description="A solicitação fica aguardando a resposta de quem abriu. Diga exatamente o que falta."
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>Voltar</Button>
+          <Button
+            variant="primary"
+            loading={enviando}
+            onClick={() => {
+              if (pergunta.trim().length < 5) {
+                setErro('Escreva a pergunta (ao menos 5 caracteres).');
+                return;
+              }
+              onConfirmar(pergunta.trim());
+            }}
+          >
+            Enviar pergunta
+          </Button>
+        </>
+      }
+    >
+      <Field label="O que falta saber" required error={erro}>
+        <Textarea
+          value={pergunta}
+          rows={3}
+          onChange={(e) => {
+            setPergunta(e.target.value);
+            setErro(null);
+          }}
+          placeholder="Ex.: qual o número de série na etiqueta traseira do equipamento?"
+        />
+      </Field>
+    </Dialog>
   );
 }
 
@@ -221,7 +298,12 @@ function DialogoAceite({
 }) {
   const toast = useToast();
   const naturezas = useCatalogo('work_order_type');
-  const [natureza, setNatureza] = useState('');
+  const [escolhida, setNatureza] = useState('');
+  // Sem escolha explícita, a natureza proposta é a do TIPO pedido (mesma chave de sistema).
+  const proposta = solicitacao.requested_type
+    ? (naturezas.find((n) => n.system_key === solicitacao.requested_type)?.id ?? '')
+    : '';
+  const natureza = escolhida || proposta;
   const [erro, setErro] = useState<string | null>(null);
 
   const criar = useApiMutation(workOrdersFromRequest, {
@@ -326,7 +408,7 @@ function DialogoRecusa({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  onConfirmar: (motivoId: string) => void;
+  onConfirmar: (motivoId: string, observacao: string) => void;
 }) {
   const motivos = useCatalogo('rejection_reason');
   const [motivo, setMotivo] = useState('');
@@ -349,7 +431,7 @@ function DialogoRecusa({
                 setErro('Escolha o motivo da recusa.');
                 return;
               }
-              onConfirmar(motivo);
+              onConfirmar(motivo, observacao);
               onOpenChange(false);
             }}
           >
@@ -410,6 +492,10 @@ const ROTULOS: Record<string, string> = {
   accepted: 'Aceita',
   rejected: 'Recusada',
   merged: 'Unida a outra',
+  duplicate: 'Duplicada',
+  in_service: 'Em atendimento',
+  fulfilled: 'Atendida',
+  closed: 'Encerrada',
   cancelled: 'Cancelada',
 };
 

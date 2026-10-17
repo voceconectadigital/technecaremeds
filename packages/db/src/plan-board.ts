@@ -29,7 +29,7 @@ import {
   type FrequencyUnit,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
-import { addPlanTask, createPlan } from './maintenance-plans';
+import { addPlanTask, createPlan, materializeCycle } from './maintenance-plans';
 import { scopeSql } from './metrics';
 import type { MembershipScope } from './painel';
 
@@ -40,16 +40,21 @@ import type { MembershipScope } from './painel';
 /**
  * Os tipos que o domínio suporta HOJE, e como cada um se apoia nele.
  *
- * `workOrderType`: a chave de sistema da natureza da OS gerada. TSE e
- * qualificação não têm natureza própria no catálogo de fábrica — entram como
- * `inspection`, e o que as distingue é o `procedure_kind` do protocolo.
- * (A VALIDAR com o cliente se ele quer naturezas próprias.)
+ * `workOrderType`: a chave de sistema da natureza da OS gerada. Desde a 0064
+ * (reunião 16/10/2026) TSE e qualificação têm natureza PRÓPRIA — o cliente as
+ * listou como tipos. `fallback` cobre a organização que ainda só tem
+ * `inspection`: o plano continua sendo criado, e o `procedure_kind` do
+ * protocolo continua distinguindo os dois.
  */
 export const PLAN_KINDS = {
-  preventive: { workOrderType: 'preventive', procedureKind: null },
-  calibration: { workOrderType: 'calibration', procedureKind: 'calibration' },
-  electrical_safety: { workOrderType: 'inspection', procedureKind: 'electrical_safety' },
-  qualification: { workOrderType: 'inspection', procedureKind: 'qualification' },
+  preventive: { workOrderType: 'preventive', procedureKind: null, fallback: null },
+  calibration: { workOrderType: 'calibration', procedureKind: 'calibration', fallback: null },
+  electrical_safety: {
+    workOrderType: 'electrical_safety',
+    procedureKind: 'electrical_safety',
+    fallback: 'inspection',
+  },
+  qualification: { workOrderType: 'qualification', procedureKind: 'qualification', fallback: 'inspection' },
 } as const;
 export type PlanKind = keyof typeof PLAN_KINDS;
 
@@ -149,9 +154,10 @@ export async function createGuidedPlan(
   const tipo = PLAN_KINDS[input.kind];
   const [natureza] = await session.query<{ id: string }>(
     `SELECT id FROM aurora.catalog_items
-      WHERE catalog_key = 'work_order_type' AND system_key = $1 AND archived_at IS NULL
-      ORDER BY position LIMIT 1`,
-    [tipo.workOrderType]
+      WHERE catalog_key = 'work_order_type' AND archived_at IS NULL
+        AND (system_key = $1 OR system_key = $2)
+      ORDER BY (system_key = $1) DESC, position LIMIT 1`,
+    [tipo.workOrderType, tipo.fallback]
   );
   if (!natureza) {
     throw new ValidationError(
@@ -240,6 +246,8 @@ export interface PlanBoardFilters {
   to: Date;
   customerId?: string | null;
   sectorId?: string | null;
+  /** Tipo (preventiva, calibração, TSE, qualificação) — combinável com cliente e setor. */
+  kind?: string | null;
 }
 
 interface ItemRow {
@@ -261,6 +269,8 @@ interface ItemRow {
   asset_name: string;
   sector_id: string | null;
   sector_name: string | null;
+  procedure_key: string | null;
+  procedure_title: string | null;
 }
 
 async function sectorPath(
@@ -291,7 +301,11 @@ async function realItems(
             ${TIPO_DA_TAREFA_SQL} AS kind,
             c.id AS customer_id, c.name AS customer_name,
             a.id AS asset_id, a.name AS asset_name,
-            se.id AS sector_id, se.name AS sector_name
+            se.id AS sector_id, se.name AS sector_name,
+            t.checklist_template_key AS procedure_key,
+            (SELECT ct.title FROM aurora.checklist_templates ct
+              WHERE ct.key = t.checklist_template_key
+              ORDER BY ct.version DESC LIMIT 1) AS procedure_title
        FROM aurora.plan_cycle_items i
        JOIN aurora.plan_tasks t ON t.id = i.task_id
        JOIN aurora.maintenance_plans p ON p.id = t.plan_id
@@ -310,9 +324,10 @@ async function realItems(
         AND ($3::uuid IS NULL OR p.customer_id = $3)
         AND ($4::text IS NULL OR a.location_path LIKE $4 || '%')
         AND ${scopeSql('a.customer_id', 'a.location_path', 5)}
+        AND ($7::text IS NULL OR ${TIPO_DA_TAREFA_SQL} = $7)
       ORDER BY i.due_at, a.name
       LIMIT ${limit}`,
-    [f.from, f.to, f.customerId ?? null, caminho, scope.customerIds, scope.locationPaths]
+    [f.from, f.to, f.customerId ?? null, caminho, scope.customerIds, scope.locationPaths, f.kind ?? null]
   );
 }
 
@@ -323,6 +338,9 @@ export interface PlanBoard {
   byCustomer: Array<{ key: string; label: string } & Record<BoardState, number>>;
   bySector: Array<{ key: string; label: string } & Record<BoardState, number>>;
   byMonth: Array<{ key: string } & Record<BoardState, number>>;
+  /** Por plano e por procedimento (reunião 16/10/2026) — dos mesmos itens reais. */
+  byPlan: Array<{ key: string; label: string } & Record<BoardState, number>>;
+  byProcedure: Array<{ key: string; label: string } & Record<BoardState, number>>;
   plans: { active: number; tasks: number };
 }
 
@@ -350,6 +368,8 @@ export async function planBoard(
   const porCliente = new Map<string, { label: string; v: Record<BoardState, number> }>();
   const porSetor = new Map<string, { label: string; v: Record<BoardState, number> }>();
   const porMes = new Map<string, Record<BoardState, number>>();
+  const porPlano = new Map<string, { label: string; v: Record<BoardState, number> }>();
+  const porProcedimento = new Map<string, { label: string; v: Record<BoardState, number> }>();
 
   for (const i of itens) {
     const estado = boardState(
@@ -378,6 +398,13 @@ export async function planBoard(
     const m = porMes.get(mes) ?? vazio();
     m[estado]++;
     porMes.set(mes, m);
+    const pl = porPlano.get(i.plan_id) ?? { label: i.plan_name, v: vazio() };
+    pl.v[estado]++;
+    porPlano.set(i.plan_id, pl);
+    const pk = i.procedure_key ?? 'sem-procedimento';
+    const pr = porProcedimento.get(pk) ?? { label: i.procedure_title ?? 'Sem procedimento', v: vazio() };
+    pr.v[estado]++;
+    porProcedimento.set(pk, pr);
   }
 
   const [contagem] = await session.query<{ planos: string; tarefas: string }>(
@@ -398,6 +425,8 @@ export async function planBoard(
     byCustomer: [...porCliente.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
     bySector: [...porSetor.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
     byMonth: [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => ({ key, ...v })),
+    byPlan: [...porPlano.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
+    byProcedure: [...porProcedimento.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
     plans: { active: Number(contagem?.planos ?? 0), tasks: Number(contagem?.tarefas ?? 0) },
   };
 }
@@ -423,6 +452,7 @@ export interface ScheduleEntry {
   asset_name: string;
   work_order_id: string | null;
   work_order_number: string | null;
+  work_order_category?: string | null;
 }
 
 /** Teto de previstos por resposta: um plano diário de 300 ativos num ano são 100 mil linhas. */
@@ -463,6 +493,7 @@ export async function planSchedule(
     kind: i.kind,
     customer_id: i.customer_id,
     customer_name: i.customer_name,
+    work_order_category: i.wo_category,
     sector_name: i.sector_name,
     asset_id: i.asset_id,
     asset_name: i.asset_name,
@@ -561,5 +592,52 @@ export async function planSchedule(
   }
 
   items.sort((a, b) => a.due_at.localeCompare(b.due_at) || a.asset_name.localeCompare(b.asset_name));
-  return { items, truncated };
+  // Os previstos também respeitam o tipo escolhido (os reais já vêm filtrados na consulta).
+  return { items: f.kind ? items.filter((x) => x.kind === f.kind) : items, truncated };
+}
+
+/* -------------------------------------------------------------------------- */
+/* ▶ Executar um item do plano (reunião 16/10/2026, Fase 6)                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Devolve a OS do item do ciclo, criando-a se ainda não existe.
+ *
+ * Nenhum motor novo: quem cria é `materializeCycle` — a mesma função da
+ * varredura —, então a OS nasce com o procedimento/checklist da VERSÃO certa
+ * da tarefa (P1.4). Item dispensado não executa.
+ */
+export async function executePlanItem(
+  session: TenantSession,
+  itemId: string,
+  scope: MembershipScope
+): Promise<{ workOrderId: string; created: boolean }> {
+  const [item] = await session.query<{
+    cycle_id: string;
+    status: string;
+    work_order_id: string | null;
+    customer_id: string;
+    location_path: string | null;
+  }>(
+    `SELECT i.cycle_id, i.status::text AS status, i.work_order_id, a.customer_id, a.location_path
+       FROM aurora.plan_cycle_items i
+       JOIN aurora.assets a ON a.id = i.asset_id
+      WHERE i.id = $1
+        AND ${scopeSql('a.customer_id', 'a.location_path', 2)}`,
+    [itemId, scope.customerIds, scope.locationPaths]
+  );
+  if (!item) throw new NotFoundError('item do plano', itemId);
+  if (item.status === 'skipped') {
+    throw new ValidationError('este item foi dispensado e não gera execução', { field: 'itemId' });
+  }
+  if (item.work_order_id) return { workOrderId: item.work_order_id, created: false };
+  await materializeCycle(session, item.cycle_id);
+  const [depois] = await session.query<{ work_order_id: string | null }>(
+    `SELECT work_order_id FROM aurora.plan_cycle_items WHERE id = $1`,
+    [itemId]
+  );
+  if (!depois?.work_order_id) {
+    throw new ValidationError('não foi possível gerar a OS deste item', { field: 'itemId' });
+  }
+  return { workOrderId: depois.work_order_id, created: true };
 }

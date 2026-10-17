@@ -9,6 +9,13 @@
  * cliente, o setor escolhido é descartado. E o servidor confere tudo de novo:
  * esta tela organiza a escolha, não a garante.
  *
+ * FAMÍLIA → TIPO → MODELO (reunião 16/10/2026).
+ *
+ * O tipo do equipamento ("Ventilador pulmonar") nasce do catálogo, dentro de
+ * uma das cinco famílias (Suporte à vida, Diagnóstico, Terapia, Tratamento,
+ * Equipamentos de apoio) — não de texto solto. Quem cura o catálogo cria tipo
+ * e modelo ali mesmo, sem sair do cadastro.
+ *
  * NA EDIÇÃO, MUDAR DE SETOR É TRANSFERÊNCIA.
  *
  * O banco recusa a edição direta do local (0015) — mudar de lugar exige
@@ -19,6 +26,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Button, Dialog, Field, Input, Select, useToast } from '@aurora/ui';
 import {
+  assetCategoriesCreate,
+  assetModelsCreate,
   assetDetail,
   assetsCreate,
   assetsFormOptions,
@@ -33,7 +42,7 @@ import {
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 
 interface Opcoes {
-  categories: Array<{ id: string; name: string }>;
+  categories: Array<{ id: string; name: string; parent_id: string | null; family_key?: string | null }>;
   models: Array<{
     id: string;
     name: string;
@@ -54,7 +63,17 @@ export interface EquipamentoInicial {
   tag: string | null;
   serial_number: string | null;
   asset_number: string | null;
+  tracker_kind?: string | null;
+  tracker_tag?: string | null;
 }
+
+export const TIPOS_DE_RASTREADOR = [
+  { valor: 'gps', rotulo: 'Chip geolocalizador (GPS)' },
+  { valor: 'ble', rotulo: 'Beacon Bluetooth (BLE)' },
+  { valor: 'rfid', rotulo: 'Etiqueta RFID' },
+  { valor: 'nfc', rotulo: 'Etiqueta NFC' },
+  { valor: 'outro', rotulo: 'Outro' },
+] as const;
 
 export interface DialogoEquipamentoProps {
   open: boolean;
@@ -103,6 +122,11 @@ export function DialogoEquipamento({
   const [tag, setTag] = useState(inicial?.tag ?? '');
   const [serie, setSerie] = useState(inicial?.serial_number ?? '');
   const [patrimonio, setPatrimonio] = useState(inicial?.asset_number ?? '');
+  const [familia, setFamilia] = useState('');
+  const [rastreadorTipo, setRastreadorTipo] = useState(inicial?.tracker_kind ?? '');
+  const [rastreadorId, setRastreadorId] = useState(inicial?.tracker_tag ?? '');
+  const [novoTipo, setNovoTipo] = useState<string | null>(null);
+  const [novoModelo, setNovoModelo] = useState<{ fabricante: string; nome: string } | null>(null);
   const [motivo, setMotivo] = useState('');
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
 
@@ -118,6 +142,11 @@ export function DialogoEquipamento({
     setTag(inicial?.tag ?? '');
     setSerie(inicial?.serial_number ?? '');
     setPatrimonio(inicial?.asset_number ?? '');
+    setFamilia('');
+    setRastreadorTipo(inicial?.tracker_kind ?? '');
+    setRastreadorId(inicial?.tracker_tag ?? '');
+    setNovoTipo(null);
+    setNovoModelo(null);
     setMotivo('');
     setErro(null);
   }, [open, inicial, clienteInicial, setorInicial]);
@@ -136,6 +165,36 @@ export function DialogoEquipamento({
   }) as {
     data: Opcoes | undefined;
   };
+
+  const categorias = useMemo(() => opcoes?.categories ?? [], [opcoes]);
+  const familias = useMemo(() => categorias.filter((c) => c.family_key), [categorias]);
+  // Família da categoria inicial (edição): a própria, se for família; senão, a do pai.
+  const familiaEfetiva = useMemo(() => {
+    if (familia) return familia;
+    const c = categorias.find((x) => x.id === categoria);
+    if (!c) return '';
+    if (c.family_key) return c.id;
+    const pai = categorias.find((x) => x.id === c.parent_id && x.family_key);
+    return pai ? pai.id : 'sem-familia';
+  }, [familia, categoria, categorias]);
+  const tipos = useMemo(
+    () =>
+      familiaEfetiva === 'sem-familia'
+        ? categorias.filter(
+            (c) => !c.family_key && !categorias.some((f) => f.id === c.parent_id && f.family_key)
+          )
+        : categorias.filter((c) => c.parent_id === familiaEfetiva),
+    [categorias, familiaEfetiva]
+  );
+  const podeCurar = can('organization.manage_catalogs');
+  const criarTipo = useApiMutation(assetCategoriesCreate, {
+    invalidates: [assetsFormOptions],
+    onError: (e: ApiError) => setErro({ campo: 'asset_category_id', mensagem: e.problem.message }),
+  });
+  const criarModelo = useApiMutation(assetModelsCreate, {
+    invalidates: [assetsFormOptions],
+    onError: (e: ApiError) => setErro({ campo: 'asset_model_id', mensagem: e.problem.message }),
+  });
 
   const todosLocais = useMemo(() => detalhe?.locations ?? [], [detalhe]);
   const setores = useMemo(() => locaisQueRecebem(todosLocais), [todosLocais]);
@@ -166,7 +225,9 @@ export function DialogoEquipamento({
     if (!cliente) return falhar('customer_id', 'Escolha o cliente (hospital) do equipamento.');
     if (!setor) return falhar('location_id', 'Escolha o setor onde o equipamento está.');
     if (nome.trim().length < 2) return falhar('name', 'Dê um nome ao equipamento.');
-    if (!categoria) return falhar('asset_category_id', 'Escolha a categoria.');
+    if (!categoria) return falhar('asset_category_id', 'Escolha o tipo do equipamento.');
+    if (Boolean(rastreadorTipo) !== Boolean(rastreadorId.trim()))
+      return falhar('tracker_tag', 'Informe o tipo e o identificador do chip juntos (ou nenhum).');
     if (mudouDeSetor && motivo.trim().length < 5)
       return falhar('reason', 'Mudar de setor exige um motivo (5+ letras).');
     return true;
@@ -188,6 +249,8 @@ export function DialogoEquipamento({
       tag: tag.trim() || null,
       serial_number: serie.trim() || null,
       asset_number: patrimonio.trim() || null,
+      tracker_kind: (rastreadorTipo || null) as (typeof TIPOS_DE_RASTREADOR)[number]['valor'] | null,
+      tracker_tag: rastreadorId.trim() || null,
     };
     try {
       if (!editando) {
@@ -217,7 +280,16 @@ export function DialogoEquipamento({
   }
 
   const erroDe = (c: string) => (erro?.campo === c ? erro.mensagem : null);
-  const conhecidos = ['customer_id', 'location_id', 'name', 'asset_category_id', 'reason'];
+  const conhecidos = [
+    'customer_id',
+    'location_id',
+    'name',
+    'asset_category_id',
+    'asset_model_id',
+    'tracker_tag',
+    'tracker_kind',
+    'reason',
+  ];
   const salvando = criar.isPending || editar.isPending || transferir.isPending;
 
   return (
@@ -313,23 +385,84 @@ export function DialogoEquipamento({
               placeholder="Ex.: Monitor multiparamétrico — leito 3"
             />
           </Field>
-          <Field label="Categoria" required error={erroDe('asset_category_id')}>
+          <Field label="Família" hint="A categoria do equipamento.">
+            <Select
+              value={familiaEfetiva}
+              onChange={(e) => {
+                setFamilia(e.target.value);
+                setCategoria('');
+                setModelo('');
+              }}
+            >
+              <option value="">Escolha a família</option>
+              {familias.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+              <option value="sem-familia">Tipos sem família (cadastro antigo)</option>
+            </Select>
+          </Field>
+          <Field
+            label="Tipo do equipamento"
+            required
+            error={erroDe('asset_category_id')}
+            hint={familiaEfetiva && tipos.length === 0 ? 'Nenhum tipo nesta família ainda.' : undefined}
+          >
             <Select
               value={categoria}
+              disabled={!familiaEfetiva}
               onChange={(e) => {
                 setCategoria(e.target.value);
                 setModelo('');
               }}
             >
-              <option value="">Escolha a categoria</option>
-              {(opcoes?.categories ?? []).map((c) => (
+              <option value="">{familiaEfetiva ? 'Escolha o tipo' : 'Escolha a família primeiro'}</option>
+              {tipos.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Modelo" error={erroDe('asset_model_id')}>
+          {podeCurar && familiaEfetiva && familiaEfetiva !== 'sem-familia' && (
+            <div className="flex items-end gap-2 sm:col-span-2">
+              {novoTipo === null ? (
+                <Button size="sm" onClick={() => setNovoTipo('')}>
+                  Novo tipo nesta família
+                </Button>
+              ) : (
+                <>
+                  <Field label="Nome do novo tipo" className="flex-1">
+                    <Input
+                      value={novoTipo}
+                      onChange={(e) => setNovoTipo(e.target.value)}
+                      placeholder="Ex.: Ventilador pulmonar"
+                    />
+                  </Field>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={criarTipo.isPending}
+                    onClick={() =>
+                      criarTipo.mutate(
+                        { body: { name: novoTipo.trim(), family_id: familiaEfetiva } },
+                        {
+                          onSuccess: (r) => {
+                            setCategoria((r as { id: string }).id);
+                            setNovoTipo(null);
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Criar tipo
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+          <Field label="Modelo (fabricante — modelo)" error={erroDe('asset_model_id')}>
             <Select value={modelo} onChange={(e) => setModelo(e.target.value)}>
               <option value="">Não informar</option>
               {modelos.map((m) => (
@@ -339,6 +472,54 @@ export function DialogoEquipamento({
               ))}
             </Select>
           </Field>
+          {podeCurar && categoria && (
+            <div className="flex flex-wrap items-end gap-2 sm:col-span-2">
+              {novoModelo === null ? (
+                <Button size="sm" onClick={() => setNovoModelo({ fabricante: '', nome: '' })}>
+                  Novo modelo deste tipo
+                </Button>
+              ) : (
+                <>
+                  <Field label="Fabricante" className="min-w-40 flex-1">
+                    <Input
+                      value={novoModelo.fabricante}
+                      onChange={(e) => setNovoModelo({ ...novoModelo, fabricante: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Modelo" className="min-w-40 flex-1">
+                    <Input
+                      value={novoModelo.nome}
+                      onChange={(e) => setNovoModelo({ ...novoModelo, nome: e.target.value })}
+                    />
+                  </Field>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={criarModelo.isPending}
+                    onClick={() =>
+                      criarModelo.mutate(
+                        {
+                          body: {
+                            manufacturer: novoModelo.fabricante.trim(),
+                            name: novoModelo.nome.trim(),
+                            asset_category_id: categoria,
+                          },
+                        },
+                        {
+                          onSuccess: (r) => {
+                            setModelo((r as { id: string }).id);
+                            setNovoModelo(null);
+                          },
+                        }
+                      )
+                    }
+                  >
+                    Criar modelo
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
           <Field label="Criticidade" error={erroDe('criticality_id')}>
             <Select value={criticidade} onChange={(e) => setCriticidade(e.target.value)}>
               <option value="">Não informar</option>
@@ -363,6 +544,33 @@ export function DialogoEquipamento({
             />
           </Field>
         </div>
+
+        <fieldset className="grid gap-4 rounded-card border border-border-subtle p-4 sm:grid-cols-2">
+          <legend className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">
+            Chip geolocalizador / etiqueta de localização
+          </legend>
+          <Field label="Tipo de identificação" error={erroDe('tracker_kind')}>
+            <Select value={rastreadorTipo} onChange={(e) => setRastreadorTipo(e.target.value)}>
+              <option value="">Nenhum</option>
+              {TIPOS_DE_RASTREADOR.map((t) => (
+                <option key={t.valor} value={t.valor}>
+                  {t.rotulo}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Identificador do chip"
+            error={erroDe('tracker_tag')}
+            hint="Só o vínculo: a leitura do chip depende de hardware ainda não integrado."
+          >
+            <Input
+              value={rastreadorId}
+              onChange={(e) => setRastreadorId(e.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+        </fieldset>
 
         {erro && !conhecidos.includes(erro.campo ?? '') && (
           <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">

@@ -55,6 +55,8 @@ let cliente: string;
 let unidadeNorte: string, unidadeSul: string, utiNorte: string, utiSul: string;
 let categoria: string;
 let ativoNorte: string;
+/** Fica na Norte o teste inteiro: `ativoNorte` é transferido para a Sul no meio da suíte. */
+let ativoFixoNorte: string;
 
 beforeAll(async () => {
   t = await createTestDatabase();
@@ -329,6 +331,15 @@ describe('o que NÃO sai do servidor', () => {
     // O ativo precisa TER valor e observação, senão o teste compara nulo com
     // nulo e passa sem provar nada.
     const sys = buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'valores' });
+    ativoFixoNorte = await withTenant(t.db, sys, (s2) =>
+      createAsset(s2, {
+        name: 'Ventilador Norte 02',
+        customerId: cliente,
+        assetCategoryId: categoria,
+        locationId: utiNorte,
+        serialNumber: 'SN-NORTE-02',
+      })
+    );
     await withTenant(t.db, sys, (s2) =>
       s2.query(
         `UPDATE aurora.assets
@@ -336,16 +347,18 @@ describe('o que NÃO sai do servidor', () => {
                 replacement_value = 61000, currency = 'BRL',
                 internal_notes = 'Cliente contesta toda fatura deste parque.'
           WHERE id = $1`,
-        [ativoNorte]
+        [ativoFixoNorte]
       )
     );
 
-    const daGestora = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_GESTOR));
+    const daGestora = await http.get(`/v1/assets/${ativoFixoNorte}`).set(auth(EMAIL_GESTOR));
     expect(daGestora.status).toBe(200);
     expect(daGestora.body.purchase_value).toBe('48000.00');
     expect(daGestora.body.internal_notes).toContain('contesta toda fatura');
 
-    const doTecnico = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_TEC));
+    // O técnico só enxerga a unidade Norte: o ativo precisa estar nela (desde
+    // 16/10/2026 o escopo vale também na ficha por id).
+    const doTecnico = await http.get(`/v1/assets/${ativoFixoNorte}`).set(auth(EMAIL_TEC));
     expect(doTecnico.status).toBe(200);
     expect(doTecnico.body.purchase_value).toBeNull();
     expect(doTecnico.body.residual_value).toBeNull();
@@ -357,7 +370,7 @@ describe('o que NÃO sai do servidor', () => {
     expect(JSON.stringify(doTecnico.body)).not.toContain('48000');
 
     // A auditora não vê nenhum dos dois.
-    const daAuditoria = await http.get(`/v1/assets/${ativoNorte}`).set(auth(EMAIL_AUD));
+    const daAuditoria = await http.get(`/v1/assets/${ativoFixoNorte}`).set(auth(EMAIL_AUD));
     expect(daAuditoria.status).toBe(200);
     expect(daAuditoria.body.internal_notes).toBeNull();
     expect(daAuditoria.body.purchase_value).toBeNull();

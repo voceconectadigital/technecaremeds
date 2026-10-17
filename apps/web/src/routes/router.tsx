@@ -80,6 +80,9 @@ const NovaSolicitacaoPage = preguicosa(() =>
 const OrdensPage = preguicosa(() =>
   import('../features/ordens/lista').then((m) => ({ default: m.OrdensPage }))
 );
+const ExecutarOrdemPage = preguicosa(() =>
+  import('../features/ordens/executar').then((m) => ({ default: m.ExecutarOrdemPage }))
+);
 const OrdemPage = preguicosa(() =>
   import('../features/ordens/ficha').then((m) => ({ default: m.OrdemPage }))
 );
@@ -95,6 +98,7 @@ const AtivosPage = preguicosa(() =>
 const AtivoPage = preguicosa(() =>
   import('../features/ativos/ficha').then((m) => ({ default: m.AtivoPage }))
 );
+const StorePage = preguicosa(() => import('../features/store/store').then((m) => ({ default: m.StorePage })));
 const EstoquePage = preguicosa(() =>
   import('../features/estoque/lista').then((m) => ({ default: m.EstoquePage }))
 );
@@ -139,6 +143,18 @@ const PerfilPage = preguicosa(() =>
 );
 const AutomacoesPage = preguicosa(() =>
   import('../features/automacoes/lista').then((m) => ({ default: m.AutomacoesPage }))
+);
+const FerramentasPage = preguicosa(() =>
+  import('../features/ferramentas/ferramentas').then((m) => ({ default: m.FerramentasPage }))
+);
+const NegociosPage = preguicosa(() =>
+  import('../features/configuracoes/negocios').then((m) => ({ default: m.NegociosPage }))
+);
+const TarefasPage = preguicosa(() =>
+  import('../features/automacoes/tarefas').then((m) => ({ default: m.TarefasPage }))
+);
+const RelatorioAgendadoPage = preguicosa(() =>
+  import('../features/automacoes/tarefas').then((m) => ({ default: m.RelatorioAgendadoPage }))
 );
 
 const raiz = createRootRoute({ component: Outlet });
@@ -240,6 +256,12 @@ export const routeTree = raiz.addChildren([
     component: OrdemPage,
     beforeLoad: exigirSessao,
   }),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/ordens/$id/executar',
+    component: ExecutarOrdemPage,
+    beforeLoad: exigirSessao,
+  }),
 
   rotaProtegida('/agenda', AgendaPage),
 
@@ -267,6 +289,8 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/estoque', EstoquePage),
+  rotaProtegida('/store', StorePage),
+  rotaProtegida('/ferramentas', FerramentasPage),
 
   rotaProtegida('/documentos', DocumentosPage),
   rotaProtegida('/contratos', ContratosPage),
@@ -291,8 +315,17 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/notificacoes', NotificacoesPage),
   rotaProtegida('/perfil', PerfilPage),
 
+  rotaProtegida('/usuarios', MembrosPage),
   rotaProtegida('/configuracoes', MembrosPage),
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
+  rotaProtegida('/configuracoes/negocios', NegociosPage),
+  rotaProtegida('/tarefas', TarefasPage),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/relatorios/agendados/$id',
+    component: RelatorioAgendadoPage,
+    beforeLoad: exigirSessao,
+  }),
 ]);
 
 export const router = createRouter({

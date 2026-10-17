@@ -21,13 +21,17 @@ export interface CustomerInput {
   taxId?: string | null;
   isInternal?: boolean;
   segment?: string | null;
+  /** EAS ou empresa corporativa (0062). Padrão: EAS. */
+  kind?: 'eas' | 'corporate';
+  subtype?: string | null;
 }
 
 export async function createCustomer(session: TenantSession, input: CustomerInput): Promise<string> {
   const id = newId();
   await session.query(
-    `INSERT INTO aurora.customers (id, organization_id, name, trade_name, code, tax_id, is_internal, segment, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO aurora.customers
+       (id, organization_id, name, trade_name, code, tax_id, is_internal, segment, created_by, kind, subtype)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       id,
       session.context.organizationId,
@@ -38,9 +42,43 @@ export async function createCustomer(session: TenantSession, input: CustomerInpu
       input.isInternal ?? false,
       input.segment ?? null,
       session.context.actorId,
+      input.kind ?? 'eas',
+      input.subtype ?? null,
     ]
   );
   return id;
+}
+
+/**
+ * Edita o cadastro de um cliente. Só os campos presentes mudam; `null` limpa.
+ * Devolve falso quando o cliente não existe (ou é de outra organização).
+ */
+export async function updateCustomer(
+  session: TenantSession,
+  id: string,
+  patch: Partial<Pick<CustomerInput, 'name' | 'tradeName' | 'code' | 'taxId' | 'kind' | 'subtype'>>
+): Promise<boolean> {
+  const campos: [string, unknown][] = [];
+  if (patch.name !== undefined) campos.push(['name', patch.name]);
+  if (patch.tradeName !== undefined) campos.push(['trade_name', patch.tradeName]);
+  if (patch.code !== undefined) campos.push(['code', patch.code]);
+  if (patch.taxId !== undefined) campos.push(['tax_id', patch.taxId]);
+  if (patch.kind !== undefined) campos.push(['kind', patch.kind]);
+  if (patch.subtype !== undefined) campos.push(['subtype', patch.subtype]);
+  if (campos.length === 0) {
+    const [r] = await session.query(`SELECT 1 FROM aurora.customers WHERE id = $1 AND deleted_at IS NULL`, [
+      id,
+    ]);
+    return Boolean(r);
+  }
+  // Nomes de coluna vêm da lista fechada acima, nunca do cliente.
+  const sets = campos.map(([c], i) => `${c} = $${i + 2}`).join(', ');
+  const linhas = await session.query(
+    `UPDATE aurora.customers SET ${sets}, updated_by = $${campos.length + 2}
+      WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    [id, ...campos.map(([, v]) => v), session.context.actorId]
+  );
+  return linhas.length > 0;
 }
 
 /* -------------------------------------------------------------------------- */

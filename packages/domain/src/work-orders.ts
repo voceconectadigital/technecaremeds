@@ -113,6 +113,8 @@ export interface StatusDefinition {
    * envenena o relatório que o ADR-004 existe para produzir.
    */
   readonly requiresWaitReason?: boolean;
+  /** Coluna no quadro. Ausente = sim. */
+  readonly visibleOnBoard?: boolean;
   /**
    * Como esta situação aparece no PORTAL do cliente (SPEC §19).
    *
@@ -131,7 +133,16 @@ export interface StatusDefinition {
 /** Reproduz a tabela de situações padrão da SPEC §10, sem acrescentar nada. */
 export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
   // `draft` sem `customerLabel`: rascunho não é compromisso, e o portal o exclui.
-  { key: 'draft', label: 'Rascunho', category: 'draft', color: '#9aa0a6', position: 0 },
+  // Fora do quadro desde 16/10/2026: o cliente pediu que "rascunho" deixasse de
+  // existir como conceito visível. A situação continua no grafo para o histórico.
+  {
+    key: 'draft',
+    label: 'Rascunho',
+    category: 'draft',
+    color: '#9aa0a6',
+    position: 0,
+    visibleOnBoard: false,
+  },
   {
     key: 'open',
     label: 'Aberta',
@@ -220,6 +231,17 @@ export const FACTORY_STATUSES: readonly StatusDefinition[] = Object.freeze([
     color: '#5f6368',
     position: 10,
     customerLabel: 'Cancelado',
+  },
+  {
+    // NEGADA (reunião 16/10/2026) não é cancelada: cancelar é desistir de um
+    // trabalho; negar é recusar o atendimento (fora de cobertura, orçamento
+    // reprovado, pedido indevido). Terminal, com motivo, e o cliente lê "Negado".
+    key: 'denied',
+    label: 'Negada',
+    category: 'cancelled',
+    color: '#a50e0e',
+    position: 11,
+    customerLabel: 'Negado',
   },
 ]);
 
@@ -477,8 +499,18 @@ const CANCELLABLE_FROM = [
   'completed',
 ] as const;
 
+/** Situações a partir das quais se nega o atendimento: antes de executar, ou aguardando (orçamento). */
+const DENIABLE_FROM = ['open', 'scheduled', 'in_analysis', 'waiting'] as const;
+
 export const FACTORY_TRANSITIONS: readonly TransitionDefinition[] = Object.freeze([
   ...CORE_TRANSITIONS,
+  ...DENIABLE_FROM.map((from) => ({
+    from,
+    to: 'denied',
+    permission: 'work_order.cancel',
+    requires: ['cancellation_reason'],
+    note: 'atendimento negado, com motivo obrigatório',
+  })),
   ...CANCELLABLE_FROM.map((from) => ({
     from,
     to: 'cancelled',

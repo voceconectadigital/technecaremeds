@@ -7,10 +7,18 @@
  * `single_customer` da listagem. Um "modo" no banco viraria dois caminhos de
  * código para a mesma pergunta e divergiria no primeiro cliente que crescer.
  */
-import { Body, Controller, Get, Inject, Param, Post, Req } from '@nestjs/common';
-import { withTenant, createCustomer, type Database, type TenantSession } from '@aurora/db';
-import { ConflictError, ForbiddenError, NotFoundError } from '@aurora/domain';
-import { customersCreate, type Customer } from '@aurora/contracts';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Req } from '@nestjs/common';
+import { withTenant, createCustomer, updateCustomer, type Database, type TenantSession } from '@aurora/db';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  isValidCustomerSubtype,
+} from '@aurora/domain';
+import { customersCreate, customersUpdate, customersAddContact, type Customer } from '@aurora/contracts';
+import { newId } from '@aurora/domain';
+import { PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
 import { uuidParam } from '../common/params';
@@ -31,7 +39,8 @@ interface CustomerListView {
  * tela que acabou de cadastrar mostraria "—" onde a lista mostra "0".
  */
 const SELECT_CUSTOMER = `
-  SELECT c.id, c.name, c.trade_name, c.code, c.tax_id, c.is_internal, c.segment, c.status::text AS status,
+  SELECT c.id, c.name, c.trade_name, c.code, c.tax_id, c.is_internal, c.segment, c.kind, c.subtype,
+         c.status::text AS status,
          (SELECT count(*) FROM aurora.locations l
            WHERE l.customer_id = c.id AND l.deleted_at IS NULL)::int AS location_count,
          (SELECT count(*) FROM aurora.assets a
@@ -48,6 +57,20 @@ function requireMembership(membershipId: string | null): string {
     throw new ForbiddenError('esta rota exige um vínculo de usuário com a organização');
   }
   return membershipId;
+}
+
+async function clienteVisivel(s: TenantSession, membershipId: string, customerId: string): Promise<void> {
+  const [visivel] = await s.query<{ ok: boolean }>(
+    `SELECT true AS ok FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+    [membershipId, customerId]
+  );
+  if (!visivel) throw new NotFoundError('cliente', customerId);
+}
+
+function conferirSubtipo(kind: string, subtype: string | null | undefined): void {
+  if (!isValidCustomerSubtype(kind, subtype)) {
+    throw new ValidationError('subtipo não pertence à classificação escolhida', { field: 'subtype' });
+  }
 }
 
 /** Vazio e só-espaços viram `null`: "não informado" tem uma forma só no banco. */
@@ -120,6 +143,7 @@ export class CustomersController {
   @RequirePermissions('customer.create')
   async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<Customer> {
     const b = parseWith(customersCreate.body, body);
+    conferirSubtipo(b.kind ?? 'eas', b.subtype);
     try {
       return await withTenant(this.db, req.auroraContext!, async (s) => {
         const id = await createCustomer(s, {
@@ -128,12 +152,113 @@ export class CustomersController {
           code: ouNulo(b.code),
           taxId: ouNulo(b.tax_id),
           segment: ouNulo(b.segment),
+          kind: b.kind ?? 'eas',
+          subtype: b.subtype ? b.subtype : null,
         });
         return (await lerCliente(s, id))!;
       });
     } catch (err) {
       throw conflitoLegivel(err);
     }
+  }
+
+  /**
+   * Edita o cadastro (reunião 16/10/2026). Fora do escopo: 404, como na ficha.
+   */
+  @Patch('customers/:id')
+  @RequirePermissions('customer.update')
+  async update(@Req() req: AuroraRequest, @Param('id') id: string, @Body() body: unknown): Promise<Customer> {
+    const ctx = req.auroraContext!;
+    const membershipId = requireMembership(ctx.membershipId);
+    const customerId = uuidParam(id, 'id');
+    const b = parseWith(customersUpdate.body, body);
+    try {
+      return await withTenant(this.db, ctx, async (s) => {
+        const [visivel] = await s.query<{ ok: boolean }>(
+          `SELECT true AS ok FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+          [membershipId, customerId]
+        );
+        const atual = visivel ? await lerCliente(s, customerId) : undefined;
+        if (!atual) throw new NotFoundError('cliente', customerId);
+        if (atual.is_internal && b.kind === 'corporate') {
+          throw new ValidationError('o cliente interno é a própria organização e não muda de classificação', {
+            field: 'kind',
+          });
+        }
+        const kind = b.kind ?? atual.kind ?? 'eas';
+        // Trocar o tipo sem mandar subtipo invalida o subtipo antigo: ele é limpo.
+        const subtype =
+          b.subtype !== undefined ? b.subtype || null : b.kind && b.kind !== atual.kind ? null : undefined;
+        conferirSubtipo(kind, subtype);
+        await updateCustomer(s, customerId, {
+          name: b.name,
+          tradeName: b.trade_name === undefined ? undefined : ouNulo(b.trade_name),
+          code: b.code === undefined ? undefined : ouNulo(b.code),
+          taxId: b.tax_id === undefined ? undefined : ouNulo(b.tax_id),
+          kind: b.kind,
+          subtype,
+        });
+        return (await lerCliente(s, customerId))!;
+      });
+    } catch (err) {
+      throw conflitoLegivel(err);
+    }
+  }
+
+  @Get('customers/:id/contacts')
+  @RequirePermissions('customer.read')
+  async contacts(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const membershipId = requireMembership(ctx.membershipId);
+    const customerId = uuidParam(id, 'id');
+    return withTenant(this.db, ctx, async (s) => {
+      await clienteVisivel(s, membershipId, customerId);
+      const items = await s.query(
+        `SELECT id, name, role_title, email, phone, is_primary
+           FROM aurora.customer_contacts
+          WHERE customer_id = $1 AND deleted_at IS NULL
+          ORDER BY is_primary DESC, name`,
+        [customerId]
+      );
+      return { items };
+    });
+  }
+
+  @Post('customers/:id/contacts')
+  @RequirePermissions('customer.read')
+  @PermissionsCheckedInHandler('aceita customer.update ou quote.create')
+  async addContact(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ id: string }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.permissions.has('customer.update') && !ctx.permissions.has('quote.create')) {
+      throw new ForbiddenError('customer.update');
+    }
+    const membershipId = requireMembership(ctx.membershipId);
+    const customerId = uuidParam(id, 'id');
+    const b = parseWith(customersAddContact.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      await clienteVisivel(s, membershipId, customerId);
+      const novo = newId();
+      await s.query(
+        `INSERT INTO aurora.customer_contacts
+           (id, organization_id, customer_id, name, role_title, email, phone, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          novo,
+          ctx.organizationId,
+          customerId,
+          b.name,
+          b.role_title ?? null,
+          b.email ?? null,
+          b.phone ?? null,
+          ctx.actorId,
+        ]
+      );
+      return { id: novo };
+    });
   }
 
   @Get('customers/:id')

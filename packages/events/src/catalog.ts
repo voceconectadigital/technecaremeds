@@ -18,6 +18,9 @@ export const EVENT_TYPES = [
   'member.role_changed',
   'member.scope_changed',
   'member.suspended',
+  'member.blocked',
+  'member.reactivated',
+  'member.updated',
   'member.removed',
   'support_access.granted',
   'support_access.expired',
@@ -57,6 +60,10 @@ export const EVENT_TYPES = [
   'service_request.rated',
 
   // --- work orders (EPIC-008/009) ----------------------------------------
+  'work_order.checked_in',
+  'work_order.checked_out',
+  'work_order.report_updated',
+  'work_order.customer_part_added',
   'work_order.opened',
   'work_order.assigned',
   'work_order.scheduled',

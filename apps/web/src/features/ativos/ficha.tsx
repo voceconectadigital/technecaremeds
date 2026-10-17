@@ -22,10 +22,29 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { BadgeCheck, CalendarDays, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
-import { Button, Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
-import { assetDetail, workOrdersList, type AssetDetail, type WorkOrderRow } from '@aurora/contracts';
-import { Can, useApiQuery } from '@aurora/app-kit';
-import { DialogoEquipamento } from './formulario';
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  Field,
+  Input,
+  Skeleton,
+  SkeletonList,
+  StatusChip,
+  cn,
+  useToast,
+} from '@aurora/ui';
+import {
+  assetDetail,
+  assetsLinkQr,
+  assetsList,
+  workOrdersList,
+  type AssetDetail,
+  type WorkOrderRow,
+} from '@aurora/contracts';
+import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { DialogoEquipamento, TIPOS_DE_RASTREADOR } from './formulario';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
@@ -60,7 +79,9 @@ export function AtivoPage() {
   return (
     <AppShell
       title={data.name}
-      subtitle={[data.manufacturer_name, data.model_name, data.category_name].filter(Boolean).join(' · ')}
+      subtitle={[data.family_name, data.category_name, data.manufacturer_name, data.model_name]
+        .filter(Boolean)
+        .join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
       actions={
         <Can permission="asset.update">
@@ -84,6 +105,8 @@ export function AtivoPage() {
           tag: data.tag,
           serial_number: data.serial_number,
           asset_number: data.asset_number,
+          tracker_kind: data.tracker_kind ?? null,
+          tracker_tag: data.tracker_tag ?? null,
         }}
       />
       <div className="flex flex-col gap-4">
@@ -232,15 +255,7 @@ export function AtivoPage() {
               </Card>
             )}
 
-            {data.qr_token && (
-              <Card>
-                <CardHeader title="Identificação" />
-                <dl className="flex flex-col gap-3 p-4 text-sm">
-                  <Info rotulo="QR" valor={data.qr_token} icone={<QrCode className="size-3.5" />} />
-                  <Info rotulo="Código de barras" valor={data.barcode} />
-                </dl>
-              </Card>
-            )}
+            <CartaoIdentificacao ativo={data} />
           </div>
         </div>
 
@@ -382,6 +397,89 @@ const ROTULO_CATEGORIA: Record<string, string> = {
   closed: 'Fechada',
   cancelled: 'Cancelada',
 };
+
+/**
+ * Identificação física: etiqueta de QR (token e vínculo de etiqueta já
+ * impressa) e chip geolocalizador. Reunião 16/10/2026: VINCULAR a etiqueta
+ * existente é a prioridade; a imagem do QR não é gerada aqui (não há engine de
+ * QR no produto, e não se reconstrói uma para esta tela).
+ */
+function CartaoIdentificacao({ ativo }: { ativo: AssetDetail }) {
+  const toast = useToast();
+  const [vinculando, setVinculando] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const vincular = useApiMutation(assetsLinkQr, {
+    invalidates: [assetDetail, assetsList],
+    onError: (e: ApiError) => setErro(e.problem.message),
+  });
+  const rastreador = TIPOS_DE_RASTREADOR.find((t) => t.valor === ativo.tracker_kind)?.rotulo;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Identificação"
+        description="Etiqueta de QR e chip de localização."
+        actions={
+          <Can permission="asset.print_label">
+            <Button size="sm" icon={<QrCode className="size-4" />} onClick={() => setVinculando((v) => !v)}>
+              Vincular etiqueta existente
+            </Button>
+          </Can>
+        }
+      />
+      <dl className="flex flex-col gap-3 p-4 text-sm">
+        <Info
+          rotulo="Código da etiqueta (QR)"
+          valor={ativo.qr_token}
+          icone={<QrCode className="size-3.5" />}
+        />
+        <Info rotulo="Código de barras" valor={ativo.barcode} />
+        <Info
+          rotulo="Chip geolocalizador / etiqueta de localização"
+          valor={ativo.tracker_tag ? `${rastreador ?? ativo.tracker_kind} · ${ativo.tracker_tag}` : null}
+          vazio="Nenhum vinculado"
+        />
+      </dl>
+      {vinculando && (
+        <form
+          className="flex flex-col gap-3 border-t border-border-subtle p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setErro(null);
+            vincular.mutate(
+              { params: { id: ativo.id }, body: { code: codigo } },
+              {
+                onSuccess: () => {
+                  toast.success(
+                    'Etiqueta vinculada',
+                    'A etiqueta anterior deste equipamento deixou de valer.'
+                  );
+                  setCodigo('');
+                  setVinculando(false);
+                },
+              }
+            );
+          }}
+        >
+          <Field
+            label="Código lido da etiqueta"
+            error={erro}
+            hint="Cole o código ou a URL que o leitor de QR mostrar. A etiqueta antiga deixa de valer."
+          >
+            <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="…/q/XXXXXXXX" />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setVinculando(false)}>Cancelar</Button>
+            <Button type="submit" variant="primary" loading={vincular.isPending}>
+              Vincular
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
 
 function Info({
   rotulo,

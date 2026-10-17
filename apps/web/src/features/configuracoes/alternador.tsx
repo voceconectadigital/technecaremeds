@@ -12,18 +12,26 @@
  * ela oito horas por dia sem precisar.
  */
 import { useRouterState } from '@tanstack/react-router';
+import { platformMe } from '@aurora/contracts';
+import { useApiQuery } from '@aurora/app-kit';
 import { AlternadorDeTelas } from '../../shell/alternador';
 
 export function AlternadorDeConfiguracoes() {
   const caminho = useRouterState({ select: (s) => s.location.pathname });
   const emAutomacoes = caminho.startsWith('/configuracoes/automacoes');
+  const emNegocios = caminho.startsWith('/configuracoes/negocios');
+  // "Novo negócio" só aparece para o admin global de plataforma (Fase 11).
+  const { data: eu } = useApiQuery(platformMe) as { data: { platform_admin: boolean } | undefined };
 
   return (
     <AlternadorDeTelas
       label="Configurações"
       itens={[
-        { para: '/configuracoes', rotulo: 'Pessoas', ativo: !emAutomacoes },
+        { para: '/usuarios', rotulo: 'Usuários', ativo: !emAutomacoes && !emNegocios },
         { para: '/configuracoes/automacoes', rotulo: 'Automações', ativo: emAutomacoes },
+        ...(eu?.platform_admin
+          ? [{ para: '/configuracoes/negocios', rotulo: 'Novo negócio', ativo: emNegocios }]
+          : []),
       ]}
     />
   );

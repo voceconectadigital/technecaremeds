@@ -48,7 +48,15 @@ import {
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
 import { enviarPdf } from '../documents/documents.controller';
-import { ForbiddenError, ValidationError, requestStatusForCustomer } from '@aurora/domain';
+import {
+  ForbiddenError,
+  ValidationError,
+  requestStatusForCustomer,
+  isServiceRequestType,
+  REQUEST_PRIORITIES,
+  type RequestPriority,
+} from '@aurora/domain';
+import { conferirAlvoDaSolicitacao } from '../common/alvo-da-solicitacao';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -212,12 +220,31 @@ export class PortalController {
     }
 
     return withTenant(this.db, ctx, async (s) => {
-      // O cliente do vínculo, e não o do corpo.
+      // O cliente vem do VÍNCULO. Quem alcança mais de um hospital escolhe —
+      // mas só entre os do próprio escopo: o cliente de outro, vindo do corpo,
+      // é IGNORADO (PORTAL-010), e o chamado nasce no cliente do vínculo.
+      const pedido = optionalUuid(body.customer_id, 'customer_id');
       const [meu] = await s.query<{ customer_id: string }>(
-        `SELECT customer_id FROM aurora.accessible_customer_ids($1) LIMIT 1`,
-        [ctx.membershipId]
+        `SELECT customer_id FROM aurora.accessible_customer_ids($1)
+          ORDER BY (customer_id = $2) DESC NULLS LAST, customer_id LIMIT 1`,
+        [ctx.membershipId, pedido]
       );
       if (!meu) throw new ForbiddenError('portal.customer');
+
+      const alvo = await conferirAlvoDaSolicitacao(s, ctx.membershipId!, {
+        customerId: meu.customer_id,
+        assetId: optionalUuid(body.asset_id, 'asset_id'),
+        locationId: optionalUuid(body.location_id, 'location_id'),
+      });
+      const prioridade =
+        typeof body.requested_priority === 'string' &&
+        (REQUEST_PRIORITIES as readonly string[]).includes(body.requested_priority)
+          ? (body.requested_priority as RequestPriority)
+          : undefined;
+      const tipo = body.requested_type;
+      if (tipo !== undefined && tipo !== null && !isServiceRequestType(tipo)) {
+        throw new ValidationError('tipo de solicitação fora da lista', { field: 'requested_type' });
+      }
 
       const r = await createServiceRequest(s, {
         customerId: meu.customer_id,
@@ -228,7 +255,9 @@ export class PortalController {
         // indicador de autoatendimento passaria a medir ficção.
         source: 'portal',
         assetId: optionalUuid(body.asset_id, 'asset_id') ?? undefined,
-        locationId: optionalUuid(body.location_id, 'location_id') ?? undefined,
+        locationId: alvo.locationId ?? undefined,
+        requestedPriority: prioridade,
+        requestedType: (tipo as string | null | undefined) ?? null,
       });
       return { id: r.id, number: r.number };
     });

@@ -155,7 +155,9 @@ test.describe('Setores e Cliente → Setor → Equipamento', () => {
     await expect(dialogo.getByLabel('Setor')).toBeEnabled();
     await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
     await dialogo.getByLabel('Nome do equipamento').fill(`Desfibrilador E2E ${Date.now() % 10_000}`);
-    await dialogo.getByLabel('Categoria').selectOption({ index: 1 });
+    // Família → Tipo (16/10/2026): o tipo do equipamento nasce do catálogo.
+    await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
+    await dialogo.getByLabel('Tipo do equipamento').selectOption({ label: 'Ventilador pulmonar' });
     await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
 
     await expect(page).toHaveURL(/\/ativos\/[0-9a-f-]{36}/);

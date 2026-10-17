@@ -20,15 +20,36 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { Check, Search } from 'lucide-react';
-import { Button, Card, Field, Input, Textarea, cn, useToast } from '@aurora/ui';
+import { Button, Card, Field, Input, Select, Textarea, cn, useToast } from '@aurora/ui';
 import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import {
   portalAssets,
   portalHome,
   portalOpenRequest,
   portalRequests,
+  REQUEST_PRIORITIES,
+  SERVICE_REQUEST_TYPE_KEYS,
   type PortalAsset,
 } from '@aurora/contracts';
+
+/** Tipos fechados (reunião 16/10/2026): o solicitante não escreve tipo livre. */
+const TIPOS: Record<(typeof SERVICE_REQUEST_TYPE_KEYS)[number], string> = {
+  corrective: 'Corretiva',
+  preventive: 'Preventiva',
+  technical_instruction: 'Instrução Técnica',
+  training: 'Treinamento',
+  calibration: 'Calibração',
+  electrical_safety: 'Teste de Segurança Elétrica',
+  qualification: 'Qualificação',
+};
+
+const URGENCIAS: Record<(typeof REQUEST_PRIORITIES)[number], string> = {
+  none: 'Sem urgência declarada',
+  low: 'Baixa',
+  urgent: 'Urgente',
+  very_urgent: 'Muito urgente',
+  emergency: 'Emergência',
+};
 import { Casca } from '../casca';
 
 export function AbrirPage() {
@@ -38,6 +59,8 @@ export function AbrirPage() {
   const [resumo, setResumo] = useState('');
   const [detalhes, setDetalhes] = useState('');
   const [equipamento, setEquipamento] = useState<PortalAsset | null>(null);
+  const [tipo, setTipo] = useState<(typeof SERVICE_REQUEST_TYPE_KEYS)[number]>('corrective');
+  const [urgencia, setUrgencia] = useState<(typeof REQUEST_PRIORITIES)[number]>('none');
   const [erro, setErro] = useState<string | null>(null);
 
   const abrir = useApiMutation(portalOpenRequest, {
@@ -69,6 +92,8 @@ export function AbrirPage() {
                   summary: resumo.trim(),
                   description: detalhes.trim() || undefined,
                   asset_id: equipamento?.id,
+                  requested_type: tipo,
+                  requested_priority: urgencia,
                 },
               },
               {
@@ -84,6 +109,9 @@ export function AbrirPage() {
             );
           }}
         >
+          {/* A ordem do cliente (16/10/2026): equipamento → o que acontece → tipo → urgência. */}
+          <EscolhaDeEquipamento escolhido={equipamento} onEscolher={setEquipamento} />
+
           <Field
             label="O que está acontecendo"
             required
@@ -94,12 +122,9 @@ export function AbrirPage() {
               value={resumo}
               onChange={(e) => setResumo(e.target.value)}
               rows={2}
-              autoFocus
               placeholder="Descreva o problema"
             />
           </Field>
-
-          <EscolhaDeEquipamento escolhido={equipamento} onEscolher={setEquipamento} />
 
           <Field label="Mais detalhes" hint="Opcional. Desde quando, o que já tentaram, o que muda o quadro.">
             <Textarea
@@ -109,6 +134,27 @@ export function AbrirPage() {
               placeholder="Se souber, conte mais"
             />
           </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Tipo" required>
+              <Select value={tipo} onChange={(e) => setTipo(e.target.value as typeof tipo)}>
+                {SERVICE_REQUEST_TYPE_KEYS.map((t) => (
+                  <option key={t} value={t}>
+                    {TIPOS[t]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Urgência" hint="O que você percebe. A prioridade final é da triagem.">
+              <Select value={urgencia} onChange={(e) => setUrgencia(e.target.value as typeof urgencia)}>
+                {REQUEST_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {URGENCIAS[p]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
 
           <Button
             type="submit"

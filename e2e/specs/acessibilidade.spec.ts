@@ -51,6 +51,13 @@ const TELAS = [
   '/configuracoes/automacoes',
   '/perfil',
   '/agenda',
+  // 16/10/2026: telas novas da rodada com o Anderson.
+  '/usuarios',
+  '/clientes',
+  '/store',
+  '/ferramentas',
+  '/tarefas',
+  '/configuracoes/negocios',
 ];
 
 /**

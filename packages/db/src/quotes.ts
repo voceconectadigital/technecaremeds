@@ -17,6 +17,8 @@ import {
   type QuoteItemKind,
   type PriceSource,
   type Cents,
+  ForbiddenError,
+  InvalidTransitionError,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
@@ -541,9 +543,46 @@ async function waitForCustomer(session: TenantSession, workOrderId: string | nul
     `SELECT status_category FROM aurora.work_orders WHERE id = $1`,
     [workOrderId]
   );
-  if (!os || os.status_category === 'closed' || os.status_category === 'cancelled') return;
+  // Só a OS EM EXECUÇÃO passa a aguardar o cliente: é a única aresta do grafo
+  // para `waiting`. OS ainda aberta/agendada/em análise continua onde está — o
+  // "aguardando aprovação de orçamento" aparece pelo próprio orçamento
+  // (`quote_summary` da ficha), sem estado redundante.
+  if (!os || os.status_category !== 'in_progress') return;
+  await efeitoNaOs(() =>
+    transitionWorkOrder(efeitoDoOrcamento(session), workOrderId, 'waiting', { waitReasonId: motivo.id })
+  );
+}
 
-  await transitionWorkOrder(session, workOrderId, 'waiting', { waitReasonId: motivo.id });
+/**
+ * A mudança da OS é CONSEQUÊNCIA do orçamento, autorizada pela permissão de
+ * enviar/aprovar que já foi conferida (`quote.send`, `quote.approve`). Quem
+ * envia (o financeiro, o gestor) não precisa poder executar OS para que ela
+ * passe a aguardar o cliente: a sessão do efeito recebe SÓ a permissão da
+ * aresta (`work_order.execute`), e só durante esta chamada.
+ */
+function efeitoDoOrcamento(session: TenantSession): TenantSession {
+  return {
+    context: {
+      ...session.context,
+      permissions: new Set([...session.context.permissions, 'work_order.execute']),
+    },
+    query: (sql, params) => session.query(sql, params),
+  };
+}
+
+/**
+ * Efeito do orçamento sobre a OS. Enviar ou aprovar o orçamento NÃO falha porque
+ * a OS não pode mudar (grafo da organização sem a aresta, por exemplo): a
+ * recusa é avaliada antes de qualquer escrita, então a OS fica como estava e o
+ * orçamento segue.
+ */
+async function efeitoNaOs(f: () => Promise<unknown>): Promise<void> {
+  try {
+    await f();
+  } catch (e) {
+    if (e instanceof ForbiddenError || e instanceof InvalidTransitionError) return;
+    throw e;
+  }
 }
 
 async function resumeWorkOrder(session: TenantSession, workOrderId: string | null): Promise<void> {
@@ -553,7 +592,7 @@ async function resumeWorkOrder(session: TenantSession, workOrderId: string | nul
     [workOrderId]
   );
   if (!os || os.status_category !== 'waiting') return;
-  await transitionWorkOrder(session, workOrderId, 'in_progress');
+  await efeitoNaOs(() => transitionWorkOrder(efeitoDoOrcamento(session), workOrderId, 'in_progress'));
 }
 
 /* -------------------------------------------------------------------------- */

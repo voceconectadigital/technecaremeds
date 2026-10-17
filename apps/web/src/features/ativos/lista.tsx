@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react';
 import { Boxes, ChevronRight, MapPin, Plus, Search } from 'lucide-react';
 import { Button, Card, EmptyState, Select, SkeletonList, StatusChip, Thumb, cn } from '@aurora/ui';
 import {
+  assetsFormOptions,
   assetsList,
   locationsList,
   ASSET_STATUSES,
@@ -62,6 +63,24 @@ const TOM_SITUACAO: Record<AssetStatus, 'neutral' | 'info' | 'warn' | 'good' | '
 export function AtivosPage() {
   const [local, setLocal] = useUrlState<string>('local', '');
   const [situacao, setSituacao] = useUrlState<string>('situacao', '');
+  // Filtros de catálogo (reunião 16/10/2026): família, tipo, criticidade e chip — no servidor.
+  const [familia, setFamilia] = useUrlState<string>('familia', '');
+  const [tipo, setTipo] = useUrlState<string>('tipo', '');
+  const [criticidade, setCriticidade] = useUrlState<string>('criticidade', '');
+  const [chip, setChip] = useUrlState<string>('chip', '');
+  const { data: opcoes } = useApiQuery(assetsFormOptions, undefined, { staleTime: 5 * 60_000 }) as {
+    data:
+      | {
+          categories: { id: string; name: string; parent_id: string | null; family_key?: string | null }[];
+          criticalities: { id: string; name: string }[];
+        }
+      | undefined;
+  };
+  const familias = (opcoes?.categories ?? []).filter((c) => c.family_key);
+  const familiaEscolhida = familias.find((f) => f.family_key === familia);
+  const tipos = (opcoes?.categories ?? []).filter((c) =>
+    familiaEscolhida ? c.parent_id === familiaEscolhida.id : !c.family_key
+  );
   // Na URL: a busca global abre esta tela já filtrada (`?q=`), e o filtro
   // sobrevive ao recarregar e ao link compartilhado.
   const [busca, setBusca] = useUrlState<string>('q', '');
@@ -78,6 +97,10 @@ export function AtivosPage() {
     query: {
       ...(local ? { location: local } : {}),
       ...(situacao ? { status: situacao as AssetStatus } : {}),
+      ...(familia ? { family: familia } : {}),
+      ...(tipo ? { category: tipo } : {}),
+      ...(criticidade ? { criticality: criticidade } : {}),
+      ...(chip === 'yes' || chip === 'no' ? { tracker: chip as 'yes' | 'no' } : {}),
       limit: LIMITE,
     },
   }) as {
@@ -176,6 +199,48 @@ export function AtivosPage() {
                     {ROTULO_SITUACAO[s]}
                   </option>
                 ))}
+              </Select>
+            </div>
+            <div className="grid gap-2 border-b border-border-subtle p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Select
+                value={familia}
+                aria-label="Família"
+                onChange={(e) => {
+                  setFamilia(e.target.value);
+                  setTipo('');
+                }}
+              >
+                <option value="">Todas as famílias</option>
+                {familias.map((f) => (
+                  <option key={f.id} value={f.family_key ?? ''}>
+                    {f.name}
+                  </option>
+                ))}
+              </Select>
+              <Select value={tipo} aria-label="Tipo do equipamento" onChange={(e) => setTipo(e.target.value)}>
+                <option value="">Todos os tipos</option>
+                {tipos.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={criticidade}
+                aria-label="Criticidade"
+                onChange={(e) => setCriticidade(e.target.value)}
+              >
+                <option value="">Toda criticidade</option>
+                {(opcoes?.criticalities ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              <Select value={chip} aria-label="Chip de localização" onChange={(e) => setChip(e.target.value)}>
+                <option value="">Com ou sem chip</option>
+                <option value="yes">Com chip de localização</option>
+                <option value="no">Sem chip de localização</option>
               </Select>
             </div>
             {isLoading ? (

@@ -26,7 +26,11 @@ import {
   ValidationError,
   RateLimitedError,
   NotFoundError,
+  ConflictError,
+  qrTokenFromScan,
 } from '@aurora/domain';
+import { assetsLinkQr } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -143,8 +147,14 @@ export class QrController {
            JOIN aurora.asset_categories c ON c.id = a.asset_category_id
            LEFT JOIN aurora.locations l   ON l.id = a.location_id
           WHERE a.id = ANY($1::uuid[]) AND a.deleted_at IS NULL
+            -- Escopo do vínculo (16/10/2026): etiqueta de equipamento fora dos
+            -- clientes/setores de quem pede simplesmente não vem.
+            AND ($2::uuid IS NULL
+                 OR (a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+                     AND (a.location_id IS NULL
+                          OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))))
           ORDER BY l.name NULLS LAST, a.name`,
-        [ids]
+        [ids, ctx.membershipId]
       )
     );
     return { items };
@@ -170,5 +180,40 @@ export class QrController {
       s.query<{ previous: string }>(`SELECT aurora.rotate_qr_token($1, $2) AS previous`, [id, novo])
     );
     return { previous_token: row!.previous, qr_token: novo };
+  }
+
+  /**
+   * Vincula uma etiqueta JÁ IMPRESSA ao equipamento (reunião 16/10/2026).
+   *
+   * Reaproveita a rotação: o código lido passa a ser o token do equipamento e
+   * a etiqueta anterior deixa de valer. Nenhuma engine nova de QR — o formato
+   * é o mesmo que a resolução pública (`/q/:token`) já entende.
+   */
+  @Post('assets/:id/qr')
+  @RequirePermissions('asset.print_label')
+  async link(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ previous_token: string; qr_token: string }> {
+    const ctx = req.auroraContext!;
+    if (!isUuid(id)) throw new ValidationError('id deve ser um identificador válido', { field: 'id' });
+    const { code } = parseWith(assetsLinkQr.body, body);
+    const token = qrTokenFromScan(code);
+    if (!isQrToken(token)) {
+      throw new ValidationError('o código lido não é uma etiqueta de QR desta plataforma', { field: 'code' });
+    }
+    try {
+      const [row] = await withTenant(this.db, ctx, (s) =>
+        s.query<{ previous: string }>(`SELECT aurora.rotate_qr_token($1, $2) AS previous`, [id, token])
+      );
+      return { previous_token: row!.previous, qr_token: token };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('assets_qr_token_uq') || msg.includes('já está em uso')) {
+        throw new ConflictError('esta etiqueta já está vinculada a outro equipamento');
+      }
+      throw e;
+    }
   }
 }

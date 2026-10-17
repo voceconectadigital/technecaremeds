@@ -13,6 +13,13 @@ export const Customer = z.object({
   /** O cliente que É a própria organização — a clínica que atende a si mesma. */
   is_internal: z.boolean(),
   segment: z.string().nullable(),
+  /**
+   * EAS (Estabelecimento Assistencial de Saúde) ou empresa corporativa, e o
+   * subtipo (hospital, clínica… / engenharia clínica, assistência técnica…).
+   * Opcionais: respostas capturadas antes da 0062 (demo) não os têm.
+   */
+  kind: z.enum(['eas', 'corporate']).optional(),
+  subtype: z.string().nullable().optional(),
   status: z.string(),
   location_count: z.number().int(),
   /**
@@ -75,10 +82,37 @@ export const customersCreate = defineOperation({
       code: TextoOpcional(60),
       tax_id: Documento,
       segment: TextoOpcional(60),
+      kind: z.enum(['eas', 'corporate']).optional(),
+      subtype: z.string().trim().max(40).nullable().optional(),
     })
     .strict(),
   response: Customer,
   errors: ['conflict'],
+});
+
+export const customersUpdate = defineOperation({
+  operationId: 'customers.update',
+  method: 'PATCH',
+  path: '/customers/:id',
+  summary: 'Edita o cadastro de um cliente',
+  description:
+    'Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa) e subtipo. ' +
+    'Só o que vier no corpo muda. Cliente fora do escopo responde 404. O subtipo precisa ser da ' +
+    'lista do tipo escolhido.',
+  permissions: ['customer.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(200).optional(),
+      trade_name: TextoOpcional(200),
+      code: TextoOpcional(60),
+      tax_id: Documento,
+      kind: z.enum(['eas', 'corporate']).optional(),
+      subtype: z.string().trim().max(40).nullable().optional(),
+    })
+    .strict(),
+  response: Customer,
+  errors: ['not_found', 'conflict'],
 });
 
 export const CustomerLocation = z.object({
@@ -181,4 +215,51 @@ export const locationsUpdate = defineOperation({
     .strict(),
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* contatos do cliente — o aprovador do orçamento (reunião 16/10/2026)         */
+/* -------------------------------------------------------------------------- */
+
+export const CustomerContact = z.object({
+  id: Uuid,
+  name: z.string(),
+  role_title: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  is_primary: z.boolean(),
+});
+export type CustomerContact = z.infer<typeof CustomerContact>;
+
+export const customersContacts = defineOperation({
+  operationId: 'customers.contacts',
+  method: 'GET',
+  path: '/customers/:id/contacts',
+  summary: 'Contatos do cliente (quem aprova orçamento, quem recebe aviso)',
+  permissions: ['customer.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ items: z.array(CustomerContact) }),
+  errors: ['not_found'],
+});
+
+export const customersAddContact = defineOperation({
+  operationId: 'customers.addContact',
+  method: 'POST',
+  path: '/customers/:id/contacts',
+  summary: 'Cadastra um contato do cliente (e-mail ou telefone obrigatório)',
+  description: 'Exige `customer.update` ou `quote.create` — quem orça precisa indicar o aprovador.',
+  permissions: ['customer.read'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(160),
+      role_title: z.string().trim().max(80).nullable().optional(),
+      email: z.string().trim().email().max(200).nullable().optional(),
+      phone: z.string().trim().min(8).max(32).nullable().optional(),
+    })
+    .strict()
+    .refine((v) => Boolean(v.email || v.phone), { message: 'informe e-mail ou telefone', path: ['email'] }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
 });

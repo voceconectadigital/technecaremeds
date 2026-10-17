@@ -54,6 +54,17 @@ export const AssetRow = z.object({
   model_name: z.string().nullable(),
   manufacturer_name: z.string().nullable(),
   warranty_until: z.string().nullable(),
+  /**
+   * Família (Suporte à vida, Diagnóstico…) e identificação física (chip
+   * geolocalizador, RFID…) — reunião 16/10/2026. Opcionais: capturas da demo
+   * anteriores à 0063 não os têm.
+   */
+  family_key: z.string().nullable().optional(),
+  family_name: z.string().nullable().optional(),
+  criticality_id: Uuid.nullable().optional(),
+  criticality_name: z.string().nullable().optional(),
+  tracker_kind: z.string().nullable().optional(),
+  tracker_tag: z.string().nullable().optional(),
 });
 export type AssetRow = z.infer<typeof AssetRow>;
 
@@ -73,6 +84,16 @@ export const assetsList = defineOperation({
     /** Só os equipamentos deste cliente (dentro do escopo). */
     customer: Uuid.optional(),
     status: z.enum(ASSET_STATUSES).optional(),
+    /** Família: chave (`life_support`…). */
+    family: z.string().max(40).optional(),
+    /** Tipo (categoria). */
+    category: Uuid.optional(),
+    model: Uuid.optional(),
+    /** Nome do fabricante, exato. */
+    manufacturer: z.string().max(200).optional(),
+    criticality: Uuid.optional(),
+    /** `yes` = com chip/etiqueta de localização; `no` = sem. */
+    tracker: z.enum(['yes', 'no']).optional(),
     limit: z.coerce.number().int().positive().max(500).optional(),
   }),
   response: z.object({
@@ -114,6 +135,10 @@ export const AssetDetail = z.object({
   asset_model_id: Uuid.nullable(),
   model_name: z.string().nullable(),
   manufacturer_name: z.string().nullable(),
+  family_key: z.string().nullable().optional(),
+  family_name: z.string().nullable().optional(),
+  tracker_kind: z.string().nullable().optional(),
+  tracker_tag: z.string().nullable().optional(),
   customer_id: Uuid,
   /** Opcional: respostas capturadas antes desta rodada (demo) não o têm. */
   customer_name: z.string().optional(),
@@ -317,7 +342,18 @@ export const assetsFormOptions = defineOperation({
     '`/customers` e `/customers/:id`, já recortados pelo escopo de quem cadastra.',
   permissions: ['asset.read'],
   response: z.object({
-    categories: z.array(z.object({ id: Uuid, name: z.string(), parent_id: Uuid.nullable() })),
+    /**
+     * Famílias (`family_key` preenchido, raiz) e tipos (filhos de uma família,
+     * ou raiz sem família — cadastro anterior à 0063).
+     */
+    categories: z.array(
+      z.object({
+        id: Uuid,
+        name: z.string(),
+        parent_id: Uuid.nullable(),
+        family_key: z.string().nullable().optional(),
+      })
+    ),
     models: z.array(
       z.object({
         id: Uuid,
@@ -338,6 +374,9 @@ const CamposDoEquipamento = {
   tag: z.string().trim().max(80).nullable().optional(),
   serial_number: z.string().trim().max(120).nullable().optional(),
   asset_number: z.string().trim().max(80).nullable().optional(),
+  /** Chip geolocalizador / etiqueta de localização: tipo + identificador, juntos ou nenhum. */
+  tracker_kind: z.enum(['gps', 'ble', 'rfid', 'nfc', 'outro']).nullable().optional(),
+  tracker_tag: z.string().trim().min(2).max(80).nullable().optional(),
 };
 
 export const assetsCreate = defineOperation({
@@ -388,4 +427,80 @@ export const assetsTransfer = defineOperation({
   }),
   response: z.object({ transfer_id: Uuid }),
   errors: ['not_found', 'validation_failed'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* catálogo de equipamento: tipos e modelos (reunião 16/10/2026, Fase 3)      */
+/* -------------------------------------------------------------------------- */
+
+export const assetCategoriesCreate = defineOperation({
+  operationId: 'assetCategories.create',
+  method: 'POST',
+  path: '/asset-categories',
+  summary: 'Cadastra um TIPO de equipamento dentro de uma família',
+  description:
+    'Tipo ("Ventilador pulmonar") é a categoria-filha; a família (Suporte à vida, Diagnóstico, ' +
+    'Terapia, Tratamento, Equipamentos de apoio) é a raiz. Nome repetido → 409.',
+  permissions: ['organization.manage_catalogs'],
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(120),
+      family_id: Uuid,
+      requires_calibration: z.boolean().optional(),
+      requires_electrical_test: z.boolean().optional(),
+    })
+    .strict(),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const assetCategoriesSetFamily = defineOperation({
+  operationId: 'assetCategories.setFamily',
+  method: 'PATCH',
+  path: '/asset-categories/:id',
+  summary: 'Põe um tipo antigo (sem família) dentro de uma família',
+  description:
+    'Para o cadastro anterior às famílias: o tipo passa a ser filho da família escolhida. Família ' +
+    'não vira filha de nada.',
+  permissions: ['organization.manage_catalogs'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ family_id: Uuid }).strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed'],
+});
+
+export const assetModelsCreate = defineOperation({
+  operationId: 'assetModels.create',
+  method: 'POST',
+  path: '/asset-models',
+  summary: 'Cadastra um modelo de equipamento (e o fabricante, se ainda não existir)',
+  permissions: ['organization.manage_catalogs'],
+  body: z
+    .object({
+      name: z.string().trim().min(1).max(160),
+      manufacturer: z.string().trim().min(1).max(160),
+      asset_category_id: Uuid,
+    })
+    .strict(),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
+});
+
+export const assetsLinkQr = defineOperation({
+  operationId: 'assets.linkQr',
+  method: 'POST',
+  path: '/assets/:id/qr',
+  summary: 'Vincula uma etiqueta de QR JÁ EXISTENTE (pré-impressa) ao equipamento',
+  description:
+    'Aceita o código lido da etiqueta — o token puro ou a URL pública `…/q/<token>`. A etiqueta ' +
+    'anterior do equipamento deixa de valer na hora (como na rotação). Código já usado por outro ' +
+    'equipamento → 409; formato inválido → 422.',
+  permissions: ['asset.print_label'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ code: z.string().trim().min(10).max(300) }).strict(),
+  response: z.object({ previous_token: z.string(), qr_token: z.string() }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
 });

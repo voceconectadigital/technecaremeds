@@ -467,7 +467,11 @@ export interface BalanceRow {
   reserved: string;
   available: string;
   min_qty: string;
-  average_cost: string;
+  max_qty: string | null;
+  /** Nulo sem `inventory.read_costs`. */
+  average_cost: string | null;
+  warehouse_customer_id: string | null;
+  warehouse_owner: 'organization' | 'customer';
   unit: string;
   category: string | null;
   /**
@@ -481,19 +485,31 @@ export interface BalanceRow {
 
 export async function balances(
   session: TenantSession,
-  opts: { warehouseId?: string | null; belowMinimum?: boolean } = {}
+  opts: {
+    warehouseId?: string | null;
+    belowMinimum?: boolean;
+    /** Vínculo cujo escopo esconde almoxarifado de cliente alheio (16/10/2026). */
+    membershipId?: string | null;
+    /** Sem `inventory.read_costs`, o custo sai da CONSULTA (vem nulo). */
+    withCosts?: boolean;
+  } = {}
 ): Promise<BalanceRow[]> {
   return session.query<BalanceRow>(
     `SELECT b.item_id, b.warehouse_id, i.sku, i.name AS item_name, w.name AS warehouse_name,
-            b.on_hand, b.reserved, (b.on_hand - b.reserved) AS available, b.min_qty, b.average_cost,
-            i.unit, i.category, i.image_key
+            b.on_hand, b.reserved, (b.on_hand - b.reserved) AS available, b.min_qty, b.max_qty,
+            CASE WHEN $4::boolean THEN b.average_cost END AS average_cost,
+            i.unit, i.category, i.image_key,
+            w.customer_id AS warehouse_customer_id,
+            CASE WHEN w.customer_id IS NULL THEN 'organization' ELSE 'customer' END AS warehouse_owner
        FROM aurora.stock_balances b
        JOIN aurora.inventory_items i ON i.id = b.item_id
        JOIN aurora.warehouses w      ON w.id = b.warehouse_id
       WHERE ($1::uuid IS NULL OR b.warehouse_id = $1)
         AND (NOT $2::boolean OR (b.min_qty > 0 AND b.on_hand < b.min_qty))
+        AND (w.customer_id IS NULL OR $3::uuid IS NULL
+             OR w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3)))
       ORDER BY i.name, w.name`,
-    [opts.warehouseId ?? null, opts.belowMinimum ?? false]
+    [opts.warehouseId ?? null, opts.belowMinimum ?? false, opts.membershipId ?? null, opts.withCosts ?? true]
   );
 }
 

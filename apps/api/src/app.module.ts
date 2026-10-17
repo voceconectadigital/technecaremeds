@@ -21,6 +21,10 @@ import { CustomersController } from './directory/customers.controller';
 import { TeamsController } from './directory/teams.controller';
 import { CatalogsController } from './catalogs/catalogs.controller';
 import { AssetsController } from './assets/assets.controller';
+import { AssetCatalogController } from './assets/asset-catalog.controller';
+import { ExecucaoGuiadaController } from './work-orders/execucao-guiada.controller';
+import { EstoqueGestaoController } from './inventory/estoque-gestao.controller';
+import { ReportsController } from './insights/reports.controller';
 import { QrController } from './assets/qr.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
@@ -32,7 +36,12 @@ import { ScheduleController } from './schedule/schedule.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { InsightsController } from './insights/insights.controller';
 import { NotificationsController } from './notifications/notifications.controller';
-import { AutomationsController } from './automations/automations.controller';
+import { PlatformTenantsController } from './platform/tenants.controller';
+import {
+  AutomationsController,
+  AutomationTasksController,
+  AutomationReportsController,
+} from './automations/automations.controller';
 import { SearchController } from './search/search.controller';
 import { AuditController } from './audit/audit.controller';
 import { FieldUploadController } from './work-orders/field-upload.controller';
@@ -93,11 +102,15 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       TeamsController,
       CatalogsController,
       AssetsController,
+      AssetCatalogController,
       QrController,
       ServiceRequestsController,
       WorkOrdersController,
       ExecutionController,
       ExecutionResourcesController,
+      ExecucaoGuiadaController,
+      EstoqueGestaoController,
+      ReportsController,
       FieldController,
       ContractsController,
       AssetContractController,
@@ -107,6 +120,9 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       InsightsController,
       NotificationsController,
       AutomationsController,
+      PlatformTenantsController,
+      AutomationTasksController,
+      AutomationReportsController,
       SearchController,
       AuditController,
       InstrumentsController,

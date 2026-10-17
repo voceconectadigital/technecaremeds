@@ -249,6 +249,10 @@ export function OrdemPage() {
     if (item.kind === 'boolean') corpo.boolean = valor === 'sim';
     else if (item.kind === 'number') corpo.number = Number(valor);
     else if (item.kind === 'option') corpo.options = [valor];
+    // Múltipla escolha guardada como "a|b" na base local; vai como lista.
+    else if (item.kind === 'multi_option') corpo.options = valor ? valor.split('|') : [];
+    else if (item.kind === 'date') corpo.date = valor;
+    else if (item.kind === 'photo') corpo.photo_count = Number(valor) || 0;
     else corpo.text = valor;
 
     await enfileirar({
@@ -409,6 +413,49 @@ export function OrdemPage() {
                         </button>
                       ))}
                     </div>
+                  ) : item.kind === 'multi_option' && item.options ? (
+                    <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={item.label}>
+                      {item.options.map((o) => {
+                        const marcadas = (respostas[item.id] ?? '').split('|').filter(Boolean);
+                        const ativa = marcadas.includes(o);
+                        return (
+                          <button
+                            key={o}
+                            type="button"
+                            aria-pressed={ativa}
+                            onClick={() =>
+                              void responder(
+                                item,
+                                (ativa ? marcadas.filter((x) => x !== o) : [...marcadas, o]).join('|')
+                              )
+                            }
+                            className={`min-h-12 rounded-control border px-3 text-sm ${
+                              ativa
+                                ? 'border-accent bg-accent text-on-accent'
+                                : 'border-border-subtle text-text'
+                            }`}
+                          >
+                            {o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : item.kind === 'date' ? (
+                    <input
+                      aria-label={item.label}
+                      type="date"
+                      defaultValue={respostas[item.id] ?? ''}
+                      onBlur={(e) => e.target.value && void responder(item, e.target.value)}
+                      className="mt-2 min-h-12 w-full rounded-control border border-border-subtle px-3 text-sm text-text"
+                    />
+                  ) : item.kind === 'photo' ? (
+                    <button
+                      type="button"
+                      onClick={() => void responder(item, String((Number(respostas[item.id]) || 0) + 1))}
+                      className="mt-2 min-h-12 w-full rounded-control border border-border-subtle px-3 text-sm text-text"
+                    >
+                      Registrar foto tirada ({Number(respostas[item.id]) || 0})
+                    </button>
                   ) : item.kind === 'measurement' ? (
                     /*
                      * PONTO DE MEDIÇÃO (metrologia N0) NÃO SE RESPONDE COMO TEXTO.

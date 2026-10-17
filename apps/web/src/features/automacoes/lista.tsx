@@ -20,11 +20,13 @@
  * nenhuma: a equipe passa a contar com um efeito que não está acontecendo.
  */
 import { useState } from 'react';
-import { AlertTriangle, FlaskConical, Pause, Play, Workflow } from 'lucide-react';
+import { AlertTriangle, FlaskConical, ListChecks, Pause, Play, PlayCircle, Workflow } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import { Button, Card, Dialog, EmptyState, SkeletonList, StatusChip, cn, useToast } from '@aurora/ui';
 import {
   automationActivate,
   automationPause,
+  automationRunNow,
   automationRuns,
   automationSimulate,
   automationsList,
@@ -36,6 +38,22 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
 import { AlternadorDeConfiguracoes } from '../configuracoes/alternador';
+import { BotaoNovaAutomacao } from './nova';
+
+const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/** "0 8 * * 1" → "toda seg às 08:00" — só para os formatos que a tela cria. */
+export function descreverAgenda(cron: string | null | undefined): string {
+  if (!cron) return 'no relógio';
+  const [m, h, dom, , dow] = cron.split(' ');
+  const hora = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  if (/^\d+$/.test(m ?? '') && /^\d+$/.test(h ?? '')) {
+    if (dom === '*' && dow === '*') return `todo dia às ${hora}`;
+    if (dom === '*' && /^\d$/.test(dow ?? '')) return `toda ${DIAS[Number(dow) % 7]} às ${hora}`;
+    if (/^\d+$/.test(dom ?? '') && dow === '*') return `todo dia ${dom} às ${hora}`;
+  }
+  return `cron ${cron}`;
+}
 
 export function AutomacoesPage() {
   const [vendo, setVendo] = useState<AutomationRule | null>(null);
@@ -57,8 +75,19 @@ export function AutomacoesPage() {
       subtitle="O que o sistema faz sozinho — e quantos casos cada regra pegaria."
       breadcrumbs={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Automações' }]}
     >
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <AlternadorDeConfiguracoes />
+        <span className="flex-1" />
+        <Link
+          to="/tarefas"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm text-accent-text underline-offset-2 hover:underline"
+        >
+          <ListChecks className="size-4" aria-hidden="true" />
+          Tarefas
+        </Link>
+        <Can permission="automation.create">
+          <BotaoNovaAutomacao />
+        </Can>
       </div>
 
       <Card>
@@ -85,8 +114,16 @@ export function AutomacoesPage() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-base text-text">{r.name}</span>
                   <span className="mt-0.5 block truncate text-xs text-muted" data-numeric>
-                    {r.trigger_kind === 'cron' ? 'no relógio' : `quando ${r.trigger_event}`} ·{' '}
-                    {r.action_count} {Number(r.action_count) === 1 ? 'ação' : 'ações'}
+                    {r.trigger_kind === 'schedule'
+                      ? descreverAgenda(r.trigger_cron)
+                      : `quando ${r.trigger_event}`}{' '}
+                    ·{' '}
+                    {r.first_action
+                      ? (ROTULO_ACAO[r.first_action] ?? r.first_action)
+                      : `${r.action_count} ação(ões)`}
+                    {r.next_run
+                      ? ` · próxima: ${new Date(r.next_run).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                      : ''}
                   </span>
                 </span>
 
@@ -107,6 +144,11 @@ export function AutomacoesPage() {
                   <Button size="sm" variant="ghost" onClick={() => setVendo(r)}>
                     Execuções
                   </Button>
+                  {r.trigger_kind === 'schedule' && r.state === 'active' && (
+                    <Can permission="automation.run_now">
+                      <BotaoExecutarAgora regra={r} />
+                    </Can>
+                  )}
                   <Can permission="automation.update">
                     <BotaoLigar regra={r} />
                   </Can>
@@ -170,7 +212,10 @@ function Simulacao({ regra }: { regra: AutomationRule }) {
     <span className="shrink-0 text-right">
       <span className="block text-xs text-subtle">simulada</span>
       <span className="block text-sm text-text tabular-nums" data-numeric>
-        {regra.simulated_matches ?? 0} {(regra.simulated_matches ?? 0) === 1 ? 'caso' : 'casos'} em 30 dias
+        {regra.simulated_matches ?? 0}{' '}
+        {regra.trigger_kind === 'schedule'
+          ? `${(regra.simulated_matches ?? 0) === 1 ? 'passada' : 'passadas'} em 30 dias`
+          : `${(regra.simulated_matches ?? 0) === 1 ? 'caso' : 'casos'} em 30 dias`}
       </span>
     </span>
   );
@@ -228,6 +273,45 @@ function BotaoLigar({ regra }: { regra: AutomationRule }) {
       }
     >
       {semSimulacao ? 'Ligar sem simular' : 'Ligar'}
+    </Button>
+  );
+}
+
+/** Regra agendada: roda a passada do minuto corrente (uma vez só). */
+function BotaoExecutarAgora({ regra }: { regra: AutomationRule }) {
+  const toast = useToast();
+  const rodar = useApiMutation(automationRunNow, {
+    invalidates: [automationsList],
+    onError: (e: ApiError) => toast.error('Não executou', e.problem.message),
+  });
+  return (
+    <Button
+      size="sm"
+      icon={<PlayCircle className="size-3.5" />}
+      loading={rodar.isPending}
+      onClick={() =>
+        rodar.mutate(
+          { params: { id: regra.id } },
+          {
+            onSuccess: (r) => {
+              const x = r as { executed: boolean; outcome: string | null; actions: { detail?: string }[] };
+              if (!x.executed) toast.success('Esta passada já foi executada');
+              else if (x.outcome === 'failed')
+                toast.error('A execução falhou', x.actions.at(-1)?.detail ?? '');
+              else
+                toast.success(
+                  'Executada',
+                  x.actions
+                    .map((a) => a.detail)
+                    .filter(Boolean)
+                    .join(' · ')
+                );
+            },
+          }
+        )
+      }
+    >
+      Executar agora
     </Button>
   );
 }
@@ -311,12 +395,31 @@ const TOM_ESTADO: Record<string, 'neutral' | 'info' | 'warn' | 'good' | 'bad'> =
 
 const ROTULO_RESULTADO: Record<string, string> = {
   applied: 'aplicou',
+  matched: 'executou',
   skipped: 'não era o caso',
+  skipped_conditions: 'não era o caso',
+  skipped_recursion: 'evitou laço',
+  skipped_rate_limit: 'limite atingido',
   failed: 'falhou',
 };
 
 const TOM_RESULTADO: Record<string, 'neutral' | 'info' | 'warn' | 'good' | 'bad'> = {
   applied: 'good',
+  matched: 'good',
   skipped: 'neutral',
+  skipped_conditions: 'neutral',
+  skipped_recursion: 'warn',
+  skipped_rate_limit: 'warn',
   failed: 'bad',
+};
+
+const ROTULO_ACAO: Record<string, string> = {
+  notify: 'notificar',
+  assign: 'atribuir',
+  change_status: 'mudar situação',
+  add_comment: 'comentar',
+  create_work_order: 'abrir OS',
+  send_report: 'relatório agendado',
+  reminder: 'lembrete',
+  create_task: 'tarefa / 5W2H / PDCA',
 };
