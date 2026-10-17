@@ -98,33 +98,43 @@ describe('PF-14 · executar exige ser o responsável, da equipe, ou ter execute_
 
     // Com a OS em execução (pelo responsável), as ações de execução do outro também são recusadas.
     expect((await mover(tecA.email, os, { to: 'in_progress' })).status).toBe(201);
-    const recusas = await Promise.all([
-      http.post(`/v1/work-orders/${os}/check-in`).set(auth(tecB.email)).send(JUSTIFICATIVA),
-      http.post(`/v1/work-orders/${os}/timer/start`).set(auth(tecB.email)).send({}),
-      http
-        .post(`/v1/work-orders/${os}/time-entries`)
-        .set(auth(tecB.email))
-        .send({ started_at: haMinutos(60), ended_at: haMinutos(30) }),
-      http.post(`/v1/work-orders/${os}/attachments`).set(auth(tecB.email)).send({
-        purpose: 'before',
-        file_name: 'a.jpg',
-        content_type: 'image/jpeg',
-        byte_size: 10,
-      }),
-      http
-        .post(`/v1/work-orders/${os}/signatures`)
-        .set(auth(tecB.email))
-        .send({ signer_role: 'technician', signer_name: 'Bruno', method: 'drawn' }),
-      http
-        .patch(`/v1/work-orders/${os}/service-report`)
-        .set(auth(tecB.email))
-        .send({ service_description: 'tentativa' }),
-      http
-        .post(`/v1/work-orders/${os}/customer-parts`)
-        .set(auth(tecB.email))
-        .send({ description: 'Peça do cliente', quantity: 1 }),
-      mover(tecB.email, os, { to: 'completed', resolution: 'feito por quem não devia' }),
-    ]);
+    // UMA DE CADA VEZ: o supertest abre um servidor efêmero por chamada, e oito
+    // em paralelo contra o PostgreSQL real do CI davam ECONNRESET intermitente.
+    // A regra testada não depende de concorrência.
+    const tentativas: Array<() => PromiseLike<{ status: number; body: unknown }>> = [
+      () => http.post(`/v1/work-orders/${os}/check-in`).set(auth(tecB.email)).send(JUSTIFICATIVA),
+      () => http.post(`/v1/work-orders/${os}/timer/start`).set(auth(tecB.email)).send({}),
+      () =>
+        http
+          .post(`/v1/work-orders/${os}/time-entries`)
+          .set(auth(tecB.email))
+          .send({ started_at: haMinutos(60), ended_at: haMinutos(30) }),
+      () =>
+        http.post(`/v1/work-orders/${os}/attachments`).set(auth(tecB.email)).send({
+          purpose: 'before',
+          file_name: 'a.jpg',
+          content_type: 'image/jpeg',
+          byte_size: 10,
+        }),
+      () =>
+        http
+          .post(`/v1/work-orders/${os}/signatures`)
+          .set(auth(tecB.email))
+          .send({ signer_role: 'technician', signer_name: 'Bruno', method: 'drawn' }),
+      () =>
+        http
+          .patch(`/v1/work-orders/${os}/service-report`)
+          .set(auth(tecB.email))
+          .send({ service_description: 'tentativa' }),
+      () =>
+        http
+          .post(`/v1/work-orders/${os}/customer-parts`)
+          .set(auth(tecB.email))
+          .send({ description: 'Peça do cliente', quantity: 1 }),
+      () => mover(tecB.email, os, { to: 'completed', resolution: 'feito por quem não devia' }),
+    ];
+    const recusas = [];
+    for (const t of tentativas) recusas.push(await t());
     for (const r of recusas) expect(r.status, JSON.stringify(r.body)).toBe(403);
 
     // Ler continua permitido: a regra é sobre executar.

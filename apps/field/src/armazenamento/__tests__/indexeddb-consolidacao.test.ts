@@ -114,3 +114,11 @@ describe('IDB-001 · a escrita espera a consolidação', () => {
     ]);
   });
 });
+
+describe('versão da base local', () => {
+  it('coleção nova exige subir VERSAO (senão o aparelho com a base aberta não a recebe)', async () => {
+    const { VERSAO, COLECOES_POR_VERSAO } = await import('../indexeddb');
+    const { COLECOES } = await import('../porta');
+    expect(COLECOES_POR_VERSAO[VERSAO], `registre COLECOES_POR_VERSAO[${VERSAO}]`).toBe(COLECOES.length);
+  });
+});

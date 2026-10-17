@@ -111,6 +111,11 @@ export const COLECOES = [
    * TUDO continuar lá.
    */
   'rascunhos',
+  /**
+   * Cronômetros abertos baixados do servidor (`/field/sync` → `open_timers`,
+   * PF-65): é o que permite mostrar "rodando desde" e parar sem rede.
+   */
+  'cronometros',
   /** Marcas: último `synced_at`, identidade, versão do pacote. */
   'meta',
 ] as const;
