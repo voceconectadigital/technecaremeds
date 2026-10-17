@@ -132,7 +132,23 @@ Testes locais (PGlite, em shards — a suíte inteira de uma vez estoura a memó
 | **Total** | **148** | **2 420** | **32** | **0** |
 
 Gates locais: typecheck, OpenAPI (`openapi:check` em dia), segredos (865 arquivos), SPEC, ESLint e Prettier nos
-arquivos alterados — todos verdes. PostgreSQL 16 real, RLS sob `NOBYPASSRLS` e Playwright rodam no CI do PR.
+arquivos alterados — todos verdes.
+
+**CI do PR [#28](https://github.com/voceconectadigital/technecaremeds/pull/28)** (run `39068863290`, commit `e973469`):
+
+| Check | Resultado |
+| --- | --- |
+| Estático | ✅ |
+| Testes contra PostgreSQL 16 | ✅ **78 migrations do zero** · 149 arquivos · **2 463 testes, 0 falhas** (RLS sob papel sem BYPASSRLS) |
+| Ponta a ponta (Playwright) | ✅ **209 aprovados**, 1 pulo condicional que já existia (`fluxo.spec.ts`), 0 falhas |
+| Cloudflare Pages | ✅ |
+
+A primeira execução do PR falhou e foi corrigida no commit `e973469`:
+- **Campo (bug real, pego pelo E2E):** a coleção `cronometros` do PF-65 nunca foi registrada em `COLECOES`, e o
+  IndexedDB real recusava a transação. A coleção foi registrada, a versão subiu para 3, o adaptador em memória dos
+  testes passou a recusar coleção desconhecida e um teste liga a versão à lista de coleções.
+- **PostgreSQL 16 (instabilidade do teste):** oito requisições paralelas no teste de recusa do PF-14 davam
+  `ECONNRESET`; passaram a ser sequenciais.
 
 ---
 
