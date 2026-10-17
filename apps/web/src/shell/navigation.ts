@@ -50,6 +50,7 @@ import {
   FileText,
   Settings,
   UserCog,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -144,6 +145,15 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     icon: Package,
     permissions: ['inventory.read'],
     hint: 'Peças, saldos e requisições',
+    grupo: 'Cadastros',
+  },
+  {
+    // Store ≠ Estoque (16/10/2026): catálogo comercial, sem saldo interno.
+    to: '/store',
+    label: 'Store',
+    icon: ShoppingBag,
+    permissions: ['store.read'],
+    hint: 'Catálogo comercial: produtos e ofertas, com pedido de proposta',
     grupo: 'Cadastros',
   },
   {

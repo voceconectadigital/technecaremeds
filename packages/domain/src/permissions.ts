@@ -168,6 +168,10 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('quote', 'send', 'Enviar orçamento ao cliente'),
   p('quote', 'approve', 'Aprovar ou reprovar orçamento'),
   p('quote', 'invoice', 'Faturar orçamento'),
+
+  // --- Store (16/10/2026): catálogo comercial, separado do estoque interno ---
+  p('store', 'read', 'Ver a Store (catálogo comercial)'),
+  p('store', 'request_quote', 'Pedir proposta pela Store'),
   p('contract', 'read', 'Ver contratos'),
   p('contract', 'create', 'Criar contratos'),
   p('contract', 'update', 'Editar contratos'),
@@ -346,6 +350,7 @@ const TECHNICIAN_BASE: readonly string[] = [
   'inventory.move',
   'document.read',
   'insight.read',
+  'store.read',
 ];
 
 export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
@@ -403,6 +408,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'maintenance_plan.skip_item',
       'opportunity.create',
       'opportunity.update',
+      'store.request_quote',
     ],
   },
   {
@@ -480,6 +486,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'insight.manage_dashboards',
       'document.release_to_customer',
       'opportunity.authorize',
+      'store.request_quote',
     ],
   },
   {
@@ -516,6 +523,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'document.update',
       'inventory.read',
       'insight.read',
+      'store.read',
     ],
   },
   {
@@ -541,6 +549,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'inventory.count',
       'inventory.read_costs',
       'insight.read',
+      'store.read',
     ],
   },
   {
@@ -566,6 +575,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'inventory.read_costs',
       'asset.read_financials',
       'insight.read_financial_metrics',
+      'store.request_quote',
     ],
   },
   {
@@ -591,6 +601,8 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'quote.read',
       'quote.approve',
       'maintenance_plan.read',
+      'store.read',
+      'store.request_quote',
     ],
   },
   {
@@ -612,6 +624,8 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'maintenance_plan.read',
       'insight.read',
       'contract.read',
+      'store.read',
+      'store.request_quote',
     ],
   },
 ]);

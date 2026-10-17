@@ -98,6 +98,7 @@ const AtivosPage = preguicosa(() =>
 const AtivoPage = preguicosa(() =>
   import('../features/ativos/ficha').then((m) => ({ default: m.AtivoPage }))
 );
+const StorePage = preguicosa(() => import('../features/store/store').then((m) => ({ default: m.StorePage })));
 const EstoquePage = preguicosa(() =>
   import('../features/estoque/lista').then((m) => ({ default: m.EstoquePage }))
 );
@@ -276,6 +277,7 @@ export const routeTree = raiz.addChildren([
     beforeLoad: exigirSessao,
   }),
   rotaProtegida('/estoque', EstoquePage),
+  rotaProtegida('/store', StorePage),
 
   rotaProtegida('/documentos', DocumentosPage),
   rotaProtegida('/contratos', ContratosPage),

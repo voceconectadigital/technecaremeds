@@ -43,3 +43,4 @@ export * from './plan-board';
 export * from './procedures';
 export * from './provisioning';
 export * from './execucao-guiada';
+export * from './estoque-gestao';

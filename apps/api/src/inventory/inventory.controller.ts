@@ -81,6 +81,9 @@ export class InventoryController {
       balances(s, {
         warehouseId: optionalUuid(warehouse, 'warehouse'),
         belowMinimum: belowMinimum === 'true',
+        membershipId: ctx.membershipId,
+        // `inventory.read_costs` passa a valer de fato (16/10/2026).
+        withCosts: ctx.permissions.has('inventory.read_costs'),
       })
     );
     return { items: items.map(comEnderecoDaImagem) };

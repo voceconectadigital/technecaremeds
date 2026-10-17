@@ -18,11 +18,11 @@ import { Button, Dialog, Field, Input, Select, cn, useToast } from '@aurora/ui';
 import {
   customersAddContact,
   customersContacts,
-  inventoryBalances,
+  inventoryItemsList,
   quotesAddItem,
   quotesCreate,
   type CustomerContact,
-  type StockBalance,
+  type InventoryItem,
   type WorkOrderDetail,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
@@ -64,14 +64,12 @@ export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; on
   const { data: contatos } = useApiQuery(customersContacts, { params: { id: os.customer_id } }) as {
     data: { items: CustomerContact[] } | undefined;
   };
-  const { data: saldos } = useApiQuery(
-    inventoryBalances,
-    { query: {} },
-    { enabled: can('inventory.read') }
-  ) as {
-    data: { items: StockBalance[] } | undefined;
+  // O catálogo de itens (16/10/2026), e não só os que têm saldo: o orçamento
+  // pode prever peça que ainda vai ser comprada.
+  const { data: catalogo } = useApiQuery(inventoryItemsList, undefined, { enabled: can('inventory.read') }) as {
+    data: { items: InventoryItem[] } | undefined;
   };
-  const itensDoCatalogo = [...new Map((saldos?.items ?? []).map((s) => [s.item_id, s.item_name])).entries()];
+  const itensDoCatalogo = (catalogo?.items ?? []).map((i) => [i.id, `${i.name} (${i.sku})`] as const);
   const contato = useApiMutation(customersAddContact, { invalidates: [customersContacts] });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
