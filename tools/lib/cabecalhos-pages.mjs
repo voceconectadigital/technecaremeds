@@ -38,7 +38,10 @@ export function origemDe(url) {
 export function hashesDosScriptsInline(html) {
   const hashes = [];
   for (const m of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
-    const corpo = m[1];
+    // O parser de HTML do navegador normaliza CRLF/CR para LF ANTES de calcular
+    // o hash. Um build feito num checkout Windows (CRLF) publicaria um hash que
+    // o navegador nunca reproduz — e o script de tema seria bloqueado.
+    const corpo = m[1].replace(/\r\n?/g, '\n');
     if (!corpo.trim()) continue;
     hashes.push(`'sha256-${createHash('sha256').update(corpo, 'utf8').digest('base64')}'`);
   }

@@ -7,6 +7,8 @@
  * primeira coisa que o técnico vê de manhã é esta tela. O casco só precisa
  * estar em cache na PRÓXIMA abertura, que é quando ele será usado sem rede.
  */
+// PRIMEIRO: antes de qualquer contrato ser construído (ver sem-eval.ts).
+import './sem-eval';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app';
