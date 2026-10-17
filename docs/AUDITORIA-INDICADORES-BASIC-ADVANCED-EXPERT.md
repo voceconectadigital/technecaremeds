@@ -608,3 +608,116 @@ Implementar só depois das respostas.
 | Calculáveis hoje | 14 |
 | Exigem dado novo | 7 |
 | Perguntas para o Anderson | 16 |
+
+---
+
+## 17. IMPLEMENTAÇÃO FASE 1 (17/10/2026)
+
+> As conclusões das seções 1 a 16 **não foram alteradas**. Esta seção registra só o que foi construído
+> depois, com o que a auditoria permitia construir sem esperar as respostas do Anderson (§15). Nada
+> aqui fecha fórmula ambígua: o que dependia de P-01…P-16 continua pendente.
+
+### 17.1 O que existe agora
+
+| Item | Onde | Situação |
+| --- | --- | --- |
+| **Catálogo central de indicadores** (código estável, nome, descrição, unidade, categoria, modelos permitidos, situação, sentido da meta, fonte de cálculo) | `packages/domain/src/report-tiers.ts` (evoluído; não há segundo arquivo) | PASS |
+| Situações `ACTIVE` · `PROVISIONAL` · `PENDING_DEFINITION` | idem | PASS |
+| **Metas configuráveis** (indicador × organização × cliente × contrato × vigência × valor × unidade × sentido) | migration `0069_metas_de_indicadores.sql`, `packages/db/src/indicator-targets.ts`, `apps/api/src/insights/indicator-targets.controller.ts`, funções puras em `packages/domain/src/indicator-targets.ts` | PASS |
+| **Avaliação da qualidade** (média, quantidade, distribuição 1–5) | `metrics.serviceRating` | PASS |
+| **Chamados Abertos x Encerrados** (AxF), com numerador e denominador | `metrics.openedVsClosed` | PASS |
+| Razão percentual genérica (`ratioPercent`) | `packages/domain/src/indicator-targets.ts` | PASS (sem população atribuída) |
+| Relatório lê o catálogo e as metas | `packages/db/src/relatorios.ts`, `reports.controller.ts` | PASS |
+| Fluxo "Gerar relatório": modelo → período → cliente (→ contrato) → indicadores | `apps/web/src/features/painel/relatorio.tsx` | PASS |
+| Tela **Configurações › Metas** (leitura para todos; edição com `insight.manage_targets`) | `apps/web/src/features/configuracoes/metas.tsx`, rota `/configuracoes/metas` | PASS |
+| Permissão nova `insight.manage_targets` (owner, admin, gestor de manutenção, gestor) | `packages/domain/src/permissions.ts`, migration `0069` | PASS |
+
+### 17.2 Classificação final dos indicadores
+
+| Código | Modelos | Situação | Por quê |
+| --- | --- | --- | --- |
+| `work_orders_opened`, `work_orders_completed` | Basic, Advanced | **ACTIVE** | Contagens do Painel |
+| `opened_vs_closed` (AxF) | Advanced | **ACTIVE** | Classe B: encerradas no período ÷ abertas no período × 100; valores de 117 % e 125 % do PDF Advanced só são possíveis com fluxos. Reutiliza as duas contagens do Painel |
+| `work_order_evolution`, `backlog`, `work_orders_by_status`, `preventive_vs_corrective`, `sla_compliance` | Advanced | **ACTIVE** | Funções do Painel, já testadas |
+| `compliance_calibration`, `compliance_electrical_safety`, `compliance_qualification` | Basic, Advanced | **ACTIVE** | Definição do sistema, exigidas separadas na reunião; **não agregadas** (P-10) |
+| `compliance_preventive` (ACM) | Basic, Advanced, Expert | **PROVISIONAL** | Razão comprovada (97,59 %), mas falta confirmar se preventiva com atraso conta como realizada (P-06, P-07) |
+| `service_rating` | Basic, Advanced, Expert | **ACTIVE** | Classe B; a média 4,687 ≈ 4,7 bate com a soma das notas. A inconsistência 64 × 67 do PDF Basic não é reproduzida: média, quantidade e distribuição saem da mesma lista |
+| `mttr`, `mtbf` | Basic, Advanced | **PROVISIONAL** | O sistema calcula (tempo corrido; minutos), mas a definição do cliente é outra ou ambígua (P-01, P-02, P-12). **Nenhum cálculo novo** |
+| `park_availability_snapshot` | Basic, Advanced | **PROVISIONAL** | Fotografia de agora; disponibilidade no tempo aguarda P-09 |
+| `requests_fulfilled_ratio` (ICRS) | Basic, Expert | **PENDING_DEFINITION** | A razão está provada, a **população não** (P-04). Só a calculadora genérica existe; nenhum registro foi mapeado |
+| `training_ratio` (ITRS) | Basic, Expert | **PENDING_DEFINITION / DATA_MODEL** | Ver 17.4 |
+| `obsolescence` | Advanced | **PENDING_DEFINITION** | P-16 |
+| `first_response_time` (TMPA), `availability_*`, `tmrg_*`, `critical_resolution_*` (I/E/G), `quality_activities_on_time`, `attendance`, `imr_penalty` | Expert | **PENDING_DEFINITION** | P-03, P-05, P-08, P-09, P-11, P-14, P-15. Estrutura dos 16 itens do IMR registrada; **sem fórmula, sem número, sem desconto** |
+
+**O Expert não herda o Basic nem o Advanced.** `tiers` é uma lista explícita por indicador. Os únicos
+reportáveis hoje no Expert são `service_rating` (ACTIVE) e `compliance_preventive` (PROVISIONAL).
+
+### 17.3 Regras de entrada no relatório
+
+- Sem seleção explícita: **só `ACTIVE`**.
+- `PROVISIONAL`: só com pedido explícito; sai marcado (`state`, "Provisório", e "(PROVISÓRIO)" no PDF).
+- `PENDING_DEFINITION`: **nunca entra**. Pedi-lo é 422. A resposta lista o que ficou de fora em `pending`,
+  com o motivo — sem número.
+- Todo indicador reportável precisa ter cálculo ligado; um teste percorre o catálogo dos três modelos e
+  falha se algum não tiver.
+
+### 17.4 Treinamentos (ITRS): por que ficou `PENDING_DEFINITION / DATA_MODEL`
+
+Existe `service_requests.requested_type = 'training'` e `work_orders.service_request_id`, mas **não há
+vínculo inequívoco solicitado → realizado**:
+
+1. a solicitação de treinamento pode gerar OS de **qualquer tipo** (`POST /work-orders/from-request/:id` não
+   força `work_order_type = training`), e a OS do tipo treinamento não aponta para o treinamento pedido;
+2. não há critério de "realizado" (OS concluída? solicitação `fulfilled`? lista de presença?);
+3. não há entidade de educação continuada (turma, participantes, carga horária).
+
+Falta, para implementar: definir o critério de "realizado" com o cliente e **ou** forçar o tipo da OS gerada
+de uma solicitação `training` **ou** criar a entidade de treinamento. Nada foi inferido.
+
+### 17.5 Metas
+
+- **Escopos e precedência:** contrato → cliente → organização. A mais específica **em vigor** vence.
+  Meta de outro cliente nunca vaza para este contexto.
+- **Vigência** em dias, inclusive nas pontas; `valid_to` nulo = aberta. Duas metas do mesmo escopo e do mesmo
+  indicador **não se sobrepõem** (gatilho + trava consultiva; 409). Vigência futura convive com a atual.
+- **Dia de referência no relatório:** o último dia do período, sem passar de hoje. Um relatório de março de
+  2020 usa a meta que valia em março de 2020.
+- **Sem meta:** `target = null` e `target_label = "SEM META CONFIGURADA"` — nunca zero. Indicador
+  informativo (`INFORMATIONAL`) não tem meta e não mostra o rótulo.
+- **Sentido e unidade** são do indicador (catálogo): configurar `≤` para uma disponibilidade, ou minutos para
+  um percentual, é 422. A API aceita `unit` só para conferir.
+- **Quem faz o quê:** `insight.read` lê; `insight.manage_targets` escreve. A meta da **organização inteira**
+  exige vínculo com escopo sobre todos os clientes; quem vê só o Hospital A configura a meta do Hospital A e
+  recebe 404 para o B. Backend é a autoridade; a tela só esconde os botões.
+- **Arquivar, não apagar:** `deleted_at`; o papel da aplicação não tem `DELETE`. A trilha de auditoria
+  (`fn_audit`) registra criação, alteração e arquivamento.
+- **`contract_id` no relatório escolhe a META do contrato.** O recorte dos números segue cliente/setor: não
+  existe ainda filtro de métrica por cobertura de contrato.
+- **Metas pré-existentes no contrato** (`contracts.sla_target_percent`, `plan_target_percent`, usadas pela
+  medição contratual) **não foram migradas nem ligadas** a esta tabela: converter por suposição está fora do
+  escopo. Unificar é decisão futura.
+- **Reaproveitamento:** `resolveTarget`, `evaluateTarget` e `loadVisibleTargets` são as mesmas para o Painel, o
+  relatório e a automação. O Painel não foi redesenhado nesta rodada.
+
+### 17.6 Correção declarada
+
+O relatório rotulava o MTBF em **horas**, mas `metrics.mtbf` devolve **minutos** (a definição de domínio
+sempre disse minutos). O catálogo e a seção agora declaram `minutes`. Nenhuma fórmula mudou.
+
+### 17.7 Segurança e evidência
+
+- RLS `FORCE` em `indicator_targets`; FKs compostas por `organization_id`; gatilho confere que o contrato é do
+  cliente da meta mesmo com escrita direta na tabela.
+- Testes adversariais: B não lê, não altera, não arquiva e não grava em nome de A; FK composta recusa cliente
+  de A; `DELETE` negado ao papel da aplicação; meta de B não entra na resolução de A.
+- Testes: `report-catalog.test.ts` (domínio, 36), `indicator-targets.test.ts` (banco, 16), `metrics.test.ts`
+  (+9: avaliação e AxF <100 / =100 / >100 / sem dado), `api-relatorios.test.ts` (12), `api-metas-indicadores.test.ts`
+  (21: organização, override de cliente e de contrato, vigência, sem meta, gestor × operador × solicitante ×
+  vínculo restrito, isolamento entre organizações, PDF).
+
+### 17.8 Continua bloqueado aguardando o Anderson
+
+P-01 (MTTR) · P-02 (MTBF) · P-03 (TMPA) · P-04 (população do ICRS) · P-05 (Global) · P-08 (interno × externo) ·
+P-09 (disponibilidade) · P-10 (escopo do Basic e agregação) · P-11 (crítica) · P-12 (formato dos tempos) ·
+P-14 (glosa/IMR) · P-15 (atividades da qualidade e assiduidade) · P-16 (obsolescência). O layout final dos
+três PDFs e a assinatura continuam em rodada posterior.

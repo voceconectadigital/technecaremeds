@@ -17,11 +17,11 @@
 >    IMPLEMENTADA + evidência), promova a capacidade para este arquivo e ajuste
 >    o mapa de código (§34) se ele mudou.
 
-**Atualizado em:** 16/10/2026 (rodada "reunião com Anderson de 16/10/2026", branch
+**Atualizado em:** 17/10/2026 (indicadores e metas, §15-A) · 16/10/2026 (rodada "reunião com Anderson de 16/10/2026", branch
 `feat/anderson-2026-10-16`, PR #22 — controle item a item em `docs/ROADMAP-ANDERSON-2026-10-16.md`) ·
-**Migration mais recente:** `0068_novo_negocio.sql` · **69 migrations** · **110 tabelas** (lista de
-`migrations.test.ts`) · **265 rotas** (205 com contrato Zod) · **118 permissões** · **13 papéis**
-(+ `operator`, `manager`) · **2104 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
+**Migration mais recente:** `0069_metas_de_indicadores.sql` · **70 migrations** · **111 tabelas** (lista de
+`migrations.test.ts`) · **265 rotas** (205 com contrato Zod) · **119 permissões** · **13 papéis**
+(+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
 > **Rodada 16/10/2026 — o que mudou (resumo; evidência por item no ROADMAP):**
@@ -822,6 +822,34 @@ exclusões, nota de comparabilidade) — a tela mostra a cobertura, não só o n
 | Tempo por situação | do histórico de situação | ⬜ (API sim) |
 | **Produtividade** | por responsável: OS concluídas + soma de minutos apontados | ⬜ (API sim, **sem contrato**) |
 | Horas apontadas | soma de `time_entries` | ⬜ (API sim) |
+
+### Relatórios e metas dos indicadores (17/10/2026 — Fase 1)
+
+Base de decisão: `docs/AUDITORIA-INDICADORES-BASIC-ADVANCED-EXPERT.md` (§17 = o que foi construído).
+
+- **Catálogo central** em `packages/domain/src/report-tiers.ts`: é a ÚNICA definição de indicador (código estável,
+  unidade, categoria, `tiers` explícitos, `state` ACTIVE / PROVISIONAL / PENDING_DEFINITION, `targetDirection`,
+  fonte). Painel, relatório gerado e relatório agendado leem dele. **O Expert não herda o Basic/Advanced**:
+  é o conjunto do IMR, quase todo PENDING_DEFINITION (TMPA, disponibilidade, TMRG, crítica I/E/G, atividades da
+  qualidade, assiduidade, glosa, ICRS, ITRS). `GET /reports/catalog` expõe tudo isso.
+- **Regras do relatório** (`POST /reports/generate`, `packages/db/src/relatorios.ts`): sem `indicators` entram só os
+  ACTIVE; PROVISIONAL (MTTR, MTBF, conformidade preventiva/ACM, disponibilidade-fotografia) só com pedido
+  explícito e sai marcado; PENDING_DEFINITION nunca entra (422) e vem listado em `pending`. Cada seção traz
+  `state`, `direction`, `target`, `target_evaluation` e `target_label`.
+- **Novos indicadores:** `service_rating` (média/quantidade/distribuição de `service_requests.rating`; período =
+  quando o atendimento terminou) e `opened_vs_closed` (AxF = encerradas ÷ abertas no período; pode passar de
+  100 %; **não é o ICRS**). `ratioPercent` é a razão genérica (denominador 0 → `null`).
+- **Metas** (`migrations/0069`, tabela `indicator_targets`, RLS FORCE, auditada, sem DELETE): por indicador ×
+  organização × cliente × contrato × vigência. Precedência contrato → cliente → organização; vigências do mesmo
+  escopo não se sobrepõem (409); sem meta = **SEM META CONFIGURADA**, nunca zero. Sentido e unidade são do catálogo.
+  Rotas `GET/POST /indicator-targets`, `PATCH/DELETE /indicator-targets/:id` (DELETE arquiva). **Leitura:
+  `insight.read`; escrita: `insight.manage_targets`** (owner, admin, gestor de manutenção, gestor). A meta da
+  organização inteira exige escopo sobre todos os clientes. Funções puras: `resolveTarget`, `evaluateTarget`.
+- **Telas:** Painel › Gerar relatório (modelo → período → cliente → contrato → indicadores; provisórios
+  identificados; pendentes listados à parte) e Configurações › **Metas** (`/configuracoes/metas`).
+- **Não feito (de propósito):** fórmula Expert, MTTR/MTBF novos, glosa, layout oficial do PDF. As metas já
+  existentes em `contracts.sla_target_percent`/`plan_target_percent` NÃO foram ligadas a esta tabela.
+- **Migration `0069` só existe no código**: não foi aplicada em banco remoto (decisão de 16/10: sem deploy).
 
 ### Painel de Controle e Modo Exibição (09/10/2026)
 
