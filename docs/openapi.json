@@ -39421,6 +39421,7 @@
           "insight.read"
         ],
         "x-aurora-source": "apps/api/src/insights/reports.controller.ts",
+        "x-aurora-permission-note": "rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado",
         "parameters": [],
         "requestBody": {
           "required": true,

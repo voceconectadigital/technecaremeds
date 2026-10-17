@@ -23,7 +23,7 @@ import {
 } from '@aurora/domain';
 import { reportsGenerate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
-import { RequirePermissions } from '../common/permissions.guard';
+import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import { gerarPdf, type LinhaPdf } from '../documents/pdf';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -65,6 +65,7 @@ export class ReportsController {
    */
   @Post('generate')
   @RequirePermissions('insight.read')
+  @PermissionsCheckedInHandler('rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado')
   async generate(
     @Req() req: AuroraRequest,
     @Res({ passthrough: true }) res: Response,

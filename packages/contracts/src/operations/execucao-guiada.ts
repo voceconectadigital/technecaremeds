@@ -42,7 +42,7 @@ export const workOrderCheckIn = defineOperation({
     'Sem rastreamento contínuo: só este instante. Sem posição do aparelho (recusada ou ' +
     'indisponível), a justificativa é obrigatória e fica auditada. Dois check-ins seguidos da ' +
     'mesma pessoa na mesma OS → 409.',
-  permissions: ['work_order.execute'],
+  permissions: ['work_order.read'], // guard; execute ou execute_any conferidos no handler
   params: z.object({ id: Uuid }),
   body: Ponto,
   response: z.object({ visit_id: Uuid, time_entry_id: Uuid, occurred_at: z.string() }),
@@ -55,7 +55,7 @@ export const workOrderCheckOut = defineOperation({
   method: 'POST',
   path: '/work-orders/:id/check-out',
   summary: 'Check-out: registra a saída e fecha o cronômetro aberto pelo check-in',
-  permissions: ['work_order.execute'],
+  permissions: ['work_order.read'], // guard; execute ou execute_any conferidos no handler
   params: z.object({ id: Uuid }),
   body: Ponto,
   response: z.object({ visit_id: Uuid, minutes: z.number().nullable(), occurred_at: z.string() }),
@@ -83,7 +83,7 @@ export const workOrderServiceReport = defineOperation({
     'Salva aos poucos (cada passo do assistente grava o que tem). Resultado operacional é a ' +
     'situação de USO do equipamento após o serviço — liberado ou parado —, não veredito ' +
     'metrológico. OS validada, fechada ou cancelada → 409.',
-  permissions: ['work_order.execute'],
+  permissions: ['work_order.read'], // guard; execute ou execute_any conferidos no handler
   params: z.object({ id: Uuid }),
   body: z
     .object({
@@ -115,7 +115,7 @@ export const workOrderCustomerPartsAdd = defineOperation({
   description:
     'Peça de estoque continua por `POST /inventory/work-orders/:id/parts`, que baixa do razão ' +
     'vinculado à OS. Esta rota não movimenta estoque nenhum: só registra o que o cliente forneceu.',
-  permissions: ['work_order.execute'],
+  permissions: ['work_order.read'], // guard; execute ou execute_any conferidos no handler
   params: z.object({ id: Uuid }),
   body: z
     .object({
