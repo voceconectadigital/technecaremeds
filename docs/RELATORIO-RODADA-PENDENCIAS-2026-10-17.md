@@ -2,241 +2,148 @@
 
 > **Pedido:** resolver de forma autônoma todas as pendências dos 85 achados do pente-fino
 > (`docs/AUDITORIA-PENTE-FINO-2026-10-17.md`), validando, auditando e corrigindo.
-> **Estado:** **INCOMPLETA.** A rodada foi interrompida por limite de uso. Quatro itens foram resolvidos e
-> commitados e um quinto foi decidido sem mudança. O restante está listado em §5, com o ponto exato em que parou.
-> **Branch:** `fix/pendencias-pente-fino-2026-10-17` (enviada ao GitHub) · **Sem PR, sem merge.**
-> **`main`:** continua em `6b7e391` (merge da PR #27), com CI verde 4/4.
+> **Branch:** `fix/pendencias-pente-fino-2026-10-17`, saindo da `main` `6b7e391` (merge da PR #27).
 > **Remoto:** nenhuma migration aplicada, nenhum deploy de backend.
+> **Histórico:** a rodada foi interrompida uma vez por limite de uso e retomada. Na retomada, as edições
+> parciais foram revisadas e concluídas; nada ficou pela metade.
 
 ---
 
 ## 1 · Ponto de partida
 
-A rodada anterior (PR [#27](https://github.com/voceconectadigital/technecaremeds/pull/27), mergeada em `6b7e391`)
-fechou o pente-fino técnico:
+A PR [#27](https://github.com/voceconectadigital/technecaremeds/pull/27) fechou o pente-fino técnico: 3/3 P0,
+20/20 P1, 28/42 P2 e 12/17 P3 corrigidos, com o CI da `main` verde. Ficaram **24 itens** abertos, entre
+BLOQUEADO — CLIENTE, BLOQUEADO — INFRA e ABERTO, além das perguntas P-01…P-16 do Anderson e dos critérios do
+especialista.
 
-| | Encontrados | Corrigidos na PR #27 |
-| --- | --- | --- |
-| P0 | 3 | 3 |
-| P1 | 20 | 20 |
-| P2 | 42 | 28 (PF-74 e PF-79 só em parte) |
-| P3 | 17 | 12 |
-| INFO | 3 | — |
-
-Evidência da PR #27: CI da PR e da `main` verdes. PostgreSQL 16 aplicou as 74 migrations do zero e rodou
-2 357 testes sem falha; Playwright teve 209 aprovados e 1 pulo condicional que já existia.
-
-Ficaram **24 itens** sem correção (BLOQUEADO — CLIENTE, BLOQUEADO — INFRA ou ABERTO), mais as perguntas
-P-01…P-16 do Anderson e os critérios do especialista. Esta rodada atacou esses 24 itens.
-
----
-
-## 2 · O que eu NÃO resolvi de propósito (e por quê)
+## 2 · O que eu NÃO resolvi de propósito
 
 | Item | Motivo |
 | --- | --- |
-| **P-01…P-16** (MTTR, MTBF, TMPA, população do ICRS, Global, ACM/atraso, IMP, interno × externo, disponibilidade, escopo do Basic, crítico, formato de tempo, competência do IMR, glosa/IMR, qualidade/assiduidade, obsolescência) | São definições de negócio do cliente. Se eu "resolvesse", o sistema imprimiria números como oficiais sem respaldo — exatamente o que a rodada anterior proibiu. Ficam como estão: pendentes, marcados como provisórios ou sem definição, e prontos para receber a resposta. |
-| **Critérios metrológicos** (incerteza, TSE, tolerância, aceitação automática) | Definição científica do especialista. Nada foi inventado. |
-| **Migration remota (0060–0077) e deploy do backend** | "Resolver tudo" não é autorização explícita com destino comprovado. Fica pronto e aguarda a sua autorização. |
+| **P-01…P-16** (fórmulas e definições do Anderson) | São definições de negócio. Se eu as "resolvesse", o sistema imprimiria números como oficiais sem respaldo. Continuam como pendentes, provisórias ou sem definição. |
+| **Critérios metrológicos** (incerteza, TSE, tolerância, aceitação automática) | Definição científica do especialista. |
+| **Migration remota (0060–0077) e deploy do backend** | "Resolver tudo" não equivale a autorização explícita com destino comprovado. O código está pronto; a publicação aguarda a sua autorização. |
 
 ---
 
-## 3 · Resolvido nesta rodada (commitado e enviado)
+## 3 · Itens resolvidos — os 24 pendentes
 
-Commits na branch `fix/pendencias-pente-fino-2026-10-17`, sobre `6b7e391`:
+### Execução de campo
 
-| Commit | Título |
-| --- | --- |
-| `8f2b2ea` | fix(db): per-transaction statement and idle timeouts (PF-75) |
-| `834cef3` | fix(access,db): audit trail out of "all reads"; system catalogs always provisioned |
-| `8a1b47b` | feat(web): build-time CSP for the Pages apps, report-only (PF-80) |
-
-### PF-75 — tempo-limite de consulta e de transação ociosa (era BLOQUEADO — INFRA)
-
-- **Problema:** o banco não tinha `statement_timeout` nem `idle_in_transaction_session_timeout`. Uma consulta
-  presa segurava a conexão para sempre e podia esgotar o pool. A rodada anterior deixou o item para a
-  infraestrutura, porque um parâmetro de inicialização da conexão é recusado pelo pooler do Supabase em modo
-  transação.
-- **Solução, sem depender da infraestrutura:** `withTenant` aplica os dois limites com
-  `set_config(..., true)`, que vale **só dentro da transação**. O pooler aceita, e o valor não vaza para a
-  transação seguinte na mesma conexão.
-- **Configuração:** `AURORA_DB_TIMEOUT_MS` (padrão 60 000; `0` desliga). A API usa o valor; o worker usa 5×,
-  porque varredura de organização grande é legitimamente mais longa. `.env.example` atualizado.
-- **Arquivos:** `packages/db/src/client.ts` (`LimitesDeTransacao`), `packages/db/src/adapters.ts`
-  (`pgPoolAdapter(pool, papel, limites)`), `packages/config/src/env.ts`, `apps/api/src/main.ts`,
-  `apps/workers/src/main.ts`.
-- **Teste:** `pool-resiliente.test.ts` confere que o limite vale dentro da transação (`1234ms`/`5678ms`) e que a
-  transação seguinte volta a `0`.
-
-### PF-15 — trilha de auditoria fora de "toda leitura" (era BLOQUEADO — CLIENTE)
-
-- **Problema:** `audit.read` também termina em `.read` e entrava de carona em `ALL_READ`. Assim, Coordenador,
-  Gestor e Financeiro liam a trilha global da organização inteira, sem recorte de escopo.
-- **Por que decidi sem esperar o cliente:** o próprio código mostra a intenção. Os papéis que devem ler a trilha
-  a listam **explicitamente** (Gestor de manutenção via `MANAGER_BASE`, Auditor); os três acima só a recebiam por
-  acidente.
-- **Correção:** `ALL_READ` exclui `audit.read`. A migration `0077` retira a permissão dos papéis de fábrica
-  existentes (`coordinator`, `manager`, `finance`, só `is_system`). Papel próprio é decisão da organização.
-- **Sem efeito colateral:** a linha do tempo de um registro não exige `audit.read`; nenhuma tela desses perfis
-  usa a trilha global.
-- **Teste:** `permissions.test.ts`: os três não leem a trilha; Gestor de manutenção, Auditor, Proprietário e
-  Administrador leem.
-
-### PF-20 — tipos de OS e famílias que não nasciam (era ABERTO)
-
-O defeito era maior do que o registrado. Existia também **no provisionamento em runtime**, não só nas
-migrations 0063/0064:
-
-- a chave de catálogo é única **inclusive entre arquivados**: com um item aposentado usando a chave `preventiva`,
-  o `ON CONFLICT DO NOTHING` engolia a inserção, e a organização ficava sem o tipo de OS de sistema, sem erro
-  nenhum;
-- uma **subcategoria** viva com o nome de uma família ("Terapia" debaixo de outra raiz) ocupava o nome: a
-  migration pulava a família, e o provisionamento **falhava**.
-
-**Correção:**
-
-- `provisioning.ts` usa a chave livre seguinte (`preventiva_2`) e o nome qualificado ("Terapia (família)").
-  Retirei o `ON CONFLICT DO NOTHING`, para que uma falha de verdade apareça.
-- A migration `0077` repara as organizações existentes com a mesma lógica: marca a raiz de mesmo nome quando
-  ela existe, senão cria; não toca organização que já está completa.
-
-**Testes (`migrations-upgrade.test.ts`, +2):**
-
-- banco legado na 0059 com o item arquivado e a subcategoria em conflito → depois da rodada nova, 7 tipos de
-  sistema (preventivo = `preventiva_2`), 5 famílias ("Terapia (família)") e a subcategoria intacta;
-- provisionamento em runtime com os mesmos conflitos → 5 famílias e 7 tipos.
-
-### PF-80 — CSP dos apps no Cloudflare Pages (era BLOQUEADO — INFRA)
-
-- **Problema:** a CSP precisa nomear a origem da API, que muda por implantação. Um `_headers` estático erraria.
-- **Solução:** `tools/lib/cabecalhos-pages.mjs` é um plugin do Vite usado nas três builds (web, portal, campo).
-  No fim do build, ele acrescenta a política ao `_headers` publicado, com:
-  - a origem real de `VITE_API_URL` em `connect-src`/`img-src`;
-  - o **hash SHA-256** do script de tema inline do `index.html` que foi de fato publicado — sem
-    `'unsafe-inline'` para script;
-  - `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
-- **Publicada como `Content-Security-Policy-Report-Only`:** uma CSP errada derruba a aplicação inteira, e nem o
-  servidor de desenvolvimento nem o E2E leem `_headers`. Para passar a bloquear, basta trocar `REPORT_ONLY`
-  depois de uma navegação limpa no ambiente publicado.
-- **Conferido:** build do portal com `VITE_API_URL=https://api-exemplo.test/v1` e build da demonstração; o
-  cabeçalho saiu correto nos dois.
-- **Teste:** `packages/config/src/__tests__/cabecalhos-pages.test.ts` (origem, hash exato, ausência de
-  `unsafe-inline` em script).
-
-Com PF-75 e PF-80, os itens **PF-74 e PF-79**, que estavam "corrigidos em parte", ficam completos (a CSP ainda
-precisa da troca para modo de bloqueio).
-
-### PF-16 — funções de plataforma confiam no `p_user_id` (ACEITO / BY DESIGN — decisão técnica)
-
-Não alterei. Qualquer identidade passada ao banco, seja por parâmetro ou por GUC, é forjável pelo mesmo papel
-(`aurora_app`) que hoje forja o parâmetro. A premissa do ataque exige injeção de SQL, e todo SQL do projeto é
-parametrizado (conferido na rodada anterior). A fronteira real é a API, que passa `ctx.actorId` resolvido da
-sessão. Trocar o mecanismo seria cerimônia, não proteção.
-
-### Validação local dos commits
-
-- Testes dos arquivos alterados: `pool-resiliente` (incluindo o tempo-limite), `migrations-upgrade` (5),
-  `migrations` (5), `permissions`/`profiles` (29), `packages/config` (inclui `env` e `cabecalhos-pages`):
-  **todos verdes**.
-- Typecheck limpo; ESLint e Prettier limpos nos arquivos alterados.
-- **CI desta branch não rodou** (não há PR).
-
----
-
-## 4 · Como o trabalho estava organizado
-
-Para as demais pendências, abri quatro frentes em paralelo, cada uma com arquivos próprios e um número de
-migration reservado:
-
-| Frente | Itens | Migration reservada |
-| --- | --- | --- |
-| Execução de campo | PF-14, PF-41, PF-65, PF-66, PF-84 | `0074` |
-| Estoque e orçamento | PF-34, PF-71 | `0075` |
-| Indicadores e fuso | PF-50…PF-56, PF-72 (+ validação de indicadores na regra agendada) | `0076` |
-| Revisão adversarial (somente leitura) | regressões do diff `511ec1f..6b7e391` | — |
-| Eu | PF-15, PF-16, PF-20, PF-75, PF-80 | `0077` |
-
-**As quatro frentes foram interrompidas** pelo limite de uso antes de terminar.
-
----
-
-## 5 · O que ficou pendente — estado exato
-
-### 5.1 Alterações parciais NÃO commitadas no working tree
-
-Ficaram 9 arquivos com edição pela metade, **não testados**. **Não devem ser commitados como estão.**
-Na próxima sessão, cada um deve ser revisado e concluído, ou descartado:
-
-| Arquivo | Frente | O que parece ter sido começado |
-| --- | --- | --- |
-| `packages/db/src/quotes.ts` (+141/−) | Estoque | PF-34: reservar só o que não foi consumido em campo antes da aprovação; a última ação registrada foi trocar `peca.` pela quantidade reduzida na reserva |
-| `packages/db/src/inventory.ts` | Estoque | apoio ao PF-34 |
-| `packages/db/migrations/0075_orcamento_e_peca_lancada.sql` (novo) | Estoque | migration do PF-34 |
-| `packages/domain/src/dia-local.ts` (novo) | Indicadores | PF-51: dia civil no fuso da organização (`Intl`) |
-| `packages/domain/src/indicator-targets.ts`, `packages/domain/src/index.ts` | Indicadores | uso do dia local na meta |
-| `packages/db/src/indicator-targets.ts` | Indicadores | idem (era a próxima edição quando parou) |
-| `packages/db/src/relatorios.ts` | Indicadores | PF-50/51: meta e dia de referência |
-| `packages/domain/src/report-tiers.ts` | Indicadores | validação de indicadores por modelo |
-
-A frente de **execução de campo** ainda não tinha gravado nada (estava lendo `anexos.ts` e `campo.tsx`). A
-**revisão adversarial** foi interrompida antes do relatório, enquanto lia `roles.ts` e `memberships.ts`.
-
-### 5.2 Itens ainda abertos
-
-| ID | Sev. | Item | Decisão proposta (para a próxima sessão) |
+| ID | Antes | Decisão e correção | Testes |
 | --- | --- | --- | --- |
-| PF-14 | P2 | `work_order.execute` ("só OS atribuída a mim") tratado como `execute_any` | Aplicar no servidor: executa quem é responsável pela OS ou da equipe dela, ou quem tem `execute_any`. A própria descrição da permissão já define a regra. Conferir as personas do E2E. |
-| PF-41 | INFO | Parecer LIBERADO/PARADO obrigatório na conclusão? | Configuração por organização, **desligada por padrão** (comportamento atual preservado). |
-| PF-65 | P2 | Cronômetro do campo sem "parar" e com hora do servidor na reenviada | O aparelho gera o id do apontamento; "iniciar", "parar" e check-in/out aceitam a hora do aparelho entre 48 h no passado e 5 min no futuro, com idempotência. |
-| PF-66 | P3 | Fotos na fila sem marca de sessão | Carimbar organização e pessoa, como já é feito com os comandos. |
-| PF-84 | P3 | Envio de fatias de foto só confere a organização; tipo do arquivo não é conferido | Exigir que quem envia possa executar a OS; conferir os bytes contra o tipo declarado ao concluir. |
-| PF-34 | P2 | Peça lançada antes da aprovação → baixa dupla | Reservar só o que falta (orçamento − consumido sem vínculo); o valor cobrado continua o orçado. **Em andamento** (§5.1). |
-| PF-71 | P2 | Orçamento da OS criado em várias chamadas | Rota única e transacional, idempotente, invalidando as listas. |
-| PF-50 | P2 | Vínculo restrito a um cliente medido pela meta da organização | Usar a meta do cliente (com fallback para a da organização) e ajustar o teste atual. **Em andamento.** |
-| PF-51 / PF-72 | P2/P3 | Dia e períodos em UTC | Fuso da organização (padrão `America/Sao_Paulo`) no servidor; data local do navegador nas telas. **Em andamento.** |
-| PF-52 | P2 | Relatório mensal = "slot − N dias" | Parâmetro "mês anterior (calendário)"; regras antigas inalteradas. |
-| PF-53 | P2 | Filtro de categoria ignorado em 4 consultas | Aplicar nas quatro. |
-| PF-54 | P2 | Tela de relatório agendado sem PROVISIONAL e sem meta | Mesmo tratamento da tela de relatório. |
-| PF-55 | P2 | Cores do Painel com limiares fixos | A API devolve as metas resolvidas; sem meta, cor neutra. |
-| PF-56 | P2 | E-mail de automação ignora preferências | Passar por `decideDelivery`. |
-| — | — | Revisão adversarial do diff da PR #27 | Refazer do início (o resultado parcial foi perdido). |
+| PF-14 | BLOQUEADO — CLIENTE | **A própria descrição da permissão já definia a regra** ("executar só OS atribuída a mim"); o código é que divergia. Novo `assertCanExecuteWorkOrder`: quem tem `work_order.execute` sem `execute_any` só age em OS de que é responsável ou da equipe atribuída. Vale para check-in, cronômetro, apontamento, checklist, anexos, assinatura, relatório de serviço, peça do cliente, transições e envio de fotos. A recusa é 403 com o motivo, que é o que a tela "Atenção" do campo mostra. Parar o próprio cronômetro e fazer check-out continuam permitidos, para que uma reatribuição no meio da visita não deixe cronômetro preso. O efeito comercial do orçamento sobre a OS recebe `execute_any`. | `pente-fino-campo` (api 17, domain 8); suítes que executavam OS não atribuída passaram a atribuí-la |
+| PF-65 | ABERTO | Iniciar o cronômetro aceita id gerado no aparelho e `started_at`; parar aceita `ended_at`; check-in/out aceitam `occurred_at`. Hora do aparelho limitada a 48 h no passado e 5 min no futuro, senão 422. O app de campo mostra "rodando desde HH:MM", enfileira "Parar cronômetro" e impede um segundo início. `/field/sync` devolve os cronômetros abertos. | `pente-fino-campo` (api, field 12) |
+| PF-66 | ABERTO | Fotos na fila são carimbadas com organização e pessoa. As de outra sessão ficam na fila, nunca são apagadas, e aparecem como "N fotos de outra sessão". | `pente-fino-campo` (field) |
+| PF-84 | ABERTO | Enviar bytes exige poder executar a OS do anexo, dentro do escopo (fora dele, 404). Anexo sem OS só aceita bytes de quem o registrou. Ao concluir, os bytes de imagem e PDF são conferidos contra o tipo declarado; se divergirem, 422 e o anexo não é marcado como concluído. | `pente-fino-campo` (api), `api-attachment-upload` |
+| PF-41 | BLOQUEADO — CLIENTE | Configuração por organização `require_operational_result`, **desligada por padrão** (o comportamento atual não muda). Com ela ligada, concluir a OS sem LIBERADO/PARADO dá 422. É alterada por `PATCH /organizations/current/configuration`. | `pente-fino-campo` (api), `api-fundacoes` |
 
-### 5.3 Fora do alcance desta engenharia
+### Estoque e orçamento
+
+| ID | Antes | Decisão e correção | Testes |
+| --- | --- | --- | --- |
+| PF-34 | BLOQUEADO — CLIENTE | **Decisão: integridade primeiro.** Na aprovação, cada linha de peça reserva só o que ainda não foi consumido em campo na mesma OS, fora de qualquer orçamento. O abatimento fica em `quote_items.field_consumed_qty` (0074), para que um mesmo consumo nunca abata dois orçamentos. O valor cobrado não muda: a peça foi usada e é paga. Só o movimento de estoque deixa de duplicar. | `pente-fino-estoque2` (15) |
+| PF-71 | ABERTO | `POST /v1/work-orders/:id/quotes` cria o orçamento e todas as linhas numa transação, idempotente por `clientRequestId`, com o escopo da OS. A tela faz uma chamada só e atualiza as listas. | `pente-fino-orcamento2` (6) |
+| (revisão) | — | Reservas anteriores à 0071 numa OS com 2+ orçamentos aprovados ficavam abertas para sempre. A 0074 as liga ao orçamento certo quando a ligação é inequívoca (mesmo instante de aprovação, mesma OS e item), libera as de orçamento substituído e emite um WARNING com a contagem do que precisa de ajuste manual. | `pente-fino-estoque2` |
+
+### Indicadores e fuso
+
+| ID | Antes | Decisão e correção | Testes |
+| --- | --- | --- | --- |
+| PF-50 | BLOQUEADO — CLIENTE | **Decisão:** quem só enxerga um cliente já tem os números recortados para esse cliente, então é medido pela meta dele; sem meta do cliente, vale a da organização. Isso vale para o relatório sob demanda e para o agendado. O teste anterior foi atualizado. | `api-metas-indicadores`, `pente-fino-indicadores` |
+| PF-51 / PF-72 | ABERTO | O dia da meta, as datas de aviso e as do PDF seguem o fuso da organização (`organizations.timezone`, padrão `America/Sao_Paulo`). As telas calculam "hoje" com data local (`packages/app-kit/src/data-local.ts`). | `pente-fino-indicadores` (domain 9, db 12, web 10) |
+| PF-52 | BLOQUEADO — CLIENTE | Nova opção `periodo: 'mes_anterior'` (mês civil anterior no fuso da organização; o dia da meta é o último dia do mês). Regras antigas não mudam. | `pente-fino-indicadores` (api 4) |
+| PF-53 | ABERTO | O filtro de categoria passou a valer nas quatro consultas. Além delas, a conformidade de SLA e a de planos ignoravam setor e categoria e foram corrigidas. | `pente-fino-indicadores` (db) |
+| PF-54 | ABERTO | A tela de relatório agendado mostra PROVISÓRIO e a meta, ou "SEM META CONFIGURADA". | `pente-fino-indicadores` (web) |
+| PF-55 | ABERTO | O Painel recebe as metas resolvidas; SLA e disponibilidade ganham cor conforme a meta e o sentido, ou ficam neutros com "sem meta". No módulo de Planos, o anel de conformidade ficou neutro: ele soma todos os tipos de plano, e não existe uma meta para essa soma (90/70 era meta inventada). | web |
+| PF-56 | BLOQUEADO — INFRA | O e-mail de automação passa pelas preferências de notificação. O suprimido fica registrado com o motivo (0075). Os três tipos de aviso de automação entraram no catálogo, então já dá para desligar esse e-mail. | `pente-fino-indicadores`, `notifications` |
+| — | P3 | A lista de indicadores da regra agendada passa a ser validada ao salvar (422). | `pente-fino-indicadores` |
+
+### Plataforma, banco e infraestrutura
+
+| ID | Antes | Decisão e correção | Testes |
+| --- | --- | --- | --- |
+| PF-15 | BLOQUEADO — CLIENTE | `audit.read` saiu de "toda leitura". Coordenador, Gestor e Financeiro deixam de ler a trilha global; quem deve lê-la a recebe explicitamente. A 0076 ajusta as organizações existentes. | `permissions.test` |
+| PF-16 | ABERTO | **ACEITO / BY DESIGN.** Qualquer identidade passada ao banco é forjável pelo mesmo papel que hoje forja o parâmetro, e a premissa do ataque exige injeção de SQL, que não existe. Mudar o mecanismo seria cerimônia, não proteção. | — |
+| PF-20 | ABERTO | O defeito existia **também em runtime**. O provisionamento usa a chave livre seguinte (`preventiva_2`) e o nome qualificado ("Terapia (família)"); a 0076 repara as organizações existentes. | `migrations-upgrade` (+2) |
+| PF-75 | BLOQUEADO — INFRA | Tempo-limite de consulta e de transação ociosa aplicado com `set_config(..., true)`, local à transação, o que funciona com o pooler do Supabase. `AURORA_DB_TIMEOUT_MS` (60 s; o worker usa 5×). | `pool-resiliente` |
+| PF-80 | BLOQUEADO — INFRA | A CSP é gerada no build: usa a origem real da API e o hash do script de tema, sem `unsafe-inline` em script, e sai como **Report-Only**. Para passar a bloquear, basta trocar a flag depois de uma navegação limpa no ambiente publicado. | `cabecalhos-pages` |
+| PF-74 / PF-79 | parciais | Completos com PF-75 e PF-80. | — |
+
+---
+
+## 4 · Revisão adversarial da PR #27 — regressões encontradas e corrigidas
+
+Revisão independente, somente leitura, do diff `511ec1f..6b7e391`. Cada achado foi confirmado no código antes
+de ser corrigido.
+
+| Sev. | Regressão | Correção |
+| --- | --- | --- |
+| **P2** | A 0073 recomeçava a contagem depois de **qualquer** bloqueio vencido, e a tentativa feita durante o bloqueio não é registrada. Resultado: o degrau de 15 min era inalcançável pelo login real, e um atacante tinha cerca de 5 tentativas por minuto, sem fim. | A **0077** recomeça a contagem só depois do bloqueio de teto. Teste percorre os vencimentos pelo login real. |
+| P3 | Login que falha com exceção (banco fora) não devolvia a cota de tentativas por IP; um hospital atrás de um NAT podia sair da queda com 429. | A cota é devolvida quando a chamada lança exceção. |
+| P3 | A linha do tempo do contrato ainda mostrava excedente e multa no payload do evento. | Chaves financeiras do payload filtradas sem `contract.read_financials`. Teste com a persona Coordenador. |
+| P3 | O seed de benchmark criava OS com ativo de outro cliente e era recusado pela 0072. | A OS herda o cliente do próprio ativo. |
+| P3 | Reservas anteriores à 0071 ficavam órfãs. | Ver PF-34 (0074). |
+| suspeito → corrigido | O Gestor podia alterar os próprios papéis. | Ninguém altera os próprios papéis (mesma regra do escopo). |
+| suspeito → corrigido | Documento criado sem cliente ficava invisível a todo vínculo restrito, inclusive a quem o criou. | Passa a herdar o cliente da OS ou do equipamento; cliente divergente é recusado. |
+| suspeito → corrigido | Um equipamento transferido de cliente fazia a materialização do ciclo inteiro falhar. | O item fica pendente e os demais viram OS; dispensar continua sendo decisão de quem coordena. |
+
+---
+
+## 5 · Migrations desta rodada (locais, NÃO aplicadas remotamente)
+
+| Migration | O quê |
+| --- | --- |
+| `0074_orcamento_e_peca_lancada.sql` | `quote_items.field_consumed_qty`; trava de linhas congeladas aceitando só o abatimento; ligação das reservas antigas |
+| `0075_indicadores_e_fuso.sql` | estado `suppressed` no e-mail de relatório agendado |
+| `0076_trilha_e_catalogos_de_sistema.sql` | `audit.read` fora dos papéis que o recebiam por "toda leitura"; reparo dos tipos de OS e das famílias |
+| `0077_bloqueio_progressivo_de_senha.sql` | bloqueio por conta com teto alcançável |
+
+Os números são contíguos: a 0074 reservada para o campo não foi usada, e as quatro foram renumeradas antes do
+PR. Nenhuma tinha sido aplicada fora de bancos de teste.
+
+---
+
+## 6 · Lacunas conhecidas (documentadas, não escondidas)
+
+- **PF-14:** o consumo de peça na OS (`POST /inventory/work-orders/:id/parts`, guardado por `inventory.move`) e
+  as rotas de sessão de medição não conferem a atribuição. Não existe API para definir a equipe da OS.
+- **PF-41:** a web não tem tela de configurações da organização, e o app de campo não tem campo para o parecer.
+  Com a exigência ligada, a conclusão feita pelo campo cai em "Atenção". Por isso o padrão é desligado.
+- **PF-56:** nenhum código de produção marca `email_verified_at`, então todo e-mail, de automação ou não, fica
+  `suppressed: unverified_email`. É coerente com o que já acontecia, e não há transporte de e-mail.
+- **PF-80:** a CSP só passa a bloquear depois da conferência no ambiente publicado.
+- **Demonstração:** as capturas gravadas (`capturas.json`) têm fatias à meia-noite UTC; os rótulos do gráfico da
+  demo aparecem um dia antes até as capturas serem refeitas.
+
+---
+
+## 7 · Validação
+
+Testes locais (PGlite, em shards — a suíte inteira de uma vez estoura a memória desta máquina):
+
+| Shard | Arquivos | Testes | Pulados | Falhas |
+| --- | --- | --- | --- | --- |
+| domain + contracts + config + events + tools | 34 | 640 | 0 | 0 |
+| db | 37 | 729 | 27 (só com PostgreSQL real) | 0 |
+| api (8 lotes) | 57 | 845 | 0 | 0 |
+| workers | 3 | 30 | 5 (só com PostgreSQL real) | 0 |
+| interface (ui, app-kit, web, portal, field) | 17 | 176 | 0 | 0 |
+| **Total** | **148** | **2 420** | **32** | **0** |
+
+Gates locais: typecheck, OpenAPI (`openapi:check` em dia), segredos (865 arquivos), SPEC, ESLint e Prettier nos
+arquivos alterados — todos verdes. PostgreSQL 16 real, RLS sob `NOBYPASSRLS` e Playwright rodam no CI do PR.
+
+---
+
+## 8 · Fora do alcance da engenharia (continua)
 
 - **Anderson:** P-01 · P-02 · P-03 · P-04 · P-05 · P-06 · P-07 · P-08 · P-09 · P-10 · P-11 · P-12 · P-13 · P-14 ·
   P-15 · P-16.
 - **Especialista:** incerteza, TSE, tolerância, aceitação automática.
 - **Infraestrutura / autorização:**
-  - transporte de e-mail (a fila existe, sem envio);
+  - transporte de e-mail;
   - destino definitivo de banco e API;
-  - aplicação das migrations **0060–0077** no banco remoto e deploy do backend, que exigem autorização explícita
-    com o destino comprovado;
-  - troca da CSP para modo de bloqueio, depois de uma navegação limpa publicada.
-
----
-
-## 6 · Próxima sessão — ordem recomendada
-
-1. Revisar os 9 arquivos de §5.1: concluir PF-34 e PF-50/51 a partir deles, ou descartar com
-   `git checkout -- <arquivo>` e refazer.
-2. Execução de campo (PF-14, PF-65, PF-66, PF-84, PF-41), numa frente só, porque mexe em servidor e app.
-3. Indicadores restantes (PF-52…PF-56) e orçamento atômico (PF-71).
-4. Revisão adversarial do diff da PR #27.
-5. Renumerar as migrations para ficarem contíguas (há `0074`/`0076` reservadas sem arquivo), suíte em shards,
-   documentação (`AUDITORIA-PENTE-FINO`, `AI-HANDOFF`, `NOVAS-SOLICITACOES`), PR, CI 4/4, merge, CI da `main`.
-
----
-
-## 7 · Resumo
-
-| | |
-| --- | --- |
-| HEAD da `main` | `6b7e391` (inalterado nesta rodada) |
-| Branch desta rodada | `fix/pendencias-pente-fino-2026-10-17` → `8a1b47b` (3 commits, enviada) |
-| PR / CI / merge | **não feitos** |
-| Resolvidos nesta rodada | PF-15, PF-20, PF-75, PF-80 (+ PF-74/PF-79 completos); PF-16 decidido como ACEITO |
-| Abertos de engenharia | 14 itens (§5.2) + revisão adversarial |
-| Pendências do cliente / especialista / infraestrutura | §5.3 |
-| Migration remota | **NÃO EXECUTADA** |
-| Deploy de backend | **NÃO EXECUTADO** |
-| Estado | **INCOMPLETA — interrompida por limite de uso** |
+  - **migrations 0060–0077 no banco remoto e deploy do backend**, que exigem autorização explícita com destino
+    comprovado;
+  - troca da CSP para modo de bloqueio.

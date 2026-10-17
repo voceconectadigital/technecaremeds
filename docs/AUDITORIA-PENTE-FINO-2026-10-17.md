@@ -309,3 +309,43 @@ PR [#27](https://github.com/voceconectadigital/technecaremeds/pull/27), run `390
 A primeira execução do PR falhou em dois pontos, ambos corrigidos no commit `9a6db9e`: formatação de um teste novo e o
 E2E da apresentação contando "EM DESENVOLVIMENTO" também na frase de abertura (`getByText` sem `exact`).
 O CI da `main` depois do merge é conferido e registrado no relatório entregue ao final da rodada.
+
+---
+
+## 11 · Rodada de pendências (17/10/2026, branch `fix/pendencias-pente-fino-2026-10-17`)
+
+Os 24 itens que ficaram abertos depois da PR #27 foram tratados. O detalhe está em
+`docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md`. **Estado final de cada um:**
+
+| ID | Estado anterior | Estado final |
+| --- | --- | --- |
+| PF-14 | BLOQUEADO — CLIENTE | CORRIGIDO (a regra estava na descrição da permissão) |
+| PF-15 | BLOQUEADO — CLIENTE | CORRIGIDO (0076) |
+| PF-16 | ABERTO | ACEITO / BY DESIGN (justificativa no relatório da rodada) |
+| PF-20 | ABERTO | CORRIGIDO (runtime + 0076) |
+| PF-34 | BLOQUEADO — CLIENTE | CORRIGIDO (0074; decisão: integridade do estoque, valor cobrado inalterado) |
+| PF-41 | BLOQUEADO — CLIENTE | CORRIGIDO como configuração por organização, desligada por padrão |
+| PF-50 | BLOQUEADO — CLIENTE | CORRIGIDO (meta do cliente único, com fallback para a da organização) |
+| PF-51 / PF-72 | ABERTO | CORRIGIDO (fuso da organização; data local nas telas) |
+| PF-52 | BLOQUEADO — CLIENTE | CORRIGIDO (opção "mês anterior"; regras antigas inalteradas) |
+| PF-53 / PF-54 / PF-55 | ABERTO | CORRIGIDO |
+| PF-56 | BLOQUEADO — INFRA | CORRIGIDO (o e-mail passa pelas preferências; o envio real continua sem transporte) |
+| PF-65 / PF-66 / PF-71 / PF-84 | ABERTO | CORRIGIDO |
+| PF-74 / PF-79 | CORRIGIDO (parcial) | CORRIGIDO |
+| PF-75 | BLOQUEADO — INFRA | CORRIGIDO (tempo-limite por transação) |
+| PF-80 | BLOQUEADO — INFRA | CORRIGIDO em Report-Only; ativar o modo de bloqueio depende de conferência publicada |
+
+**Regressões da PR #27 encontradas pela revisão adversarial e corrigidas:**
+- **P2:** o teto do bloqueio de senha era inalcançável (0077).
+- **P3:**
+  - a cota de tentativas por IP não era devolvida quando o banco caía;
+  - o payload financeiro do contrato aparecia na linha do tempo;
+  - o seed de benchmark quebrava com a 0072;
+  - reservas antigas ficavam órfãs.
+- **Suspeitos, também corrigidos:** alteração dos próprios papéis; documento sem cliente invisível; ciclo de
+  preventiva travado por um equipamento transferido.
+
+**Saldo do programa (PR #27 + esta rodada):** P0 3/3 · P1 20/20 + 1 regressão P2 corrigida · P2 42/42 · P3 17/17
+resolvidos. Na conta de P3, PF-16 entra como aceito por decisão técnica, e PF-80 está corrigido em Report-Only.
+Continuam fora da engenharia: P-01…P-16, critérios metrológicos, transporte de e-mail, destino de
+infraestrutura e a aplicação remota das migrations 0060–0077.

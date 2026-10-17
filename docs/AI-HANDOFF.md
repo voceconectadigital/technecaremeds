@@ -24,6 +24,23 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Rodada de pendências 17/10/2026 (branch `fix/pendencias-pente-fino-2026-10-17`) — o que muda sobre o bloco abaixo:**
+> **Migration mais recente:** `0077_bloqueio_progressivo_de_senha.sql` · **78 migrations** (0074–0077 novas, **não
+> aplicadas em banco remoto**). Relatório: `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md`.
+> · **Executar OS:** `work_order.execute` sem `execute_any` só age em OS atribuída à pessoa ou à equipe dela
+>   (`assertCanExecuteWorkOrder`, packages/db/src/execution.ts). Testes que executam OS precisam atribuí-la.
+> · **Campo:** cronômetro com id do aparelho, "parar" e hora do aparelho (48 h para trás / 5 min para frente);
+>   fotos carimbadas com a sessão; bytes de anexo conferidos contra o tipo declarado.
+> · **Orçamento:** peça já lançada em campo abate a reserva (`quote_items.field_consumed_qty`, 0074);
+>   `POST /v1/work-orders/:id/quotes` cria orçamento + linhas numa transação.
+> · **Indicadores:** fuso da organização (`organizations.timezone`) para dia de meta e datas; vínculo de um cliente
+>   só é medido pela meta desse cliente; `periodo: mes_anterior` no relatório agendado; Painel colorido pela meta
+>   configurada (sem meta = neutro); e-mail de automação passa pelas preferências.
+> · **Banco:** tempo-limite por transação (`AURORA_DB_TIMEOUT_MS`); `audit.read` fora de "toda leitura"; tipos de OS
+>   e famílias sempre provisionados; teto do bloqueio de senha alcançável (0077); ninguém altera os próprios papéis.
+> · **Pages:** CSP gerada no build (`tools/lib/cabecalhos-pages.mjs`), em **Report-Only**.
+> · **Organização:** `require_operational_result` (parecer LIBERADO/PARADO obrigatório) — desligado por padrão.
+>
 > **Pente-fino 17/10/2026 — estado REAL (branch `audit/pente-fino-2026-10-17`, partiu de `511ec1f`):**
 > **Migration mais recente:** `0073_endurecimento_de_autenticacao.sql` · **74 migrations** (0070–0073 novas,
 > **não aplicadas em banco remoto**) · 111 tabelas (nenhuma nova) · 272 rotas (212 com contrato Zod).
