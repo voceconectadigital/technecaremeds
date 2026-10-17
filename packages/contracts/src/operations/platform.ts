@@ -160,6 +160,16 @@ export const Organization = z.object({
   seats_used: z.number().int(),
   status: z.enum(['active', 'suspended', 'archived']),
   ...OrganizationConfigurationShape,
+  /** Marca do negócio (Fase 11). Opcional: respostas da demonstração não a têm. */
+  branding: z
+    .object({
+      display_name: z.string().nullable().optional(),
+      primary_color: z.string().nullable().optional(),
+      support_email: z.string().nullable().optional(),
+    })
+    .optional(),
+  /** Domínio pedido; `pending_dns` = apontamento/certificado não automatizados (BLOQUEADO — INFRA). */
+  domain: z.object({ host: z.string(), status: z.string() }).nullable().optional(),
 });
 export type Organization = z.infer<typeof Organization>;
 
@@ -174,4 +184,75 @@ export const organizationsCurrent = defineOperation({
   permissions: ['organization.read'],
   response: Organization,
   errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* Novo Negócio — tenants (reunião 16/10/2026, Fase 11)                        */
+/* -------------------------------------------------------------------------- */
+
+export const platformMe = defineOperation({
+  operationId: 'platform.me',
+  method: 'GET',
+  path: '/platform/me',
+  summary: 'Esta pessoa é admin global de plataforma?',
+  description: 'Concedido só por ato de DBA (tabela platform_admins); não há rota que conceda.',
+  response: z.object({ platform_admin: z.boolean() }),
+});
+
+export const TenantSummary = z.object({
+  id: Uuid,
+  slug: z.string(),
+  name: z.string(),
+  status: z.string(),
+  created_at: z.union([z.string(), z.date()]),
+  branding: z.object({
+    display_name: z.string().nullable().optional(),
+    primary_color: z.string().nullable().optional(),
+    support_email: z.string().nullable().optional(),
+  }),
+  domain: z.object({ host: z.string(), status: z.string() }).nullable(),
+});
+export type TenantSummary = z.infer<typeof TenantSummary>;
+
+export const platformTenantsList = defineOperation({
+  operationId: 'platform.tenantsList',
+  method: 'GET',
+  path: '/platform/tenants',
+  summary: 'O registro de negócios (tenants) — só o admin global',
+  description:
+    'Só o REGISTRO (nome, slug, situação, marca). Dado de negócio de outra organização continua atrás ' +
+    'da RLS, inclusive para o admin de plataforma.',
+  response: z.object({ items: z.array(TenantSummary) }),
+  errors: ['forbidden'],
+});
+
+export const platformTenantsCreate = defineOperation({
+  operationId: 'platform.tenantsCreate',
+  method: 'POST',
+  path: '/platform/tenants',
+  summary: 'Novo negócio: organização, base de fábrica, marca e primeiro administrador',
+  description:
+    'Um código só; o negócio novo é dado. Domínio fica pedido (pending_dns) — DNS e certificado não ' +
+    'são automatizados (BLOQUEADO — INFRA). Sem preço nem cobrança.',
+  body: z.object({
+    slug: z.string().regex(/^[a-z0-9][a-z0-9-]{1,62}$/),
+    name: NonEmpty,
+    tax_id: z.string().max(32).nullable().optional(),
+    branding: z
+      .object({
+        display_name: z.string().max(120).nullable().optional(),
+        primary_color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .nullable()
+          .optional(),
+        support_email: z.string().email().nullable().optional(),
+      })
+      .optional(),
+    domain: z.string().max(253).nullable().optional(),
+    admin: z.object({ email: z.string().email(), name: NonEmpty }),
+  }),
+  response: z.object({ organization_id: Uuid, admin_membership_id: Uuid, reused_user: z.boolean() }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'conflict'],
 });

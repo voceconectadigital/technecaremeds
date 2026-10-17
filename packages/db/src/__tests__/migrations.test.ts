@@ -125,6 +125,7 @@ describe('migrations (EPIC-001)', () => {
       'plan_cycle_items',
       'plan_cycles',
       'plan_tasks',
+      'platform_admins',
       'price_list_items',
       'price_lists',
       'quote_items',

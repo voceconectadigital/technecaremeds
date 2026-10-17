@@ -36,6 +36,7 @@ import { ScheduleController } from './schedule/schedule.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { InsightsController } from './insights/insights.controller';
 import { NotificationsController } from './notifications/notifications.controller';
+import { PlatformTenantsController } from './platform/tenants.controller';
 import {
   AutomationsController,
   AutomationTasksController,
@@ -119,6 +120,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       InsightsController,
       NotificationsController,
       AutomationsController,
+      PlatformTenantsController,
       AutomationTasksController,
       AutomationReportsController,
       SearchController,

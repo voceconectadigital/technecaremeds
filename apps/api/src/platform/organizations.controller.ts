@@ -47,13 +47,23 @@ export class OrganizationsController {
   async current(@Req() req: AuroraRequest): Promise<OrganizationView> {
     const ctx = req.auroraContext!;
     return withTenant(this.db, ctx, async (s) => {
-      const rows = await s.query<Omit<OrganizationView, 'seats_used' | keyof OrganizationConfiguration>>(
-        `SELECT id, slug, name, locale, timezone, asset_label, plan, seat_limit, status::text
+      const rows = await s.query<
+        Omit<OrganizationView, 'seats_used' | keyof OrganizationConfiguration> & {
+          settings: { branding?: Record<string, unknown>; domain?: { host: string; status: string } } | null;
+        }
+      >(
+        `SELECT id, slug, name, locale, timezone, asset_label, plan, seat_limit, status::text, settings
            FROM aurora.organizations
           WHERE deleted_at IS NULL`
       );
-      const org = rows[0];
-      if (!org) throw new NotFoundError('Organização');
+      const linha = rows[0];
+      if (!linha) throw new NotFoundError('Organização');
+      const { settings, ...base } = linha;
+      const org = {
+        ...base,
+        branding: { display_name: base.name, ...(settings?.branding ?? {}) },
+        domain: settings?.domain ?? null,
+      };
 
       const [seats] = await s.query<{ used: number }>(
         `SELECT count(*)::int AS used FROM aurora.memberships
