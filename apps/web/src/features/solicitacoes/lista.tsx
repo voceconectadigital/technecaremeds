@@ -268,6 +268,10 @@ const SITUACOES: Record<string, { rotulo: string; tom: 'neutral' | 'info' | 'war
   accepted: { rotulo: 'Aceita', tom: 'good' },
   rejected: { rotulo: 'Recusada', tom: 'bad' },
   merged: { rotulo: 'Unida a outra', tom: 'neutral' },
+  duplicate: { rotulo: 'Duplicada', tom: 'neutral' },
+  in_service: { rotulo: 'Em atendimento', tom: 'info' },
+  fulfilled: { rotulo: 'Atendida', tom: 'good' },
+  closed: { rotulo: 'Encerrada', tom: 'neutral' },
   cancelled: { rotulo: 'Cancelada', tom: 'neutral' },
 };
 

@@ -13,6 +13,7 @@
  */
 import { defineOperation } from '../registry';
 import { z, Uuid, Timestamp } from '../primitives';
+import { REQUEST_PRIORITIES, SERVICE_REQUEST_TYPE_KEYS } from './service-requests';
 
 /* -------------------------------------------------------------------------- */
 
@@ -146,6 +147,10 @@ export const portalOpenRequest = defineOperation({
     description: z.string().optional(),
     asset_id: Uuid.optional(),
     location_id: Uuid.optional(),
+    /** Só entre os clientes do escopo do vínculo; ausente = o primeiro deles. */
+    customer_id: Uuid.optional(),
+    requested_priority: z.enum(REQUEST_PRIORITIES).optional(),
+    requested_type: z.enum(SERVICE_REQUEST_TYPE_KEYS).nullable().optional(),
   }),
   response: z.object({ id: Uuid, number: z.string() }),
   status: 201,

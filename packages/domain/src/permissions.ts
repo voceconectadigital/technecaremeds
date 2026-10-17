@@ -445,6 +445,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'asset.transfer',
       'asset.print_label',
       'asset.read_financials',
+      'service_request.create',
       'service_request.triage',
       'service_request.accept',
       'service_request.reject',

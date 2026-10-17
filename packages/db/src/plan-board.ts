@@ -40,16 +40,21 @@ import type { MembershipScope } from './painel';
 /**
  * Os tipos que o domínio suporta HOJE, e como cada um se apoia nele.
  *
- * `workOrderType`: a chave de sistema da natureza da OS gerada. TSE e
- * qualificação não têm natureza própria no catálogo de fábrica — entram como
- * `inspection`, e o que as distingue é o `procedure_kind` do protocolo.
- * (A VALIDAR com o cliente se ele quer naturezas próprias.)
+ * `workOrderType`: a chave de sistema da natureza da OS gerada. Desde a 0064
+ * (reunião 16/10/2026) TSE e qualificação têm natureza PRÓPRIA — o cliente as
+ * listou como tipos. `fallback` cobre a organização que ainda só tem
+ * `inspection`: o plano continua sendo criado, e o `procedure_kind` do
+ * protocolo continua distinguindo os dois.
  */
 export const PLAN_KINDS = {
-  preventive: { workOrderType: 'preventive', procedureKind: null },
-  calibration: { workOrderType: 'calibration', procedureKind: 'calibration' },
-  electrical_safety: { workOrderType: 'inspection', procedureKind: 'electrical_safety' },
-  qualification: { workOrderType: 'inspection', procedureKind: 'qualification' },
+  preventive: { workOrderType: 'preventive', procedureKind: null, fallback: null },
+  calibration: { workOrderType: 'calibration', procedureKind: 'calibration', fallback: null },
+  electrical_safety: {
+    workOrderType: 'electrical_safety',
+    procedureKind: 'electrical_safety',
+    fallback: 'inspection',
+  },
+  qualification: { workOrderType: 'qualification', procedureKind: 'qualification', fallback: 'inspection' },
 } as const;
 export type PlanKind = keyof typeof PLAN_KINDS;
 
@@ -149,9 +154,10 @@ export async function createGuidedPlan(
   const tipo = PLAN_KINDS[input.kind];
   const [natureza] = await session.query<{ id: string }>(
     `SELECT id FROM aurora.catalog_items
-      WHERE catalog_key = 'work_order_type' AND system_key = $1 AND archived_at IS NULL
-      ORDER BY position LIMIT 1`,
-    [tipo.workOrderType]
+      WHERE catalog_key = 'work_order_type' AND archived_at IS NULL
+        AND (system_key = $1 OR system_key = $2)
+      ORDER BY (system_key = $1) DESC, position LIMIT 1`,
+    [tipo.workOrderType, tipo.fallback]
   );
   if (!natureza) {
     throw new ValidationError(

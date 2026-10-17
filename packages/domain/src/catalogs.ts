@@ -36,7 +36,20 @@ export const CATALOGS: readonly CatalogDefinition[] = [
     // A separação preventiva/corretiva é a base de metade dos indicadores de
     // manutenção. Sem chave estável, renomear "Corretiva" para "Reparo" zeraria
     // o histórico do indicador — foi o que a auditoria viu acontecer.
-    systemKeys: ['corrective', 'preventive', 'calibration', 'inspection', 'installation'],
+    // As quatro últimas entraram em 16/10/2026: os tipos de solicitação definidos
+    // pelo cliente (Instrução Técnica, Treinamento, TSE e Qualificação) passam a
+    // ter natureza própria, e não mais `inspection` com procedimento por baixo.
+    systemKeys: [
+      'corrective',
+      'preventive',
+      'calibration',
+      'inspection',
+      'installation',
+      'technical_instruction',
+      'training',
+      'electrical_safety',
+      'qualification',
+    ],
   },
   {
     key: 'failure_symptom',

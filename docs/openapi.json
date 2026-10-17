@@ -33323,6 +33323,41 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "customer_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "requested_priority": {
+                    "type": "string",
+                    "enum": [
+                      "emergency",
+                      "very_urgent",
+                      "urgent",
+                      "low",
+                      "none"
+                    ]
+                  },
+                  "requested_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "corrective",
+                          "preventive",
+                          "technical_instruction",
+                          "training",
+                          "calibration",
+                          "electrical_safety",
+                          "qualification"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -36915,6 +36950,15 @@
                       }
                     ]
                   },
+                  "info_request": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 2000
+                  },
+                  "rejection_note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
                   "priority": {
                     "type": "string",
                     "enum": [
@@ -37195,6 +37239,35 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "asset_tag": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "requested_type": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "corrective",
+                            "preventive",
+                            "technical_instruction",
+                            "training",
+                            "calibration",
+                            "electrical_safety",
+                            "qualification"
+                          ]
                         },
                         {
                           "type": "null"
@@ -37692,6 +37765,25 @@
                       "urgent",
                       "low",
                       "none"
+                    ]
+                  },
+                  "requested_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "corrective",
+                          "preventive",
+                          "technical_instruction",
+                          "training",
+                          "calibration",
+                          "electrical_safety",
+                          "qualification"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   },
                   "requester_name": {

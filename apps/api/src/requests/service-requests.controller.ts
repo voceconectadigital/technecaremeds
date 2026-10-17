@@ -33,9 +33,12 @@ import {
   type RequestStatus,
   type RequestPriority,
   type ServiceRequestSource,
+  isServiceRequestType,
+  SERVICE_REQUEST_TYPE_KEYS,
 } from '@aurora/domain';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { escopoRestrito } from '../common/scope-sql';
+import { conferirAlvoDaSolicitacao } from '../common/alvo-da-solicitacao';
 import { optionalUuid, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import { runFieldOperation } from '../common/client-operation';
@@ -50,6 +53,18 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: s
     throw new ValidationError(`${field} inválido`, { field, allowed });
   }
   return value as T;
+}
+
+/** Tipo da solicitação: lista fechada (0064). Ausente continua valendo — os canais antigos não o mandam. */
+function tipoDaSolicitacao(v: unknown): string | null {
+  if (v === undefined || v === null || v === '') return null;
+  if (!isServiceRequestType(v)) {
+    throw new ValidationError('tipo de solicitação fora da lista', {
+      field: 'requested_type',
+      allowed: SERVICE_REQUEST_TYPE_KEYS,
+    });
+  }
+  return v;
 }
 
 @Controller('service-requests')
@@ -90,8 +105,10 @@ export class ServiceRequestsController {
       requesterName: typeof body.requester_name === 'string' ? body.requester_name : null,
       requesterPhone: typeof body.requester_phone === 'string' ? body.requester_phone : null,
       requesterEmail: typeof body.requester_email === 'string' ? body.requester_email : null,
+      requestedType: tipoDaSolicitacao(body.requested_type),
       submit: body.submit !== false,
     };
+    const ctx = req.auroraContext!;
 
     /*
      * ABRIR CHAMADO É A OPERAÇÃO DE CAMPO MAIS COMUM, e a mais fácil de
@@ -100,6 +117,11 @@ export class ServiceRequestsController {
      * viram duas triagens, e alguém precisa descobrir qual fechar.
      */
     return runFieldOperation(this.db, req, 'POST /service-requests', body, async (s) => {
+      // Escopo de quem abre: cliente, setor e equipamento (16/10/2026).
+      if (ctx.membershipId) {
+        const alvo = await conferirAlvoDaSolicitacao(s, ctx.membershipId, entrada);
+        entrada.locationId = alvo.locationId;
+      }
       const hints = await duplicateHints(s, {
         assetId: entrada.assetId,
         locationId: entrada.locationId,
@@ -139,6 +161,7 @@ export class ServiceRequestsController {
     return withTenant(this.db, ctx, async (s) => {
       const [row] = await s.query<Record<string, unknown>>(
         `SELECT r.*, c.name AS customer_name, l.name AS location_name, a.name AS asset_name,
+                a.tag AS asset_tag,
                 sintoma.label AS reported_failure_label,
                 motivo.label AS rejection_reason_label
            FROM aurora.service_requests r
@@ -196,6 +219,10 @@ export class ServiceRequestsController {
         mergedIntoRequestId: optionalUuid(body.merged_into_request_id, 'merged_into_request_id'),
         cancellationReason: typeof body.cancellation_reason === 'string' ? body.cancellation_reason : null,
         infoRequest: typeof body.info_request === 'string' ? body.info_request : null,
+        rejectionNote:
+          typeof body.rejection_note === 'string' && body.rejection_note.trim()
+            ? body.rejection_note.trim()
+            : null,
         priority:
           body.priority === undefined
             ? undefined

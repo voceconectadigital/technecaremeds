@@ -31,6 +31,8 @@ export interface ServiceRequestInput {
   assetId?: string | null;
   reportedFailureCodeId?: string | null;
   requestedPriority?: RequestPriority;
+  /** Tipo da solicitação — lista fechada (0064). */
+  requestedType?: string | null;
   requesterMembershipId?: string | null;
   requesterName?: string | null;
   requesterPhone?: string | null;
@@ -77,10 +79,10 @@ export async function createServiceRequest(
        (id, organization_id, number, source, status, customer_id, location_id, asset_id,
         summary, description, reported_failure_code_id, requested_priority, priority,
         requester_membership_id, requester_name, requester_phone, requester_email,
-        submitted_at, created_by)
+        submitted_at, created_by, requested_type)
      VALUES ($1, $2, $3, $4::aurora.request_source, $5::aurora.request_status, $6, $7, $8,
              $9, $10, $11, $12::aurora.request_priority, $12::aurora.request_priority,
-             $13, $14, $15, $16, $17, $18)`,
+             $13, $14, $15, $16, $17, $18, $19)`,
     [
       id,
       session.context.organizationId,
@@ -100,6 +102,7 @@ export async function createServiceRequest(
       input.requesterEmail ?? null,
       status === 'submitted' ? new Date().toISOString() : null,
       session.context.actorId,
+      input.requestedType ?? null,
     ]
   );
 
@@ -192,6 +195,8 @@ export interface TransitionInput {
   mergedIntoRequestId?: string | null;
   cancellationReason?: string | null;
   infoRequest?: string | null;
+  /** Observação da recusa, que o cliente lê junto do motivo. */
+  rejectionNote?: string | null;
   priority?: RequestPriority;
   /** Versão que o cliente carregou; protege contra escrita concorrente. */
   expectedVersion?: number;
@@ -249,7 +254,8 @@ export async function transitionRequest(
             cancellation_reason = coalesce($5, cancellation_reason),
             info_request = coalesce($6, info_request),
             priority = coalesce($7::aurora.request_priority, priority),
-            updated_by = $8
+            updated_by = $8,
+            rejection_note = coalesce($9, rejection_note)
       WHERE id = $1
       RETURNING status::text AS status, version`,
     [
@@ -261,6 +267,7 @@ export async function transitionRequest(
       input.infoRequest ?? null,
       input.priority ?? null,
       session.context.actorId,
+      input.rejectionNote ?? null,
     ]
   );
 

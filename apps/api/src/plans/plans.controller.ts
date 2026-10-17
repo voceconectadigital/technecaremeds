@@ -157,7 +157,7 @@ export class PlansController {
       return {
         kinds: Object.entries(PLAN_KINDS).map(([key, v]) => ({
           key,
-          available: existentes.has(v.workOrderType),
+          available: existentes.has(v.workOrderType) || (v.fallback !== null && existentes.has(v.fallback)),
           work_order_type: v.workOrderType,
           procedure_kind: v.procedureKind,
         })),

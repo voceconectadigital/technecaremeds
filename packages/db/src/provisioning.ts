@@ -12,7 +12,7 @@
  * organização editou (rótulos, posições). É o que `admin:criar` e o
  * provisionamento de novo negócio chamam.
  */
-import { ASSET_FAMILIES, newId } from '@aurora/domain';
+import { ASSET_FAMILIES, SERVICE_REQUEST_TYPES, newId } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { provisionFactoryRoles } from './rbac';
 import { provisionWorkOrderStates } from './work-orders';
@@ -34,6 +34,7 @@ export async function provisionOrganizationBaseline(session: TenantSession): Pro
   const locationTypes = await provisionStarterLocationTypes(session);
   const families = await provisionAssetFamilies(session);
   await provisionNeutralCriticalities(session);
+  await provisionWorkOrderTypes(session);
   return { roles, locationTypes, families };
 }
 
@@ -71,6 +72,50 @@ export async function provisionAssetFamilies(session: TenantSession): Promise<Ma
     ids.set(f.key, id);
   }
   return ids;
+}
+
+/**
+ * As naturezas de OS dos sete tipos de solicitação (0064). Item existente com a
+ * mesma chave de sistema, a mesma chave ou o mesmo rótulo é reaproveitado.
+ */
+const CHAVE_DO_ITEM: Record<string, string> = {
+  corrective: 'corretiva',
+  preventive: 'preventiva',
+  technical_instruction: 'instrucao_tecnica',
+  training: 'treinamento',
+  calibration: 'calibracao',
+  electrical_safety: 'teste_seguranca_eletrica',
+  qualification: 'qualificacao',
+};
+
+export async function provisionWorkOrderTypes(session: TenantSession): Promise<void> {
+  for (const [i, t] of SERVICE_REQUEST_TYPES.entries()) {
+    const chave = CHAVE_DO_ITEM[t.key]!;
+    const [existente] = await session.query<{ id: string; system_key: string | null }>(
+      `SELECT id, system_key FROM aurora.catalog_items
+        WHERE catalog_key = 'work_order_type' AND archived_at IS NULL
+          AND (system_key = $1 OR key = $2 OR normalized_label = aurora.normalize_label($3))
+        ORDER BY (system_key = $1) DESC NULLS LAST
+        LIMIT 1`,
+      [t.key, chave, t.label]
+    );
+    if (existente) {
+      if (!existente.system_key) {
+        await session.query(`UPDATE aurora.catalog_items SET system_key = $2 WHERE id = $1`, [
+          existente.id,
+          t.key,
+        ]);
+      }
+      continue;
+    }
+    await session.query(
+      `INSERT INTO aurora.catalog_items
+         (id, organization_id, catalog_key, key, system_key, label, position, is_system, created_by)
+       VALUES ($1, $2, 'work_order_type', $3, $4, $5, $6, true, $7)
+       ON CONFLICT DO NOTHING`,
+      [newId(), session.context.organizationId, chave, t.key, t.label, i + 1, session.context.actorId]
+    );
+  }
 }
 
 /**

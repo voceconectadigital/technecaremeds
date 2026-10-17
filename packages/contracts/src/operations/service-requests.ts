@@ -18,6 +18,21 @@ import { z, Uuid, NonEmpty, Timestamp } from '../primitives';
  * o contrato a recusava. A captura da demonstração acusou; a lista agora é a
  * do domínio, e um teste compara as duas.
  */
+
+/**
+ * Tipos de solicitação — lista FECHADA definida pelo cliente (16/10/2026).
+ * Espelha `packages/domain/src/request-types.ts`.
+ */
+export const SERVICE_REQUEST_TYPE_KEYS = [
+  'corrective',
+  'preventive',
+  'technical_instruction',
+  'training',
+  'calibration',
+  'electrical_safety',
+  'qualification',
+] as const;
+
 export const REQUEST_STATUSES = [
   'draft',
   'submitted',
@@ -104,6 +119,10 @@ export const ServiceRequestDetail = z
     location_name: z.string().nullable(),
     asset_id: Uuid.nullable(),
     asset_name: z.string().nullable(),
+    /** Opcionais: capturas anteriores à 0064 (demo) não os têm. */
+    asset_tag: z.string().nullable().optional(),
+    requested_type: z.enum(SERVICE_REQUEST_TYPE_KEYS).nullable().optional(),
+    /** Dado histórico: o campo "sintoma" saiu da tela de abertura (16/10/2026). */
     reported_failure_label: z.string().nullable(),
     rejection_reason_label: z.string().nullable(),
     requester_name: z.string().nullable(),
@@ -167,6 +186,7 @@ export const requestCreate = defineOperation({
     asset_id: Uuid.nullable().optional(),
     reported_failure_code_id: Uuid.nullable().optional(),
     requested_priority: z.enum(REQUEST_PRIORITIES).optional(),
+    requested_type: z.enum(SERVICE_REQUEST_TYPE_KEYS).nullable().optional(),
     requester_name: z.string().nullable().optional(),
     requester_phone: z.string().nullable().optional(),
     requester_email: z.string().nullable().optional(),
@@ -196,6 +216,10 @@ export const requestTransition = defineOperation({
     rejection_reason_id: Uuid.nullable().optional(),
     merged_into_request_id: Uuid.nullable().optional(),
     cancellation_reason: z.string().nullable().optional(),
+    /** Obrigatório para ir a `info_needed`: a pergunta feita a quem abriu. */
+    info_request: z.string().trim().min(5).max(2000).optional(),
+    /** Observação da recusa para o cliente (opcional). */
+    rejection_note: z.string().trim().max(2000).optional(),
     priority: z.enum(REQUEST_PRIORITIES).optional(),
     version: z.number().int().optional(),
   }),
