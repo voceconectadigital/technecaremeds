@@ -32,7 +32,7 @@ import { WorkOrdersController } from './work-orders/work-orders.controller';
 import { ExecutionController, ExecutionResourcesController } from './work-orders/execution.controller';
 import { FieldController } from './work-orders/field.controller';
 import { ContractsController, AssetContractController } from './contracts/contracts.controller';
-import { QuotesController } from './quotes/quotes.controller';
+import { QuotesController, WorkOrderQuotesController } from './quotes/quotes.controller';
 import { ScheduleController } from './schedule/schedule.controller';
 import { DocumentsController } from './documents/documents.controller';
 import { InsightsController } from './insights/insights.controller';
@@ -117,6 +117,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       ContractsController,
       AssetContractController,
       QuotesController,
+      WorkOrderQuotesController,
       ScheduleController,
       DocumentsController,
       InsightsController,

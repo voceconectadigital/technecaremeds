@@ -19,8 +19,9 @@ import {
   customersAddContact,
   customersContacts,
   inventoryItemsList,
-  quotesAddItem,
-  quotesCreate,
+  quotesCreateFromWorkOrder,
+  quotesList,
+  workOrderDetail,
   type CustomerContact,
   type InventoryItem,
   type WorkOrderDetail,
@@ -50,6 +51,19 @@ export function formatarCentavos(c: number): string {
   return (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/**
+ * Identificador do pedido, gerado UMA vez por diálogo (PF-71): a retentativa
+ * repete o mesmo e o servidor devolve o orçamento já criado em vez de criar outro.
+ */
+function novoIdDoPedido(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  const h = () =>
+    Math.floor(Math.random() * 0x10000)
+      .toString(16)
+      .padStart(4, '0');
+  return `${h()}${h()}-${h()}-4${h().slice(1)}-a${h().slice(1)}-${h()}${h()}${h()}`;
+}
+
 export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; onFechar: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -75,8 +89,13 @@ export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; on
   const contato = useApiMutation(customersAddContact, { invalidates: [customersContacts] });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const criar = useApiMutation(quotesCreate, {});
-  const item = useApiMutation(quotesAddItem, {});
+  const [pedidoId] = useState(novoIdDoPedido);
+  // Cabeçalho e linhas numa chamada só, numa transação só (PF-71): linha
+  // recusada não deixa orçamento pela metade. A lista de orçamentos e a ficha
+  // da OS (resumo do orçamento, andamento) deixam de valer.
+  const gerarNoServidor = useApiMutation(quotesCreateFromWorkOrder, {
+    invalidates: [quotesList, workOrderDetail],
+  });
 
   const totais = linhas.map((l) => {
     const u = centavos(l.unitario);
@@ -109,29 +128,27 @@ export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; on
           body: { name: novoContato.nome.trim(), email: novoContato.email.trim() },
         })) as { id: string };
         aprovadorId = c.id;
+        // Fica escolhido: se a geração falhar, a retentativa usa este contato
+        // em vez de cadastrar outro igual.
+        setAprovador(c.id);
       }
       const tem = (t: Linha['tipo']) => linhas.some((l) => l.tipo === t);
-      const q = (await criar.mutateAsync({
+      const q = await gerarNoServidor.mutateAsync({
+        params: { id: os.id },
         body: {
-          customerId: os.customer_id,
-          workOrderId: os.id,
+          clientRequestId: pedidoId,
           nature: tem('part') && tem('service') ? 'parts_and_services' : tem('part') ? 'parts' : 'services',
           validUntil: validade,
           ...(aprovadorId ? { approverContactId: aprovadorId } : {}),
-        },
-      })) as { id: string };
-      for (const l of linhas) {
-        await item.mutateAsync({
-          params: { id: q.id },
-          body: {
+          items: linhas.map((l) => ({
             kind: l.tipo,
             ...(l.tipo === 'part' ? { itemId: l.itemId } : {}),
             description: l.descricao.trim(),
             quantity: Number(l.quantidade.replace(',', '.')),
             unitPrice: l.unitario.trim().replace(',', '.'),
-          },
-        });
-      }
+          })),
+        },
+      });
       toast.success('Orçamento gerado', 'Revise e envie ao cliente para aprovação.');
       onFechar();
       void navigate({ to: '/orcamentos/$id', params: { id: q.id } });

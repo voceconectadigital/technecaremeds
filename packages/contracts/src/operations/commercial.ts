@@ -85,6 +85,12 @@ export const QuoteItem = z.object({
    * comercial; preço digitado é discutido com quem digitou.
    */
   price_source: z.string().nullable(),
+  /**
+   * Quanto da linha já tinha sido lançado em campo, na OS, quando o orçamento
+   * foi aprovado (PF-34): essa parte não foi reservada de novo. Não muda o
+   * valor cobrado. "0.000" em toda linha não aprovada.
+   */
+  field_consumed_qty: z.string().optional(),
 });
 export type QuoteItem = z.infer<typeof QuoteItem>;
 
@@ -351,6 +357,53 @@ export const quotesAddItem = defineOperation({
     quantity: z.number().positive(),
     unitPrice: z.union([Dinheiro, z.number().min(0)]).optional(),
     unit: z.string().trim().max(20).optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+/** Uma linha do orçamento gerado da OS — o mesmo formato de `quotes.addItem`. */
+export const LinhaDoOrcamentoDaOs = z
+  .object({
+    kind: z.enum(['part', 'service']),
+    itemId: Uuid.nullable().optional(),
+    description: z.string().trim().min(2).max(300).optional(),
+    quantity: z.number().positive(),
+    unitPrice: z.union([Dinheiro, z.number().min(0)]).optional(),
+    unit: z.string().trim().max(20).optional(),
+  })
+  .refine((l) => l.kind !== 'part' || !!l.itemId, {
+    message: 'peça precisa do item do catálogo',
+    path: ['itemId'],
+  });
+
+export const quotesCreateFromWorkOrder = defineOperation({
+  operationId: 'quotes.createFromWorkOrder',
+  method: 'POST',
+  path: '/work-orders/:id/quotes',
+  summary: 'Gera o orçamento da OS já com as linhas, numa transação só',
+  description:
+    'Cabeçalho e linhas nascem juntos ou não nascem: uma linha recusada desfaz o orçamento inteiro ' +
+    '(a mensagem diz qual linha). O cliente é o da OS. `clientRequestId` é gerado pela tela antes da ' +
+    'primeira tentativa: reenviar o MESMO pedido devolve o mesmo orçamento, sem criar outro; o mesmo ' +
+    'identificador com outro conteúdo, depois de um sucesso, é 409. Exige `quote.create` e ' +
+    '`quote.update` (o mesmo que criar e acrescentar linha), e a OS no escopo de quem pede.',
+  permissions: ['quote.create', 'quote.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    clientRequestId: Uuid,
+    nature: z.enum(['parts', 'services', 'parts_and_services']).optional(),
+    validUntil: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    approverContactId: Uuid.nullable().optional(),
+    paymentTerms: z.string().nullable().optional(),
+    customerNotes: z.string().nullable().optional(),
+    internalNotes: z.string().nullable().optional(),
+    items: z.array(LinhaDoOrcamentoDaOs).min(1).max(200),
   }),
   response: z.object({ id: Uuid }),
   status: 201,

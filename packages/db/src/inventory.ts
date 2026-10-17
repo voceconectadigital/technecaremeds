@@ -441,8 +441,13 @@ export async function consumeForWorkOrder(
 ): Promise<{ movementId: string; reservationId: string }> {
   if (!(qty > 0)) throw new ValidationError('a quantidade consumida deve ser positiva', { field: 'qty' });
 
+  // `FOR KEY SHARE`: não bloqueia outro lançamento nem a edição comum da OS,
+  // mas enfileira com a APROVAÇÃO de orçamento (que trava a OS em `FOR UPDATE`
+  // para abater o consumo de campo — PF-34). Sem isto, um lançamento no meio da
+  // aprovação ficaria fora da conta e a peça poderia sair duas vezes. Tomada
+  // antes de qualquer reserva/saldo, na mesma ordem da aprovação (OS → saldo).
   const [os] = await session.query<{ customer_id: string }>(
-    `SELECT customer_id FROM aurora.work_orders WHERE id = $1`,
+    `SELECT customer_id FROM aurora.work_orders WHERE id = $1 FOR KEY SHARE`,
     [workOrderId]
   );
   if (!os) throw new NotFoundError('ordem de serviço', workOrderId);
