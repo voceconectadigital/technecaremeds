@@ -106,6 +106,8 @@ beforeAll(async () => {
       title: 'Calibração anual',
       locationId: A.setor,
       assetId: incubadora,
+      // PF-14: o técnico responde o checklist — executa só a OS atribuída a ele.
+      assigneeMembershipId: tecnico.mem,
     });
     os = w.id;
     await transitionWorkOrder(s, os, 'in_progress');

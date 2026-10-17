@@ -27,9 +27,19 @@ import {
   verifySignatures,
   completionCheck,
   completionRequirementsFor,
+  assertCanExecuteWorkOrder,
+  workOrderOfChecklistResponse,
   type Database,
 } from '@aurora/db';
-import { NotFoundError, ValidationError, fonteManual, type AttachmentPurpose } from '@aurora/domain';
+import {
+  NotFoundError,
+  ValidationError,
+  deviceInstant,
+  fonteManual,
+  type AttachmentPurpose,
+} from '@aurora/domain';
+import { timeEntryStop, workOrderTimerStart } from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, uuidParam } from '../common/params';
 import { runFieldOperation } from '../common/client-operation';
@@ -102,42 +112,65 @@ export class ExecutionController {
     @Param('id') id: string,
     @Body() body: { template_id?: unknown; response_id?: unknown }
   ): Promise<{ response_id: string }> {
-    const responseId = await runFieldOperation(this.db, req, 'POST /work-orders/:id/checklists', body, (s) =>
-      attachChecklist(
-        s,
-        uuidParam(id, 'id'),
-        uuidParam(body.template_id, 'template_id'),
-        /*
-         * O APARELHO PODE TRAZER O IDENTIFICADOR DA RESPOSTA.
-         *
-         * Sem isso, responder um item exigiria estar online para anexar
-         * primeiro — e anexar é a primeira coisa que o técnico faz ao chegar
-         * no equipamento, que é onde não há rede. Com o identificador vindo
-         * de lá, o anexo e as respostas entram na fila juntos, na ordem certa.
-         */
-        optionalUuid(body.response_id, 'response_id') ?? undefined
-      )
+    const woId = uuidParam(id, 'id');
+    const responseId = await runFieldOperation(
+      this.db,
+      req,
+      'POST /work-orders/:id/checklists',
+      body,
+      async (s) => {
+        await assertCanExecuteWorkOrder(s, woId);
+        return attachChecklist(
+          s,
+          woId,
+          uuidParam(body.template_id, 'template_id'),
+          /*
+           * O APARELHO PODE TRAZER O IDENTIFICADOR DA RESPOSTA.
+           *
+           * Sem isso, responder um item exigiria estar online para anexar
+           * primeiro — e anexar é a primeira coisa que o técnico faz ao chegar
+           * no equipamento, que é onde não há rede. Com o identificador vindo
+           * de lá, o anexo e as respostas entram na fila juntos, na ordem certa.
+           */
+          optionalUuid(body.response_id, 'response_id') ?? undefined
+        );
+      }
     );
     return { response_id: responseId };
   }
 
   @Post(':id/timer/start')
   @RequirePermissions('time_entry.create')
-  async start(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ entry_id: string }> {
+  async start(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ entry_id: string }> {
+    const woId = uuidParam(id, 'id');
+    const b = parseWith(workOrderTimerStart.body, body ?? {});
     /*
      * O CRONÔMETRO É O CASO MAIS CARO DE DUPLICAR.
      *
      * Dois cronômetros abertos na mesma OS produzem duas contagens que correm
-     * juntas, e a folha do dia passa a somar dezesseis horas para oito. Como a
-     * rota não tem corpo, a operação é identificada só pelo cabeçalho — que é
-     * exatamente o que o aparelho gera antes da primeira tentativa.
+     * juntas, e a folha do dia passa a somar dezesseis horas para oito. A
+     * operação é identificada pelo cabeçalho — que é exatamente o que o
+     * aparelho gera antes da primeira tentativa — e, desde o PF-65, também
+     * pelo `id` do apontamento, que o aparelho gera para poder enfileirar o
+     * "parar" logo atrás, offline.
+     *
+     * `started_at` é a hora do APARELHO: o cronômetro iniciado no subsolo às
+     * 9h e enviado às 11h começou às 9h, e não na chegada.
      */
+    const inicio = deviceInstant(b.started_at, 'started_at');
     const entryId = await runFieldOperation(
       this.db,
       req,
       'POST /work-orders/:id/timer/start',
-      { work_order_id: id },
-      (s) => startTimer(s, uuidParam(id, 'id'))
+      { work_order_id: id, ...b },
+      async (s) => {
+        await assertCanExecuteWorkOrder(s, woId);
+        return startTimer(s, woId, { id: b.id, startedAt: inicio });
+      }
     );
     return { entry_id: entryId };
   }
@@ -180,15 +213,23 @@ export class ExecutionController {
       });
     }
 
-    const entryId = await runFieldOperation(this.db, req, 'POST /work-orders/:id/time-entries', body, (s) =>
-      logTime(s, {
-        workOrderId: uuidParam(id, 'id'),
-        membershipId: typeof body.membership_id === 'string' ? body.membership_id : undefined,
-        startedAt: inicio,
-        endedAt: fim,
-        note: typeof body.note === 'string' ? body.note : undefined,
-        hourlyCost: typeof body.hourly_cost === 'number' ? body.hourly_cost : null,
-      })
+    const woId = uuidParam(id, 'id');
+    const entryId = await runFieldOperation(
+      this.db,
+      req,
+      'POST /work-orders/:id/time-entries',
+      body,
+      async (s) => {
+        await assertCanExecuteWorkOrder(s, woId);
+        return logTime(s, {
+          workOrderId: woId,
+          membershipId: typeof body.membership_id === 'string' ? body.membership_id : undefined,
+          startedAt: inicio,
+          endedAt: fim,
+          note: typeof body.note === 'string' ? body.note : undefined,
+          hourlyCost: typeof body.hourly_cost === 'number' ? body.hourly_cost : null,
+        });
+      }
     );
     return { entry_id: entryId };
   }
@@ -213,9 +254,11 @@ export class ExecutionController {
     @Param('id') id: string,
     @Body() body: Record<string, unknown>
   ): Promise<{ attachment_id: string; storage_key: string }> {
-    const r = await runFieldOperation(this.db, req, 'POST /work-orders/:id/attachments', body, (s) =>
-      attachFile(s, {
-        workOrderId: uuidParam(id, 'id'),
+    const woId = uuidParam(id, 'id');
+    const r = await runFieldOperation(this.db, req, 'POST /work-orders/:id/attachments', body, async (s) => {
+      await assertCanExecuteWorkOrder(s, woId);
+      return attachFile(s, {
+        workOrderId: woId,
         // Tipo, tamanho, nome e finalidade são conferidos pelo domínio
         // (`validateAttachment`): lista fechada de tipos por finalidade, teto
         // de tamanho, e o nome limpo de tudo que quebraria cabeçalho ou log.
@@ -224,8 +267,8 @@ export class ExecutionController {
         contentType: body.content_type as string,
         byteSize: body.byte_size as number,
         sha256: typeof body.sha256 === 'string' ? body.sha256 : null,
-      })
-    );
+      });
+    });
 
     return { attachment_id: r.id, storage_key: r.storageKey };
   }
@@ -249,16 +292,18 @@ export class ExecutionController {
       throw new ValidationError('signer_name é obrigatório', { field: 'signer_name' });
     }
 
-    return runFieldOperation(this.db, req, 'POST /work-orders/:id/signatures', body, (s) =>
-      signWorkOrder(s, uuidParam(id, 'id'), {
+    const woId = uuidParam(id, 'id');
+    return runFieldOperation(this.db, req, 'POST /work-orders/:id/signatures', body, async (s) => {
+      await assertCanExecuteWorkOrder(s, woId);
+      return signWorkOrder(s, woId, {
         signerRole: body.signer_role as (typeof roles)[number],
         signerName: (body.signer_name as string).trim(),
         method: body.method as (typeof methods)[number],
         signerEmail: typeof body.signer_email === 'string' ? body.signer_email : null,
         signerDocument: typeof body.signer_document === 'string' ? body.signer_document : null,
         attachmentId: typeof body.attachment_id === 'string' ? body.attachment_id : null,
-      })
-    );
+      });
+    });
   }
 
   /**
@@ -320,6 +365,10 @@ export class ExecutionResourcesController {
       'POST /checklist-responses/:responseId/answers',
       body,
       async (s) => {
+        // A resposta é da OS dela: quem responde precisa poder executá-la
+        // (PF-14). Resposta inexistente segue, e o 404 é do núcleo.
+        const woId = await workOrderOfChecklistResponse(s, rId);
+        if (woId) await assertCanExecuteWorkOrder(s, woId);
         /*
          * PONTO DE MEDIÇÃO: o corpo vira envelope pela fonte manual e vai ao
          * mesmo núcleo da rota de sessão. Assim a fila de campo que já usa
@@ -398,15 +447,25 @@ export class ExecutionResourcesController {
   async stop(
     @Req() req: AuroraRequest,
     @Param('entryId') entryId: string,
-    @Body() body: { note?: unknown }
+    @Body() body: unknown
   ): Promise<{ minutes: number }> {
+    const id = uuidParam(entryId, 'entryId');
+    const b = parseWith(timeEntryStop.body, body ?? {});
+    /*
+     * `ended_at` é a hora do APARELHO (PF-65): o "parar" tocado às 11h no
+     * subsolo e enviado às 13h parou às 11h. Validado contra a janela de
+     * `deviceInstant` e, no núcleo, contra o início do cronômetro.
+     *
+     * Parar o PRÓPRIO cronômetro não passa pela regra de atribuição do PF-14 —
+     * ver `stopTimer`.
+     */
+    const fim = deviceInstant(b.ended_at, 'ended_at');
     const minutes = await runFieldOperation(
       this.db,
       req,
       'POST /time-entries/:entryId/stop',
-      { entry_id: entryId, ...body },
-      (s) =>
-        stopTimer(s, uuidParam(entryId, 'entryId'), typeof body.note === 'string' ? body.note : undefined)
+      { entry_id: entryId, ...b },
+      (s) => stopTimer(s, id, b.note, fim)
     );
     return { minutes };
   }

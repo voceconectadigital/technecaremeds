@@ -214,6 +214,8 @@ describe('P0.4 — modo de uso e recursos habilitados', () => {
       // ordem canônica, não a de quem enviou
       enabled_features: ['assets', 'work_orders', 'portal'],
       features_customized: true,
+      // PF-41: a exigência do parecer nasce desligada.
+      require_operational_result: false,
     });
   });
 

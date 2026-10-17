@@ -43,6 +43,11 @@ export interface PacoteDoDia {
   transitions: { from_key: string; to_key: string }[];
   wait_reasons: { id: string }[];
   stock: { item_id: string; warehouse_id: string }[];
+  /**
+   * O cronômetro aberto desta pessoa (PF-65). Opcional: um servidor anterior
+   * não manda, e aí a coleção local não é tocada.
+   */
+  open_timers?: { id: string; work_order_id: string; started_at: string }[];
   counts: Record<string, number>;
 }
 
@@ -119,6 +124,12 @@ const DESTINOS: {
   campo: keyof PacoteDoDia;
   colecao: string;
   chave: (r: Record<string, unknown>) => string;
+  /**
+   * Vem INTEIRO em toda descida, inclusive na incremental — e por isso
+   * substitui. É o caso do cronômetro aberto: parado na web, ele precisa sumir
+   * do aparelho, e o corte incremental nunca traria a ausência dele.
+   */
+  sempreInteiro?: boolean;
 }[] = [
   { campo: 'work_orders', colecao: 'ordens', chave: (r) => String(r.id) },
   { campo: 'assets', colecao: 'ativos', chave: (r) => String(r.id) },
@@ -137,6 +148,7 @@ const DESTINOS: {
     colecao: 'estoque',
     chave: (r) => `${String(r.item_id)}@${String(r.warehouse_id)}`,
   },
+  { campo: 'open_timers', colecao: 'cronometros', chave: (r) => String(r.id), sempreInteiro: true },
 ];
 
 export interface DependenciasDaSincronizacao {
@@ -235,6 +247,8 @@ export class Sincronizacao {
 
     const baixados: Record<string, number> = {};
     for (const d of DESTINOS) {
+      // Campo que o servidor não mandou não apaga o que o aparelho sabe.
+      if (d.sempreInteiro && pacote[d.campo] === undefined) continue;
       const linhas = (pacote[d.campo] ?? []) as unknown as Record<string, unknown>[];
       const colecao = this.base.colecao<Record<string, unknown>>(d.colecao);
 
@@ -245,7 +259,7 @@ export class Sincronizacao {
        * mudou — que é quase tudo. O técnico ficaria com uma OS na tela porque
        * foi a única alterada desde a manhã.
        */
-      if (!pacote.incremental) await colecao.limpar();
+      if (!pacote.incremental || d.sempreInteiro) await colecao.limpar();
       for (const linha of linhas) await colecao.gravar(d.chave(linha), linha);
       baixados[d.colecao] = linhas.length;
     }

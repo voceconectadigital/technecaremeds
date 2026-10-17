@@ -21,13 +21,29 @@ export interface OrganizationConfiguration {
   enabled_features: OrganizationFeature[];
   /** `false` enquanto ninguém escolheu: tudo habilitado por padrão. */
   features_customized: boolean;
+  /**
+   * Concluir a OS exige o parecer LIBERADO/PARADO (pente-fino PF-41).
+   *
+   * Mora em `organizations.settings` (jsonb, sem migration) e é `false` por
+   * padrão: ninguém pediu a exigência para todos, e ligá-la mudaria o fluxo de
+   * quem conclui hoje sem parecer.
+   */
+  require_operational_result: boolean;
 }
+
+/** A chave em `organizations.settings`. */
+const CHAVE_PARECER = 'require_operational_result';
 
 export async function loadOrganizationConfiguration(
   session: TenantSession
 ): Promise<OrganizationConfiguration> {
-  const [row] = await session.query<{ usage_mode: string; enabled_features: string[] | null }>(
-    `SELECT usage_mode::text AS usage_mode, enabled_features
+  const [row] = await session.query<{
+    usage_mode: string;
+    enabled_features: string[] | null;
+    require_operational_result: boolean | null;
+  }>(
+    `SELECT usage_mode::text AS usage_mode, enabled_features,
+            (settings ->> '${CHAVE_PARECER}')::boolean AS require_operational_result
        FROM aurora.organizations WHERE deleted_at IS NULL`
   );
   if (!row) throw new NotFoundError('Organização');
@@ -35,11 +51,21 @@ export async function loadOrganizationConfiguration(
     usage_mode: row.usage_mode as OrganizationUsageMode,
     enabled_features: effectiveFeatures(row.enabled_features),
     features_customized: row.enabled_features !== null,
+    require_operational_result: row.require_operational_result === true,
   };
 }
 
+/** A conclusão exige o parecer? Lido na transição — ver `transitionWorkOrder`. */
+export async function requiresOperationalResult(session: TenantSession): Promise<boolean> {
+  const [row] = await session.query<{ exige: boolean | null }>(
+    `SELECT (settings ->> '${CHAVE_PARECER}')::boolean AS exige
+       FROM aurora.organizations WHERE deleted_at IS NULL`
+  );
+  return row?.exige === true;
+}
+
 /**
- * Muda o modo e/ou a lista de recursos.
+ * Muda o modo, a lista de recursos e/ou a exigência do parecer.
  *
  * `enabledFeatures: null` volta ao padrão (tudo habilitado). Lista vazia é
  * recusada: uma organização sem módulo nenhum não tem tela para desfazer o
@@ -47,7 +73,11 @@ export async function loadOrganizationConfiguration(
  */
 export async function updateOrganizationConfiguration(
   session: TenantSession,
-  patch: { usageMode?: string; enabledFeatures?: readonly string[] | null }
+  patch: {
+    usageMode?: string;
+    enabledFeatures?: readonly string[] | null;
+    requireOperationalResult?: boolean;
+  }
 ): Promise<OrganizationConfiguration> {
   if (
     patch.usageMode !== undefined &&
@@ -56,6 +86,11 @@ export async function updateOrganizationConfiguration(
     throw new ValidationError('modo de uso inválido', {
       field: 'usage_mode',
       allowed: ORGANIZATION_USAGE_MODES,
+    });
+  }
+  if (patch.requireOperationalResult !== undefined && typeof patch.requireOperationalResult !== 'boolean') {
+    throw new ValidationError('require_operational_result precisa ser verdadeiro ou falso', {
+      field: 'require_operational_result',
     });
   }
 
@@ -70,14 +105,25 @@ export async function updateOrganizationConfiguration(
     }
   }
 
+  // A exigência entra MESCLADA em `settings`: a coluna guarda também a marca e
+  // o domínio, e sobrescrevê-la apagaria os dois.
   const rows = await session.query<{ id: string }>(
     `UPDATE aurora.organizations
         SET usage_mode = COALESCE($1::aurora.organization_usage_mode, usage_mode),
             enabled_features = CASE WHEN $2::boolean THEN $3::text[] ELSE enabled_features END,
+            settings = CASE WHEN $5::boolean IS NULL THEN settings
+                            ELSE COALESCE(settings, '{}'::jsonb) || jsonb_build_object('${CHAVE_PARECER}', $5::boolean)
+                       END,
             updated_by = $4
       WHERE deleted_at IS NULL
       RETURNING id`,
-    [patch.usageMode ?? null, lista !== undefined, lista ?? null, session.context.actorId]
+    [
+      patch.usageMode ?? null,
+      lista !== undefined,
+      lista ?? null,
+      session.context.actorId,
+      patch.requireOperationalResult ?? null,
+    ]
   );
   if (rows.length === 0) throw new NotFoundError('Organização');
 
@@ -89,6 +135,7 @@ export async function updateOrganizationConfiguration(
       change: 'configuration',
       usage_mode: atual.usage_mode,
       enabled_features: atual.enabled_features,
+      require_operational_result: atual.require_operational_result,
     },
   });
   return atual;

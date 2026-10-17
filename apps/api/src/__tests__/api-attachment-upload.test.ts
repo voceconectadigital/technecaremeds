@@ -85,6 +85,9 @@ const ctxA = buildContext({
 function foto(tamanho: number): Buffer {
   const b = Buffer.alloc(tamanho);
   for (let i = 0; i < tamanho; i++) b[i] = (i * 7 + 13) % 251;
+  // Começa como um JPEG de verdade (FF D8 FF): ao concluir, o servidor confere
+  // os primeiros bytes contra o tipo declarado (PF-84).
+  b.set([0xff, 0xd8, 0xff], 0);
   return b;
 }
 

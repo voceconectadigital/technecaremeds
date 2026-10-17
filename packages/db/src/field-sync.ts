@@ -57,6 +57,8 @@ export interface FieldSyncBundle {
   transitions: Record<string, unknown>[];
   wait_reasons: Record<string, unknown>[];
   stock: Record<string, unknown>[];
+  /** Os cronômetros abertos DESTA pessoa (PF-65). Sempre inteiro, nunca incremental. */
+  open_timers: Record<string, unknown>[];
   counts: Record<string, number>;
 }
 
@@ -317,6 +319,22 @@ export async function fieldSyncBundle(
     [membershipId]
   );
 
+  /*
+   * O CRONÔMETRO ABERTO DESTA PESSOA (PF-65), em qualquer OS.
+   *
+   * Sem isto o aparelho só sabia do cronômetro que ELE ainda tinha na fila: o
+   * aberto pela web, ou o que já tinha subido, sumia da tela — e o técnico
+   * tocava "iniciar" de novo e recebia 409 na atenção. Vem sempre inteiro (é
+   * no máximo um), para o "parar" feito em outro lugar também chegar.
+   */
+  const cronometros = await s.query<Record<string, unknown>>(
+    `SELECT id, work_order_id,
+            to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS started_at
+       FROM aurora.time_entries
+      WHERE membership_id = $1 AND ended_at IS NULL`,
+    [membershipId]
+  );
+
   return {
     // Já vem em ISO com milissegundos, do banco. Reprocessar em JavaScript foi
     // exatamente o que perdeu a precisão antes.
@@ -331,6 +349,7 @@ export async function fieldSyncBundle(
     transitions: transicoes,
     wait_reasons: motivos,
     stock: estoque,
+    open_timers: cronometros,
     /*
      * As contagens existem para o aparelho DIZER o que baixou.
      *

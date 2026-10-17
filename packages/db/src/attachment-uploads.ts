@@ -24,7 +24,15 @@
  * chegou) daria um arquivo com buraco e resumo que nunca fecha. Mantendo a
  * gravação sob a mesma trava, a ordem é sempre: bytes, depois conta.
  */
-import { ConflictError, NotFoundError, ValidationError } from '@aurora/domain';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  SNIFFABLE_CONTENT_TYPES,
+  contentMatchesDeclaredType,
+} from '@aurora/domain';
+import { assertCanExecuteWorkOrder } from './execution';
 import type { TenantSession } from './client';
 
 export interface FatiaRecebida {
@@ -43,8 +51,52 @@ interface LinhaDoAnexo {
   storage_key: string;
   byte_size: string;
   sha256: string | null;
+  content_type: string;
   received_bytes: string;
   upload_completed_at: string | null;
+}
+
+/**
+ * Quem está mandando os bytes pode escrever NESTE anexo? (pente-fino PF-84)
+ *
+ * A rota chega pelo id do anexo, e conferia só a organização (pela RLS): um
+ * técnico com o id do anexo de outra OS escreveria nele. Agora o anexo leva à
+ * OS dele — direto, pela resposta de checklist ou pela sessão de medição — e a
+ * OS passa pela mesma regra de toda ação de execução
+ * (`assertCanExecuteWorkOrder`), com o escopo conferido aqui, porque o
+ * `ScopeGuard` não conhece este caminho.
+ *
+ * Anexo sem OS (certificado de instrumento, arquivo de importação) só recebe
+ * bytes de quem o registrou: é a mesma pessoa, no mesmo fluxo, e ninguém mais
+ * tem motivo para escrever nele.
+ */
+export async function assertCanUploadAttachment(session: TenantSession, attachmentId: string): Promise<void> {
+  const [a] = await session.query<{ uploaded_by: string | null; work_order_id: string | null }>(
+    `SELECT a.uploaded_by,
+            COALESCE(a.work_order_id, r.work_order_id, ms.work_order_id) AS work_order_id
+       FROM aurora.attachments a
+       LEFT JOIN aurora.checklist_answers ca     ON ca.id = a.checklist_answer_id
+       LEFT JOIN aurora.checklist_responses r    ON r.id = ca.response_id
+       LEFT JOIN aurora.measurement_sessions ms  ON ms.id = a.measurement_session_id
+      WHERE a.id = $1`,
+    [attachmentId]
+  );
+  if (!a) throw new NotFoundError('Anexo', attachmentId);
+  if (a.work_order_id) {
+    try {
+      await assertCanExecuteWorkOrder(session, a.work_order_id, { checkScope: true });
+    } catch (e) {
+      // OS fora do escopo: o ANEXO é que "não existe" para quem chamou.
+      if (e instanceof NotFoundError) throw new NotFoundError('Anexo', attachmentId);
+      throw e;
+    }
+    return;
+  }
+  if (a.uploaded_by !== session.context.actorId) {
+    const recusa = new ForbiddenError('work_order.execute');
+    recusa.message = 'só quem registrou este anexo envia os bytes dele';
+    throw recusa;
+  }
 }
 
 /**
@@ -80,7 +132,7 @@ export async function receiveAttachmentSlice(
    * não aparece — não é "recusado", é inexistente.
    */
   const [linha] = await session.query<LinhaDoAnexo>(
-    `SELECT storage_key, byte_size::text, sha256, received_bytes::text, upload_completed_at
+    `SELECT storage_key, byte_size::text, sha256, content_type, received_bytes::text, upload_completed_at
        FROM aurora.attachments
       WHERE id = $1
       FOR UPDATE`,
@@ -156,6 +208,25 @@ export async function receiveAttachmentSlice(
       ]);
       throw new ConflictError(
         'o arquivo recebido não confere com o resumo declarado; o envio recomeça do início'
+      );
+    }
+  }
+
+  if (completo && SNIFFABLE_CONTENT_TYPES.includes(linha.content_type)) {
+    /*
+     * O CONTEÚDO É O TIPO DECLARADO? (PF-84)
+     *
+     * O resumo prova que chegou o arquivo que o aparelho mandou — não que ele é
+     * o que o registro diz. Declarar `image/jpeg` e mandar um HTML é o caminho
+     * clássico de XSS armazenado no dia em que o anexo for servido de volta.
+     * Os primeiros bytes ("números mágicos") decidem; fora do tipo, 422 e o
+     * anexo NÃO fica concluído (a transação volta, e a conta junto).
+     */
+    const guardado = await armazenamento.ler(linha.storage_key);
+    if (!guardado || !contentMatchesDeclaredType(linha.content_type, guardado.subarray(0, 16))) {
+      throw new ValidationError(
+        `o conteúdo do arquivo não é do tipo declarado (${linha.content_type}); o anexo não foi concluído`,
+        { field: 'content_type', declared: linha.content_type }
       );
     }
   }

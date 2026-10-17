@@ -189,6 +189,19 @@ export const FieldStockBalance = z.object({
   warehouse_name: z.string(),
 });
 
+/**
+ * Um cronômetro DESTA PESSOA ainda aberto (PF-65).
+ *
+ * Desce sempre inteiro, e não pelo corte incremental: é no máximo um (índice
+ * de um aberto por pessoa), e é o que faz o aparelho mostrar "rodando desde
+ * 9h12" e oferecer "parar" em vez de um segundo "iniciar" que viraria 409.
+ */
+export const FieldOpenTimer = z.object({
+  id: Uuid,
+  work_order_id: Uuid,
+  started_at: Timestamp,
+});
+
 export const fieldSync = defineOperation({
   operationId: 'field.sync',
   method: 'GET',
@@ -218,6 +231,7 @@ export const fieldSync = defineOperation({
     transitions: z.array(FieldTransition),
     wait_reasons: z.array(FieldWaitReason),
     stock: z.array(FieldStockBalance),
+    open_timers: z.array(FieldOpenTimer),
     /**
      * As contagens existem para a tela DIZER o que baixou.
      *

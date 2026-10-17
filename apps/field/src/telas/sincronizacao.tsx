@@ -69,7 +69,8 @@ export function SincronizacaoPage() {
     estado.atencao === 0 &&
     estado.deOutraSessao === 0 &&
     anexosEstado.pendentes === 0 &&
-    anexosEstado.falhados === 0;
+    anexosEstado.falhados === 0 &&
+    anexosEstado.deOutraSessao === 0;
 
   return (
     <div className="mx-auto flex max-w-md flex-col gap-4">
@@ -235,15 +236,27 @@ export function SincronizacaoPage() {
             </section>
           )}
 
-          {(anexosEstado.pendentes > 0 || anexosEstado.falhados > 0) && (
+          {(anexosEstado.pendentes > 0 || anexosEstado.falhados > 0 || anexosEstado.deOutraSessao > 0) && (
             <section aria-labelledby="fotos" className="flex flex-col gap-2">
               <h2 id="fotos" className="text-sm font-semibold text-text">
-                Fotos ({anexosEstado.pendentes + anexosEstado.falhados})
+                Fotos ({anexosEstado.pendentes + anexosEstado.falhados + anexosEstado.deOutraSessao})
               </h2>
               <p className="text-sm text-muted">
                 {tamanho(anexosEstado.bytesPendentes)} ainda no aparelho.
                 {anexosEstado.falhados > 0 && ` ${anexosEstado.falhados} com falha.`}
               </p>
+              {/*
+                FOTOS DE OUTRA SESSÃO (PF-66): a mesma regra dos comandos. Não
+                sobem com a credencial de quem está agora e não são apagadas —
+                esperam quem as tirou entrar de novo.
+              */}
+              {anexosEstado.deOutraSessao > 0 && (
+                <p className="text-sm text-muted">
+                  {anexosEstado.deOutraSessao === 1
+                    ? '1 foto de outra sessão continua guardada e é enviada quando quem a tirou entrar de novo.'
+                    : `${anexosEstado.deOutraSessao} fotos de outra sessão continuam guardadas e são enviadas quando quem as tirou entrar de novo.`}
+                </p>
+              )}
               {anexosEstado.progresso !== null && (
                 <>
                   {/*

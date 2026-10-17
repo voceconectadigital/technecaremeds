@@ -8,7 +8,14 @@
  * anexos).
  */
 import { defineOperation } from '../registry';
-import { z, Uuid, Ok } from '../primitives';
+import { z, Uuid, Ok, Timestamp } from '../primitives';
+
+/**
+ * A hora do APARELHO (PF-65): quando a ação aconteceu, e não quando chegou.
+ * O servidor aceita de 48 h no passado a 5 min no futuro; fora disso, 422.
+ * Ausente, vale a hora do servidor.
+ */
+const HoraDoAparelho = Timestamp.optional();
 
 const Ponto = z.object({
   latitude: z.number().min(-90).max(90).nullable().optional(),
@@ -16,6 +23,38 @@ const Ponto = z.object({
   accuracy_m: z.number().min(0).nullable().optional(),
   /** Obrigatória (10+ letras) quando não há posição do aparelho. */
   justification: z.string().trim().max(500).nullable().optional(),
+  occurred_at: HoraDoAparelho,
+});
+
+export const workOrderTimerStart = defineOperation({
+  operationId: 'workOrders.startTimer',
+  method: 'POST',
+  path: '/work-orders/:id/timer/start',
+  summary: 'Inicia o cronômetro da pessoa nesta OS',
+  description:
+    'O aparelho pode gerar o `id` do apontamento (para enfileirar o "parar" logo atrás, offline) ' +
+    'e mandar `started_at` com a hora dele. O mesmo `id` de novo devolve o mesmo apontamento. ' +
+    'Um cronômetro aberto por pessoa: outro aberto → 409.',
+  permissions: ['time_entry.create'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ id: Uuid.optional(), started_at: HoraDoAparelho }).strict(),
+  response: z.object({ entry_id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed', 'forbidden'],
+});
+
+export const timeEntryStop = defineOperation({
+  operationId: 'timeEntries.stop',
+  method: 'POST',
+  path: '/time-entries/:entryId/stop',
+  summary: 'Para o cronômetro (com a hora do aparelho, se vier)',
+  description: '`ended_at` antes do início → 422. Cronômetro já parado → 409.',
+  permissions: ['time_entry.create'],
+  params: z.object({ entryId: Uuid }),
+  body: z.object({ note: z.string().max(2000).optional(), ended_at: HoraDoAparelho }).strict(),
+  response: z.object({ minutes: z.number().int() }),
+  status: 201,
+  errors: ['conflict', 'validation_failed', 'forbidden'],
 });
 
 export const WorkOrderVisit = z.object({

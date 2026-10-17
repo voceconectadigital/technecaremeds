@@ -121,6 +121,8 @@ const OrganizationConfigurationShape = {
   enabled_features: z.array(z.enum(ORGANIZATION_FEATURES)),
   /** `false` enquanto ninguém escolheu — tudo habilitado por padrão. */
   features_customized: z.boolean(),
+  /** Concluir a OS exige o parecer LIBERADO/PARADO (PF-41). `false` por padrão. */
+  require_operational_result: z.boolean(),
 };
 export const OrganizationConfiguration = z.object(OrganizationConfigurationShape);
 
@@ -137,6 +139,8 @@ export const organizationsUpdateConfiguration = defineOperation({
     .object({
       usage_mode: z.enum(ORGANIZATION_USAGE_MODES).optional(),
       enabled_features: z.array(z.enum(ORGANIZATION_FEATURES)).min(1).nullable().optional(),
+      /** Liga/desliga a exigência do parecer na conclusão da OS (PF-41). */
+      require_operational_result: z.boolean().optional(),
     })
     .strict(),
   response: OrganizationConfiguration,

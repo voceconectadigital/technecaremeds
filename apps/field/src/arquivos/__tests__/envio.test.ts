@@ -267,7 +267,7 @@ describe('ANEXO-004 · nada some em silêncio', () => {
       },
     });
 
-    expect(r).toEqual({ enviados: 0, falharam: 0, bytesSubidos: 0 });
+    expect(r).toEqual({ enviados: 0, falharam: 0, bytesSubidos: 0, deOutraSessao: 0 });
     expect((await anexos.ler('sem-chave'))!.estado).toBe('capturado');
   });
 

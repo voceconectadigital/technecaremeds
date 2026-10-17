@@ -26,6 +26,8 @@
  * numa transação de banco.
  */
 
+import type { Identidade } from '../fila';
+
 /** Uma referência opaca ao arquivo dentro do adaptador. */
 export type ReferenciaDeArquivo = string;
 
@@ -113,6 +115,17 @@ export interface AnexoPendente {
   /** Onde os bytes estão, no adaptador de arquivos. */
   referenciaLocal: ReferenciaDeArquivo;
   criadoEm: string;
+  /**
+   * DE QUEM É A FOTO — a mesma marca dos comandos (`Identidade` em `fila.ts`,
+   * pente-fino PF-66).
+   *
+   * Sem ela, os bytes eram enviados com a credencial de quem estivesse logado
+   * na hora do ENVIO: a foto que Ana tirou às 15h subia às 19h na sessão de
+   * Bruno, ou na organização errada. Foto de outra sessão fica guardada,
+   * intacta, e sobe quando o dono entrar de novo. Ausente nas fotos gravadas
+   * antes desta versão — tratadas como da sessão atual (`mesmaIdentidade`).
+   */
+  identidade?: Identidade;
 }
 
 /**
