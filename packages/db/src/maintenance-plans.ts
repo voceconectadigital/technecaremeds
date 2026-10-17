@@ -292,10 +292,18 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
   let criadas = 0;
   for (const item of pendentes) {
     const checklist = item.checklist_template_key ? await publicadoDe(item.checklist_template_key) : null;
-    const [ativo] = await session.query<{ name: string; location_id: string | null }>(
-      `SELECT name, location_id FROM aurora.assets WHERE id = $1`,
+    const [ativo] = await session.query<{ name: string; location_id: string | null; customer_id: string }>(
+      `SELECT name, location_id, customer_id FROM aurora.assets WHERE id = $1`,
       [item.asset_id]
     );
+    /*
+     * EQUIPAMENTO QUE MUDOU DE CLIENTE depois de o ciclo abrir fica PENDENTE, e
+     * os demais seguem (revisão de 17/10/2026). A OS não aceita equipamento de
+     * outro cliente (0072) — e um único item transferido abortava o ciclo
+     * inteiro. Dispensar com justificativa continua sendo decisão de quem
+     * coordena; inventar a justificativa aqui não é.
+     */
+    if (ativo && ativo.customer_id !== item.customer_id) continue;
     const os = await createWorkOrder(session, {
       customerId: item.customer_id,
       workOrderTypeId: item.work_order_type_id,

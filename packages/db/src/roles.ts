@@ -232,6 +232,12 @@ export async function setMemberRoles(
   membershipId: string,
   roleIds: readonly string[]
 ): Promise<void> {
+  // Ninguém altera os PRÓPRIOS papéis — a mesma regra do escopo. A conferência
+  // de escalada só olha permissões administrativas; sem esta trava, quem gerencia
+  // pessoas podia se dar um papel técnico que não tem (revisão de 17/10/2026).
+  if (session.context.membershipId && session.context.membershipId === membershipId) {
+    throw new ForbiddenError('ninguém altera os próprios papéis; peça a outra pessoa que gerencia acessos');
+  }
   const [alvo] = await session.query<{ id: string }>(
     `SELECT id FROM aurora.memberships WHERE id = $1 AND deleted_at IS NULL`,
     [membershipId]
