@@ -268,6 +268,13 @@ export class WorkOrdersController {
                 w.wait_note, w.created_at, w.updated_at,
                 w.service_description, w.service_observations, w.operational_result,
                 w.final_opinion, w.service_report_updated_at,
+                -- O orçamento vivo desta OS (16/10/2026): é por ele que a ficha mostra
+                -- "aguardando aprovação", "aprovado" ou "reprovado" sem estado redundante.
+                (SELECT json_build_object('id', q.id, 'number', q.number, 'version', q.version,
+                                          'status', q.status::text, 'total_cents', q.total_cents::text)
+                   FROM aurora.quotes q
+                  WHERE q.work_order_id = w.id AND q.status::text <> 'superseded'
+                  ORDER BY q.created_at DESC LIMIT 1) AS quote_summary,
                 st.key AS status_key, st.label AS status_label,
                 st.requires_wait_reason,
                 wr.key AS wait_reason_key, wr.label AS wait_reason_label, wr.pauses_sla,

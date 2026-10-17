@@ -105,6 +105,20 @@ export function toCents(value: number): Cents {
   return Math.round(value * 100);
 }
 
+/**
+ * Centavos a partir de DECIMAL escrito ("150", "150.5", "1234,56") — sem passar
+ * por ponto flutuante. É o caminho do formulário de orçamento (16/10/2026):
+ * dinheiro não vira `float` em lugar nenhum entre a tela e o banco.
+ */
+export function centsFromDecimal(raw: string): Cents {
+  const t = raw.trim().replace(',', '.');
+  const m = /^(\d{1,12})(?:\.(\d{1,2}))?$/.exec(t);
+  if (!m) throw new RangeError(`valor monetário inválido: ${raw}`);
+  const inteiro = Number(m[1]);
+  const fracao = Number((m[2] ?? '').padEnd(2, '0'));
+  return inteiro * 100 + fracao;
+}
+
 export function fromCents(value: Cents): number {
   return Number((value / 100).toFixed(2));
 }

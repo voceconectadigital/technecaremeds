@@ -216,3 +216,50 @@ export const locationsUpdate = defineOperation({
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'validation_failed', 'conflict'],
 });
+
+/* -------------------------------------------------------------------------- */
+/* contatos do cliente — o aprovador do orçamento (reunião 16/10/2026)         */
+/* -------------------------------------------------------------------------- */
+
+export const CustomerContact = z.object({
+  id: Uuid,
+  name: z.string(),
+  role_title: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  is_primary: z.boolean(),
+});
+export type CustomerContact = z.infer<typeof CustomerContact>;
+
+export const customersContacts = defineOperation({
+  operationId: 'customers.contacts',
+  method: 'GET',
+  path: '/customers/:id/contacts',
+  summary: 'Contatos do cliente (quem aprova orçamento, quem recebe aviso)',
+  permissions: ['customer.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ items: z.array(CustomerContact) }),
+  errors: ['not_found'],
+});
+
+export const customersAddContact = defineOperation({
+  operationId: 'customers.addContact',
+  method: 'POST',
+  path: '/customers/:id/contacts',
+  summary: 'Cadastra um contato do cliente (e-mail ou telefone obrigatório)',
+  description: 'Exige `customer.update` ou `quote.create` — quem orça precisa indicar o aprovador.',
+  permissions: ['customer.read'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(2).max(160),
+      role_title: z.string().trim().max(80).nullable().optional(),
+      email: z.string().trim().email().max(200).nullable().optional(),
+      phone: z.string().trim().min(8).max(32).nullable().optional(),
+    })
+    .strict()
+    .refine((v) => Boolean(v.email || v.phone), { message: 'informe e-mail ou telefone', path: ['email'] }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
+});

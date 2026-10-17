@@ -40,17 +40,22 @@ import {
   type QuoteStatus,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { useState } from 'react';
+import { Dialog, Field, Select, Textarea } from '@aurora/ui';
+import { useCatalogo } from '../../lib/catalogos';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarData, reais } from './orcamentos';
 import { formatarDataRelativa } from '../../routes/hoje';
 
 const ROTULO: Record<QuoteStatus, string> = {
-  draft: 'Rascunho',
-  sent: 'Enviado',
-  viewed: 'Visto pelo cliente',
+  // Vocabulário da reunião de 16/10/2026: "aguardando aprovação", "aprovado",
+  // "reprovado" — e sem "rascunho".
+  draft: 'Em elaboração',
+  sent: 'Aguardando aprovação',
+  viewed: 'Aguardando aprovação (visto)',
   approved: 'Aprovado',
-  rejected: 'Recusado',
+  rejected: 'Reprovado',
   expired: 'Vencido',
   in_execution: 'Em execução',
   invoiced: 'Faturado',
@@ -92,6 +97,7 @@ interface Detalhe {
 
 export function OrcamentoPage() {
   const { id } = useParams({ strict: false }) as { id: string };
+  const [reprovando, setReprovando] = useState(false);
   const toast = useToast();
 
   const { data, isLoading, isError, error } = useApiQuery(quoteDetail, { params: { id } }) as {
@@ -150,18 +156,46 @@ export function OrcamentoPage() {
               variant={t.to === 'approved' ? 'primary' : 'secondary'}
               loading={mover.isPending}
               onClick={() =>
-                mover.mutate(
-                  { params: { id }, body: { to: t.to } },
-                  { onSuccess: () => toast.success(`${data.quote.number} agora está em ${t.label}`) }
-                )
+                t.to === 'rejected'
+                  ? setReprovando(true)
+                  : mover.mutate(
+                      { params: { id }, body: { to: t.to } },
+                      {
+                        onSuccess: () =>
+                          toast.success(
+                            `${data.quote.number} agora está em ${ROTULO[t.to as QuoteStatus] ?? t.label}`
+                          ),
+                      }
+                    )
               }
             >
-              {t.label}
+              {t.to === 'rejected' ? 'Reprovar' : t.label}
             </Button>
           ))}
         </div>
       }
     >
+      {reprovando && (
+        <DialogoReprovar
+          numero={data.quote.number}
+          enviando={mover.isPending}
+          onFechar={() => setReprovando(false)}
+          onConfirmar={(motivo, nota) =>
+            mover.mutate(
+              {
+                params: { id },
+                body: { to: 'rejected', rejectionReasonId: motivo, ...(nota ? { note: nota } : {}) },
+              },
+              {
+                onSuccess: () => {
+                  toast.success(`${data.quote.number} reprovado`);
+                  setReprovando(false);
+                },
+              }
+            )
+          }
+        />
+      )}
       <div className="flex flex-col gap-4">
         <Card>
           <div className="flex flex-col gap-4 p-4">
@@ -309,4 +343,64 @@ function formatarQuantidade(valor: string): string {
   const n = Number(valor);
   if (!Number.isFinite(n)) return valor;
   return Number.isInteger(n) ? String(n) : valor.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+/** Reprovar exige o motivo (catálogo) — fica na trilha do orçamento, com quem e quando. */
+function DialogoReprovar({
+  numero,
+  enviando,
+  onFechar,
+  onConfirmar,
+}: {
+  numero: string;
+  enviando: boolean;
+  onFechar: () => void;
+  onConfirmar: (motivo: string, nota: string) => void;
+}) {
+  const motivos = useCatalogo('rejection_reason');
+  const [motivo, setMotivo] = useState('');
+  const [nota, setNota] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onFechar()}
+      title={`Reprovar ${numero}`}
+      description="O motivo fica registrado na trilha do orçamento, com quem reprovou e quando."
+      footer={
+        <>
+          <Button onClick={onFechar}>Voltar</Button>
+          <Button
+            variant="danger"
+            loading={enviando}
+            onClick={() => (motivo ? onConfirmar(motivo, nota.trim()) : setErro('Escolha o motivo.'))}
+          >
+            Reprovar
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field label="Motivo" required error={erro}>
+          <Select
+            value={motivo}
+            onChange={(e) => {
+              setMotivo(e.target.value);
+              setErro(null);
+            }}
+          >
+            <option value="">Selecione…</option>
+            {motivos.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Observação">
+          <Textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)} />
+        </Field>
+      </div>
+    </Dialog>
+  );
 }

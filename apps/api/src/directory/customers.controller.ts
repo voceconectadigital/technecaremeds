@@ -16,7 +16,9 @@ import {
   ValidationError,
   isValidCustomerSubtype,
 } from '@aurora/domain';
-import { customersCreate, customersUpdate, type Customer } from '@aurora/contracts';
+import { customersCreate, customersUpdate, customersAddContact, type Customer } from '@aurora/contracts';
+import { newId } from '@aurora/domain';
+import { PermissionsCheckedInHandler } from '../common/permissions.guard';
 import { RequirePermissions } from '../common/permissions.guard';
 import { parseWith } from '../common/contract-validation';
 import { uuidParam } from '../common/params';
@@ -55,6 +57,14 @@ function requireMembership(membershipId: string | null): string {
     throw new ForbiddenError('esta rota exige um vínculo de usuário com a organização');
   }
   return membershipId;
+}
+
+async function clienteVisivel(s: TenantSession, membershipId: string, customerId: string): Promise<void> {
+  const [visivel] = await s.query<{ ok: boolean }>(
+    `SELECT true AS ok FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+    [membershipId, customerId]
+  );
+  if (!visivel) throw new NotFoundError('cliente', customerId);
 }
 
 function conferirSubtipo(kind: string, subtype: string | null | undefined): void {
@@ -193,6 +203,62 @@ export class CustomersController {
     } catch (err) {
       throw conflitoLegivel(err);
     }
+  }
+
+  @Get('customers/:id/contacts')
+  @RequirePermissions('customer.read')
+  async contacts(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const membershipId = requireMembership(ctx.membershipId);
+    const customerId = uuidParam(id, 'id');
+    return withTenant(this.db, ctx, async (s) => {
+      await clienteVisivel(s, membershipId, customerId);
+      const items = await s.query(
+        `SELECT id, name, role_title, email, phone, is_primary
+           FROM aurora.customer_contacts
+          WHERE customer_id = $1 AND deleted_at IS NULL
+          ORDER BY is_primary DESC, name`,
+        [customerId]
+      );
+      return { items };
+    });
+  }
+
+  @Post('customers/:id/contacts')
+  @RequirePermissions('customer.read')
+  @PermissionsCheckedInHandler('aceita customer.update ou quote.create')
+  async addContact(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ id: string }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.permissions.has('customer.update') && !ctx.permissions.has('quote.create')) {
+      throw new ForbiddenError('customer.update');
+    }
+    const membershipId = requireMembership(ctx.membershipId);
+    const customerId = uuidParam(id, 'id');
+    const b = parseWith(customersAddContact.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      await clienteVisivel(s, membershipId, customerId);
+      const novo = newId();
+      await s.query(
+        `INSERT INTO aurora.customer_contacts
+           (id, organization_id, customer_id, name, role_title, email, phone, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          novo,
+          ctx.organizationId,
+          customerId,
+          b.name,
+          b.role_title ?? null,
+          b.email ?? null,
+          b.phone ?? null,
+          ctx.actorId,
+        ]
+      );
+      return { id: novo };
+    });
   }
 
   @Get('customers/:id')

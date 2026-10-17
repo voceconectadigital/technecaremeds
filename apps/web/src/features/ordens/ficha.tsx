@@ -33,7 +33,7 @@
  * salva metade das coisas. A ficha LÊ e faz TRANSIÇÃO; as transições é que
  * escrevem, e escrevem pelo caminho que o servidor valida.
  */
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 import {
   AlertTriangle,
@@ -88,6 +88,7 @@ import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
+import { AndamentoDaOs, DialogoOrcamentoDaOs, rotuloDoOrcamento } from './orcamento-da-os';
 
 // A aba "Conversa" saiu da navegação da OS (reunião 16/10/2026: não tem função
 // nesse fluxo). Os comentários continuam gravados e no histórico — nada foi
@@ -108,6 +109,7 @@ export function OrdemPage() {
   const navigate = useNavigate();
   const { can } = usePermissions();
   const [pedindo, setPedindo] = useState<WorkOrderTransition | null>(null);
+  const [orcando, setOrcando] = useState(false);
   // A aba fica na URL: quem manda o link da conversa quer que o outro caia na
   // conversa, e recarregar a página não deve devolver a pessoa ao resumo.
   const [aba, setAba] = useUrlState<string>('aba', 'resumo');
@@ -168,6 +170,12 @@ export function OrdemPage() {
                 Executar
               </Button>
             )}
+          {can('quote.create') &&
+            !['closed', 'cancelled'].includes(data.status_category) &&
+            (!data.quote_summary ||
+              ['rejected', 'expired', 'cancelled'].includes(data.quote_summary.status)) && (
+              <Button onClick={() => setOrcando(true)}>Gerar orçamento</Button>
+            )}
           {data.available_transitions.map((t) => (
             <Button
               key={t.to}
@@ -207,6 +215,7 @@ export function OrdemPage() {
         </div>
       </div>
 
+      {orcando && <DialogoOrcamentoDaOs os={data} onFechar={() => setOrcando(false)} />}
       {pedindo && (
         <DialogoDeTransicao
           transicao={pedindo}
@@ -254,6 +263,15 @@ function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
             </StatusChip>
           )}
           <span className="text-sm text-muted">{os.work_order_type_label}</span>
+          {os.quote_summary && (
+            <Link
+              to="/orcamentos/$id"
+              params={{ id: os.quote_summary.id }}
+              className="text-sm text-accent-text underline"
+            >
+              {rotuloDoOrcamento(os.quote_summary.status)} · {os.quote_summary.number}
+            </Link>
+          )}
           {os.reschedule_count > 0 && (
             // Remarcar quatro vezes não é detalhe de agenda: é o sintoma de um
             // atendimento que ninguém está conseguindo fazer.
@@ -288,6 +306,8 @@ function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
             </p>
           </div>
         )}
+
+        <AndamentoDaOs os={os} />
 
         <Sla relogios={os.sla} />
 

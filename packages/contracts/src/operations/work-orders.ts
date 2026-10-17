@@ -279,6 +279,17 @@ export const WorkOrderDetail = z.object({
   operational_result: z.enum(['released', 'stopped']).nullable().optional(),
   final_opinion: z.string().nullable().optional(),
   service_report_updated_at: z.string().nullable().optional(),
+  /** O orçamento vivo ligado a esta OS, se houver. */
+  quote_summary: z
+    .object({
+      id: Uuid,
+      number: z.string(),
+      version: z.number().int(),
+      status: z.string(),
+      total_cents: z.string(),
+    })
+    .nullable()
+    .optional(),
 
   /* --- agregados -------------------------------------------------------- */
   history: z.array(WorkOrderHistoryEntry),

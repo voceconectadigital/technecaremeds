@@ -38,6 +38,7 @@ import {
   QUOTE_NATURES,
   QUOTE_ITEM_KINDS,
   toCents,
+  centsFromDecimal,
   type QuoteStatus,
   type QuoteNature,
   type QuoteItemKind,
@@ -68,6 +69,15 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: s
  * que o cliente encontra ao conferir a proposta.
  */
 function money(value: unknown, field: string): number {
+  // Texto decimal ("150.50") vira centavos sem passar por float — é o que o
+  // formulário de orçamento envia. Número continua aceito (clientes antigos).
+  if (typeof value === 'string') {
+    try {
+      return centsFromDecimal(value);
+    } catch {
+      throw new ValidationError(`${field} deve ser um valor monetário não negativo`, { field });
+    }
+  }
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n) || n < 0) {
     throw new ValidationError(`${field} deve ser um valor monetário não negativo`, { field });
