@@ -28,6 +28,7 @@ import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permi
 import { parseWith } from '../common/contract-validation';
 import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+import { runFieldOperation } from '../common/client-operation';
 import type { AuroraRequest } from '../common/context.middleware';
 
 function podeExecutar(req: AuroraRequest): void {
@@ -54,13 +55,24 @@ export class ExecucaoGuiadaController {
   async entrar(@Req() req: AuroraRequest, @Param('id') id: string, @Body() body: unknown) {
     podeExecutar(req);
     const b = parseWith(workOrderCheckIn.body, body);
-    const r = await withTenant(this.db, req.auroraContext!, (s) =>
-      checkIn(s, uuidParam(id, 'id'), {
-        latitude: b.latitude,
-        longitude: b.longitude,
-        accuracyM: b.accuracy_m,
-        justification: b.justification,
-      })
+    /*
+     * CHECK-IN E CHECK-OUT SÃO OPERAÇÕES DE CAMPO: o aparelho reenvia quando o
+     * sinal volta. Sob a garantia de idempotência (x-aurora-client-operation),
+     * o reenvio devolve o desfecho da primeira vez — e não um 409 de "você já
+     * fez check-in" que faria a fila achar que falhou.
+     */
+    const r = await runFieldOperation(
+      this.db,
+      req,
+      'POST /work-orders/:id/check-in',
+      { work_order_id: id, ...b },
+      (s) =>
+        checkIn(s, uuidParam(id, 'id'), {
+          latitude: b.latitude,
+          longitude: b.longitude,
+          accuracyM: b.accuracy_m,
+          justification: b.justification,
+        })
     );
     return { visit_id: r.visitId, time_entry_id: r.timeEntryId, occurred_at: r.occurredAt };
   }
@@ -71,13 +83,18 @@ export class ExecucaoGuiadaController {
   async sair(@Req() req: AuroraRequest, @Param('id') id: string, @Body() body: unknown) {
     podeExecutar(req);
     const b = parseWith(workOrderCheckOut.body, body);
-    const r = await withTenant(this.db, req.auroraContext!, (s) =>
-      checkOut(s, uuidParam(id, 'id'), {
-        latitude: b.latitude,
-        longitude: b.longitude,
-        accuracyM: b.accuracy_m,
-        justification: b.justification,
-      })
+    const r = await runFieldOperation(
+      this.db,
+      req,
+      'POST /work-orders/:id/check-out',
+      { work_order_id: id, ...b },
+      (s) =>
+        checkOut(s, uuidParam(id, 'id'), {
+          latitude: b.latitude,
+          longitude: b.longitude,
+          accuracyM: b.accuracy_m,
+          justification: b.justification,
+        })
     );
     return { visit_id: r.visitId, minutes: r.minutes, occurred_at: r.occurredAt };
   }

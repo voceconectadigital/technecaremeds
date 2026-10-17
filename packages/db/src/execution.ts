@@ -11,6 +11,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
   type ChecklistItem,
   type AnswerValue,
   type CompletionRequirement,
@@ -364,6 +365,36 @@ export async function answerChecklistItem(
     provenance?: MeasurementProvenance;
   } = {}
 ): Promise<{ verdict: string; answerId: string; revision: number }> {
+  /*
+   * OS VALIDADA, FECHADA OU CANCELADA NÃO TEM CHECKLIST REABERTO POR AQUI.
+   *
+   * A resposta é a evidência do que foi feito; mudá-la depois da validação
+   * reescreveria o que o gestor aprovou (e o laudo que saiu dele). Quem tem
+   * `work_order.edit_closed` ainda corrige — e, nesse caso, o motivo da
+   * correção deixa de ser opcional: correção depois do fechamento sem motivo é
+   * exatamente o rastro que a 0047 existe para não perder.
+   */
+  const [osDaResposta] = await session.query<{ category: string }>(
+    `SELECT w.status_category::text AS category
+       FROM aurora.checklist_responses r
+       JOIN aurora.work_orders w ON w.id = r.work_order_id
+      WHERE r.id = $1`,
+    [responseId]
+  );
+  if (osDaResposta && ['done', 'closed', 'cancelled'].includes(osDaResposta.category)) {
+    if (!session.context.permissions.has('work_order.edit_closed')) {
+      throw new ConflictError(
+        'a OS já foi validada, fechada ou cancelada: as respostas do checklist não mudam mais',
+        { category: osDaResposta.category }
+      );
+    }
+    if (!opts.correctionReason?.trim()) {
+      throw new ValidationError('corrigir checklist de OS validada, fechada ou cancelada exige o motivo', {
+        field: 'correction_reason',
+      });
+    }
+  }
+
   const [item] = await session.query<Record<string, unknown>>(
     `SELECT ${COLUNAS_DO_ITEM} FROM aurora.checklist_items WHERE id = $1`,
     [itemId]
@@ -656,6 +687,25 @@ export async function startTimer(
   if (!session.context.membershipId) {
     throw new ValidationError('apontar hora exige um vínculo com a organização', { field: 'membership' });
   }
+  // UM CRONÔMETRO ABERTO POR PESSOA (índice `te_one_open_per_person`, 0025).
+  // Conferido aqui para a recusa dizer ONDE está o cronômetro aberto, em vez de
+  // devolver o nome do índice.
+  const [aberto] = await session.query<{ id: string; work_order_id: string; number: string | null }>(
+    `SELECT te.id, te.work_order_id, w.number
+       FROM aurora.time_entries te
+       LEFT JOIN aurora.work_orders w ON w.id = te.work_order_id
+      WHERE te.membership_id = $1 AND te.ended_at IS NULL
+      LIMIT 1`,
+    [session.context.membershipId]
+  );
+  if (aberto) {
+    const onde =
+      aberto.work_order_id === workOrderId ? 'nesta OS' : `na OS ${aberto.number ?? aberto.work_order_id}`;
+    throw new ConflictError(
+      `já existe um cronômetro aberto seu ${onde} — faça o check-out (ou pare o cronômetro) antes de abrir outro`,
+      { open_time_entry_id: aberto.id, work_order_id: aberto.work_order_id }
+    );
+  }
   const id = newId();
   await session.query(
     `INSERT INTO aurora.time_entries
@@ -674,6 +724,21 @@ export async function startTimer(
 }
 
 export async function stopTimer(session: TenantSession, entryId: string, note?: string): Promise<number> {
+  // O cronômetro é de quem o abriu. Parar o de outra pessoa — que encerraria as
+  // horas dela — fica com quem aprova ou aponta horas para os outros.
+  const [dono] = await session.query<{ membership_id: string }>(
+    `SELECT membership_id FROM aurora.time_entries WHERE id = $1`,
+    [entryId]
+  );
+  const perms = session.context.permissions;
+  if (
+    dono &&
+    dono.membership_id !== session.context.membershipId &&
+    !perms.has('time_entry.approve') &&
+    !perms.has('time_entry.create_for_others')
+  ) {
+    throw new ForbiddenError('time_entry.approve');
+  }
   const rows = await session.query<{ minutes: number }>(
     `UPDATE aurora.time_entries
         SET ended_at = now(), note = coalesce($2, note)

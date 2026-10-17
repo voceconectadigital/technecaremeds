@@ -318,6 +318,9 @@ export async function transitionWorkOrder(
   toStatusKey: string,
   input: WorkOrderTransitionInput = {}
 ): Promise<{ status: string; category: StatusCategory; version: number }> {
+  // FOR UPDATE: duas transições simultâneas da mesma OS leriam o mesmo estado e
+  // passariam as duas pelo grafo. Com a linha travada, a segunda espera e lê o
+  // estado novo.
   const [atual] = await session.query<{
     status_key: string;
     status_label: string;
@@ -330,7 +333,8 @@ export async function transitionWorkOrder(
             w.version, w.number, w.resolution
        FROM aurora.work_orders w
        JOIN aurora.work_order_statuses s ON s.id = w.status_id
-      WHERE w.id = $1`,
+      WHERE w.id = $1
+        FOR UPDATE OF w`,
     [workOrderId]
   );
   if (!atual) throw new NotFoundError('Ordem de serviço', workOrderId);
@@ -407,6 +411,23 @@ export async function transitionWorkOrder(
         );
       }
     }
+  }
+
+  // OS CANCELADA, NEGADA OU FECHADA NÃO TEM CRONÔMETRO CORRENDO.
+  //
+  // Fecha aqui, antes de mudar a situação, os cronômetros que ficaram abertos
+  // nela (check-in sem check-out, por exemplo). Sem isto, o apontamento ficava
+  // aberto numa OS que não aceita mais hora, e o índice de um cronômetro por
+  // pessoa travava essa pessoa em todas as outras OS. O check-out posterior
+  // continua possível: só registra a saída.
+  if (destino.category === 'cancelled' || destino.category === 'closed') {
+    await session.query(
+      `UPDATE aurora.time_entries
+          SET ended_at = greatest(now(), started_at + interval '1 microsecond'),
+              note = coalesce(note, $2)
+        WHERE work_order_id = $1 AND ended_at IS NULL`,
+      [workOrderId, `encerrado automaticamente: OS ${destino.label.toLowerCase()}`]
+    );
   }
 
   const rows = await session.query<{ status_category: StatusCategory; version: number }>(
@@ -562,7 +583,7 @@ export async function acceptServiceRequest(
   }>(
     `SELECT customer_id, location_id, asset_id, summary, description,
             priority::text AS priority, reported_failure_code_id
-       FROM aurora.service_requests WHERE id = $1`,
+       FROM aurora.service_requests WHERE id = $1 FOR UPDATE`,
     [requestId]
   );
   if (!pedido) throw new NotFoundError('Solicitação', requestId);
@@ -570,6 +591,38 @@ export async function acceptServiceRequest(
   // A transição primeiro: se ela não for válida — falta permissão, estado
   // errado — nenhuma OS chega a ser criada.
   await transitionRequest(session, requestId, 'accepted');
+
+  // Cada OS gerada herda o CLIENTE da solicitação; o ativo e o local que o
+  // aceite indicar têm de ser desse cliente. O banco também recusa (0072), mas
+  // aqui a mensagem diz qual alvo está errado.
+  for (const [i, alvo] of targets.entries()) {
+    if (alvo.assetId) {
+      const [a] = await session.query<{ customer_id: string }>(
+        `SELECT customer_id FROM aurora.assets WHERE id = $1`,
+        [alvo.assetId]
+      );
+      if (!a) throw new NotFoundError('Ativo', alvo.assetId);
+      if (a.customer_id !== pedido.customer_id) {
+        throw new ValidationError(
+          `targets[${i}].asset_id: o equipamento pertence a outro cliente, não ao da solicitação`,
+          { field: `targets[${i}].asset_id` }
+        );
+      }
+    }
+    if (alvo.locationId) {
+      const [l] = await session.query<{ customer_id: string }>(
+        `SELECT customer_id FROM aurora.locations WHERE id = $1`,
+        [alvo.locationId]
+      );
+      if (!l) throw new NotFoundError('Local', alvo.locationId);
+      if (l.customer_id !== pedido.customer_id) {
+        throw new ValidationError(
+          `targets[${i}].location_id: o local pertence a outro cliente, não ao da solicitação`,
+          { field: `targets[${i}].location_id` }
+        );
+      }
+    }
+  }
 
   const workOrders: Array<{ id: string; number: string | null }> = [];
   for (const [i, alvo] of targets.entries()) {
