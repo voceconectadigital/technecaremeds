@@ -113,6 +113,11 @@ it('captura as respostas da demonstração', async () => {
     await ler(C.workOrderParts, p);
     await ler(C.workOrderAttachments, p);
     await ler(C.workOrderComments, p);
+    // Assistente ▶ Executar (16/10/2026).
+    await ler(C.workOrderVisits, p);
+    await ler(C.workOrderCustomerParts, p);
+    await ler(C.workOrderChecklists, p);
+    await ler(C.workOrderCompletion, p);
   }
 
   /* ------------------------------------------------------ solicitações */
@@ -144,6 +149,17 @@ it('captura as respostas da demonstração', async () => {
     await ler(C.inventoryLedger, null, { item: s.item_id, warehouse: s.warehouse_id, limit: 50 });
   }
 
+  // Gestão de estoque e Store (16/10/2026). A demonstração ignora from/to.
+  await ler(C.inventoryItemsList);
+  await ler(C.inventoryWarehouses);
+  await ler(C.inventoryValuation);
+  await ler(C.inventoryAbc, null, { from: `${dia(-30)}T00:00:00.000Z`, to: `${dia(0)}T23:59:59.999Z` });
+  await ler(C.inventoryPeriodReport, null, {
+    from: `${dia(-30)}T00:00:00.000Z`,
+    to: `${dia(0)}T23:59:59.999Z`,
+  });
+  await ler(C.storeItemsList);
+
   /* -------------------------------------------------------- comercial */
   const contratos = await ler<ComId>(C.contractsList, null, {});
   for (const c of contratos?.items ?? []) {
@@ -171,6 +187,7 @@ it('captura as respostas da demonstração', async () => {
     await ler(op, null, periodo);
   }
   await ler(C.insightBacklog, null, { to: periodo.to });
+  await ler(C.reportsCatalog);
 
   /* ------------------------------------------- Painel de Controle e TV */
   // A demonstração ignora from/to ao escolher a captura (PAGINACAO): uma por
@@ -234,6 +251,10 @@ it('captura as respostas da demonstração', async () => {
   await ler(C.rolesList);
   const regras = await ler<ComId>(C.automationsList);
   for (const r of regras?.items ?? []) await ler(C.automationRuns, { id: r.id }, { limit: 50 });
+  // Automações agendadas, tarefas e Novo Negócio (16/10/2026).
+  await ler(C.automationVocabulary);
+  await ler(C.automationTasksList, null, {});
+  await ler(C.platformMe);
 
   await app.close();
   await t.close();
