@@ -62,6 +62,23 @@ const CAMPOS_PROTEGIDOS: Record<string, Record<string, string>> = {
   },
 };
 
+/**
+ * O mesmo recorte no PAYLOAD dos eventos de domínio da linha do tempo
+ * (revisão de 17/10/2026). `contract.period_closed` carrega excedente e multa
+ * em reais: quem não tem `contract.read_financials` lia os valores pela linha do
+ * tempo, embora a rota de medição exija a permissão.
+ */
+const CHAVES_DE_EVENTO_PROTEGIDAS: Record<string, Record<string, string>> = {
+  contracts: {
+    overageAmount: 'contract.read_financials',
+    penaltyAmount: 'contract.read_financials',
+  },
+};
+
+function semChaves<T extends Record<string, unknown>>(obj: T, ocultas: ReadonlySet<string>): T {
+  return Object.fromEntries(Object.entries(obj).filter(([k]) => !ocultas.has(k))) as T;
+}
+
 function instant(value: unknown, field: string): Date | null {
   if (value === undefined || value === null || value === '') return null;
   const d = new Date(String(value));
@@ -176,17 +193,23 @@ export class AuditController {
     const items = await withTenant(this.db, ctx, (s) =>
       recordTimeline(s, entityType, uuidParam(entityId, 'entityId'), limit ? Number(limit) : undefined)
     );
-    const protegidos = Object.entries(CAMPOS_PROTEGIDOS[entityType] ?? {}).filter(
-      ([, p]) => !ctx.permissions.has(p)
+    const ocultos = new Set(
+      Object.entries(CAMPOS_PROTEGIDOS[entityType] ?? {})
+        .filter(([, p]) => !ctx.permissions.has(p))
+        .map(([campo]) => campo)
     );
-    if (protegidos.length === 0) return { items };
-    const ocultos = new Set(protegidos.map(([campo]) => campo));
+    const ocultasNoEvento = new Set(
+      Object.entries(CHAVES_DE_EVENTO_PROTEGIDAS[entityType] ?? {})
+        .filter(([, p]) => !ctx.permissions.has(p))
+        .map(([chave]) => chave)
+    );
+    if (ocultos.size === 0 && ocultasNoEvento.size === 0) return { items };
     return {
-      items: items.map((i) =>
-        i.changes
-          ? { ...i, changes: Object.fromEntries(Object.entries(i.changes).filter(([k]) => !ocultos.has(k))) }
-          : i
-      ),
+      items: items.map((i) => ({
+        ...i,
+        changes: i.changes ? semChaves(i.changes, ocultos) : i.changes,
+        payload: i.payload ? semChaves(i.payload, ocultasNoEvento) : i.payload,
+      })),
     };
   }
 }

@@ -39,7 +39,7 @@ import { intervaloDoPainel, type FiltrosDoPainel } from './dados';
 import { PERIODOS, type Periodo } from './rotulos';
 
 type Tier = 'basic' | 'advanced' | 'expert';
-type Estado = 'ACTIVE' | 'PROVISIONAL' | 'PENDING_DEFINITION';
+export type Estado = 'ACTIVE' | 'PROVISIONAL' | 'PENDING_DEFINITION';
 type Indicador = {
   key: string;
   label: string;
@@ -50,13 +50,13 @@ type Indicador = {
   target_direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER' | 'INFORMATIONAL';
   note?: string;
 };
-type Meta = {
+export type Meta = {
   value: number;
   unit: string;
   direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
   scope: 'contract' | 'customer' | 'organization';
 };
-type Secao = {
+export type Secao = {
   key: string;
   label: string;
   state: Estado;
@@ -97,11 +97,12 @@ function numero(v: number): string {
   return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 }
 
-function valorDe(s: Secao): string {
+export function valorDe(s: Pick<Secao, 'value' | 'unit'>): string {
   return s.value === null ? 'Sem dados suficientes no período' : `${numero(s.value)}${SUFIXO[s.unit] ?? ''}`;
 }
 
-function MetaDaSecao({ s }: { s: Secao }) {
+/** Meta da seção, "SEM META CONFIGURADA" ou nada (informativo). Também no relatório agendado. */
+export function MetaDaSecao({ s }: { s: Pick<Secao, 'target' | 'target_evaluation' | 'target_label'> }) {
   if (s.target_evaluation === 'informational') return null;
   if (!s.target) {
     return <span className="text-xs font-medium text-muted">{s.target_label ?? 'SEM META CONFIGURADA'}</span>;

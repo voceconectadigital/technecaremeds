@@ -86,12 +86,21 @@ export class AuthController {
     // uma rajada paralela não passa inteira pela conferência acima.
     this.limiter.registrarFalha(origem);
 
-    const resultado = await abrirSessaoPorSenha(this.db, {
-      email: entrada.email,
-      senha: entrada.senha,
-      clientIp: origem,
-      userAgent: req.header('user-agent') ?? null,
-    });
+    let resultado: Awaited<ReturnType<typeof abrirSessaoPorSenha>>;
+    try {
+      resultado = await abrirSessaoPorSenha(this.db, {
+        email: entrada.email,
+        senha: entrada.senha,
+        clientIp: origem,
+        userAgent: req.header('user-agent') ?? null,
+      });
+    } catch (e) {
+      // Banco fora do ar não é tentativa de adivinhar senha: sem devolver a
+      // cota, um hospital inteiro atrás de um NAT que insiste durante a queda
+      // sairia dela bloqueado por 429 (revisão de 17/10/2026).
+      this.limiter.perdoarFalha(origem);
+      throw e;
+    }
 
     if ('motivo' in resultado) {
       // SÓ A FALHA CONSOME COTA — ver `bloqueado()` em attempt-limiter.ts:

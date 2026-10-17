@@ -36,6 +36,7 @@ import { Camera, CircleCheck, Package, Timer } from 'lucide-react';
 import { limparRascunhos, useCampo, useColecaoLocal, useRascunho } from '../campo';
 import type { AnexoPendente } from '../arquivos';
 import { referenciaAoAnexo } from '../anexos';
+import { cronometroAberto, horaCurta, type CronometroAberto, type CronometroBaixado } from '../cronometro';
 import { Assinatura } from './assinatura';
 
 interface OrdemLocal {
@@ -97,7 +98,8 @@ export function OrdemPage() {
    * roteador. Foi assim que apareceu aqui.
    */
   const { id } = useParams({ strict: false }) as { id: string };
-  const { enfileirar, capturarFoto, anexarBytes, estado, anexos, base, fila } = useCampo();
+  const { enfileirar, capturarFoto, anexarBytes, estado, anexos, base, fila, ultimaSincronizacao } =
+    useCampo();
 
   const { linhas: ordens, carregando } = useColecaoLocal<OrdemLocal>('ordens');
   const { linhas: transicoes } = useColecaoLocal<TransicaoLocal>('transicoes');
@@ -133,21 +135,30 @@ export function OrdemPage() {
    * vale exatamente enquanto o comando existe, e some junto com ele.
    */
   const [situacoesNaFila, setSituacoesNaFila] = useState<string[]>([]);
+  /*
+   * O CRONÔMETRO ABERTO (PF-65) — do pacote do dia mais a fila, pela mesma
+   * razão da situação acima: o que está na fila é o que vai acontecer. Ver
+   * `cronometroAberto`.
+   */
+  const [cronometro, setCronometro] = useState<CronometroAberto | null>(null);
   useEffect(() => {
     let vivo = true;
-    void fila.listar().then((cs) => {
-      if (!vivo) return;
-      setSituacoesNaFila(
-        cs
-          .filter((c) => c.agregado === `work_order:${id}` && c.caminho.endsWith('/transitions'))
-          .map((c) => (c.corpo as { to?: unknown } | null)?.to)
-          .filter((to): to is string => typeof to === 'string')
-      );
-    });
+    void Promise.all([fila.listar(), base.colecao<CronometroBaixado>('cronometros').todos()]).then(
+      ([cs, baixados]) => {
+        if (!vivo) return;
+        setSituacoesNaFila(
+          cs
+            .filter((c) => c.agregado === `work_order:${id}` && c.caminho.endsWith('/transitions'))
+            .map((c) => (c.corpo as { to?: unknown } | null)?.to)
+            .filter((to): to is string => typeof to === 'string')
+        );
+        setCronometro(cronometroAberto(cs, baixados, (c) => fila.daSessaoAtual(c)));
+      }
+    );
     return () => {
       vivo = false;
     };
-  }, [fila, id, estado.pendentes, estado.bloqueados, estado.atencao]);
+  }, [fila, base, id, estado.pendentes, estado.bloqueados, estado.atencao, ultimaSincronizacao]);
 
   const ordem = ordens.find((o) => o.id === id);
   const rotulos = useMemo(() => new Map(situacoes.map((s) => [s.key, s.label])), [situacoes]);
@@ -232,15 +243,48 @@ export function OrdemPage() {
   }
 
   async function iniciarCronometro() {
-    await comAviso('cronometro', () =>
-      enfileirar({
+    /*
+     * O IDENTIFICADOR E A HORA NASCEM AQUI, no toque (PF-65).
+     *
+     * O identificador permite enfileirar o "parar" sem rede, sabendo o que
+     * parar; a hora é a do toque, e não a da chegada ao servidor — iniciado às
+     * 9h no subsolo e enviado às 11h, o cronômetro começou às 9h.
+     */
+    const novo = { id: crypto.randomUUID(), started_at: new Date().toISOString() };
+    await comAviso('cronometro', async () => {
+      await enfileirar({
         agregado,
         metodo: 'POST',
         caminho: `/work-orders/${ordemAtual.id}/timer/start`,
-        corpo: {},
+        corpo: novo,
         rotulo: `Iniciar cronômetro — ${ordemAtual.number ?? ordemAtual.title}`,
-      })
-    );
+      });
+      // Também na coleção do pacote: se o "iniciar" subir e a descida falhar,
+      // a tela continua sabendo que há um cronômetro rodando.
+      await base.colecao<CronometroBaixado>('cronometros').gravar(novo.id, {
+        id: novo.id,
+        work_order_id: ordemAtual.id,
+        started_at: novo.started_at,
+      });
+      setCronometro({ id: novo.id, workOrderId: ordemAtual.id, desde: novo.started_at, naFila: true });
+    });
+  }
+
+  async function pararCronometro(aberto: CronometroAberto) {
+    if (!aberto.id) return;
+    const entryId = aberto.id;
+    await comAviso('cronometro', async () => {
+      await enfileirar({
+        // O agregado da OS DO CRONÔMETRO: o "parar" sai depois do "iniciar".
+        agregado: `work_order:${aberto.workOrderId}`,
+        metodo: 'POST',
+        caminho: `/time-entries/${entryId}/stop`,
+        corpo: { ended_at: new Date().toISOString() },
+        rotulo: `Parar cronômetro — ${ordemAtual.number ?? ordemAtual.title}`,
+      });
+      await base.colecao<CronometroBaixado>('cronometros').apagar(entryId);
+      setCronometro(null);
+    });
   }
 
   async function anexarChecklist(modelo: ModeloDeChecklist) {
@@ -365,15 +409,54 @@ export function OrdemPage() {
         <h2 id="tempo" className="text-sm font-semibold text-text">
           Tempo
         </h2>
-        <button
-          type="button"
-          onClick={() => void iniciarCronometro()}
-          disabled={enviando !== null}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-control border border-border-subtle bg-surface px-3 text-sm font-medium text-text"
-        >
-          <Timer aria-hidden className="size-4" />
-          Iniciar cronômetro
-        </button>
+        {cronometro && cronometro.workOrderId === ordemAtual.id ? (
+          <>
+            <p role="status" className="text-sm text-text">
+              Cronômetro rodando desde {horaCurta(cronometro.desde)}
+              {cronometro.naFila && (
+                <span className="text-xs text-muted"> (no aparelho, aguardando envio)</span>
+              )}
+            </p>
+            <button
+              type="button"
+              onClick={() => void pararCronometro(cronometro)}
+              disabled={enviando !== null || !cronometro.id}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-control border border-accent bg-surface px-3 text-sm font-medium text-text"
+            >
+              <Timer aria-hidden className="size-4" />
+              Parar cronômetro
+            </button>
+            {!cronometro.id && (
+              <p className="text-xs text-muted">
+                Este cronômetro foi iniciado por uma versão anterior do aplicativo: sincronize para poder
+                pará-lo aqui.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            {/*
+              UM ABERTO POR PESSOA: com um cronômetro rodando em OUTRA OS, o
+              "iniciar" daqui só viraria recusa (409) na tela de atenção.
+            */}
+            {cronometro && (
+              <p role="status" className="text-sm text-muted">
+                Você tem um cronômetro rodando desde {horaCurta(cronometro.desde)} em{' '}
+                {ordens.find((o) => o.id === cronometro.workOrderId)?.number ?? 'outra OS'}. Pare-o lá antes
+                de iniciar outro.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => void iniciarCronometro()}
+              disabled={enviando !== null || cronometro !== null}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-control border border-border-subtle bg-surface px-3 text-sm font-medium text-text"
+            >
+              <Timer aria-hidden className="size-4" />
+              Iniciar cronômetro
+            </button>
+          </>
+        )}
       </section>
 
       {/* -------------------------------------------------------- checklist */}

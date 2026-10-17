@@ -30,6 +30,22 @@ export interface Database extends SqlClient {
   transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T>;
   close(): Promise<void>;
   readonly appRole: string | null;
+  /**
+   * Tempo-limite por transação de tenant (pente-fino 17/10/2026, PF-75).
+   *
+   * Aplicado com `set_config(..., true)` — LOCAL à transação. Não vai como
+   * parâmetro de inicialização da conexão, que o pooler do Supabase em modo
+   * transação recusa, e não vaza para a próxima transação da mesma conexão.
+   * Ausente: sem limite (suíte, scripts administrativos).
+   */
+  readonly limites?: LimitesDeTransacao;
+}
+
+export interface LimitesDeTransacao {
+  /** `statement_timeout`: uma consulta presa não segura a conexão para sempre. */
+  readonly consultaMs: number;
+  /** `idle_in_transaction_session_timeout`: transação aberta e esquecida é encerrada. */
+  readonly ociosaNaTransacaoMs: number;
 }
 
 export interface TenantSession extends SqlClient {
@@ -66,7 +82,9 @@ export async function withTenant<T>(
               set_config('aurora.request_id',      $4, true),
               set_config('aurora.client_ip',       $5, true),
               set_config('aurora.user_agent',      $6, true),
-              set_config('aurora.source',          $7, true)`,
+              set_config('aurora.source',          $7, true),
+              set_config('statement_timeout',      $8, true),
+              set_config('idle_in_transaction_session_timeout', $9, true)`,
         [
           ctx.organizationId,
           ctx.actorId ?? '',
@@ -75,6 +93,9 @@ export async function withTenant<T>(
           ctx.clientIp ?? '',
           ctx.userAgent ?? '',
           ctx.source,
+          // '0' = sem limite, o padrão do PostgreSQL.
+          String(db.limites?.consultaMs ?? 0),
+          String(db.limites?.ociosaNaTransacaoMs ?? 0),
         ]
       );
 

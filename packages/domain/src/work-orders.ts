@@ -23,6 +23,7 @@
  * perdemos esperando peça?" — pergunta que, na referência, exigiria somar
  * estados escritos de cinco formas diferentes.
  */
+import { ValidationError } from './errors';
 
 /* -------------------------------------------------------------------------- */
 /* categorias — fixas                                                          */
@@ -746,4 +747,61 @@ export function eventForTransition(from: StatusRef, to: StatusRef): string | nul
   }
 
   return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* execução: quem executa e quando aconteceu (pente-fino PF-14, PF-65)         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A execução desta pessoa fica restrita às OS atribuídas a ela (ou à equipe)?
+ *
+ * `work_order.execute` é, pela própria descrição do catálogo, "executar as
+ * ordens atribuídas a si"; `work_order.execute_any`, "executar qualquer
+ * ordem". Quem tem a segunda não é restrito. Quem não tem nenhuma das duas não
+ * é restringido POR ESTA REGRA: a rota exige a permissão dela (concluir é
+ * `work_order.complete`; apontar hora é `time_entry.create`), e quem conclui
+ * sem executar — o gestor que fecha pelo técnico — continua podendo.
+ */
+export function executionRestrictedToAssignment(permissions: ReadonlySet<string>): boolean {
+  return permissions.has('work_order.execute') && !permissions.has('work_order.execute_any');
+}
+
+/** O relógio do aparelho pode estar até 5 minutos adiantado. */
+export const DEVICE_CLOCK_MAX_AHEAD_MS = 5 * 60 * 1000;
+/** E o trabalho guardado offline vale até 48 horas depois. */
+export const DEVICE_CLOCK_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * O instante que o APARELHO diz que algo aconteceu — validado.
+ *
+ * O cronômetro iniciado no subsolo às 9h e enviado às 11h, quando o sinal
+ * voltou, começou às 9h. Usar o relógio do servidor na chegada (o que a rota
+ * fazia) apagava duas horas da folha. Mas o relógio do aparelho pode estar
+ * errado — caso de borda que a SPEC lista —, então ele só é aceito numa
+ * janela: até 5 minutos no futuro (relógio adiantado) e até 48 horas no
+ * passado (o turno sem rede mais longo que faz sentido aceitar sem revisão).
+ * Fora dela, 422: quem decide é uma pessoa, e não o servidor.
+ *
+ * `undefined`/`null` devolve `null` — quem chama usa a hora do servidor.
+ */
+export function deviceInstant(raw: unknown, field: string, now: Date = new Date()): Date | null {
+  if (raw === undefined || raw === null) return null;
+  const instante = typeof raw === 'string' ? new Date(raw) : null;
+  if (!instante || Number.isNaN(instante.getTime())) {
+    throw new ValidationError(`${field} precisa ser um instante ISO 8601 com fuso`, { field });
+  }
+  if (instante.getTime() > now.getTime() + DEVICE_CLOCK_MAX_AHEAD_MS) {
+    throw new ValidationError(
+      `${field} está mais de 5 minutos no futuro — confira a data e a hora do aparelho`,
+      { field, received: raw }
+    );
+  }
+  if (instante.getTime() < now.getTime() - DEVICE_CLOCK_MAX_AGE_MS) {
+    throw new ValidationError(
+      `${field} tem mais de 48 horas — um lançamento tão antigo entra como apontamento manual`,
+      { field, received: raw }
+    );
+  }
+  return instante;
 }

@@ -17,6 +17,7 @@
  * Funções puras: o Painel, o relatório e a automação chamam as MESMAS.
  */
 import { REPORT_INDICATORS, findIndicator, type TargetDirection } from './report-tiers';
+import { DEFAULT_ORGANIZATION_TIMEZONE, localDay } from './dia-local';
 
 export const NO_TARGET_LABEL = 'SEM META CONFIGURADA';
 
@@ -52,9 +53,13 @@ export function targetScopeOf(t: Pick<IndicatorTarget, 'customerId' | 'contractI
   return 'organization';
 }
 
-/** Dia de calendário (UTC) de uma data. */
-export function dayOf(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/**
+ * Dia de calendário de uma data NO FUSO DA ORGANIZAÇÃO (padrão
+ * `America/Sao_Paulo`). Era o dia em UTC: em 31/10 às 21h30 de Brasília a meta
+ * escolhida era a de 01/11 (pente-fino 17/10/2026, PF-51).
+ */
+export function dayOf(d: Date, timeZone: string = DEFAULT_ORGANIZATION_TIMEZONE): string {
+  return localDay(d, timeZone);
 }
 
 /** A meta está em vigor no dia? (datas ISO comparam como texto) */

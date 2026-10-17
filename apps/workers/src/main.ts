@@ -40,7 +40,10 @@ export async function main(): Promise<void> {
     new Pool({ connectionString: env.DATABASE_URL, max: env.AURORA_DB_POOL_MAX, ...OPCOES_DE_POOL }),
     (e) => process.stderr.write(JSON.stringify({ nivel: 'error', origem: 'pool', erro: e.message }) + '\n')
   );
-  const db = pgPoolAdapter(pool, 'aurora_app');
+  const db = pgPoolAdapter(pool, 'aurora_app', {
+    consultaMs: env.AURORA_DB_TIMEOUT_MS * 5,
+    ociosaNaTransacaoMs: env.AURORA_DB_TIMEOUT_MS * 5,
+  });
   // Conexão sem papel fixado: cada rotina de plataforma assume o SEU papel.
   const platformDb = pgPoolAdapter(pool, null);
 

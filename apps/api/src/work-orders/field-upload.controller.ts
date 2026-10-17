@@ -25,7 +25,7 @@
  */
 import { Controller, Headers, Inject, Param, Put, Req, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { receiveAttachmentSlice, type Database } from '@aurora/db';
+import { assertCanUploadAttachment, receiveAttachmentSlice, type Database } from '@aurora/db';
 import { runFieldOperation } from '../common/client-operation';
 import { ValidationError } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
@@ -99,16 +99,25 @@ export class FieldUploadController {
      * pela escrita posicional, mas o rastro de quem mandou o quê vale o mesmo
      * aqui que no resto.
      */
+    const attachmentId = uuidParam(id, 'id');
     const r = await runFieldOperation(
       this.db,
       req,
       'PUT /field/attachments/:id/bytes',
       { offset, sha256, final: finalCru === '1' },
-      (s) =>
-        receiveAttachmentSlice(
+      async (s) => {
+        /*
+         * QUEM ENVIA PRECISA PODER EXECUTAR A OS DO ANEXO (PF-84).
+         *
+         * A organização sozinha não basta: um técnico com o id do anexo de
+         * outra OS escreveria nele. Conferido DENTRO da transação, antes da
+         * trava da linha, pela mesma regra de toda ação de execução.
+         */
+        await assertCanUploadAttachment(s, attachmentId);
+        return receiveAttachmentSlice(
           s,
           {
-            attachmentId: uuidParam(id, 'id'),
+            attachmentId,
             offset,
             bytes: new Uint8Array(corpo),
             sha256,
@@ -119,7 +128,8 @@ export class FieldUploadController {
             ler: (chave) => this.arquivos.ler(chave),
             resumo: sha256De,
           }
-        )
+        );
+      }
     );
 
     res.status(r.accepted ? 200 : 409).json({

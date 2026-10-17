@@ -28,6 +28,7 @@
 import type { Colecao } from './armazenamento';
 import type { AdaptadorDeArquivos, AnexoPendente } from './arquivos';
 import type { AdaptadorDeCamera } from './dispositivo';
+import type { Identidade } from './fila';
 
 /**
  * O SHA-256 do conteúdo, calculado no aparelho.
@@ -51,6 +52,11 @@ export interface CapturaDeEvidencia {
   anexos: Colecao<AnexoPendente>;
   novoId(): string;
   agora(): Date;
+  /**
+   * A sessão que está capturando (PF-66). A foto é carimbada com ela, como os
+   * comandos da fila — ver `AnexoPendente.identidade`.
+   */
+  identidade?(): Identidade | null;
   /** Enfileira o comando de registro e devolve o identificador da operação. */
   enfileirar(e: {
     agregado: string;
@@ -102,7 +108,9 @@ export async function guardarEvidencia(
   // 1 · OS BYTES PRIMEIRO. Ver a nota do cabeçalho.
   await e.arquivos.guardar(id, foto.bytes, foto.tipo);
 
-  // 2 · O REGISTRO. A partir daqui a foto existe para a tela.
+  // 2 · O REGISTRO. A partir daqui a foto existe para a tela — carimbada com a
+  // sessão que a capturou, como o comando que a registra (PF-66).
+  const identidade = e.identidade?.() ?? null;
   const anexo: AnexoPendente = {
     id,
     agregado: `work_order:${e.workOrderId}`,
@@ -120,6 +128,7 @@ export async function guardarEvidencia(
     idNoServidor: null,
     referenciaLocal: id,
     criadoEm: e.agora().toISOString(),
+    ...(identidade ? { identidade } : {}),
   };
   await e.anexos.gravar(id, anexo);
 

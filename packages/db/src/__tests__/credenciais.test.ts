@@ -188,6 +188,42 @@ describe('bloqueio por tentativas', () => {
     expect('token' in r).toBe(true);
   });
 
+  it('o teto de 15 minutos é alcançável pelo login real (0077)', async () => {
+    const id = newId();
+    await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
+      id,
+      'teto@hospital.test',
+      'Pessoa no Teto',
+    ]);
+    await definirSenha(t.admin, { userId: id, senha: SENHA });
+    const vencerBloqueio = () =>
+      t.raw(
+        `UPDATE aurora.user_credentials SET locked_until = now() - interval '1 second' WHERE user_id = $1`,
+        [id]
+      );
+    const errar = () => abrirSessaoPorSenha(t.db, { email: 'teto@hospital.test', senha: 'errada demais 1' });
+
+    // 5 erros: 1 minuto. Antes da 0077, vencido esse minuto a contagem
+    // recomeçava e o teto nunca chegava.
+    for (let i = 0; i < 5; i++) await errar();
+    for (let i = 0; i < 5; i++) {
+      await vencerBloqueio();
+      await errar();
+    }
+    const [linha] = await t.raw(
+      `SELECT failed_attempts, locked_until - now() > interval '10 minutes' AS longo
+         FROM aurora.user_credentials WHERE user_id = $1`,
+      [id]
+    );
+    expect(linha).toMatchObject({ failed_attempts: 10, longo: true });
+
+    // Vencido o teto, recomeça: a pessoa certa entra (sem bloqueio perpétuo).
+    await vencerBloqueio();
+    await errar();
+    const r = await abrirSessaoPorSenha(t.db, { email: 'teto@hospital.test', senha: SENHA });
+    expect('token' in r).toBe(true);
+  });
+
   it('o acerto zera o contador', async () => {
     const id = newId();
     await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [

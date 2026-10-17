@@ -155,6 +155,11 @@ beforeAll(async () => {
       await assignRole(s, memOp, base.roles.get('operator')!);
       await assignRole(s, memBloco, base.roles.get('operator')!);
       await assignRole(s, memSol, base.roles.get('requester')!);
+      // PF-14: o Operador executa só a OS atribuída a ele — as desta suíte são dele.
+      await s.query(`UPDATE aurora.work_orders SET assignee_membership_id = $1 WHERE id = ANY($2::uuid[])`, [
+        memOp,
+        [os1, os2],
+      ]);
     }
   );
   await withTenant(

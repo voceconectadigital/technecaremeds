@@ -44,4 +44,5 @@ export { lerSessaoGuardada, CHAVE_TOKEN, CHAVE_ORG } from './session-guard';
 export { ThemeProvider, useTheme, ESTILOS, ESTILO_PADRAO, modoDoEstilo } from './theme';
 export type { Theme, Estilo } from './theme';
 export { useUrlState } from './url-state';
+export { diaLocal, hojeLocal, somarDias, diaLocalDaqui, inicioDoDiaLocal, fimDoDiaLocal } from './data-local';
 export { MARCA } from './marca.gerada';

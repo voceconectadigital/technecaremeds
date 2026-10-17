@@ -146,11 +146,19 @@ export async function workOrderSeries(
   filters: MetricFilters
 ): Promise<SeriesPoint[]> {
   const passo = granularity === 'day' ? '1 day' : granularity === 'week' ? '7 days' : '1 month';
-  const p = [filters.customerId ?? null, filters.locationPath ?? null, ...scopeParams(filters)];
+  // Categoria do equipamento: o filtro chegava e era ignorado aqui (pente-fino
+  // 17/10/2026, PF-53) — o cartão filtrava, o gráfico ao lado não.
+  const p = [
+    filters.customerId ?? null,
+    filters.locationPath ?? null,
+    ...scopeParams(filters),
+    filters.assetCategoryId ?? null,
+  ];
   const filtro = `
       AND ($4::uuid IS NULL OR f.customer_id = $4)
       AND ($5::text IS NULL OR f.location_path LIKE $5 || '%')
-      AND ${scopeSql('f.customer_id', 'f.location_path', 6)}`;
+      AND ${scopeSql('f.customer_id', 'f.location_path', 6)}
+      AND ($8::uuid IS NULL OR f.asset_category_id = $8)`;
   const rows = await session.query<{
     inicio: Date;
     fim: Date;
@@ -220,8 +228,14 @@ export async function openWorkOrdersSnapshot(
         AND ($1::uuid IS NULL OR f.customer_id = $1)
         AND ($2::text IS NULL OR f.location_path LIKE $2 || '%')
         AND ${scopeSql('f.customer_id', 'f.location_path', 3)}
+        AND ($5::uuid IS NULL OR f.asset_category_id = $5)
       GROUP BY 1, 2`,
-    [filters.customerId ?? null, filters.locationPath ?? null, ...scopeParams(filters)]
+    [
+      filters.customerId ?? null,
+      filters.locationPath ?? null,
+      ...scopeParams(filters),
+      filters.assetCategoryId ?? null,
+    ]
   );
   const byStatus: Record<string, number> = {};
   const byPriority: Record<string, number> = {};
@@ -248,11 +262,17 @@ export interface ParkSnapshot {
  * cliente não deu. O painel diz isso ao lado do gráfico.
  */
 export async function parkSnapshot(session: TenantSession, filters: MetricFilters): Promise<ParkSnapshot> {
-  const base = [filters.customerId ?? null, filters.locationPath ?? null, ...scopeParams(filters)];
+  const base = [
+    filters.customerId ?? null,
+    filters.locationPath ?? null,
+    ...scopeParams(filters),
+    filters.assetCategoryId ?? null,
+  ];
   const filtro = `a.deleted_at IS NULL
         AND ($1::uuid IS NULL OR a.customer_id = $1)
         AND ($2::text IS NULL OR a.location_path LIKE $2 || '%')
-        AND ${scopeSql('a.customer_id', 'a.location_path', 3)}`;
+        AND ${scopeSql('a.customer_id', 'a.location_path', 3)}
+        AND ($5::uuid IS NULL OR a.asset_category_id = $5)`;
   const porStatus = await session.query<{ status: string; total: string }>(
     `SELECT a.status::text AS status, count(*)::text AS total
        FROM aurora.assets a WHERE ${filtro} GROUP BY 1`,

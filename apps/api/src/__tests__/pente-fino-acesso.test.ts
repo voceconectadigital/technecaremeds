@@ -33,6 +33,7 @@ import {
   createWorkOrder,
   createDocument,
   createContract,
+  emitEvent,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
 import { createApp } from '../bootstrap';
@@ -50,6 +51,8 @@ const ids = { organizationId: ORG, userId: newId(), membershipId: newId() };
 const memGestor = newId();
 const memGestorSetor = newId();
 const memOperador = newId();
+const memCoordenador = newId();
+const COORDENADOR = 'coordenador@pente-fino.test';
 const memAlvo = newId();
 
 let t: TestDatabase;
@@ -59,7 +62,7 @@ let http: ReturnType<typeof request>;
 let hospital: string, outroHospital: string, uti: string;
 let ativoUti: string, ativoOutro: string;
 let osUti: string, osOutro: string;
-let docA: string, docB: string, docInterno: string;
+let docA: string, docB: string, docInterno: string, docDerivado: string, tipoDocumento: string;
 let ctA: string, ctB: string;
 const papeis = new Map<string, string>();
 
@@ -148,6 +151,13 @@ beforeAll(async () => {
       customerId: outroHospital,
     });
     docInterno = await createDocument(s, { documentTypeId: tipo, title: 'Laudo Interno' });
+    // Sem cliente informado: vem do equipamento.
+    docDerivado = await createDocument(s, {
+      documentTypeId: tipo,
+      title: 'Laudo Derivado',
+      assetId: ativoUti,
+    });
+    tipoDocumento = tipo;
     ctA = await createContract(s, { customerId: hospital, kind: 'full_service', startsOn: '2026-01-01' });
     ctB = await createContract(s, {
       customerId: outroHospital,
@@ -170,11 +180,20 @@ beforeAll(async () => {
   await membro(memGestorSetor, GESTOR_SETOR, { customerIds: [hospital], locationIds: [uti] });
   await membro(memOperador, OPERADOR, { customerIds: [hospital], locationIds: [uti] });
   await membro(memAlvo, ALVO, { customerIds: [hospital], locationIds: [uti] });
+  await membro(memCoordenador, COORDENADOR, {});
   await withTenant(t.db, sys, async (s) => {
     await assignRole(s, memGestor, papeis.get('manager')!);
     await assignRole(s, memGestorSetor, papeis.get('manager')!);
     await assignRole(s, memOperador, papeis.get('operator')!);
     await assignRole(s, memAlvo, papeis.get('requester')!);
+    await assignRole(s, memCoordenador, papeis.get('coordinator')!);
+    // Fechamento de período: o evento carrega excedente e multa em reais.
+    await emitEvent(s, {
+      type: 'contract.period_closed',
+      aggregateType: 'contract',
+      aggregateId: ctA,
+      payload: { period: '2026-09', overageAmount: '1234.56', penaltyAmount: '78.90' },
+    });
   });
 
   const env = loadEnv({
@@ -248,6 +267,14 @@ describe('P0 — escalada de papel pelo GESTOR', () => {
       .set(auth(GESTOR))
       .send({ role_ids: [papeis.get('requester')] });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
+  });
+
+  it('ninguém altera os próprios papéis', async () => {
+    const r = await http
+      .put(`/v1/memberships/${memGestor}/roles`)
+      .set(auth(GESTOR))
+      .send({ role_ids: [papeis.get('manager'), papeis.get('maintenance_manager')] });
+    expect(r.status).toBe(403);
   });
 
   it('nem tirar o papel de Administrador de quem o tem', async () => {
@@ -344,7 +371,7 @@ describe('P1 — escopo nas rotas de equipe', () => {
   it('documentos: a lista e o detalhe só do escopo; PDF e por-ativo também', async () => {
     const lista = await http.get('/v1/documents').set(auth(OPERADOR));
     expect(lista.status).toBe(200);
-    expect(lista.body.items.map((d: { id: string }) => d.id)).toEqual([docA]);
+    expect(lista.body.items.map((d: { id: string }) => d.id).sort()).toEqual([docA, docDerivado].sort());
     expect((await http.get(`/v1/documents/${docA}`).set(auth(OPERADOR))).status).toBe(200);
     expect((await http.get(`/v1/documents/${docB}`).set(auth(OPERADOR))).status).toBe(404);
     expect((await http.get(`/v1/documents/${docB}/pdf`).set(auth(OPERADOR))).status).toBe(404);
@@ -353,7 +380,7 @@ describe('P1 — escopo nas rotas de equipe', () => {
     expect(porAtivo.body.items).toEqual([]);
 
     const tudo = await http.get('/v1/documents').set(auth(ADMIN));
-    expect(tudo.body.items).toHaveLength(3);
+    expect(tudo.body.items).toHaveLength(4);
   });
 
   it('contratos: lista, detalhe e ativos só do cliente do escopo', async () => {
@@ -382,13 +409,42 @@ describe('P1 — escopo nas rotas de equipe', () => {
     expect(campos(op.body)).not.toContain('purchase_value');
   });
 
+  it('linha do tempo não mostra excedente e multa do contrato a quem não lê o financeiro', async () => {
+    type Item = { payload: Record<string, unknown> | null };
+    const chaves = (body: { items: Item[] }) => body.items.flatMap((i) => Object.keys(i.payload ?? {}));
+    const admin = await http.get(`/v1/audit/timeline/contracts/${ctA}`).set(auth(ADMIN));
+    expect(chaves(admin.body)).toContain('penaltyAmount');
+    const coord = await http.get(`/v1/audit/timeline/contracts/${ctA}`).set(auth(COORDENADOR));
+    expect(coord.status, JSON.stringify(coord.body)).toBe(200);
+    expect(chaves(coord.body)).toContain('period');
+    expect(chaves(coord.body)).not.toContain('penaltyAmount');
+    expect(chaves(coord.body)).not.toContain('overageAmount');
+  });
+
+  it('documento sem cliente informado herda o do equipamento; divergente é recusado', async () => {
+    const lista = await http.get('/v1/documents').set(auth(OPERADOR));
+    expect(lista.status).toBe(200);
+    expect(lista.body.items.map((d: { id: string }) => d.id)).toContain(docDerivado);
+    const ctx = buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'doc-divergente' });
+    await expect(
+      withTenant(t.db, ctx, (s) =>
+        createDocument(s, {
+          documentTypeId: tipoDocumento,
+          title: 'Laudo trocado',
+          assetId: ativoUti,
+          customerId: outroHospital,
+        })
+      )
+    ).rejects.toThrow('não é o cliente da OS/equipamento');
+  });
+
   it('busca: documento de outro cliente não aparece', async () => {
     const r = await http.get('/v1/search?q=laudo').set(auth(OPERADOR));
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const docs = r.body.hits
       .filter((h: { scope: string }) => h.scope === 'document')
       .map((h: { id: string }) => h.id);
-    expect(docs).toEqual([docA]);
+    expect([...docs].sort()).toEqual([docA, docDerivado].sort());
   });
 
   it('local novo com cliente fora do escopo → 404', async () => {

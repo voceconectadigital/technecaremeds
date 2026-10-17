@@ -35,6 +35,7 @@ import {
   openWorkOrdersSnapshot,
   parkSnapshot,
   planBoard,
+  panelTargets,
   type MetricFilters,
   type MembershipScope,
   type TenantSession,
@@ -325,6 +326,9 @@ export class InsightsController {
         })(),
         open_now: await openWorkOrdersSnapshot(s, f),
         park: await parkSnapshot(s, f),
+        // As metas configuradas que valem neste recorte: a cor do Painel é a da
+        // meta, e não um limiar fixo (pente-fino 17/10/2026, PF-55).
+        targets: await panelTargets(s, escopo, { customerId: q.customerId ?? null, to: p.to }),
       };
     });
   }

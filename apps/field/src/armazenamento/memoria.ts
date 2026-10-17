@@ -13,7 +13,7 @@
  * adaptador de SQLite faz. Sem isso, a suíte passaria guardando uma `Date` e o
  * aparelho devolveria texto.
  */
-import { copiaJson, type ArmazenamentoOffline, type Colecao } from './porta';
+import { COLECOES, copiaJson, type ArmazenamentoOffline, type Colecao } from './porta';
 
 export function armazenamentoEmMemoria(): ArmazenamentoOffline {
   const dados = new Map<string, Map<string, unknown>>();
@@ -21,6 +21,12 @@ export function armazenamentoEmMemoria(): ArmazenamentoOffline {
   return {
     nome: 'memoria',
     colecao<T>(nome: string): Colecao<T> {
+      // A MESMA recusa do IndexedDB para coleção fora da lista (17/10/2026). Sem
+      // ela, a suíte aceitou `cronometros` antes de a coleção existir, e só o E2E
+      // no navegador real acusou — "object store not found".
+      if (!(COLECOES as readonly string[]).includes(nome)) {
+        throw new Error(`coleção desconhecida: ${nome} (acrescente em COLECOES e suba VERSAO no IndexedDB)`);
+      }
       if (!dados.has(nome)) dados.set(nome, new Map());
       const m = dados.get(nome)!;
       return {

@@ -19,6 +19,12 @@ export interface PontoDeVisita {
   accuracyM?: number | null;
   /** Obrigatória (10+ letras) quando não há posição: recusada, indisponível… */
   justification?: string | null;
+  /**
+   * Quando aconteceu, pelo relógio do APARELHO, já validado (`deviceInstant`,
+   * PF-65). Ausente → a hora do servidor, como sempre foi. É o que faz o
+   * check-in feito no subsolo às 9h e enviado às 11h valer 9h.
+   */
+  occurredAt?: Date | null;
 }
 
 const ENCERRADAS = new Set(['done', 'closed', 'cancelled']);
@@ -79,9 +85,16 @@ async function ultimaVisita(
   session: TenantSession,
   workOrderId: string,
   membershipId: string
-): Promise<{ id: string; kind: string; time_entry_id: string | null } | undefined> {
-  const [v] = await session.query<{ id: string; kind: string; time_entry_id: string | null }>(
-    `SELECT id, kind, time_entry_id FROM aurora.work_order_visits
+): Promise<
+  { id: string; kind: string; time_entry_id: string | null; occurred_at: Date | string } | undefined
+> {
+  const [v] = await session.query<{
+    id: string;
+    kind: string;
+    time_entry_id: string | null;
+    occurred_at: Date | string;
+  }>(
+    `SELECT id, kind, time_entry_id, occurred_at FROM aurora.work_order_visits
       WHERE work_order_id = $1 AND membership_id = $2
       ORDER BY occurred_at DESC, created_at DESC LIMIT 1`,
     [workOrderId, membershipId]
@@ -113,13 +126,21 @@ export async function checkIn(
     throw new ConflictError('você já fez check-in nesta OS — faça o check-out antes de um novo check-in');
   }
   const p = posicao(ponto);
-  const timeEntryId = await startTimer(session, workOrderId);
+  // A hora do aparelho não pode pôr esta chegada antes da saída anterior: a
+  // linha do tempo das visitas é o que a auditoria lê, e ela precisa fechar.
+  if (ultima && ponto.occurredAt && ponto.occurredAt.getTime() < new Date(ultima.occurred_at).getTime()) {
+    throw new ValidationError('o check-in não pode ser antes do último check-out desta OS', {
+      field: 'occurred_at',
+    });
+  }
+  const timeEntryId = await startTimer(session, workOrderId, { startedAt: ponto.occurredAt ?? null });
   const id = newId();
   const [r] = await session.query<{ occurred_at: string }>(
     `INSERT INTO aurora.work_order_visits
        (id, organization_id, work_order_id, membership_id, kind, latitude, longitude, accuracy_m,
-        position_source, justification, customer_id, location_id, time_entry_id)
-     VALUES ($1, $2, $3, $4, 'check_in', $5, $6, $7, $8, $9, $10, $11, $12)
+        position_source, justification, customer_id, location_id, time_entry_id, occurred_at)
+     VALUES ($1, $2, $3, $4, 'check_in', $5, $6, $7, $8, $9, $10, $11, $12,
+             COALESCE($13::timestamptz, now()))
      RETURNING occurred_at::text`,
     [
       id,
@@ -134,6 +155,7 @@ export async function checkIn(
       os.customer_id,
       os.location_id,
       timeEntryId,
+      ponto.occurredAt?.toISOString() ?? null,
     ]
   );
   await emitEvent(session, {
@@ -159,20 +181,26 @@ export async function checkOut(
     throw new ConflictError('não há check-in aberto seu nesta OS');
   }
   const p = posicao(ponto);
+  if (ponto.occurredAt && ponto.occurredAt.getTime() < new Date(ultima.occurred_at).getTime()) {
+    throw new ValidationError('o check-out não pode ser antes do check-in', { field: 'occurred_at' });
+  }
   let minutes: number | null = null;
   if (ultima.time_entry_id) {
     const [aberto] = await session.query(
       `SELECT 1 FROM aurora.time_entries WHERE id = $1 AND ended_at IS NULL`,
       [ultima.time_entry_id]
     );
-    if (aberto) minutes = await stopTimer(session, ultima.time_entry_id, 'check-out');
+    if (aberto) {
+      minutes = await stopTimer(session, ultima.time_entry_id, 'check-out', ponto.occurredAt ?? null);
+    }
   }
   const id = newId();
   const [r] = await session.query<{ occurred_at: string }>(
     `INSERT INTO aurora.work_order_visits
        (id, organization_id, work_order_id, membership_id, kind, latitude, longitude, accuracy_m,
-        position_source, justification, customer_id, location_id, time_entry_id)
-     VALUES ($1, $2, $3, $4, 'check_out', $5, $6, $7, $8, $9, $10, $11, $12)
+        position_source, justification, customer_id, location_id, time_entry_id, occurred_at)
+     VALUES ($1, $2, $3, $4, 'check_out', $5, $6, $7, $8, $9, $10, $11, $12,
+             COALESCE($13::timestamptz, now()))
      RETURNING occurred_at::text`,
     [
       id,
@@ -187,6 +215,7 @@ export async function checkOut(
       os.customer_id,
       os.location_id,
       ultima.time_entry_id,
+      ponto.occurredAt?.toISOString() ?? null,
     ]
   );
   await emitEvent(session, {

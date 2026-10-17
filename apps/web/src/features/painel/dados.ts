@@ -11,8 +11,9 @@
  * a tela diz que falhou.
  */
 import { useMemo } from 'react';
-import { insightControlPanel, type ControlPanel } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import { insightControlPanel, type ControlPanel, type PanelTarget } from '@aurora/contracts';
+import { fimDoDiaLocal, hojeLocal, inicioDoDiaLocal, useApiQuery, useUrlState } from '@aurora/app-kit';
+import type { Tone } from '@aurora/ui';
 import { intervaloDe, type Periodo } from './rotulos';
 
 /** O maior período que a API de indicadores aceita. */
@@ -85,7 +86,14 @@ export function intervaloDoPainel(
   if (f.ate < f.de) return { problema: 'A data final vem antes da inicial.' };
   const dias = (Date.parse(`${f.ate}T00:00:00Z`) - Date.parse(`${f.de}T00:00:00Z`)) / 86_400_000 + 1;
   if (dias > MAX_DIAS) return { problema: `O período personalizado vai até ${MAX_DIAS} dias.` };
-  return { from: `${f.de}T00:00:00.000Z`, to: `${f.ate}T23:59:59.999Z`, problema: null };
+  // Meia-noite e fim do dia LOCAIS (PF-51/PF-72): em UTC, o dia 17 começava às
+  // 21 h do dia 16 em Brasília.
+  const de = inicioDoDiaLocal(f.de);
+  const ate = fimDoDiaLocal(f.ate);
+  if (Number.isNaN(de.getTime()) || Number.isNaN(ate.getTime())) {
+    return { problema: 'Escolha a data inicial e a final do período.' };
+  }
+  return { from: de.toISOString(), to: ate.toISOString(), problema: null };
 }
 
 /** Atualização periódica: a televisão do corredor não tem quem aperte F5. */
@@ -93,7 +101,7 @@ export function usePainel(f: Recorte, opts: { refetchMs?: number } = {}) {
   // O intervalo muda uma vez por DIA (pela chave), não a cada render nem a
   // cada atualização: senão a chave da consulta mudaria sem parar e a TV
   // piscaria o esqueleto a cada minuto.
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   const { periodo, de, ate } = f;
   const intervalo = useMemo(() => intervaloDoPainel({ periodo, de, ate }), [periodo, de, ate, hoje]);
   const consulta = useApiQuery(
@@ -152,4 +160,34 @@ export function disponibilidadeAgora(byStatus: Record<string, number>) {
     base,
     taxa: base > 0 ? Number(((disponiveis / base) * 100).toFixed(1)) : null,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* metas (pente-fino 17/10/2026, PF-55)                                        */
+/* -------------------------------------------------------------------------- */
+
+/** A meta configurada que vale no recorte, por código de indicador do catálogo. */
+export function metaDoPainel(d: ControlPanel, indicador: string): PanelTarget | null {
+  return d.targets?.items[indicador] ?? null;
+}
+
+/**
+ * A cor de um número contra a META configurada, no sentido dela (≥ ou ≤).
+ *
+ * Antes eram limiares fixos (SLA 90/75, disponibilidade 95/85) que ninguém
+ * configurou. Sem meta — ou sem número — a cor é neutra: pintar de verde ou
+ * vermelho sem régua seria inventar a régua. Igualdade cumpre a meta, como no
+ * relatório (`evaluateTarget`).
+ */
+export function tomPelaMeta(valor: number | null | undefined, meta: PanelTarget | null): Tone {
+  if (valor === null || valor === undefined || !meta) return 'neutral';
+  const cumpriu = meta.direction === 'HIGHER_IS_BETTER' ? valor >= meta.value : valor <= meta.value;
+  return cumpriu ? 'good' : 'bad';
+}
+
+/** "Meta ≥ 95 %" / "sem meta" — o texto curto que acompanha a cor. */
+export function textoDaMeta(meta: PanelTarget | null, sufixo = ' %'): string {
+  if (!meta) return 'sem meta';
+  const sinal = meta.direction === 'HIGHER_IS_BETTER' ? '≥' : '≤';
+  return `meta ${sinal} ${meta.value.toLocaleString('pt-BR')}${sufixo}`;
 }

@@ -251,7 +251,8 @@ Auditoria completa do sistema — achados, correções e evidência em `docs/AUD
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | PF | Pente-fino: RBAC/escopo, auth, RLS/migrations, OS/solicitação/execução, estoque/orçamento, indicadores, campo offline, infra | — | VALIDADO | ver relatório (PF-01…PF-85) | 0070–0073 (locais) | `pente-fino-*`, `migrations-upgrade`, `pool-resiliente`, `caminho-publico` + suítes existentes | PR do pente-fino | decisões de regra listadas no relatório §9 |
 | NS-022 | Página pública `/apresentacao` para cliente/investidor | NOVO | IMPLEMENTADO | `apps/web/src/features/apresentacao/*` | — | `apresentacao.test`, `apresentacao.spec` | PR do pente-fino | |
-| I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | migrations **0060–0073** não aplicadas em banco remoto; sem deploy de backend (decisão de 16/10 mantida) |
+| PF2 | Rodada de pendências do pente-fino (24 itens + revisão adversarial da PR #27) | — | VALIDADO | ver `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md` | 0074–0077 (locais) | `pente-fino-campo`, `pente-fino-estoque2`, `pente-fino-orcamento2`, `pente-fino-indicadores` + suítes existentes | PR da rodada | P-01…P-16 seguem com o Anderson |
+| I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | migrations **0060–0077** não aplicadas em banco remoto; sem deploy de backend (decisão de 16/10 mantida) |
 
 ---
 

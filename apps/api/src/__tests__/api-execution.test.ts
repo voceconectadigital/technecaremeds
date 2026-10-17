@@ -143,6 +143,8 @@ async function osEmExecucao(title: string) {
     location_id: setor,
     asset_id: ativo,
     title,
+    // PF-14: o técnico executa só a OS atribuída a ele.
+    assignee_membership_id: TEC_MEM,
   });
   await http
     .post(`/v1/work-orders/${criada.body.id}/transitions`)

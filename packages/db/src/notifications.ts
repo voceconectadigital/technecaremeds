@@ -351,6 +351,107 @@ async function deliverTo(
 }
 
 /* -------------------------------------------------------------------------- */
+/* avisos das automações                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O tipo de um aviso de automação (relatório agendado, lembrete, tarefa).
+ *
+ * Esses avisos não nascem de evento de domínio — a automação já sabe quem
+ * recebe —, mas o e-mail deles obedece às MESMAS regras dos outros: canal
+ * desligado, e-mail não verificado ou bloqueado, resumo e silêncio.
+ */
+function tipoDeAutomacao(typeKey: string): NotificationTypeDefinition {
+  // O catálogo tem os três tipos de automação; o objeto abaixo só cobre um tipo
+  // de automação novo que ainda não tenha entrado lá.
+  const doCatalogo = notificationType(typeKey);
+  if (doCatalogo) return doCatalogo;
+  return {
+    key: typeKey,
+    label: 'Automação',
+    event: 'automation.schedule',
+    audiences: [],
+    channels: ['in_app', 'email'],
+    phase: 'F2',
+    dedupeMinutes: 0,
+    bypassesQuietHours: false,
+  };
+}
+
+export interface AutomationDelivery {
+  channel: NotificationChannel;
+  state: 'pending' | 'sent' | 'suppressed' | 'digested';
+  reason: string;
+}
+
+/**
+ * Grava as entregas de um aviso de automação já inserido em `notifications`.
+ *
+ * A caixa de entrada recebe SEMPRE (é o registro de que a automação rodou).
+ * O e-mail passa por `decideDelivery` — antes ia direto para a fila e
+ * ignorava descadastro e e-mail bloqueado (pente-fino 17/10/2026, PF-56). O
+ * e-mail que pode sair fica `pending` com `pendingReason` (não há transporte);
+ * o que não pode fica `suppressed`/`digested` com o motivo.
+ */
+export async function deliverAutomationNotice(
+  session: TenantSession,
+  notificationId: string,
+  membershipId: string,
+  typeKey: string,
+  opts: { email: boolean; pendingReason: string; now?: Date }
+): Promise<AutomationDelivery[]> {
+  const entregas: AutomationDelivery[] = [];
+  await session.query(
+    `INSERT INTO aurora.notification_deliveries (id, organization_id, notification_id, channel, state, sent_at)
+     VALUES ($1, $2, $3, 'in_app', 'sent', now())`,
+    [newId(), session.context.organizationId, notificationId]
+  );
+  entregas.push({ channel: 'in_app', state: 'sent', reason: 'delivered' });
+  if (!opts.email) return entregas;
+
+  const destinatario = await loadRecipient(session, membershipId, typeKey);
+  let estado: AutomationDelivery['state'];
+  let motivo: string;
+  let resumo: DigestMode | null = null;
+  if (!destinatario) {
+    // Vínculo inativo: quem chama já filtra, mas a entrega não pode "ficar na fila".
+    estado = 'suppressed';
+    motivo = 'recipient_inactive';
+  } else {
+    const relogio = localClock(opts.now ?? new Date(), destinatario.timezone);
+    const decisao = decideDelivery({
+      type: tipoDeAutomacao(typeKey),
+      channel: 'email',
+      preference: destinatario.preferences.get('email') ?? null,
+      quiet: destinatario.quiet,
+      minuteOfDay: relogio.minuteOfDay,
+      weekday: relogio.weekday,
+      emailVerified: destinatario.emailVerified,
+      duplicateWithinWindow: false,
+    });
+    if (decisao.deliver) {
+      estado = 'pending';
+      motivo = opts.pendingReason;
+    } else {
+      estado =
+        decisao.reason === 'unverified_email' || decisao.reason === 'channel_disabled'
+          ? 'suppressed'
+          : 'digested';
+      motivo = decisao.reason;
+      resumo = decisao.digest ?? null;
+    }
+  }
+  await session.query(
+    `INSERT INTO aurora.notification_deliveries
+       (id, organization_id, notification_id, channel, state, reason, digest)
+     VALUES ($1, $2, $3, 'email', $4::aurora.delivery_state, $5, $6::aurora.digest_mode)`,
+    [newId(), session.context.organizationId, notificationId, estado, motivo, resumo]
+  );
+  entregas.push({ channel: 'email', state: estado, reason: motivo });
+  return entregas;
+}
+
+/* -------------------------------------------------------------------------- */
 /* caixa de entrada                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -538,6 +639,10 @@ export async function pendingDeliveries(
        JOIN aurora.memberships m ON m.id = n.membership_id
        JOIN aurora.users u ON u.id = m.user_id
       WHERE d.state = 'pending' AND d.channel = $1::aurora.notification_channel
+        -- Quem perdeu o acesso, ou teve o e-mail bloqueado DEPOIS de a entrega
+        -- entrar na fila, não recebe (pente-fino 17/10/2026, PF-56).
+        AND m.status = 'active'
+        AND (d.channel <> 'email' OR u.email_blocked_at IS NULL)
       ORDER BY d.created_at
       LIMIT ${n}`,
     [channel]

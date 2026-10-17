@@ -190,6 +190,7 @@ export function CampoProvider({
     falhados: 0,
     bytesPendentes: 0,
     progresso: null,
+    deOutraSessao: 0,
   });
   const [ultimaSincronizacao, setUltima] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
@@ -316,7 +317,7 @@ export function CampoProvider({
     if (!fila || !sincronizacao) return;
     setEstado(await fila.estado());
     setUltima(await sincronizacao.ultimaMarca());
-    if (anexos) setAnexosEstado(await estadoDosAnexos(anexos));
+    if (anexos) setAnexosEstado(await estadoDosAnexos(anexos, identidadeAtual()));
   }, [fila, sincronizacao, anexos]);
 
   useEffect(() => {
@@ -378,6 +379,8 @@ export function CampoProvider({
       if (anexos && arquivos && !r.semRede) {
         await enviarAnexosPendentes(anexos, arquivos, {
           agora: () => new Date(),
+          // Só sobem as fotos desta sessão (PF-66). Ver `AnexoPendente.identidade`.
+          identidade: identidadeAtual,
           async enviarFatia({ anexo, offset, pedaco, ultima }) {
             /*
              * O IDENTIFICADOR DO SERVIDOR, e não o local.
@@ -524,6 +527,7 @@ export function CampoProvider({
         anexos,
         novoId,
         agora: () => new Date(),
+        identidade: identidadeAtual,
         enfileirar: (e) => fila.enfileirar(e),
       });
       await atualizarEstado();
@@ -543,6 +547,7 @@ export function CampoProvider({
         anexos,
         novoId,
         agora: () => new Date(),
+        identidade: identidadeAtual,
         bytes,
         tipo,
         enfileirar: (e) => fila.enfileirar(e),

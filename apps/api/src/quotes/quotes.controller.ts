@@ -14,7 +14,9 @@
 import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
+  withClientOperation,
   createQuote,
+  createQuoteWithItems,
   addQuoteItem,
   removeQuoteItem,
   setQuoteDiscount,
@@ -33,6 +35,7 @@ import {
   ValidationError,
   ForbiddenError,
   NotFoundError,
+  ConflictError,
   canTransitionQuote,
   allowedQuoteTransitions,
   QUOTE_STATUSES,
@@ -43,7 +46,9 @@ import {
   type QuoteNature,
   type QuoteItemKind,
 } from '@aurora/domain';
+import { quotesCreateFromWorkOrder } from '@aurora/contracts';
 import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permissions.guard';
+import { parseWith } from '../common/contract-validation';
 import { DATABASE } from '../common/tokens';
 import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -426,4 +431,106 @@ export class QuotesController {
   }
 
   /** O preço que a cascata daria, para a tela mostrar antes de a linha existir. */
+}
+
+/** Validação de borda de UMA linha, com o número dela na mensagem ("linha 3: …"). */
+function naLinha<T>(indice: number, f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    if (e instanceof ValidationError) {
+      throw new ValidationError(`linha ${indice + 1}: ${e.message}`, { ...e.details, line: indice + 1 });
+    }
+    throw e;
+  }
+}
+
+/**
+ * "Gerar orçamento" a partir da OS (PF-71).
+ *
+ * A tela fazia uma chamada para o cabeçalho e uma por linha: uma linha recusada
+ * no meio deixava um orçamento pela metade, e "Gerar" de novo criava outro.
+ * Aqui é UMA rota, UMA transação: cabeçalho e linhas nascem juntos ou não
+ * nascem.
+ *
+ * Debaixo de `/work-orders/:id`, de propósito: a regra `work-orders/<uuid>` do
+ * `ScopeGuard` recorta pelo cliente e pelo local da OS sem código novo, e o
+ * cliente do orçamento é SEMPRE o da OS — não vem no corpo.
+ *
+ * REENVIO. A tela gera `clientRequestId` antes da primeira tentativa e o
+ * repete na retentativa. É a mesma garantia de "no máximo uma vez" das
+ * operações de campo (`withClientOperation`): a reserva do identificador mora
+ * na transação do trabalho, então falha não deixa marca (a retentativa corrige
+ * e tenta de novo) e sucesso devolve o MESMO orçamento a quem reenviar. O
+ * conflito NÃO é gravado como pendência de campo (`runFieldOperation`): isto
+ * é tela de escritório, e a tela "Precisa da sua atenção" é do técnico.
+ */
+@Controller('work-orders')
+export class WorkOrderQuotesController {
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
+
+  @Post(':id/quotes')
+  @RequirePermissions('quote.create', 'quote.update')
+  async createFromWorkOrder(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ id: string }> {
+    const ctx = req.auroraContext!;
+    const woId = uuidParam(id, 'id');
+    const b = parseWith(quotesCreateFromWorkOrder.body, body);
+
+    // Mesmas regras de borda de `POST /quotes/:id/items`, linha a linha, ANTES
+    // de abrir a transação.
+    const linhas = b.items.map((l, i) =>
+      naLinha(i, () => ({
+        kind: l.kind,
+        itemId: l.itemId ?? null,
+        description: l.description,
+        quantity: quantidadeDaLinha(l.quantity),
+        unitPriceCents: l.unitPrice == null ? undefined : money(l.unitPrice, 'unitPrice'),
+        unit: l.unit,
+      }))
+    );
+
+    const r = await withClientOperation(
+      this.db,
+      ctx,
+      {
+        id: b.clientRequestId.toLowerCase(),
+        route: 'POST /work-orders/:id/quotes',
+        body: { work_order_id: woId, ...b },
+      },
+      async (s) => {
+        const [os] = await s.query<{ customer_id: string }>(
+          `SELECT customer_id FROM aurora.work_orders WHERE id = $1`,
+          [woId]
+        );
+        if (!os) throw new NotFoundError('ordem de serviço', woId);
+        const quoteId = await createQuoteWithItems(s, {
+          customerId: os.customer_id,
+          workOrderId: woId,
+          nature: b.nature,
+          validUntil: b.validUntil ?? null,
+          approverContactId: b.approverContactId ?? null,
+          paymentTerms: b.paymentTerms ?? null,
+          customerNotes: b.customerNotes ?? null,
+          internalNotes: b.internalNotes ?? null,
+          items: linhas,
+        });
+        return { id: quoteId };
+      }
+    );
+
+    if (!r.replayed) return r.value;
+    // O identificador já foi usado por uma operação RECUSADA (só a fila de
+    // campo grava recusa): devolver aquilo como sucesso mentiria.
+    if (r.status >= 400) {
+      throw new ConflictError('Este pedido já foi recusado antes; gere o orçamento de novo.', {
+        client_operation_id: b.clientRequestId,
+        replayed: true,
+      });
+    }
+    return r.body as { id: string };
+  }
 }

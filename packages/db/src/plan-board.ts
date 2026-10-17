@@ -248,6 +248,11 @@ export interface PlanBoardFilters {
   sectorId?: string | null;
   /** Tipo (preventiva, calibração, TSE, qualificação) — combinável com cliente e setor. */
   kind?: string | null;
+  /**
+   * Categoria do equipamento. O relatório e o Painel recebiam o filtro e o
+   * quadro o ignorava (pente-fino 17/10/2026, PF-53).
+   */
+  assetCategoryId?: string | null;
 }
 
 interface ItemRow {
@@ -325,9 +330,19 @@ async function realItems(
         AND ($4::text IS NULL OR a.location_path LIKE $4 || '%')
         AND ${scopeSql('a.customer_id', 'a.location_path', 5)}
         AND ($7::text IS NULL OR ${TIPO_DA_TAREFA_SQL} = $7)
+        AND ($8::uuid IS NULL OR a.asset_category_id = $8)
       ORDER BY i.due_at, a.name
       LIMIT ${limit}`,
-    [f.from, f.to, f.customerId ?? null, caminho, scope.customerIds, scope.locationPaths, f.kind ?? null]
+    [
+      f.from,
+      f.to,
+      f.customerId ?? null,
+      caminho,
+      scope.customerIds,
+      scope.locationPaths,
+      f.kind ?? null,
+      f.assetCategoryId ?? null,
+    ]
   );
 }
 
@@ -550,8 +565,9 @@ export async function planSchedule(
          JOIN aurora.assets a ON a.id = r.asset_id
         WHERE ($2::text IS NULL OR a.location_path LIKE $2 || '%')
           AND ${scopeSql('a.customer_id', 'a.location_path', 3)}
+          AND ($5::uuid IS NULL OR a.asset_category_id = $5)
         ORDER BY a.name`,
-      [t.id, caminho, scope.customerIds, scope.locationPaths]
+      [t.id, caminho, scope.customerIds, scope.locationPaths, f.assetCategoryId ?? null]
     );
     if (alvos.length === 0) continue;
 

@@ -40,7 +40,8 @@ describe('catálogo', () => {
     for (const t of NOTIFICATION_TYPES) {
       expect(t.event).toMatch(/^[a-z_]+\.[a-z_]+$/);
       expect(t.channels.length).toBeGreaterThan(0);
-      expect(t.audiences.length).toBeGreaterThan(0);
+      // Aviso de automação não tem público por papel: a regra escolhe quem recebe.
+      if (t.event !== 'automation.schedule') expect(t.audiences.length).toBeGreaterThan(0);
     }
   });
 

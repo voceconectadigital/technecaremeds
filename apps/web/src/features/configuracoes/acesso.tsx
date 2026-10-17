@@ -49,7 +49,7 @@ import {
   type PermissionOrigin,
   type Role,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { ApiError, diaLocalDaqui, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 
 export function GavetaDeAcesso({ membro, onFechar }: { membro: Member; onFechar: () => void }) {
   const { can } = usePermissions();
@@ -438,8 +438,7 @@ function mesmosItens(a: Set<string>, b: Set<string>): boolean {
   return true;
 }
 
+/** Daqui a 30 dias, no calendário local (PF-72). */
 function emTrintaDias(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
+  return diaLocalDaqui(30);
 }

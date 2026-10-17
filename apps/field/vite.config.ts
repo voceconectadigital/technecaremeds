@@ -12,12 +12,18 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cabecalhosDoPages } from '../../tools/lib/cabecalhos-pages.mjs';
 
 const raiz = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export default defineConfig({
   root: dirname(fileURLToPath(import.meta.url)),
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // O mesmo padrão de `campo.tsx` quando `VITE_API_URL` não vem no build.
+    cabecalhosDoPages({ apiUrl: process.env.VITE_API_URL ?? 'http://localhost:3001/v1' }),
+  ],
   resolve: {
     alias: {
       '@aurora/contracts': resolve(raiz, 'packages/contracts/src'),

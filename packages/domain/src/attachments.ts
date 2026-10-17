@@ -336,6 +336,23 @@ export function contentMatchesDeclaredType(contentType: string, primeirosBytes: 
   }
 }
 
+/**
+ * Os tipos que `contentMatchesDeclaredType` sabe conferir.
+ *
+ * Texto (CSV, JSON, XML) e binário genérico não têm assinatura de formato: para
+ * eles a conferência diria "não bate" sempre, e o dado bruto de um instrumento
+ * nunca chegaria. Eles também nunca são servidos como página (ver
+ * `ALLOWED_CONTENT_TYPES`), que é o risco que a conferência existe para cobrir.
+ */
+export const SNIFFABLE_CONTENT_TYPES: readonly string[] = Object.freeze([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+]);
+
 function mb(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
 }

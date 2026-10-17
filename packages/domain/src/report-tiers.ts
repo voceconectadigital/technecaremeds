@@ -444,6 +444,25 @@ export function defaultIndicatorsForTier(tier: ReportTier): ReportIndicator[] {
   return indicatorsForTier(tier).filter((i) => i.state === 'ACTIVE');
 }
 
+/**
+ * Confere uma seleção explícita de indicadores contra o modelo: fora do modelo
+ * ou PENDING_DEFINITION é erro (a mensagem diz quais). Devolve `null` quando a
+ * seleção pode entrar. O relatório sob demanda e a regra agendada (ao SALVAR,
+ * e não só na execução — pente-fino 17/10/2026) usam a mesma conferência.
+ */
+export function reportSelectionProblem(tier: ReportTier, keys: readonly string[]): string | null {
+  const doModelo = indicatorsForTier(tier);
+  const fora = [...new Set(keys)].filter((k) => !doModelo.some((i) => i.key === k));
+  if (fora.length > 0) {
+    return `indicadores fora do modelo ${REPORT_TIER_LABEL[tier]}: ${fora.join(', ')}`;
+  }
+  const pendentes = doModelo.filter((i) => keys.includes(i.key) && !isReportable(i)).map((i) => i.key);
+  if (pendentes.length > 0) {
+    return `indicadores aguardando definição não entram em relatório: ${pendentes.join(', ')}`;
+  }
+  return null;
+}
+
 export function findIndicator(key: string): ReportIndicator | undefined {
   return REPORT_INDICATORS.find((i) => i.key === key);
 }

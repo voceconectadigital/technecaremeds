@@ -31,6 +31,18 @@ const Envelope = <T extends z.ZodTypeAny>(data: T) =>
     data,
   });
 
+/** Uma meta resolvida (mesma forma da meta da seção do relatório). */
+export const PanelTarget = z.object({
+  id: Uuid,
+  value: z.number(),
+  unit: z.string(),
+  direction: z.enum(['HIGHER_IS_BETTER', 'LOWER_IS_BETTER']),
+  scope: z.enum(['contract', 'customer', 'organization']),
+  valid_from: z.string(),
+  valid_to: z.string().nullable(),
+});
+export type PanelTarget = z.infer<typeof PanelTarget>;
+
 const Media = z.object({ value: z.number().nullable(), samples: z.number().int() }).passthrough();
 
 export const ControlPanelPoint = z.object({
@@ -141,6 +153,18 @@ export const ControlPanel = z.object({
     ),
     withoutSector: z.number().int(),
   }),
+  /**
+   * Metas configuradas que valem neste recorte (contrato → cliente →
+   * organização; vínculo de um cliente só usa a meta desse cliente), por código
+   * de indicador do catálogo. Nulo = SEM META CONFIGURADA: a tela usa cor
+   * neutra, e não um limiar fixo. Opcional: capturas antigas da demo não têm.
+   */
+  targets: z
+    .object({
+      target_day: z.string(),
+      items: z.record(z.string(), PanelTarget.nullable()),
+    })
+    .optional(),
 });
 export type ControlPanel = z.infer<typeof ControlPanel>;
 

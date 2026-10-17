@@ -50,7 +50,15 @@ import {
 import type { ControlPanel } from '@aurora/contracts';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { buscaDoPainel, disponibilidadeAgora, usePainel, useFiltrosDoPainel } from './dados';
+import {
+  buscaDoPainel,
+  disponibilidadeAgora,
+  metaDoPainel,
+  textoDaMeta,
+  tomPelaMeta,
+  usePainel,
+  useFiltrosDoPainel,
+} from './dados';
 import {
   PERIODOS,
   ROTULO_SITUACAO_OS,
@@ -222,9 +230,6 @@ function FiltrosDeRecorte({
 /** Categorias de situação que a lista de OS sabe filtrar pela URL. */
 const CATEGORIAS_DA_LISTA = new Set(['open', 'in_progress', 'waiting', 'done']);
 
-const tomTaxa = (v: number | null, bom: number, medio: number): Tone =>
-  v === null ? 'neutral' : v >= bom ? 'good' : v >= medio ? 'warn' : 'bad';
-
 /*
  * A COMPOSIÇÃO É EDITORIAL, E NÃO UMA GRADE DE CAIXAS IGUAIS.
  *
@@ -238,6 +243,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
   const mttr = formatarDuracao(k.mttr.data.value);
   const mtbf = formatarDuracao(k.mtbf.data.value);
   const disp = disponibilidadeAgora(d.park.byStatus);
+  // A cor do SLA é a da META configurada para este recorte (PF-55); sem meta, neutra.
+  const metaSla = metaDoPainel(d, 'sla_compliance');
   const prev = d.preventives;
   const abertasAgora = Object.entries(d.open_now.byStatus).sort((a, b) => b[1] - a[1]);
   const totalAbertas = abertasAgora.reduce((a, [, v]) => a + v, 0);
@@ -276,8 +283,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
               valor={k.sla.data.rate}
               unidade="%"
               icone={AlarmClock}
-              tom={tomTaxa(k.sla.data.rate, 90, 75)}
-              dica={`${k.sla.data.met} no prazo · ${k.sla.data.breached} estourados`}
+              tom={tomPelaMeta(k.sla.data.rate, metaSla)}
+              dica={`${k.sla.data.met} no prazo · ${k.sla.data.breached} estourados · ${textoDaMeta(metaSla)}`}
               vazio={SEM_DADOS}
               link="/indicadores"
             />
@@ -515,7 +522,9 @@ function Disponibilidade({
   disp: ReturnType<typeof disponibilidadeAgora>;
   className?: string;
 }) {
-  const tom = tomTaxa(disp.taxa, 95, 85);
+  // Contra a meta configurada da disponibilidade (PF-55); sem meta, ponto neutro.
+  const meta = metaDoPainel(d, 'park_availability_snapshot');
+  const tom = tomPelaMeta(disp.taxa, meta);
   const partes = [
     { rotulo: 'Disponíveis', valor: disp.disponiveis, cor: 'bg-good' },
     { rotulo: 'Em manutenção', valor: disp.indisponiveis, cor: 'bg-warn' },
@@ -573,7 +582,7 @@ function Disponibilidade({
                       : 'bg-nav-label'
               )}
             />
-            {disp.disponiveis} de {d.park.total} equipamentos disponíveis
+            {disp.disponiveis} de {d.park.total} equipamentos disponíveis · {textoDaMeta(meta)}
           </p>
 
           <div className="relative mt-auto pt-6">

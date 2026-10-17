@@ -27,6 +27,7 @@
  */
 import { TAMANHO_DA_FATIA, type AdaptadorDeArquivos, type AnexoPendente } from './porta';
 import type { Colecao } from '../armazenamento';
+import { mesmaIdentidade, type Identidade } from '../fila';
 
 export interface RespostaDaFatia {
   status: number;
@@ -49,6 +50,12 @@ export interface DependenciasDoEnvio {
     ultima: boolean;
   }): Promise<RespostaDaFatia>;
   agora(): Date;
+  /**
+   * A identidade da sessão ATUAL (PF-66). Só sobem as fotos dela — ver
+   * `AnexoPendente.identidade`. Sem esta dependência, sobem todas (o que a
+   * versão anterior fazia).
+   */
+  identidade?(): Identidade | null;
 }
 
 const MAX_TENTATIVAS_POR_RODADA = 3;
@@ -57,6 +64,8 @@ export interface ResultadoDoEnvio {
   enviados: number;
   falharam: number;
   bytesSubidos: number;
+  /** Fotos guardadas por OUTRA sessão: ficaram no aparelho, intactas. */
+  deOutraSessao: number;
 }
 
 /**
@@ -82,9 +91,21 @@ export async function enviarAnexosPendentes(
    * comando de registro ainda está na fila espera — e é a fila, não este
    * arquivo, que garante que o registro chega.
    */
-  const prontos = todos
-    .filter((a) => a.chaveNoServidor !== null && a.estado !== 'enviado')
+  const candidatos = todos.filter((a) => a.chaveNoServidor !== null && a.estado !== 'enviado');
+
+  /*
+   * FOTO DE OUTRA SESSÃO NÃO SOBE COM A CREDENCIAL DESTA (PF-66).
+   *
+   * É a mesma regra da fila de comandos: o servidor aceitaria, porque para ele
+   * é um pedido válido de quem está logado — e a foto de Ana entraria como de
+   * Bruno, ou na organização errada. Ela NÃO é apagada nem marcada como
+   * falha: fica como está, e sobe quando o dono entrar de novo.
+   */
+  const atual = deps.identidade?.() ?? null;
+  const prontos = candidatos
+    .filter((a) => mesmaIdentidade(a.identidade, atual))
     .sort((a, b) => a.criadoEm.localeCompare(b.criadoEm));
+  const deOutraSessao = candidatos.length - prontos.length;
 
   for (const anexo of prontos) {
     const tamanho = await arquivos.tamanho(anexo.referenciaLocal);
@@ -238,7 +259,7 @@ export async function enviarAnexosPendentes(
     }
   }
 
-  return { enviados, falharam, bytesSubidos };
+  return { enviados, falharam, bytesSubidos, deOutraSessao };
 }
 
 /**
@@ -253,10 +274,20 @@ export interface EstadoDosAnexos {
   bytesPendentes: number;
   /** 0 a 1, ou `null` quando não há nada pendente. */
   progresso: number | null;
+  /**
+   * Fotos que ainda não subiram e são de OUTRA sessão (PF-66). Ficam fora das
+   * contas acima: não vão subir agora, e somá-las faria a barra de progresso
+   * nunca terminar para quem está logado.
+   */
+  deOutraSessao: number;
 }
 
-export async function estadoDosAnexos(anexos: Colecao<AnexoPendente>): Promise<EstadoDosAnexos> {
-  const todos = (await anexos.todos()).filter((a) => a.estado !== 'enviado');
+export async function estadoDosAnexos(
+  anexos: Colecao<AnexoPendente>,
+  identidade: Identidade | null = null
+): Promise<EstadoDosAnexos> {
+  const naoEnviados = (await anexos.todos()).filter((a) => a.estado !== 'enviado');
+  const todos = naoEnviados.filter((a) => mesmaIdentidade(a.identidade, identidade));
   const total = todos.reduce((t, a) => t + a.bytes, 0);
   const subido = todos.reduce((t, a) => t + a.enviados, 0);
   return {
@@ -264,5 +295,6 @@ export async function estadoDosAnexos(anexos: Colecao<AnexoPendente>): Promise<E
     falhados: todos.filter((a) => a.estado === 'falhou').length,
     bytesPendentes: Math.max(0, total - subido),
     progresso: total === 0 ? null : subido / total,
+    deOutraSessao: naoEnviados.length - todos.length,
   };
 }

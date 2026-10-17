@@ -139,6 +139,8 @@ async function criar(over: Record<string, unknown> = {}) {
       reported_failure_code_id: sintoma,
       title: 'Ventilador não liga',
       priority: 'urgent',
+      // PF-14: o técnico executa só a OS atribuída a ele.
+      assignee_membership_id: TEC_MEM,
       ...over,
     });
 }

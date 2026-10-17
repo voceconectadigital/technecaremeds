@@ -30,8 +30,18 @@ import { MARCA } from '@aurora/app-kit';
  *
  * 2: entrou `rascunhos`, para o que o técnico digitou sobreviver ao aplicativo
  *    ser derrubado pelo sistema no meio de uma OS.
+ * 3: entrou `cronometros` (PF-65), os cronômetros abertos baixados do servidor.
+ *    A primeira versão do PF-65 acrescentou a coleção sem subir o número, e o
+ *    aparelho que já tinha a base aberta quebrava com "object store not found" —
+ *    foi o E2E do campo que acusou.
  */
-const VERSAO = 2;
+export const VERSAO = 3;
+
+/**
+ * Quantas coleções cada versão conhece. Teste de regressão: acrescentar uma
+ * coleção sem subir `VERSAO` falha na suíte, e não no aparelho de alguém.
+ */
+export const COLECOES_POR_VERSAO: Readonly<Record<number, number>> = { 2: 14, 3: 15 };
 
 export async function armazenamentoIndexedDb(nome = 'aurora-campo'): Promise<ArmazenamentoOffline> {
   const db = await new Promise<IDBDatabase>((resolver, recusar) => {

@@ -22,7 +22,8 @@ import type { EventType } from '@aurora/events';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { transitionRequest } from './service-requests';
-import { completionCheck, completionRequirementsFor } from './execution';
+import { assertCanExecuteWorkOrder, completionCheck, completionRequirementsFor } from './execution';
+import { requiresOperationalResult } from './organization-config';
 import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
 import { releaseReservations } from './inventory';
 
@@ -328,9 +329,10 @@ export async function transitionWorkOrder(
     version: number;
     number: string | null;
     resolution: string | null;
+    operational_result: string | null;
   }>(
     `SELECT s.key AS status_key, s.label AS status_label, w.status_category::text AS category,
-            w.version, w.number, w.resolution
+            w.version, w.number, w.resolution, w.operational_result
        FROM aurora.work_orders w
        JOIN aurora.work_order_statuses s ON s.id = w.status_id
       WHERE w.id = $1
@@ -384,6 +386,33 @@ export async function transitionWorkOrder(
   });
   if (!avaliacao.allowed) {
     throw new InvalidTransitionError(atual.status_label, destino.label, avaliacao.allowedTargets);
+  }
+
+  // EXECUTAR E CONCLUIR SÃO DE QUEM A OS É (PF-14). As arestas de execução
+  // (iniciar, pausar, aguardar, retomar) e a de conclusão passam pela mesma
+  // regra das demais ações de execução; atribuir, validar, fechar e cancelar
+  // são atos de gestão e seguem só a permissão da aresta.
+  const aresta = graph.find((t) => t.from === atual.status_key && t.to === destino.key);
+  if (aresta && (aresta.permission === 'work_order.execute' || aresta.permission === 'work_order.complete')) {
+    await assertCanExecuteWorkOrder(session, workOrderId);
+  }
+
+  // O PARECER NA CONCLUSÃO (PF-41) — só quando a organização ligou a exigência.
+  //
+  // Desligada por padrão: nem o roteiro nem as solicitações do cliente dizem
+  // que é obrigatório, e ligar para todos mudaria o fluxo de quem nunca pediu.
+  // 422, e não 412: não é um requisito da natureza da OS (esses vêm em
+  // `missing`), é um campo que falta e que a pessoa preenche no relatório.
+  if (
+    destino.category === 'review' &&
+    !atual.operational_result &&
+    (await requiresOperationalResult(session))
+  ) {
+    throw new ValidationError(
+      'esta organização exige o parecer do equipamento (LIBERADO ou PARADO) para concluir a OS — ' +
+        'preencha o resultado operacional no relatório de serviço',
+      { field: 'operational_result' }
+    );
   }
 
   // O BLOCO DE CONCLUSÃO (SPEC §10).

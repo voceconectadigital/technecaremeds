@@ -33,7 +33,7 @@ import {
   type Customer,
   type CustomerLocation,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { ApiError, hojeLocal, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { rotuloTipo } from '../painel/rotulos';
 
 type Tipo = 'preventive' | 'calibration' | 'electrical_safety' | 'qualification';
@@ -92,8 +92,9 @@ export const ROTULO_CONTRATO: Record<string, string> = {
   warranty: 'Garantia',
 };
 
+/** Hoje no calendário local (PF-72) — e não em UTC, que às 22 h já é amanhã. */
 function hojeIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLocal();
 }
 
 export function NovoPlanoDialog({

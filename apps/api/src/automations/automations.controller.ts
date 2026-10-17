@@ -28,6 +28,7 @@ import {
   TRIGGER_KINDS,
   AUTOMATION_TEMPLATES,
   DEFAULT_AUTOMATION_TIMEZONE,
+  REPORT_PERIODS,
   nextRuns,
   type ActionKind,
   type TriggerKind,
@@ -58,6 +59,9 @@ export class AutomationsController {
       triggers: TRIGGER_KINDS,
       templates: AUTOMATION_TEMPLATES,
       default_timezone: DEFAULT_AUTOMATION_TIMEZONE,
+      // Relatório agendado: sem `periodo`, os últimos `periodDays` dias; `mes_anterior`
+      // é o mês civil anterior no fuso da organização (PF-52).
+      report_periods: REPORT_PERIODS,
       // Sem provedor de e-mail configurado: a entrega fica na fila (BLOQUEADO — INFRA).
       email_transport: 'not_configured',
     };

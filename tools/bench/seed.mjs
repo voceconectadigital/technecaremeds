@@ -293,6 +293,9 @@ async function semearOrganizacao(orgId, quantasOs, slug) {
   );
 
   const ativos = [];
+  // O cliente de cada ativo: a OS herda o cliente do próprio equipamento. Desde a
+  // 0072 a OS recusa ativo de outro cliente — e com razão.
+  const clienteDoAtivo = new Map();
   const QUANTOS_ATIVOS = Math.max(200, Math.round(quantasOs / 25));
   console.log(`    ${QUANTOS_ATIVOS} ativos, ${locais.length} locais…`);
 
@@ -323,6 +326,7 @@ async function semearOrganizacao(orgId, quantasOs, slug) {
         newId().replace(/-/g, '')
       );
       ativos.push(id);
+      clienteDoAtivo.set(id, clienteDoLocal(local, clientes, locais));
     }
     await q(
       `INSERT INTO aurora.assets
@@ -346,7 +350,6 @@ async function semearOrganizacao(orgId, quantasOs, slug) {
     for (let i = 0; i < quantas; i++) {
       // Distribuição torta: 20% dos ativos concentram a maior parte.
       const ativo = escolherTorto(ativos);
-      const local = escolher(locais);
       const estado = escolherTorto(estados);
       const criadaEm = new Date(AGORA - aleatorio() * DOIS_ANOS);
       const n = feitas + i;
@@ -361,7 +364,7 @@ async function semearOrganizacao(orgId, quantasOs, slug) {
         newId(),
         orgId,
         `OS-${String(n + 1).padStart(7, '0')}`,
-        clienteDoLocal(local, clientes, locais),
+        clienteDoAtivo.get(ativo),
         escolher(naturezas),
         ativo,
         estado.id,

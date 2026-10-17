@@ -140,6 +140,31 @@ export interface DocumentInput {
 
 export async function createDocument(session: TenantSession, input: DocumentInput): Promise<string> {
   const id = newId();
+  /*
+   * O CLIENTE do documento vem da OS ou do equipamento quando não é informado
+   * (revisão de 17/10/2026). Documento sem cliente fica invisível a todo vínculo
+   * restrito — inclusive ao técnico que o criou —, e o escopo é o que decide
+   * quem vê laudo. Informado e divergente da OS/equipamento é recusado: seria o
+   * laudo de um hospital entregue a outro.
+   */
+  const origens = await session.query<{ customer_id: string }>(
+    `SELECT customer_id FROM aurora.work_orders WHERE id = $1
+     UNION
+     SELECT customer_id FROM aurora.assets WHERE id = $2`,
+    [input.workOrderId ?? null, input.assetId ?? null]
+  );
+  const clientesDaOrigem = [...new Set(origens.map((o) => o.customer_id))];
+  if (clientesDaOrigem.length > 1) {
+    throw new ValidationError('a OS e o equipamento do documento são de clientes diferentes', {
+      field: 'asset_id',
+    });
+  }
+  if (input.customerId && clientesDaOrigem[0] && input.customerId !== clientesDaOrigem[0]) {
+    throw new ValidationError('o cliente do documento não é o cliente da OS/equipamento', {
+      field: 'customer_id',
+    });
+  }
+  const clienteId = input.customerId ?? clientesDaOrigem[0] ?? null;
   await session.query(
     `INSERT INTO aurora.documents
        (id, organization_id, document_type_id, title, asset_id, work_order_id, customer_id,
@@ -152,7 +177,7 @@ export async function createDocument(session: TenantSession, input: DocumentInpu
       input.title ?? null,
       input.assetId ?? null,
       input.workOrderId ?? null,
-      input.customerId ?? null,
+      clienteId,
       input.technicalManagerId ?? null,
       JSON.stringify(input.payload ?? {}),
       input.verdict ?? null,

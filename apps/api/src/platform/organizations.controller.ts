@@ -89,6 +89,7 @@ export class OrganizationsController {
       updateOrganizationConfiguration(s, {
         usageMode: entrada.usage_mode,
         enabledFeatures: entrada.enabled_features,
+        requireOperationalResult: entrada.require_operational_result,
       })
     );
   }

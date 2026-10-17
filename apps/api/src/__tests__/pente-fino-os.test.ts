@@ -135,8 +135,15 @@ beforeAll(async () => {
   });
 
   await withTenant(t.db, tudo, async (s) => {
+    // PF-14: o Operador executa só a OS atribuída a ele — as desta suíte são dele.
     const nova = (title: string) =>
-      createWorkOrder(s, { customerId: hospital, locationId: uti, workOrderTypeId: corretiva, title });
+      createWorkOrder(s, {
+        customerId: hospital,
+        locationId: uti,
+        workOrderTypeId: corretiva,
+        title,
+        assigneeMembershipId: memOp,
+      });
     os1 = (await nova('Check-in 1')).id;
     os2 = (await nova('Check-in 2')).id;
     osFechada = (await nova('Fechada com checklist')).id;

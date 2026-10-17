@@ -249,7 +249,14 @@ export interface RoleDefinition {
   readonly except?: readonly string[];
 }
 
-const ALL_READ = PERMISSION_KEYS.filter((k) => k.endsWith('.read'));
+/**
+ * "Toda leitura" de NEGÓCIO — sem a trilha de auditoria (pente-fino 17/10/2026,
+ * PF-15). `audit.read` também termina em `.read`, e entrava de carona no
+ * Coordenador, no Gestor e no Financeiro: a trilha global da organização
+ * inteira, sem recorte de escopo. Quem deve lê-la diz isso explicitamente
+ * (Gestor de manutenção, Auditor, Proprietário e Administrador).
+ */
+const ALL_READ = PERMISSION_KEYS.filter((k) => k.endsWith('.read') && k !== 'audit.read');
 
 const MANAGER_BASE: readonly string[] = [
   ...ALL_READ,

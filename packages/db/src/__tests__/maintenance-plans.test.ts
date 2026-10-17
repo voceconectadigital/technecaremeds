@@ -10,7 +10,7 @@ import { newId, buildContext, PERMISSION_KEYS, addFrequency, cyclesPerYear } fro
 import { withTenant } from '../client';
 import { createCustomer, createLocation, provisionStarterLocationTypes } from '../directory';
 import { createCatalogItem } from '../catalogs';
-import { createAssetCategory, createAsset, decommissionAsset } from '../assets';
+import { createAssetCategory, createAsset, decommissionAsset, transferAsset } from '../assets';
 import { provisionWorkOrderStates, transitionWorkOrder } from '../work-orders';
 import {
   createPlan,
@@ -547,5 +547,47 @@ describe('varredura', () => {
     });
     const r = await withTenant(t.db, ctx, (s) => generateCycle(s, tarefa));
     expect(r).toBeNull();
+  });
+});
+
+describe('equipamento que mudou de cliente depois de o ciclo abrir', () => {
+  it('fica pendente e não aborta o lote; os demais viram OS', async () => {
+    // O 2º ciclo da preventiva semestral já existe, com um item por ativo.
+    const [c2] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ id: string }>(
+        `SELECT c.id FROM aurora.plan_cycles c
+           JOIN aurora.plan_tasks t ON t.id = c.task_id
+          WHERE t.name = 'Preventiva semestral' AND c.seq = 2`
+      )
+    );
+    const [movido] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ asset_id: string }>(
+        `SELECT asset_id FROM aurora.plan_cycle_items WHERE cycle_id = $1 AND status = 'pending' LIMIT 1`,
+        [c2!.id]
+      )
+    );
+    await withTenant(t.db, ctx, async (s) => {
+      const tipos = await provisionStarterLocationTypes(s);
+      const outro = await createCustomer(s, { name: 'Hospital Vizinho' });
+      const destino = await createLocation(s, {
+        customerId: outro,
+        locationTypeId: tipos.get('unidade')!,
+        name: 'Vizinho',
+      });
+      await transferAsset(s, movido!.asset_id, destino, 'empréstimo entre hospitais do grupo');
+    });
+    const pendentesAntes = await withTenant(t.db, ctx, (s) =>
+      s.query(`SELECT 1 FROM aurora.plan_cycle_items WHERE cycle_id = $1 AND status = 'pending'`, [c2!.id])
+    );
+
+    const criadas = await withTenant(t.db, ctx, (s) => materializeCycle(s, c2!.id));
+    expect(criadas).toBe(pendentesAntes.length - 1);
+    const [ainda] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ status: string }>(
+        `SELECT status::text FROM aurora.plan_cycle_items WHERE cycle_id = $1 AND asset_id = $2`,
+        [c2!.id, movido!.asset_id]
+      )
+    );
+    expect(ainda?.status).toBe('pending');
   });
 });

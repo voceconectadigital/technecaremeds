@@ -284,6 +284,39 @@ export async function addQuoteItem(session: TenantSession, args: QuoteItemArgs):
 }
 
 /**
+ * Abre o orçamento JÁ COM AS LINHAS, na transação de quem chama (PF-71).
+ *
+ * "Gerar orçamento" da OS fazia uma chamada para o cabeçalho e uma por linha:
+ * uma linha recusada no meio deixava um orçamento pela metade, e tentar de novo
+ * criava um segundo. Aqui é tudo ou nada — qualquer linha inválida desfaz o
+ * cabeçalho junto, porque a transação é uma só.
+ */
+export async function createQuoteWithItems(
+  session: TenantSession,
+  input: QuoteInput & { items: Array<Omit<QuoteItemArgs, 'quoteId'>> }
+): Promise<string> {
+  if (input.items.length === 0) {
+    throw new ValidationError('o orçamento precisa de ao menos uma linha', { field: 'items' });
+  }
+  const { items, ...cabecalho } = input;
+  const id = await createQuote(session, cabecalho);
+  for (const [i, linha] of items.entries()) {
+    try {
+      await addQuoteItem(session, { ...linha, quoteId: id });
+    } catch (e) {
+      // A linha que falhou vai na mensagem: a tela mostra "linha 3: …" e a
+      // pessoa sabe onde corrigir. Item de estoque inexistente na linha é
+      // pedido errado (422), não "orçamento não encontrado".
+      if (e instanceof ValidationError || e instanceof NotFoundError) {
+        throw new ValidationError(`linha ${i + 1}: ${e.message}`, { ...e.details, line: i + 1 });
+      }
+      throw e;
+    }
+  }
+  return id;
+}
+
+/**
  * Remove uma linha. Com `quoteId`, só se a linha for DAQUELE orçamento — a rota
  * `/quotes/:id/items/:itemId/remove` não pode apagar linha de outro orçamento
  * (fora do escopo de quem chama) só porque o id da linha veio junto.
@@ -574,17 +607,56 @@ async function applyEffects(session: TenantSession, quote: QuoteRow, to: QuoteSt
  * aprovado, e recusar a aprovação porque a peça está em falta transformaria uma
  * boa notícia comercial em erro de sistema. A falta aparece na OS, que é onde
  * alguém pode agir sobre ela.
+ *
+ * PEÇA JÁ LANÇADA EM CAMPO (PF-34, migration 0074). Se o técnico registrou a
+ * peça na OS ANTES da aprovação, ela já saiu do estoque por uma reserva do
+ * campo; reservar a linha inteira de novo faria o faturamento baixá-la uma
+ * segunda vez. Decisão (integridade primeiro, conservadora): cada linha reserva
+ * só `max(0, quantidade − consumo de campo ainda livre)`, e o quanto foi abatido
+ * fica gravado na linha (`field_consumed_qty`) — o mesmo consumo não abate dois
+ * orçamentos da mesma OS. O VALOR do orçamento não muda: o cliente paga pela
+ * peça usada; só o movimento de estoque deixa de duplicar.
  */
 async function reserveApprovedParts(session: TenantSession, quote: QuoteRow): Promise<void> {
   if (!quote.work_order_id) return;
 
-  const pecas = await session.query<{ item_id: string; quantity: string }>(
-    `SELECT item_id, quantity::text FROM aurora.quote_items
-      WHERE quote_id = $1 AND kind = 'part' AND item_id IS NOT NULL`,
+  const pecas = await session.query<{ id: string; item_id: string; quantity: string }>(
+    `SELECT id, item_id, quantity::text FROM aurora.quote_items
+      WHERE quote_id = $1 AND kind = 'part' AND item_id IS NOT NULL
+      ORDER BY position`,
     [quote.id]
   );
+  if (pecas.length === 0) return;
 
+  // Trava a OS ANTES de ler o consumo livre: duas aprovações de orçamentos
+  // diferentes da mesma OS leriam o mesmo consumo e o abateriam as duas vezes.
+  // O lançamento de peça do campo (`consumeForWorkOrder`) segura a OS em
+  // `FOR KEY SHARE`, que conflita com esta trava — consumo e aprovação
+  // simultâneos também se enfileiram. Ordem: orçamento → OS → saldo.
+  await session.query(`SELECT 1 FROM aurora.work_orders WHERE id = $1 FOR UPDATE`, [quote.work_order_id]);
+
+  const livrePorItem = new Map<string, number>();
   for (const peca of pecas) {
+    if (!livrePorItem.has(peca.item_id)) {
+      livrePorItem.set(
+        peca.item_id,
+        await consumoDeCampoLivre(session, quote.work_order_id, peca.item_id, quote.id)
+      );
+    }
+    const livre = livrePorItem.get(peca.item_id)!;
+    const quantidade = Number(peca.quantity);
+    // Mesma escala da coluna (numeric(12,3)): sem sobra de ponto flutuante.
+    const abatido = Number(Math.min(quantidade, livre).toFixed(3));
+    const aReservar = Number((quantidade - abatido).toFixed(3));
+    if (abatido > 0) {
+      livrePorItem.set(peca.item_id, Number((livre - abatido).toFixed(3)));
+      await session.query(`UPDATE aurora.quote_items SET field_consumed_qty = $2 WHERE id = $1`, [
+        peca.id,
+        abatido,
+      ]);
+    }
+    if (aReservar <= 0) continue;
+
     // Almoxarifado de cliente (0066) é estoque DAQUELE cliente: a aprovação só
     // reserva no da prestadora (sem cliente) ou no do próprio cliente do orçamento.
     const [saldo] = await session.query<{ warehouse_id: string }>(
@@ -594,19 +666,68 @@ async function reserveApprovedParts(session: TenantSession, quote: QuoteRow): Pr
           AND w.archived_at IS NULL
           AND (w.customer_id IS NULL OR w.customer_id = $3)
         ORDER BY (b.on_hand - b.reserved) DESC LIMIT 1`,
-      [peca.item_id, Number(peca.quantity), quote.customer_id]
+      [peca.item_id, aReservar, quote.customer_id]
     );
     if (!saldo) continue;
 
-    await reserve(
-      session,
-      quote.work_order_id,
-      peca.item_id,
-      saldo.warehouse_id,
-      Number(peca.quantity),
-      quote.id
-    );
+    await reserve(session, quote.work_order_id, peca.item_id, saldo.warehouse_id, aReservar, quote.id);
   }
+}
+
+/** Orçamento que já reservou/abateu peça e continua valendo (aprovado em diante, sem ter sido superado). */
+const ORCAMENTO_VIVO = `('approved', 'in_execution', 'invoiced', 'closed')`;
+
+/**
+ * Quanto do item já foi consumido na OS e AINDA NÃO está coberto por orçamento
+ * vivo — o que a aprovação de `quoteId` pode abater.
+ *
+ *   consumo líquido na OS (consumos − estornos deles − devoluções, pelo razão)
+ *   − o consumido contra reserva de orçamento vivo (é peça daquele orçamento)
+ *   − o que outro orçamento vivo da OS já abateu (`field_consumed_qty`)
+ *
+ * Orçamento superado ou cancelado sai das duas subtrações: o consumo que estava
+ * com ele volta a ficar livre, e a versão nova o abate em vez de reservar de novo.
+ */
+async function consumoDeCampoLivre(
+  session: TenantSession,
+  workOrderId: string,
+  itemId: string,
+  quoteId: string
+): Promise<number> {
+  const [r] = await session.query<{ livre: string }>(
+    `WITH movs AS (
+       SELECT id, qty FROM aurora.stock_movements
+        WHERE ref_type = 'work_order' AND ref_id = $1 AND item_id = $2
+          AND kind IN ('consumption', 'return')
+     ),
+     liquido AS (
+       SELECT -COALESCE(sum(q), 0) AS consumido FROM (
+         SELECT qty AS q FROM movs
+         UNION ALL
+         SELECT e.qty FROM aurora.stock_movements e JOIN movs m ON m.id = e.reverses_id
+       ) x
+     ),
+     de_orcamento AS (
+       SELECT COALESCE(sum(r.consumed_qty), 0) AS consumido
+         FROM aurora.stock_reservations r
+         JOIN aurora.quotes q ON q.id = r.quote_id
+        WHERE r.work_order_id = $1 AND r.item_id = $2
+          AND q.id <> $3 AND q.status IN ${ORCAMENTO_VIVO}
+     ),
+     abatido AS (
+       SELECT COALESCE(sum(i.field_consumed_qty), 0) AS qtd
+         FROM aurora.quote_items i
+         JOIN aurora.quotes q ON q.id = i.quote_id
+        WHERE q.work_order_id = $1 AND i.item_id = $2 AND i.kind = 'part'
+          AND q.id <> $3 AND q.status IN ${ORCAMENTO_VIVO}
+     )
+     -- Truncado na escala da linha do orçamento (numeric(12,3)): o razão tem 4
+     -- casas, e arredondar para cima abateria mais do que saiu de fato.
+     SELECT trunc(GREATEST(0, liquido.consumido - de_orcamento.consumido - abatido.qtd), 3)::text AS livre
+       FROM liquido, de_orcamento, abatido`,
+    [workOrderId, itemId, quoteId]
+  );
+  return Number(r?.livre ?? 0);
 }
 
 /**
@@ -658,12 +779,16 @@ async function waitForCustomer(session: TenantSession, workOrderId: string | nul
  * envia (o financeiro, o gestor) não precisa poder executar OS para que ela
  * passe a aguardar o cliente: a sessão do efeito recebe SÓ a permissão da
  * aresta (`work_order.execute`), e só durante esta chamada.
+ *
+ * `work_order.execute_any` vai junto (PF-14): `execute` sozinho passou a valer
+ * só para a OS atribuída a quem executa, e esta mudança não é execução pessoal
+ * de ninguém — é efeito comercial sobre a OS, qualquer que seja o responsável.
  */
 function efeitoDoOrcamento(session: TenantSession): TenantSession {
   return {
     context: {
       ...session.context,
-      permissions: new Set([...session.context.permissions, 'work_order.execute']),
+      permissions: new Set([...session.context.permissions, 'work_order.execute', 'work_order.execute_any']),
     },
     query: (sql, params) => session.query(sql, params),
   };
@@ -815,7 +940,7 @@ export async function quoteItems(session: TenantSession, quoteId: string): Promi
   return session.query(
     `SELECT id, position, kind, item_id, description, unit, quantity::text,
             unit_price_cents::text, discount_cents::text, net_cents::text, price_source,
-            warranty_days, delivery_days
+            warranty_days, delivery_days, field_consumed_qty::text
        FROM aurora.quote_items WHERE quote_id = $1 ORDER BY position`,
     [quoteId]
   );

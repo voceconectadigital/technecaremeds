@@ -22,6 +22,7 @@ import {
   type AttachmentPurpose,
   type MeasurementSource,
   PURPOSES_REQUIRING_SHA256,
+  executionRestrictedToAssignment,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { pendingPartsCount } from './inventory';
@@ -679,14 +680,120 @@ export async function checklistStatus(session: TenantSession, responseId: string
 /* horas                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Recusa a execução de quem só pode executar a PRÓPRIA OS (pente-fino PF-14).
+ *
+ * Uma regra, num lugar só, chamada por toda ação de execução: check-in,
+ * cronômetro e apontamento, checklist, assinatura, anexo, envio dos bytes,
+ * transições de execução e a conclusão. Quem tem `work_order.execute` sem
+ * `work_order.execute_any` executa só a OS de que é responsável ou cuja equipe
+ * integra (`work_orders.team_id` → `team_members`). Ver
+ * `executionRestrictedToAssignment` para quem a regra não alcança.
+ *
+ * 403, E NÃO 404. Quem chega aqui já LÊ a OS (tem `work_order.read` e ela está
+ * no escopo — fora dele o `ScopeGuard` já respondeu 404). Esconder a existência
+ * de algo que a pessoa vê na lista não protege nada; dizer POR QUE foi recusado
+ * é o que permite ao técnico pedir a atribuição — e é o texto que a tela de
+ * atenção do campo mostra.
+ *
+ * `checkScope` é para a rota que chega à OS por um caminho que o `ScopeGuard`
+ * não conhece (a dos bytes de um anexo): ali a OS fora do escopo é 404, a
+ * mesma resposta de "não existe".
+ */
+export async function assertCanExecuteWorkOrder(
+  session: TenantSession,
+  workOrderId: string,
+  opts: { checkScope?: boolean } = {}
+): Promise<void> {
+  const ctx = session.context;
+  const restrito = executionRestrictedToAssignment(ctx.permissions);
+  const conferirEscopo =
+    opts.checkScope === true &&
+    ctx.membershipId !== null &&
+    (ctx.scope.customerScope !== 'all' || ctx.scope.locationScope !== 'all');
+  if (!restrito && !conferirEscopo) return;
+
+  const [os] = await session.query<{ atribuida: boolean; no_escopo: boolean }>(
+    `SELECT COALESCE(w.assignee_membership_id = $2, false)
+              OR EXISTS (SELECT 1
+                           FROM aurora.team_members tm
+                           JOIN aurora.teams t ON t.id = tm.team_id AND t.deleted_at IS NULL
+                          WHERE tm.team_id = w.team_id AND tm.membership_id = $2) AS atribuida,
+            (NOT $3::boolean
+              OR (w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+                  AND (w.location_id IS NULL
+                       OR w.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2))))
+            ) AS no_escopo
+       FROM aurora.work_orders w
+      WHERE w.id = $1`,
+    [workOrderId, ctx.membershipId, conferirEscopo]
+  );
+  if (!os || !os.no_escopo) throw new NotFoundError('Ordem de serviço', workOrderId);
+  if (restrito && !os.atribuida) {
+    // Um `ForbiddenError` comum (mesmo código e título de toda recusa de
+    // permissão), com o motivo dito por extenso.
+    const recusa = new ForbiddenError('work_order.execute_any');
+    recusa.message =
+      'esta OS não está atribuída a você nem à sua equipe — executá-la exige ser o responsável, ' +
+      'ser da equipe dela ou ter a permissão work_order.execute_any';
+    throw recusa;
+  }
+}
+
+/** A OS a que uma resposta de checklist pertence. `null` quando não existe. */
+export async function workOrderOfChecklistResponse(
+  session: TenantSession,
+  responseId: string
+): Promise<string | null> {
+  const [r] = await session.query<{ work_order_id: string }>(
+    `SELECT work_order_id FROM aurora.checklist_responses WHERE id = $1`,
+    [responseId]
+  );
+  return r?.work_order_id ?? null;
+}
+
 export async function startTimer(
   session: TenantSession,
   workOrderId: string,
-  opts: { hourlyCost?: number | null } = {}
+  opts: {
+    hourlyCost?: number | null;
+    /**
+     * O identificador gerado no APARELHO (PF-65). Com ele, o "parar" pode ser
+     * enfileirado logo atrás do "iniciar", offline, sabendo o que vai parar.
+     */
+    id?: string;
+    /** A hora do aparelho, já validada (`deviceInstant`). Ausente → agora. */
+    startedAt?: Date | null;
+  } = {}
 ): Promise<string> {
   if (!session.context.membershipId) {
     throw new ValidationError('apontar hora exige um vínculo com a organização', { field: 'membership' });
   }
+
+  /*
+   * O MESMO IDENTIFICADOR DE NOVO É O MESMO CRONÔMETRO.
+   *
+   * O registro de operação (`x-aurora-client-operation`) já devolve o desfecho
+   * da primeira vez; isto cobre o reenvio que chega sem ele (ou com outro). Do
+   * mesmo dono e na mesma OS, é o mesmo apontamento — devolver o id é a
+   * resposta certa. De outro dono ou de outra OS, é colisão, e não é aceito.
+   */
+  if (opts.id) {
+    const [existente] = await session.query<{ work_order_id: string; membership_id: string }>(
+      `SELECT work_order_id, membership_id FROM aurora.time_entries WHERE id = $1`,
+      [opts.id]
+    );
+    if (existente) {
+      if (
+        existente.work_order_id === workOrderId &&
+        existente.membership_id === session.context.membershipId
+      ) {
+        return opts.id;
+      }
+      throw new ConflictError('este identificador de apontamento já está em uso', { field: 'id' });
+    }
+  }
+
   // UM CRONÔMETRO ABERTO POR PESSOA (índice `te_one_open_per_person`, 0025).
   // Conferido aqui para a recusa dizer ONDE está o cronômetro aberto, em vez de
   // devolver o nome do índice.
@@ -706,11 +813,11 @@ export async function startTimer(
       { open_time_entry_id: aberto.id, work_order_id: aberto.work_order_id }
     );
   }
-  const id = newId();
+  const id = opts.id ?? newId();
   await session.query(
     `INSERT INTO aurora.time_entries
        (id, organization_id, work_order_id, membership_id, started_at, source, hourly_cost, created_by)
-     VALUES ($1, $2, $3, $4, now(), 'timer', $5, $6)`,
+     VALUES ($1, $2, $3, $4, COALESCE($7::timestamptz, now()), 'timer', $5, $6)`,
     [
       id,
       session.context.organizationId,
@@ -718,16 +825,28 @@ export async function startTimer(
       session.context.membershipId,
       opts.hourlyCost ?? null,
       session.context.actorId,
+      opts.startedAt?.toISOString() ?? null,
     ]
   );
   return id;
 }
 
-export async function stopTimer(session: TenantSession, entryId: string, note?: string): Promise<number> {
+export async function stopTimer(
+  session: TenantSession,
+  entryId: string,
+  note?: string,
+  /** A hora do aparelho, já validada (`deviceInstant`). Ausente → agora. */
+  endedAt?: Date | null
+): Promise<number> {
   // O cronômetro é de quem o abriu. Parar o de outra pessoa — que encerraria as
   // horas dela — fica com quem aprova ou aponta horas para os outros.
-  const [dono] = await session.query<{ membership_id: string }>(
-    `SELECT membership_id FROM aurora.time_entries WHERE id = $1`,
+  //
+  // PARAR O PRÓPRIO NÃO PASSA PELA REGRA DE ATRIBUIÇÃO (PF-14). Se a OS mudou
+  // de responsável com o cronômetro correndo, recusar o "parar" deixaria a
+  // pessoa com um cronômetro aberto — e o índice de um aberto por pessoa a
+  // travaria em TODAS as outras OS.
+  const [dono] = await session.query<{ membership_id: string; started_at: Date | string }>(
+    `SELECT membership_id, started_at FROM aurora.time_entries WHERE id = $1`,
     [entryId]
   );
   const perms = session.context.permissions;
@@ -739,12 +858,22 @@ export async function stopTimer(session: TenantSession, entryId: string, note?: 
   ) {
     throw new ForbiddenError('time_entry.approve');
   }
+  if (dono && endedAt && endedAt.getTime() < new Date(dono.started_at).getTime()) {
+    throw new ValidationError('o fim do cronômetro não pode ser antes do início', { field: 'ended_at' });
+  }
+  /*
+   * `greatest(..., started_at + 1 µs)`: o início pode ter vindo do aparelho
+   * até 5 minutos adiantado, e parar com a hora do servidor logo depois daria
+   * fim antes do início — que o banco recusa (`te_order`) com um erro que
+   * ninguém entenderia. Fim igual ao início vira o menor intervalo possível.
+   */
   const rows = await session.query<{ minutes: number }>(
     `UPDATE aurora.time_entries
-        SET ended_at = now(), note = coalesce($2, note)
+        SET ended_at = greatest(COALESCE($3::timestamptz, now()), started_at + interval '1 microsecond'),
+            note = coalesce($2, note)
       WHERE id = $1 AND ended_at IS NULL
       RETURNING (EXTRACT(EPOCH FROM (ended_at - started_at)) / 60)::int AS minutes`,
-    [entryId, note ?? null]
+    [entryId, note ?? null, endedAt?.toISOString() ?? null]
   );
   if (rows.length === 0) {
     throw new ConflictError('não há cronômetro aberto com este identificador');

@@ -306,8 +306,22 @@ export async function slaCompliance(
               SELECT 1 FROM aurora.fact_work_order f
                WHERE f.work_order_id = c.document_id
                  AND ${scopeSql('f.customer_id', 'f.location_path', 4)}))
+        -- Setor e categoria do equipamento: o relatório os passava e o SLA os
+        -- ignorava (pente-fino 17/10/2026, junto do PF-53).
+        AND (($6::text IS NULL AND $7::uuid IS NULL) OR EXISTS (
+              SELECT 1 FROM aurora.fact_work_order f
+               WHERE f.work_order_id = c.document_id
+                 AND ($6::text IS NULL OR f.location_path LIKE $6 || '%')
+                 AND ($7::uuid IS NULL OR f.asset_category_id = $7)))
       GROUP BY 1, 2`,
-    [period.from, period.to, filters.customerId ?? null, ...scopeParams(filters)]
+    [
+      period.from,
+      period.to,
+      filters.customerId ?? null,
+      ...scopeParams(filters),
+      filters.locationPath ?? null,
+      filters.assetCategoryId ?? null,
+    ]
   );
 
   const porAlvo: SlaData['byKind'] = {};
@@ -536,8 +550,17 @@ export async function planCompliance(
        JOIN aurora.assets a ON a.id = i.asset_id
       WHERE i.due_at >= $1 AND i.due_at < $2
         AND ($3::uuid IS NULL OR a.customer_id = $3)
-        AND ${scopeSql('a.customer_id', 'a.location_path', 4)}`,
-    [period.from, period.to, filters.customerId ?? null, ...scopeParams(filters)]
+        AND ${scopeSql('a.customer_id', 'a.location_path', 4)}
+        AND ($6::text IS NULL OR a.location_path LIKE $6 || '%')
+        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+    [
+      period.from,
+      period.to,
+      filters.customerId ?? null,
+      ...scopeParams(filters),
+      filters.locationPath ?? null,
+      filters.assetCategoryId ?? null,
+    ]
   );
 
   const previstos = Number(row!.expected);
