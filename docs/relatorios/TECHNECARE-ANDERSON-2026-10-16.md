@@ -9,7 +9,8 @@ Pedidos: `docs/NOVAS-SOLICITACOES.md` (NS-021).
 | | |
 | --- | --- |
 | HEAD inicial | `5207188` (main) |
-| Branch / PR | `feat/anderson-2026-10-16` · https://github.com/voceconectadigital/technecaremeds/pull/22 |
+| Branch / PR | `feat/anderson-2026-10-16` · https://github.com/voceconectadigital/technecaremeds/pull/22 (MERGED) + #23 |
+| Main | `27a5e8c` — CI verde (estático, PostgreSQL 16 real, navegador 205/205) |
 | Migrations novas | `0060` → `0068` (9) |
 | Testes de unidade/HTTP (local, PGlite) | 2104 passando, 32 pulados (sem PostgreSQL real) |
 | Testes de navegador | 121 (32 arquivos) — rodam só no CI |
@@ -26,23 +27,28 @@ Pedidos: `docs/NOVAS-SOLICITACOES.md` (NS-021).
 | 6 Planos | PASS | filtro de tipo, executar item, gráficos por plano/procedimento |
 | 7 Orçamentos | PASS | gerado da OS, centavos, aprovar/reprovar com trilha |
 | 8 Estoque / Store | PASS | dono, máximo, ABC, relatório de período; Store sem checkout |
-| 9 Relatórios | PASS (fundação) | Basic/Advanced/Expert; layout AGUARDANDO MODELO PDF OFICIAL |
+| 9 Relatórios | PASS — FUNDAÇÃO (refinamento aguardando PDFs) | Basic/Advanced/Expert; layout AGUARDANDO MODELO PDF OFICIAL |
 | 10 Automações | PASS | relatório agendado, lembrete, tarefa, 5W2H, PDCA; agendador idempotente; e-mail em fila |
 | 11 Novo Negócio | PASS | provisionamento pelo admin global de plataforma; 2 tenants isolados |
 | 12 Ferramentas | PASS | vitrine com 7 ferramentas rotuladas; sem backend |
-| 13 Produção | BLOQUEADA | verificado só por leitura; deploy exige autorização explícita; backup sem prova |
+| 13 Produção | BLOQUEADA | verificada só por leitura; sem deploy nesta rodada (decisão de 16/10) |
 
 ## Bloqueios que continuam
 
 - **Cliente:** PDFs oficiais (layout e indicadores Expert/FHEMIG); definição de "parado"
-  (disponibilidade no tempo); autorização de deploy no HostPanel.
+  (disponibilidade no tempo).
 - **Especialista:** fórmulas, incerteza, limites de TSE, decisão metrológica.
 - **Infra:** transporte de e-mail (automação e convite com senha), mapa/geocodificação, leitura
-  do chip, domínio "htec.b" (não existe), backup/restore comprovado, restart/logs no HostPanel.
+  do chip, domínio ainda não confirmado ("htec.b" não existe), VPS definitiva e backup/restore
+  da futura infraestrutura.
 
-## Próximos passos de publicação
+## Infraestrutura — decisão vigente
 
-1. Backup do PostgreSQL de produção com prova (antes das migrations `0060`–`0068`).
-2. Deploy da API no HostPanel (com autorização) → conferir `/v1/health/version`.
-3. Front (web, portal, campo) por `wrangler pages deploy` → smoke remoto.
-4. DBA concede o admin global de plataforma (Novo Negócio) a quem a operação indicar.
+Decisão vigente (16/10/2026, responsável do projeto): **sem deploy no HostPanel nesta rodada** e sem tocar a VPS antiga; o **PostgreSQL remoto atual permanece no Supabase Online** da Téchne Care até a infraestrutura definitiva; **VPS dedicada fica para fase posterior**; autenticação **continua própria da aplicação** (sem Supabase Auth). Código na `main` não autoriza migration remota nem deploy de backend.
+
+- Backend **não** publicado; migrations `0060`–`0068` **não** aplicadas em banco remoto.
+- Front de produção continua na versão de 15/10: o front novo depende do backend desta rodada →
+  **AGUARDANDO DEPLOY CONECTADO**.
+- Demo pública (`technecaremeds.pages.dev`, Cloudflare Pages ligado ao GitHub) publica a `main`
+  automaticamente em modo demonstração (sem backend).
+- Admin global de plataforma (Novo Negócio): concessão por DBA, quando houver deploy conectado.

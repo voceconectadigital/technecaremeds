@@ -5,7 +5,7 @@ Controle da rodada. **Este arquivo acompanha a rodada inteira**: cada item nasce
 O estado real do produto continua sendo `docs/AI-HANDOFF.md`; o histórico de
 pedidos, `docs/NOVAS-SOLICITACOES.md`.
 
-**HEAD inicial:** `5207188` (main) · **CI verde:** `ac20895` (run 38992481765) · **VALIDADO** = teste de API e/ou E2E passando no CI com PostgreSQL 16 real · **Migration mais recente na partida:** `0059` ·
+**HEAD inicial:** `5207188` (main) · **Na main:** `27a5e8c` (PR #22 + #23, CI verde, run 38994905170) — fases 1–12 **VALIDADAS NA MAIN**; Fase 9 = **FUNDAÇÃO IMPLEMENTADA, REFINAMENTO AGUARDANDO PDFs**; Fase 13 **BLOQUEADA** · **CI verde do PR:** `ac20895` (run 38992481765) · **VALIDADO** = teste de API e/ou E2E passando no CI com PostgreSQL 16 real · **Migration mais recente na partida:** `0059` ·
 **Próxima livre:** `0060` · Baseline: `npm run typecheck` verde.
 
 Precedência em conflito: (1) decisão mais recente do cliente · (2) código/migrations
@@ -208,8 +208,8 @@ P2/BLOQUEADOS: Expert (fórmulas) · hardware/geolocalizador · IA real · integ
 | I-02 | Domínio "htec.b" (não presumir; não comprar) | NOVO | BLOQUEADO — INFRA | — | — | `nslookup htec.b` sem registro | — | domínio inexistente/não controlado; não comprado |
 | I-03 | HTTPS, PG privado, firewall, restart, logs, healthcheck | PARCIAL | BLOQUEADO — INFRA | HTTPS ✓, 5432/6432 fechados ✓, live/ready ✓ (verificado) | — | `PRODUCAO-VERIFICACAO` §2 | — | restart/logs/monitoramento no HostPanel não verificados |
 | I-04 | Backup real de PostgreSQL/arquivos + restore test descartável | NOVO | BLOQUEADO — INFRA | — | — | — | — | nenhuma prova de backup/restore; não afirmado |
-| I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | deploy no HostPanel só com autorização explícita; produção segue na imagem de 15/10 |
-| I-06 | VPS dedicada nos EUA | NOVO | BLOQUEADO — INFRA | | | | | decisão/aquisição fora do repositório |
+| I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | AGUARDANDO DEPLOY CONECTADO: sem deploy de backend nesta rodada (decisão de 16/10); migrations 0060–0068 não aplicadas em banco remoto; produção segue na versão de 15/10 |
+| I-06 | VPS dedicada nos EUA | NOVO | FUTURO | | | | | fase posterior (decisão de 16/10); até lá o PostgreSQL remoto segue no Supabase Online; auth própria mantida |
 
 ## Fase final — Inspeção funcional, a11y, performance, gates
 
