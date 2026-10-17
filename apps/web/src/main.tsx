@@ -1,8 +1,6 @@
 /**
  * Aurora — ponto de entrada da aplicação web.
  */
-// PRIMEIRO: antes de qualquer contrato ser construído (ver sem-eval.ts).
-import './sem-eval';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app';

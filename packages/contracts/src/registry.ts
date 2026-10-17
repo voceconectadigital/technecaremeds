@@ -22,7 +22,7 @@
  * alguém mudar `@Post('quotes')` para `@Post('proposals')` e esquecer daqui, o
  * gerador acusa a divergência em vez de publicar um documento bonito e falso.
  */
-import { z } from 'zod/v4';
+import { z } from './zod';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 

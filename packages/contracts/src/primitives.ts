@@ -8,7 +8,7 @@
  * `packages/config` continua na API clássica; migra quando for tocado. São o
  * mesmo pacote e a mesma instalação, não dois sistemas de tipos.
  */
-import { z } from 'zod/v4';
+import { z } from './zod';
 
 /**
  * Identificador. UUID v7 gerado pela aplicação (§37).

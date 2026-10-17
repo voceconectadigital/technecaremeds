@@ -11,7 +11,7 @@
  * ENVIA, então é a de entrada que vale para corpo e consulta. Para a resposta,
  * `output` — e é por isso que a função recebe qual das duas se quer.
  */
-import { z } from 'zod/v4';
+import { z } from './zod';
 
 export type JsonSchema = Record<string, unknown>;
 
