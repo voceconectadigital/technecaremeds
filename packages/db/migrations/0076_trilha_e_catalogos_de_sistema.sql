@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0077 — trilha de auditoria fora do "toda leitura" e catálogos de sistema
+-- 0076 — trilha de auditoria fora do "toda leitura" e catálogos de sistema
 --        que não nasceram (pendências do pente-fino de 17/10/2026)
 --
 -- 1. PF-15 — `audit.read` entrava de carona em "toda leitura" (`ALL_READ`) no

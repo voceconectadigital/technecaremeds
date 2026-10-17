@@ -3,7 +3,7 @@
  *
  * Decisão: na aprovação, cada linha de peça reserva só
  * `max(0, orçado − consumo de campo ainda livre)` daquele item na mesma OS, e
- * o abatimento fica gravado na linha (`field_consumed_qty`, migration 0075).
+ * o abatimento fica gravado na linha (`field_consumed_qty`, migration 0074).
  * O valor cobrado não muda.
  *
  *   · campo 2 → orçamento de 2 aprovado → faturado: o físico cai exatamente 2;
@@ -12,7 +12,7 @@
  *   · revisar o aprovado: a versão nova abate de novo (a velha sai da conta);
  *   · cancelar antes de aprovar não mexe em nada; devolução volta a ser livre;
  *   · `fn_quote_items_frozen` continua recusando tudo o que recusava antes;
- *   · a 0075 liga ao orçamento as reservas de aprovação que a 0071 deixou sem
+ *   · a 0074 liga ao orçamento as reservas de aprovação que a 0071 deixou sem
  *     elo (OS com 2+ aprovados) — o faturamento passa a baixá-las.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -290,7 +290,7 @@ describe('PF-34 — revisão do orçamento aprovado', () => {
   });
 });
 
-describe('PF-34 — fn_quote_items_frozen (0075) mantém tudo o que recusava', () => {
+describe('PF-34 — fn_quote_items_frozen (0074) mantém tudo o que recusava', () => {
   let rascunho: string, enviado: string, aprovado: string, item: string;
 
   beforeAll(async () => {
@@ -348,10 +348,10 @@ describe('PF-34 — fn_quote_items_frozen (0075) mantém tudo o que recusava', (
   });
 });
 
-describe('0075 — reservas de aprovação que a 0071 deixou sem orçamento', () => {
-  /** O trecho de dado da 0075, executado de novo sobre o dado "legado" montado aqui. */
+describe('0074 — reservas de aprovação que a 0071 deixou sem orçamento', () => {
+  /** O trecho de dado da 0074, executado de novo sobre o dado "legado" montado aqui. */
   const correcao = (() => {
-    const sql = readFileSync(join(MIGRATIONS_DIR, '0075_orcamento_e_peca_lancada.sql'), 'utf8');
+    const sql = readFileSync(join(MIGRATIONS_DIR, '0074_orcamento_e_peca_lancada.sql'), 'utf8');
     const i = sql.indexOf('-- Reservas de aprovação sem orçamento');
     expect(i).toBeGreaterThan(0);
     return sql.slice(i);

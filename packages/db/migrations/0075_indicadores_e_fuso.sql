@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0076 — indicadores e fuso (pendências do pente-fino de 17/10/2026)
+-- 0075 — indicadores e fuso (pendências do pente-fino de 17/10/2026)
 --
 -- PF-56 — o e-mail das automações (relatório agendado, lembrete) passa pelas
 -- MESMAS preferências de notificação do resto do sistema (`decideDelivery`):

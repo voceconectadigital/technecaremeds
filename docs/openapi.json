@@ -13367,6 +13367,35 @@
                         ]
                       }
                     },
+                    "open_timers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "work_order_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "started_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "work_order_id",
+                          "started_at"
+                        ]
+                      }
+                    },
                     "counts": {
                       "type": "object",
                       "propertyNames": {
@@ -13391,6 +13420,7 @@
                     "transitions",
                     "wait_reasons",
                     "stock",
+                    "open_timers",
                     "counts"
                   ]
                 }
@@ -18110,6 +18140,85 @@
                         "byStatus",
                         "bySector",
                         "withoutSector"
+                      ]
+                    },
+                    "targets": {
+                      "type": "object",
+                      "properties": {
+                        "target_day": {
+                          "type": "string"
+                        },
+                        "items": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "description": "Identificador UUID",
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "HIGHER_IS_BETTER",
+                                      "LOWER_IS_BETTER"
+                                    ]
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "contract",
+                                      "customer",
+                                      "organization"
+                                    ]
+                                  },
+                                  "valid_from": {
+                                    "type": "string"
+                                  },
+                                  "valid_to": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "value",
+                                  "unit",
+                                  "direction",
+                                  "scope",
+                                  "valid_from",
+                                  "valid_to"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "target_day",
+                        "items"
                       ]
                     }
                   },
@@ -33908,6 +34017,9 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "require_operational_result": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false
@@ -33958,12 +34070,16 @@
                     },
                     "features_customized": {
                       "type": "boolean"
+                    },
+                    "require_operational_result": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
                     "usage_mode",
                     "enabled_features",
-                    "features_customized"
+                    "features_customized",
+                    "require_operational_result"
                   ]
                 }
               }
@@ -35522,6 +35638,9 @@
                     "features_customized": {
                       "type": "boolean"
                     },
+                    "require_operational_result": {
+                      "type": "boolean"
+                    },
                     "branding": {
                       "type": "object",
                       "properties": {
@@ -35593,7 +35712,8 @@
                     "status",
                     "usage_mode",
                     "enabled_features",
-                    "features_customized"
+                    "features_customized",
+                    "require_operational_result"
                   ]
                 }
               }
@@ -39649,6 +39769,9 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "field_consumed_qty": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -43917,8 +44040,9 @@
     },
     "/v1/time-entries/{entryId}/stop": {
       "post": {
-        "operationId": "ExecutionResourcesController.stop",
-        "summary": "(sem contrato) ExecutionResourcesController.stop",
+        "operationId": "timeEntries.stop",
+        "summary": "Para o cronômetro (com a hora do aparelho, se vier)",
+        "description": "`ended_at` antes do início → 422. Cronômetro já parado → 409.",
         "tags": [
           "ExecutionResources"
         ],
@@ -43926,23 +44050,60 @@
           "time_entry.create"
         ],
         "x-aurora-source": "apps/api/src/work-orders/execution.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "entryId",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "ended_at": {
+                    "description": "Instante em ISO 8601 com fuso horário",
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "minutes": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "minutes"
+                  ]
+                }
               }
             }
           },
@@ -43958,6 +44119,16 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -44398,6 +44569,10 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "occurred_at": {
+                    "description": "Instante em ISO 8601 com fuso horário",
+                    "type": "string"
                   }
                 }
               }
@@ -44584,6 +44759,10 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "occurred_at": {
+                    "description": "Instante em ISO 8601 com fuso horário",
+                    "type": "string"
                   }
                 }
               }
@@ -46380,6 +46559,267 @@
         ]
       }
     },
+    "/v1/work-orders/{id}/quotes": {
+      "post": {
+        "operationId": "quotes.createFromWorkOrder",
+        "summary": "Gera o orçamento da OS já com as linhas, numa transação só",
+        "description": "Cabeçalho e linhas nascem juntos ou não nascem: uma linha recusada desfaz o orçamento inteiro (a mensagem diz qual linha). O cliente é o da OS. `clientRequestId` é gerado pela tela antes da primeira tentativa: reenviar o MESMO pedido devolve o mesmo orçamento, sem criar outro; o mesmo identificador com outro conteúdo, depois de um sucesso, é 409. Exige `quote.create` e `quote.update` (o mesmo que criar e acrescentar linha), e a OS no escopo de quem pede.",
+        "tags": [
+          "WorkOrderQuotes"
+        ],
+        "x-aurora-permissions": [
+          "quote.create",
+          "quote.update"
+        ],
+        "x-aurora-source": "apps/api/src/quotes/quotes.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "clientRequestId": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "nature": {
+                    "type": "string",
+                    "enum": [
+                      "parts",
+                      "services",
+                      "parts_and_services"
+                    ]
+                  },
+                  "validUntil": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "approverContactId": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "paymentTerms": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "customerNotes": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "internalNotes": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "part",
+                            "service"
+                          ]
+                        },
+                        "itemId": {
+                          "anyOf": [
+                            {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 300
+                        },
+                        "quantity": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "unitPrice": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^\\d{1,12}([.,]\\d{1,2})?$"
+                            },
+                            {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          ]
+                        },
+                        "unit": {
+                          "type": "string",
+                          "maxLength": 20
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "quantity"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "clientRequestId",
+                  "items"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/work-orders/{id}/service-report": {
       "patch": {
         "operationId": "workOrders.serviceReport",
@@ -47014,8 +47454,9 @@
     },
     "/v1/work-orders/{id}/timer/start": {
       "post": {
-        "operationId": "ExecutionController.start",
-        "summary": "(sem contrato) ExecutionController.start",
+        "operationId": "workOrders.startTimer",
+        "summary": "Inicia o cronômetro da pessoa nesta OS",
+        "description": "O aparelho pode gerar o `id` do apontamento (para enfileirar o \"parar\" logo atrás, offline) e mandar `started_at` com a hora dele. O mesmo `id` de novo devolve o mesmo apontamento. Um cronômetro aberto por pessoa: outro aberto → 409.",
         "tags": [
           "Execution"
         ],
@@ -47023,23 +47464,63 @@
           "time_entry.create"
         ],
         "x-aurora-source": "apps/api/src/work-orders/execution.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "started_at": {
+                    "description": "Instante em ISO 8601 com fuso horário",
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "entry_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "entry_id"
+                  ]
+                }
               }
             }
           },
@@ -47055,6 +47536,26 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {

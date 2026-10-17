@@ -188,7 +188,7 @@ describe('bloqueio por tentativas', () => {
     expect('token' in r).toBe(true);
   });
 
-  it('o teto de 15 minutos é alcançável pelo login real (0078)', async () => {
+  it('o teto de 15 minutos é alcançável pelo login real (0077)', async () => {
     const id = newId();
     await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
       id,
@@ -203,7 +203,7 @@ describe('bloqueio por tentativas', () => {
       );
     const errar = () => abrirSessaoPorSenha(t.db, { email: 'teto@hospital.test', senha: 'errada demais 1' });
 
-    // 5 erros: 1 minuto. Antes da 0078, vencido esse minuto a contagem
+    // 5 erros: 1 minuto. Antes da 0077, vencido esse minuto a contagem
     // recomeçava e o teto nunca chegava.
     for (let i = 0; i < 5; i++) await errar();
     for (let i = 0; i < 5; i++) {

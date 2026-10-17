@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0078 — o bloqueio por conta volta a ALCANÇAR o teto (revisão de 17/10/2026)
+-- 0077 — o bloqueio por conta volta a ALCANÇAR o teto (revisão de 17/10/2026)
 --
 -- A 0073 acabou com o bloqueio perpétuo, mas recomeçava a contagem sempre que
 -- QUALQUER bloqueio vencia. Como a tentativa feita durante o bloqueio não é

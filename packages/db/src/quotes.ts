@@ -608,7 +608,7 @@ async function applyEffects(session: TenantSession, quote: QuoteRow, to: QuoteSt
  * boa notícia comercial em erro de sistema. A falta aparece na OS, que é onde
  * alguém pode agir sobre ela.
  *
- * PEÇA JÁ LANÇADA EM CAMPO (PF-34, migration 0075). Se o técnico registrou a
+ * PEÇA JÁ LANÇADA EM CAMPO (PF-34, migration 0074). Se o técnico registrou a
  * peça na OS ANTES da aprovação, ela já saiu do estoque por uma reserva do
  * campo; reservar a linha inteira de novo faria o faturamento baixá-la uma
  * segunda vez. Decisão (integridade primeiro, conservadora): cada linha reserva

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Aurora — 0075 PEÇA LANÇADA EM CAMPO ANTES DA APROVAÇÃO DO ORÇAMENTO (PF-34)
+-- Aurora — 0074 PEÇA LANÇADA EM CAMPO ANTES DA APROVAÇÃO DO ORÇAMENTO (PF-34)
 --
 -- O defeito: o técnico registra a peça na OS (consumo de campo, fora de
 -- qualquer reserva de orçamento) e DEPOIS o orçamento com essa peça é aprovado.
@@ -147,10 +147,10 @@ BEGIN
     FROM aurora.stock_reservations r
    WHERE r.quote_id IS NULL AND r.released_at IS NULL AND r.consumed_qty < r.qty;
   IF v_faturado > 0 THEN
-    RAISE WARNING '0075: % reserva(s) antiga(s) de orçamento já faturado seguem abertas — conferir e ajustar o estoque', v_faturado;
+    RAISE WARNING '0074: % reserva(s) antiga(s) de orçamento já faturado seguem abertas — conferir e ajustar o estoque', v_faturado;
   END IF;
   IF v_sem_elo > 0 THEN
-    RAISE WARNING '0075: % reserva(s) aberta(s) sem orçamento e sem marca única — conferir manualmente', v_sem_elo;
+    RAISE WARNING '0074: % reserva(s) aberta(s) sem orçamento e sem marca única — conferir manualmente', v_sem_elo;
   END IF;
 END
 $do$;
