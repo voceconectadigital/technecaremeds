@@ -20,7 +20,8 @@ test.describe('Clientes: classificação e edição', () => {
     // Pode haver a oferta da primeira unidade: recusa-se.
     const agoraNao = page.getByRole('button', { name: 'Agora não' });
     if (await agoraNao.isVisible().catch(() => false)) await agoraNao.click();
-    await expect(page.getByText(nome)).toBeVisible();
+    // Exato: o diálogo da primeira unidade também cita o nome, e pode abrir depois do clique.
+    await expect(page.getByText(nome, { exact: true })).toBeVisible();
     await expect(page.getByText(/Empresa corporativa · Engenharia clínica/).first()).toBeVisible();
   });
 
