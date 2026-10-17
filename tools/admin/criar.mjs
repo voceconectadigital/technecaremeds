@@ -366,8 +366,11 @@ try {
 
   // O catálogo de permissões é espelho do código (§21) e não vem por migração:
   // sem sincronizar, o papel de fábrica aponta para uma chave que o banco não
-  // conhece, e a chave estrangeira recusa.
+  // conhece, e a chave estrangeira recusa. O mesmo vale para as definições de
+  // catálogo: o provisionamento semeia os tipos de OS (`work_order_type`), e
+  // sem a definição a primeira organização de um banco novo não nascia.
   await db.syncPermissionCatalog(admin);
+  await db.syncCatalogDefinitions(admin);
 
   const userId = existente[0]?.id ?? newId();
   const membershipId = newId();
