@@ -144,6 +144,9 @@ const PerfilPage = preguicosa(() =>
 const AutomacoesPage = preguicosa(() =>
   import('../features/automacoes/lista').then((m) => ({ default: m.AutomacoesPage }))
 );
+const FerramentasPage = preguicosa(() =>
+  import('../features/ferramentas/ferramentas').then((m) => ({ default: m.FerramentasPage }))
+);
 const NegociosPage = preguicosa(() =>
   import('../features/configuracoes/negocios').then((m) => ({ default: m.NegociosPage }))
 );
@@ -287,6 +290,7 @@ export const routeTree = raiz.addChildren([
   }),
   rotaProtegida('/estoque', EstoquePage),
   rotaProtegida('/store', StorePage),
+  rotaProtegida('/ferramentas', FerramentasPage),
 
   rotaProtegida('/documentos', DocumentosPage),
   rotaProtegida('/contratos', ContratosPage),

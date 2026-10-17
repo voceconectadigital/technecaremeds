@@ -51,6 +51,7 @@ import {
   Settings,
   UserCog,
   ShoppingBag,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -174,6 +175,17 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     hint: 'Como estamos indo: indicadores, gráficos e Modo Exibição',
     grupo: 'Inteligência',
     tambem: ['/indicadores'],
+  },
+  {
+    // 16/10/2026 (Fase 12): vitrine do que está a caminho — temperatura,
+    // geolocalização, CME, gases, simuladores, integrações, IA. Sem backend e
+    // sem número: cada cartão diz EM BREVE, FUTURO ou INTEGRAÇÃO PLANEJADA.
+    to: '/ferramentas',
+    label: 'Ferramentas',
+    icon: Wrench,
+    permissions: ['asset.read', 'work_order.read'],
+    hint: 'O que está a caminho: sensores, rastreabilidade, integrações e IA',
+    grupo: 'Inteligência',
   },
 ]);
 
