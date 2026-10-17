@@ -188,6 +188,7 @@ it('captura as respostas da demonstração', async () => {
   }
   await ler(C.insightBacklog, null, { to: periodo.to });
   await ler(C.reportsCatalog);
+  await ler(C.indicatorTargetsList);
 
   /* ------------------------------------------- Painel de Controle e TV */
   // A demonstração ignora from/to ao escolher a captura (PAGINACAO): uma por

@@ -1,45 +1,81 @@
 /**
- * Aurora — "Gerar relatório" do Painel (reunião 16/10/2026, Fase 9 — fundação).
+ * Aurora — "Gerar relatório" do Painel: modelos BASIC, ADVANCED e EXPERT
+ * (reunião 16/10/2026; Fase 1 de indicadores, 17/10/2026).
  *
- * Modelo BASIC, ADVANCED ou EXPERT (nível de RELATÓRIO, não de contrato),
- * seleção de indicadores e os filtros aplicáveis. Os números vêm das MESMAS
- * funções do Painel, com o mesmo recorte de quem pede.
+ * Fluxo: modelo → período → cliente (e contrato) → indicadores do modelo.
  *
- * O que ainda não tem fórmula ou definição aparece marcado, sem número. O PDF é
- * provisório: o layout oficial dos três modelos está AGUARDANDO MODELO PDF
- * OFICIAL, e será refinado em rodada dedicada com os PDFs do cliente.
+ * O catálogo vem do servidor e é a fonte única:
+ *
+ *   · ACTIVE entra marcado; PROVISIONAL aparece desmarcado e identificado como
+ *     provisório (a definição ainda não foi confirmada pelo cliente);
+ *   · PENDING_DEFINITION não entra em relatório — a tela os lista à parte, com
+ *     o motivo, e sem caixa de seleção;
+ *   · o Expert não herda o Basic: cada modelo mostra só os seus indicadores.
+ *
+ * Os números vêm das MESMAS funções do Painel, com o recorte de quem pede. Cada
+ * linha traz a meta vigente (contrato → cliente → organização) ou diz SEM META
+ * CONFIGURADA. O PDF é provisório: o layout oficial está AGUARDANDO MODELO PDF
+ * OFICIAL.
  */
 import { useMemo, useState } from 'react';
 import { FileDown, FileText } from 'lucide-react';
-import { Button, Dialog, Field, Select, StatusChip, cn, useToast } from '@aurora/ui';
-import { assetsFormOptions, reportsCatalog, reportsGenerate } from '@aurora/contracts';
-import { ApiError, lerSessaoGuardada, useApi, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { Button, Dialog, Field, Input, Select, StatusChip, cn, useToast } from '@aurora/ui';
+import {
+  assetsFormOptions,
+  contractsList,
+  customersList,
+  reportsCatalog,
+  reportsGenerate,
+} from '@aurora/contracts';
+import {
+  ApiError,
+  lerSessaoGuardada,
+  useApi,
+  useApiMutation,
+  useApiQuery,
+  usePermissions,
+} from '@aurora/app-kit';
 import { intervaloDoPainel, type FiltrosDoPainel } from './dados';
+import { PERIODOS, type Periodo } from './rotulos';
 
 type Tier = 'basic' | 'advanced' | 'expert';
+type Estado = 'ACTIVE' | 'PROVISIONAL' | 'PENDING_DEFINITION';
 type Indicador = {
   key: string;
   label: string;
-  tier: Tier;
-  status: 'available' | 'awaiting_official_model' | 'awaiting_definition';
+  description: string;
+  unit: string;
+  tiers: Tier[];
+  state: Estado;
+  target_direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER' | 'INFORMATIONAL';
   note?: string;
+};
+type Meta = {
+  value: number;
+  unit: string;
+  direction: 'HIGHER_IS_BETTER' | 'LOWER_IS_BETTER';
+  scope: 'contract' | 'customer' | 'organization';
 };
 type Secao = {
   key: string;
   label: string;
-  status: Indicador['status'];
+  state: Estado;
   note: string | null;
   value: number | null;
-  unit: 'count' | 'minutes' | 'hours' | 'percent' | 'none';
+  unit: string;
   samples: number | null;
   definition: string | null;
+  target: Meta | null;
+  target_evaluation: 'met' | 'not_met' | 'no_value' | 'no_target' | 'informational';
+  target_label: string | null;
 };
+type Pendente = { key: string; label: string; state: Estado; note: string | null };
 
-const ORDEM: Record<Tier, number> = { basic: 0, advanced: 1, expert: 2 };
+const NOMES: Record<Tier, string> = { basic: 'Basic', advanced: 'Advanced', expert: 'Expert' };
 const DESCRICAO: Record<Tier, string> = {
-  basic: 'Disponibilidade do parque, MTTR, MTBF, chamados e conformidades.',
-  advanced: 'Basic + SLA, evolução dos chamados, backlog, OS por situação, obsolescência.',
-  expert: 'Advanced + indicadores avançados (modelo FHEMIG e outros).',
+  basic: 'Chamados, conformidades de planos e avaliação da qualidade.',
+  advanced: 'Basic + SLA, evolução dos chamados, backlog, OS por situação e abertos × encerrados.',
+  expert: 'Conjunto contratual do FHEMIG (IMR). Não herda o Basic nem o Advanced.',
 };
 
 const TIPOS_DE_PLANO = [
@@ -50,18 +86,43 @@ const TIPOS_DE_PLANO = [
   ['qualification', 'Qualificação'],
 ] as const;
 
+const SUFIXO: Record<string, string> = { percent: ' %', minutes: ' min', hours: ' h', score: ' de 5' };
+const ESCOPO: Record<Meta['scope'], string> = {
+  contract: 'do contrato',
+  customer: 'do cliente',
+  organization: 'da organização',
+};
+
+function numero(v: number): string {
+  return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+}
+
 function valorDe(s: Secao): string {
-  if (s.status === 'awaiting_official_model') return 'AGUARDANDO MODELO PDF OFICIAL';
-  if (s.status === 'awaiting_definition') return 'Aguardando definição do cliente';
-  if (s.value === null) return 'Sem dados suficientes no período';
-  const v = s.value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-  return s.unit === 'percent'
-    ? `${v} %`
-    : s.unit === 'minutes'
-      ? `${v} min`
-      : s.unit === 'hours'
-        ? `${v} h`
-        : v;
+  return s.value === null ? 'Sem dados suficientes no período' : `${numero(s.value)}${SUFIXO[s.unit] ?? ''}`;
+}
+
+function MetaDaSecao({ s }: { s: Secao }) {
+  if (s.target_evaluation === 'informational') return null;
+  if (!s.target) {
+    return <span className="text-xs font-medium text-muted">{s.target_label ?? 'SEM META CONFIGURADA'}</span>;
+  }
+  const sinal = s.target.direction === 'HIGHER_IS_BETTER' ? '≥' : '≤';
+  return (
+    <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+      Meta {sinal} {numero(s.target.value)}
+      {SUFIXO[s.target.unit] ?? ''} ({ESCOPO[s.target.scope]})
+      {s.target_evaluation === 'met' && (
+        <StatusChip size="sm" tone="good">
+          Meta cumprida
+        </StatusChip>
+      )}
+      {s.target_evaluation === 'not_met' && (
+        <StatusChip size="sm" tone="bad">
+          Abaixo da meta
+        </StatusChip>
+      )}
+    </span>
+  );
 }
 
 export function BotaoGerarRelatorio({ f }: { f: FiltrosDoPainel }) {
@@ -79,38 +140,59 @@ export function BotaoGerarRelatorio({ f }: { f: FiltrosDoPainel }) {
 function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () => void }) {
   const toast = useToast();
   const api = useApi();
+  const { can } = usePermissions();
   const [tier, setTier] = useState<Tier>('basic');
   const [marcados, setMarcados] = useState<string[] | null>(null);
+  const [periodo, setPeriodo] = useState<Periodo>(f.periodo);
+  const [de, setDe] = useState(f.de);
+  const [ate, setAte] = useState(f.ate);
+  const [cliente, setCliente] = useState(f.cliente);
+  const [contrato, setContrato] = useState('');
   const [tipoPlano, setTipoPlano] = useState('');
   const [categoria, setCategoria] = useState('');
-  const [resultado, setResultado] = useState<Secao[] | null>(null);
+  const [resultado, setResultado] = useState<{ sections: Secao[]; pending: Pendente[] } | null>(null);
   const [baixando, setBaixando] = useState(false);
+
   const { data: catalogo } = useApiQuery(reportsCatalog) as {
     data: { indicators: Indicador[]; layout_note: string } | undefined;
   };
   const { data: opcoes } = useApiQuery(assetsFormOptions) as {
     data: { categories: { id: string; name: string; family_key?: string | null }[] } | undefined;
   };
+  const { data: clientes } = useApiQuery(customersList) as {
+    data: { items: { id: string; name: string }[] } | undefined;
+  };
+  const veContratos = can('contract.read');
+  const { data: contratos } = useApiQuery(
+    contractsList,
+    { query: { customerId: cliente } },
+    { enabled: veContratos && cliente !== '' }
+  ) as { data: { items: { id: string; number: string; title: string | null }[] } | undefined };
   const gerar = useApiMutation(reportsGenerate, {
     onError: (e: ApiError) => toast.error('Relatório não gerado', e.problem.message),
   });
 
-  const doNivel = useMemo(
-    () => (catalogo?.indicators ?? []).filter((i) => ORDEM[i.tier] <= ORDEM[tier]),
+  const doModelo = useMemo(
+    () => (catalogo?.indicators ?? []).filter((i) => i.tiers.includes(tier)),
     [catalogo, tier]
   );
-  const escolhidos = marcados ?? doNivel.map((i) => i.key);
-  const intervalo = intervaloDoPainel(f);
+  const selecionaveis = doModelo.filter((i) => i.state !== 'PENDING_DEFINITION');
+  const pendentes = doModelo.filter((i) => i.state === 'PENDING_DEFINITION');
+  // ACTIVE entra sozinho; PROVISIONAL só se a pessoa marcar.
+  const escolhidos = marcados ?? selecionaveis.filter((i) => i.state === 'ACTIVE').map((i) => i.key);
+  const intervalo = intervaloDoPainel({ periodo, de, ate });
+  const setorValido = cliente === f.cliente && f.setor !== '';
 
   function corpo() {
     if (intervalo.problema !== null) return null;
     return {
       tier,
-      indicators: escolhidos.filter((k) => doNivel.some((i) => i.key === k)),
+      indicators: escolhidos.filter((k) => selecionaveis.some((i) => i.key === k)),
       from: intervalo.from,
       to: intervalo.to,
-      ...(f.cliente ? { customer_id: f.cliente } : {}),
-      ...(f.setor ? { sector_id: f.setor } : {}),
+      ...(cliente ? { customer_id: cliente } : {}),
+      ...(contrato ? { contract_id: contrato } : {}),
+      ...(setorValido ? { sector_id: f.setor } : {}),
       ...(tipoPlano ? { plan_kind: tipoPlano as 'preventive' } : {}),
       ...(categoria ? { asset_category_id: categoria } : {}),
     };
@@ -146,20 +228,22 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
     }
   }
 
+  const semNada = escolhidos.filter((k) => selecionaveis.some((i) => i.key === k)).length === 0;
+
   return (
     <Dialog
       open
       size="lg"
       onOpenChange={(o) => !o && onFechar()}
       title="Gerar relatório"
-      description="Modelo, indicadores e filtros. Usa o período, o cliente e o setor escolhidos no Painel."
+      description="Escolha o modelo, o período, o cliente e os indicadores."
       footer={
         <>
           <Button onClick={onFechar}>Fechar</Button>
           <Button
             icon={<FileDown className="size-4" />}
             loading={baixando}
-            disabled={Boolean(intervalo.problema)}
+            disabled={Boolean(intervalo.problema) || semNada}
             onClick={() => void baixarPdf()}
           >
             Baixar PDF (provisório)
@@ -167,13 +251,13 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
           <Button
             variant="primary"
             loading={gerar.isPending}
-            disabled={Boolean(intervalo.problema)}
+            disabled={Boolean(intervalo.problema) || semNada}
             onClick={() => {
               const b = corpo();
               if (b)
                 gerar.mutate(
                   { body: b },
-                  { onSuccess: (r) => setResultado((r as { sections: Secao[] }).sections) }
+                  { onSuccess: (r) => setResultado(r as { sections: Secao[]; pending: Pendente[] }) }
                 );
             }}
           >
@@ -186,8 +270,9 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
         <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
           Layout final: AGUARDANDO MODELO PDF OFICIAL. {catalogo?.layout_note}
         </p>
+
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-text">Modelo de relatório</legend>
+          <legend className="mb-2 text-sm font-medium text-text">1. Modelo de relatório</legend>
           <div role="radiogroup" aria-label="Modelo de relatório" className="grid gap-2 sm:grid-cols-3">
             {(['basic', 'advanced', 'expert'] as const).map((t) => (
               <label
@@ -208,7 +293,7 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
                       setResultado(null);
                     }}
                   />
-                  {t === 'basic' ? 'Basic' : t === 'advanced' ? 'Advanced' : 'Expert'}
+                  {NOMES[t]}
                 </span>
                 <span className="text-xs text-muted">{DESCRICAO[t]}</span>
               </label>
@@ -217,9 +302,67 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
         </fieldset>
 
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-text">Indicadores</legend>
+          <legend className="mb-2 text-sm font-medium text-text">2. Período e cliente</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Período">
+              <Select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+                {PERIODOS.map((p) => (
+                  <option key={p.valor} value={p.valor}>
+                    Últimos {p.rotulo}
+                  </option>
+                ))}
+                <option value="custom">Personalizado</option>
+              </Select>
+            </Field>
+            <Field label="Cliente">
+              <Select
+                value={cliente}
+                onChange={(e) => {
+                  setCliente(e.target.value);
+                  setContrato('');
+                }}
+              >
+                <option value="">Todos os clientes</option>
+                {(clientes?.items ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {periodo === 'custom' && (
+              <>
+                <Field label="De">
+                  <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
+                </Field>
+                <Field label="Até">
+                  <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+                </Field>
+              </>
+            )}
+            {veContratos && cliente !== '' && (contratos?.items.length ?? 0) > 0 && (
+              <Field label="Contrato" hint="Escolhe a meta do contrato; os números seguem o cliente">
+                <Select value={contrato} onChange={(e) => setContrato(e.target.value)}>
+                  <option value="">Sem contrato específico</option>
+                  {(contratos?.items ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.number}
+                      {c.title ? ` — ${c.title}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+          </div>
+          {intervalo.problema && <p className="mt-2 text-sm text-bad-text">{intervalo.problema}</p>}
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-text">
+            3. Indicadores do modelo {NOMES[tier]}
+          </legend>
           <ul className="grid gap-1 sm:grid-cols-2">
-            {doNivel.map((i) => (
+            {selecionaveis.map((i) => (
               <li key={i.key}>
                 <label className="flex min-h-11 items-center gap-2 text-sm">
                   <input
@@ -232,15 +375,30 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
                     }
                   />
                   <span className="min-w-0 flex-1">{i.label}</span>
-                  {i.status !== 'available' && (
+                  {i.state === 'PROVISIONAL' && (
                     <StatusChip size="sm" tone="warn" hint={i.note}>
-                      {i.status === 'awaiting_official_model' ? 'Aguardando modelo' : 'Aguardando definição'}
+                      Provisório
                     </StatusChip>
                   )}
                 </label>
               </li>
             ))}
           </ul>
+          {pendentes.length > 0 && (
+            <details className="mt-2 rounded-control border border-border-subtle px-3 py-2">
+              <summary className="cursor-pointer text-sm text-muted">
+                {pendentes.length} indicador(es) do modelo aguardando definição — fora do relatório
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1.5">
+                {pendentes.map((i) => (
+                  <li key={i.key} className="text-xs text-muted">
+                    <span className="font-medium text-text">{i.label}</span>
+                    {i.note ? ` — ${i.note}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </fieldset>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -266,33 +424,32 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
             </Select>
           </Field>
         </div>
-        {intervalo.problema && <p className="text-sm text-bad-text">{intervalo.problema}</p>}
 
         {resultado && (
           <section
             aria-label="Prévia do relatório"
             className="flex flex-col divide-y divide-border-subtle rounded-control border border-border-subtle"
           >
-            {resultado.map((s) => (
+            {resultado.sections.map((s) => (
               <div key={s.key} className="flex flex-col gap-0.5 px-3 py-2">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm text-text">{s.label}</span>
-                  <span
-                    className={cn(
-                      'text-sm font-semibold tabular-nums',
-                      s.status !== 'available' && 'text-warn-text'
+                  <span className="flex items-center gap-2 text-sm text-text">
+                    {s.label}
+                    {s.state === 'PROVISIONAL' && (
+                      <StatusChip size="sm" tone="warn" hint={s.note ?? undefined}>
+                        Provisório
+                      </StatusChip>
                     )}
-                  >
-                    {valorDe(s)}
                   </span>
+                  <span className="text-sm font-semibold tabular-nums">{valorDe(s)}</span>
                 </div>
-                {(s.definition || s.note) && (
-                  <span className="text-xs text-muted">
-                    {[s.definition, s.note].filter(Boolean).join(' · ')}
-                  </span>
-                )}
+                <MetaDaSecao s={s} />
+                {s.definition && <span className="text-xs text-muted">{s.definition}</span>}
               </div>
             ))}
+            {resultado.sections.length === 0 && (
+              <p className="px-3 py-2 text-sm text-muted">Nenhum indicador selecionado.</p>
+            )}
           </section>
         )}
       </div>
