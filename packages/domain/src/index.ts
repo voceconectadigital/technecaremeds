@@ -32,4 +32,5 @@ export * from './customer-kinds';
 export * from './asset-families';
 export * from './request-types';
 export * from './report-tiers';
+export * from './indicator-targets';
 export * from './automation-schedule';

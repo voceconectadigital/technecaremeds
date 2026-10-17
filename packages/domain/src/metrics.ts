@@ -38,6 +38,8 @@ export const METRIC_KEYS = [
   'productivity',
   'labor_hours',
   'first_response_time',
+  'opened_vs_closed',
+  'service_rating',
 ] as const;
 export type MetricKey = (typeof METRIC_KEYS)[number];
 
@@ -49,7 +51,7 @@ export interface MetricDefinition {
   readonly numerator: string;
   /** `null` quando a métrica é contagem simples e não tem denominador. */
   readonly denominator: string | null;
-  readonly unit: 'count' | 'minutes' | 'hours' | 'percent' | 'days';
+  readonly unit: 'count' | 'minutes' | 'hours' | 'percent' | 'days' | 'score';
   /** O que fica DE FORA, e por quê — a parte que costuma faltar. */
   readonly exclusions: readonly string[];
   /** Aviso sobre comparar com o sistema antigo. */
@@ -213,6 +215,35 @@ export const METRIC_DEFINITIONS: Readonly<Record<MetricKey, MetricDefinition>> =
     exclusions: ['solicitações ainda não triadas'],
     comparability:
       'substitui a sigla "TMAC" da referência, cujo significado só pôde ser inferido e cuja fórmula não foi confirmada',
+  },
+  opened_vs_closed: {
+    key: 'opened_vs_closed',
+    label: 'Chamados Abertos x Encerrados',
+    purpose: 'Capacidade de dar vazão à demanda do período',
+    numerator: 'ordens de serviço encerradas (concluídas) dentro do período',
+    denominator: 'ordens de serviço abertas dentro do período',
+    unit: 'percent',
+    exclusions: [
+      'canceladas, que não representam entrega',
+      'rascunhos, que ainda não foram abertos',
+      'a idade da OS: encerrar no período uma OS aberta antes conta — é fluxo, não coorte, e por isso pode passar de 100 %',
+    ],
+    comparability:
+      'derivada do modelo Advanced (valores de 117 % e 125 % só são possíveis com fluxos do período); não é o ICRS',
+  },
+  service_rating: {
+    key: 'service_rating',
+    label: 'Avaliação da qualidade dos serviços',
+    purpose: 'Percepção de quem pediu o atendimento',
+    numerator: 'soma das notas (1 a 5) das solicitações avaliadas cujo atendimento terminou no período',
+    denominator: 'quantidade de solicitações avaliadas nesse período',
+    unit: 'score',
+    exclusions: [
+      'solicitações sem avaliação: ausência de nota não é nota baixa',
+      'atendimentos que terminaram fora do período',
+    ],
+    comparability:
+      'a média do PDF Basic (4,7) só bate com 67 avaliações, e o painel diz 64; aqui a média e a quantidade vêm da mesma lista',
   },
 });
 

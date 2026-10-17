@@ -1,20 +1,29 @@
 /**
- * Aurora — modelos de RELATÓRIO: BASIC, ADVANCED, EXPERT (reunião 16/10/2026, Fase 9).
+ * Aurora — CATÁLOGO CENTRAL de indicadores e modelos de RELATÓRIO
+ * (BASIC / ADVANCED / EXPERT — reunião 16/10/2026; auditoria 17/10/2026).
  *
- * São níveis de RELATÓRIO — não confundir com tipo de CONTRATO.
+ * É a ÚNICA fonte de definição dos indicadores. O Painel, o relatório gerado e
+ * o relatório agendado das automações leem daqui: nenhum dos três redefine
+ * nome, unidade, sentido de meta ou situação.
  *
- * Esta rodada entrega só a FUNDAÇÃO, por decisão do cliente: os PDFs oficiais
- * dos três modelos chegam numa rodada dedicada. Até lá:
+ * Modelos de relatório não são tipos de contrato.
  *
- *   · cada indicador declara o NÍVEL mínimo e a SITUAÇÃO;
- *   · `available` = calculado com dado real por função que já existe;
- *   · `awaiting_official_model` = AGUARDANDO MODELO PDF OFICIAL (fórmula,
- *     composição ou gráfico ainda não formalizados — não se inventa);
- *   · `awaiting_definition` = depende de definição do cliente (ex.: o que conta
- *     como "parado" para disponibilidade no tempo).
+ *   · BASIC e ADVANCED compartilham indicadores — um indicador lista em `tiers`
+ *     os modelos em que pode aparecer;
+ *   · EXPERT NÃO herda o Basic nem o Advanced: o conjunto dele é o contratual
+ *     do FHEMIG (IMR, 16 itens). Por isso `tiers` é uma lista explícita, e não
+ *     um "nível mínimo".
  *
- * O layout final de TODOS os modelos também está AGUARDANDO MODELO PDF OFICIAL:
- * o PDF gerado hoje é provisório e diz isso na faixa de cada página.
+ * SITUAÇÃO (`state`)
+ *
+ *   · ACTIVE — definição segura; entra sozinho no relatório;
+ *   · PROVISIONAL — o sistema calcula, mas a definição ainda não foi confirmada
+ *     pelo cliente; só entra se for pedido explicitamente e sai marcado;
+ *   · PENDING_DEFINITION — falta definição ou dado; NÃO entra em relatório
+ *     (aparece só no catálogo, com o motivo). Nada aqui é inventado: a
+ *     fórmula de um indicador pendente não existe no código.
+ *
+ * O layout final dos PDFs continua AGUARDANDO MODELO PDF OFICIAL.
  */
 export const REPORT_TIERS = ['basic', 'advanced', 'expert'] as const;
 export type ReportTier = (typeof REPORT_TIERS)[number];
@@ -25,14 +34,42 @@ export const REPORT_TIER_LABEL: Record<ReportTier, string> = {
   expert: 'Expert',
 };
 
-export type ReportIndicatorStatus = 'available' | 'awaiting_official_model' | 'awaiting_definition';
+export const INDICATOR_STATES = ['ACTIVE', 'PROVISIONAL', 'PENDING_DEFINITION'] as const;
+export type IndicatorState = (typeof INDICATOR_STATES)[number];
+
+export const TARGET_DIRECTIONS = ['HIGHER_IS_BETTER', 'LOWER_IS_BETTER', 'INFORMATIONAL'] as const;
+export type TargetDirection = (typeof TARGET_DIRECTIONS)[number];
+
+export type IndicatorUnit = 'count' | 'minutes' | 'hours' | 'percent' | 'score' | 'none';
+
+export type IndicatorCategory =
+  'volume' | 'time' | 'compliance' | 'quality' | 'service_level' | 'availability' | 'park' | 'contractual';
+
+/** Por que um indicador pendente está pendente. */
+export type PendingKind = 'DEFINITION' | 'DATA_MODEL';
+
+/**
+ * Situação legada do indicador, mantida na resposta da API porque os relatórios
+ * agendados já gravados (`automation_report_outputs.sections`) e a tela de
+ * tarefas a leem. Derivada de `state`; não é fonte de verdade.
+ */
+export type LegacyIndicatorStatus = 'available' | 'awaiting_official_model' | 'awaiting_definition';
 
 export interface ReportIndicator {
+  /** Código estável. Nunca é reutilizado nem renomeado. */
   readonly key: string;
   readonly label: string;
-  /** Nível MÍNIMO em que aparece (os níveis acima herdam). */
-  readonly tier: ReportTier;
-  readonly status: ReportIndicatorStatus;
+  readonly description: string;
+  readonly unit: IndicatorUnit;
+  readonly category: IndicatorCategory;
+  /** Modelos em que o indicador pode aparecer. Lista explícita: Expert não herda. */
+  readonly tiers: readonly ReportTier[];
+  readonly state: IndicatorState;
+  readonly targetDirection: TargetDirection;
+  /** Fonte de cálculo (função/tabela) — ou `null` quando não há cálculo. */
+  readonly source: string | null;
+  /** Só para `PENDING_DEFINITION`. */
+  readonly pendingKind?: PendingKind;
   /** O que está faltando, ou como o número é lido hoje. */
   readonly note?: string;
 }
@@ -40,81 +77,375 @@ export interface ReportIndicator {
 export const REPORT_LAYOUT_STATUS = 'awaiting_official_model' as const;
 export const AGUARDANDO_MODELO = 'AGUARDANDO MODELO PDF OFICIAL';
 
+export function legacyStatusOf(state: IndicatorState): LegacyIndicatorStatus {
+  return state === 'PENDING_DEFINITION' ? 'awaiting_definition' : 'available';
+}
+
+const BA: readonly ReportTier[] = ['basic', 'advanced'];
+const A: readonly ReportTier[] = ['advanced'];
+const BAE: readonly ReportTier[] = ['basic', 'advanced', 'expert'];
+const BE: readonly ReportTier[] = ['basic', 'expert'];
+const E: readonly ReportTier[] = ['expert'];
+
+const IMR = 'Indicador do IMR (FHEMIG) — fórmula aguardando definição do cliente.';
+
 export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
-  // --- BASIC ---------------------------------------------------------------
+  // --- volume --------------------------------------------------------------
   {
-    key: 'park_availability_snapshot',
-    label: 'Disponibilidade do parque (situação cadastrada, agora)',
-    tier: 'basic',
-    status: 'available',
-    note: 'Fotografia da situação cadastrada dos equipamentos. Disponibilidade NO TEMPO aguarda a definição de "parado".',
+    key: 'work_orders_opened',
+    label: 'Chamados abertos (OS)',
+    description: 'Ordens de serviço abertas no período.',
+    unit: 'count',
+    category: 'volume',
+    tiers: BA,
+    state: 'ACTIVE',
+    targetDirection: 'INFORMATIONAL',
+    source: 'metrics.workOrdersOpened',
   },
-  { key: 'mttr', label: 'MTTR', tier: 'basic', status: 'available' },
-  { key: 'mtbf', label: 'MTBF', tier: 'basic', status: 'available' },
-  { key: 'work_orders_opened', label: 'Chamados abertos (OS)', tier: 'basic', status: 'available' },
-  { key: 'work_orders_completed', label: 'Chamados concluídos (OS)', tier: 'basic', status: 'available' },
-  { key: 'compliance_preventive', label: 'Conformidade de preventivas', tier: 'basic', status: 'available' },
-  { key: 'compliance_calibration', label: 'Conformidade de calibrações', tier: 'basic', status: 'available' },
+  {
+    key: 'work_orders_completed',
+    label: 'Chamados concluídos (OS)',
+    description: 'Ordens de serviço concluídas no período (canceladas não contam).',
+    unit: 'count',
+    category: 'volume',
+    tiers: BA,
+    state: 'ACTIVE',
+    targetDirection: 'INFORMATIONAL',
+    source: 'metrics.workOrdersCompleted',
+  },
+  {
+    key: 'opened_vs_closed',
+    label: 'Chamados Abertos x Encerrados',
+    description:
+      'OS encerradas no período ÷ OS abertas no período × 100. Fluxos do período, não coorte: pode passar de 100 %. Não é o ICRS.',
+    unit: 'percent',
+    category: 'volume',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'metrics.openedVsClosed',
+    note: 'Auditoria 17/10, classe B: valores acima de 100 % do modelo oficial só são possíveis com fluxos do período.',
+  },
+  {
+    key: 'work_order_evolution',
+    label: 'Evolução dos chamados (abertos × concluídos)',
+    description: 'Abertas e concluídas por fatia do período.',
+    unit: 'none',
+    category: 'volume',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'INFORMATIONAL',
+    source: 'painel.workOrderSeries',
+  },
+  {
+    key: 'backlog',
+    label: 'Backlog',
+    description: 'OS ainda não concluídas na data de corte, por idade.',
+    unit: 'count',
+    category: 'volume',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'LOWER_IS_BETTER',
+    source: 'metrics.backlog',
+  },
+  {
+    key: 'work_orders_by_status',
+    label: 'OS por situação (agora)',
+    description: 'OS abertas agora, por situação.',
+    unit: 'count',
+    category: 'volume',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'INFORMATIONAL',
+    source: 'painel.openWorkOrdersSnapshot',
+  },
+  {
+    key: 'preventive_vs_corrective',
+    label: 'Preventiva × corretiva',
+    description: 'Mistura de OS concluídas entre preventiva e corretiva.',
+    unit: 'none',
+    category: 'volume',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'INFORMATIONAL',
+    source: 'metrics.preventiveVsCorrective',
+  },
+  {
+    key: 'requests_fulfilled_ratio',
+    label: 'Chamados realizados/solicitados (ICRS)',
+    description: 'Realizados ÷ solicitados × 100.',
+    unit: 'percent',
+    category: 'volume',
+    tiers: BE,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DEFINITION',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: null,
+    note:
+      'A razão está comprovada no Data Studio (1.713 ÷ 1.967 = 87,09 %), mas a população de "solicitados" e ' +
+      '"realizados" não foi confirmada (P-04). Calculadora genérica pronta; nenhum registro é mapeado ainda.',
+  },
+  // --- tempos --------------------------------------------------------------
+  {
+    key: 'mttr',
+    label: 'MTTR',
+    description: 'Tempo médio de reparo das corretivas concluídas (tempo corrido abertura → conclusão).',
+    unit: 'minutes',
+    category: 'time',
+    tiers: BA,
+    state: 'PROVISIONAL',
+    targetDirection: 'LOWER_IS_BETTER',
+    source: 'metrics.mttr',
+    note: 'Definição do sistema (tempo corrido). O PDF Basic fala em tempo "em atendimento": aguarda P-01 e P-12.',
+  },
+  {
+    key: 'mtbf',
+    label: 'MTBF',
+    description: 'Tempo médio entre falhas por equipamento, dentro do período.',
+    unit: 'minutes',
+    category: 'time',
+    tiers: BA,
+    state: 'PROVISIONAL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'metrics.mtbf',
+    note: 'Calculado em minutos (como o Painel). Unidade e janela divergem entre os documentos do cliente: aguarda P-02 e P-12.',
+  },
+  // --- conformidade --------------------------------------------------------
+  {
+    key: 'compliance_preventive',
+    label: 'Conformidade de preventivas',
+    description: 'Itens de plano preventivo realizados ÷ (programados − dispensados), no período.',
+    unit: 'percent',
+    category: 'compliance',
+    tiers: BAE,
+    state: 'PROVISIONAL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'plan-board.byKind',
+    note: 'É o ACM do Data Studio (razão comprovada). Falta confirmar se preventiva feita com atraso conta como realizada (P-06, P-07).',
+  },
+  {
+    key: 'compliance_calibration',
+    label: 'Conformidade de calibrações',
+    description: 'Itens de plano de calibração realizados ÷ (programados − dispensados), no período.',
+    unit: 'percent',
+    category: 'compliance',
+    tiers: BA,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'plan-board.byKind',
+    note: 'Separada das demais por decisão da reunião; o PDF Basic agrega MP+CAL+TSE (P-10).',
+  },
   {
     key: 'compliance_electrical_safety',
     label: 'Conformidade de TSE',
-    tier: 'basic',
-    status: 'available',
+    description: 'Itens de plano de TSE realizados ÷ (programados − dispensados), no período.',
+    unit: 'percent',
+    category: 'compliance',
+    tiers: BA,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'plan-board.byKind',
     note: 'Execução no prazo dos planos de TSE. Não é veredito elétrico: limites de TSE seguem bloqueados (especialista).',
   },
   {
     key: 'compliance_qualification',
     label: 'Conformidade de qualificações',
-    tier: 'basic',
-    status: 'available',
+    description: 'Itens de plano de qualificação realizados ÷ (programados − dispensados), no período.',
+    unit: 'percent',
+    category: 'compliance',
+    tiers: BA,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'plan-board.byKind',
   },
-  // --- ADVANCED ------------------------------------------------------------
-  { key: 'sla_compliance', label: 'SLA', tier: 'advanced', status: 'available' },
+  // --- nível de serviço e qualidade ---------------------------------------
   {
-    key: 'work_order_evolution',
-    label: 'Evolução dos chamados (abertos × concluídos)',
-    tier: 'advanced',
-    status: 'available',
+    key: 'sla_compliance',
+    label: 'SLA',
+    description: 'Relógios de SLA cumpridos ÷ (cumpridos + violados), no período.',
+    unit: 'percent',
+    category: 'service_level',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'metrics.slaCompliance',
   },
-  { key: 'backlog', label: 'Backlog', tier: 'advanced', status: 'available' },
-  { key: 'work_orders_by_status', label: 'OS por situação (agora)', tier: 'advanced', status: 'available' },
-  { key: 'preventive_vs_corrective', label: 'Preventiva × corretiva', tier: 'advanced', status: 'available' },
+  {
+    key: 'service_rating',
+    label: 'Avaliação da qualidade dos serviços',
+    description: 'Média das avaliações de 1 a 5 dadas pelo solicitante, no período, com a distribuição.',
+    unit: 'score',
+    category: 'quality',
+    tiers: BAE,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'metrics.serviceRating',
+    note: 'Conta as solicitações encerradas no período e já avaliadas. A inconsistência 64 × 67 do PDF Basic não é reproduzida.',
+  },
+  {
+    key: 'training_ratio',
+    label: 'Treinamentos realizados/solicitados',
+    description: 'Treinamentos realizados ÷ solicitados × 100, no período.',
+    unit: 'percent',
+    category: 'compliance',
+    tiers: BE,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DATA_MODEL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: null,
+    note:
+      'Sem vínculo inequívoco solicitado → realizado: a solicitação `requested_type = training` pode gerar OS de ' +
+      'qualquer tipo, a OS do tipo treinamento não aponta para o treinamento solicitado, e não há critério de ' +
+      '"realizado" nem entidade de educação continuada.',
+  },
+  // --- parque e disponibilidade -------------------------------------------
+  {
+    key: 'park_availability_snapshot',
+    label: 'Disponibilidade do parque (situação cadastrada, agora)',
+    description: 'Equipamentos em operação ou reserva ÷ equipamentos cadastrados, na situação de agora.',
+    unit: 'percent',
+    category: 'park',
+    tiers: BA,
+    state: 'PROVISIONAL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'painel.parkSnapshot',
+    note: 'Fotografia da situação cadastrada. Disponibilidade NO TEMPO aguarda a definição de "parado" (P-09).',
+  },
   {
     key: 'obsolescence',
     label: 'Obsolescência',
-    tier: 'advanced',
-    status: 'awaiting_definition',
-    note: 'Sem critério de obsolescência definido pelo cliente (idade? fim de suporte do fabricante? custo?).',
+    description: 'Equipamentos obsoletos no parque.',
+    unit: 'count',
+    category: 'park',
+    tiers: A,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DEFINITION',
+    targetDirection: 'LOWER_IS_BETTER',
+    source: null,
+    note: 'Sem critério de obsolescência definido pelo cliente (idade? fim de suporte? custo?) — P-16.',
   },
-  // --- EXPERT --------------------------------------------------------------
+  // --- EXPERT: os 16 itens do IMR (FHEMIG) ---------------------------------
   {
-    key: 'fhemig_indicators',
-    label: 'Indicadores no modelo FHEMIG',
-    tier: 'expert',
-    status: 'awaiting_official_model',
-    note: `${AGUARDANDO_MODELO}: fórmulas e composição ainda não entregues.`,
+    key: 'first_response_time',
+    label: 'Tempo médio para o primeiro atendimento (TMPA)',
+    description: 'Tempo médio até o primeiro atendimento da corretiva.',
+    unit: 'hours',
+    category: 'time',
+    tiers: E,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DEFINITION',
+    targetDirection: 'LOWER_IS_BETTER',
+    source: null,
+    note: 'Cinco marcos candidatos para o fim do relógio; horas corridas ou úteis (P-03). Não usar o `firstResponseTime` do Painel como se fosse este.',
+  },
+  ...(
+    [
+      ['internal', 'Interno'],
+      ['external', 'Externo'],
+      ['global', 'Global'],
+    ] as const
+  ).flatMap(([sufixo, rotulo]) => [
+    {
+      key: `availability_${sufixo}`,
+      label: `Disponibilidade — ${rotulo}`,
+      description: `Disponibilidade temporal do parque (${rotulo.toLowerCase()}).`,
+      unit: 'percent' as const,
+      category: 'availability' as const,
+      tiers: E,
+      state: 'PENDING_DEFINITION' as const,
+      pendingKind: 'DATA_MODEL' as const,
+      targetDirection: 'HIGHER_IS_BETTER' as const,
+      source: null,
+      note: `${IMR} Falta a definição de "parado" (P-09), a classificação interno × externo (P-08) e a relação do Global (P-05).`,
+    },
+    {
+      key: `tmrg_${sufixo}`,
+      label: `TMRG — ${rotulo}`,
+      description: `Tempo médio de resolutividade geral (${rotulo.toLowerCase()}).`,
+      unit: 'hours' as const,
+      category: 'time' as const,
+      tiers: E,
+      state: 'PENDING_DEFINITION' as const,
+      pendingKind: 'DATA_MODEL' as const,
+      targetDirection: 'LOWER_IS_BETTER' as const,
+      source: null,
+      note: `${IMR} Falta classificar a OS como interna/externa (P-08), o relógio e a relação do Global (P-05).`,
+    },
+    {
+      key: `critical_resolution_${sufixo}`,
+      label: `Resolutividade crítica — ${rotulo}`,
+      description: `Tempo médio de atendimento e resolutividade dos chamados críticos (${rotulo.toLowerCase()}).`,
+      unit: 'hours' as const,
+      category: 'time' as const,
+      tiers: E,
+      state: 'PENDING_DEFINITION' as const,
+      pendingKind: 'DEFINITION' as const,
+      targetDirection: 'LOWER_IS_BETTER' as const,
+      source: null,
+      note: `${IMR} Falta definir "crítica" (prioridade × criticidade do equipamento, P-11) e interno/externo (P-08).`,
+    },
+  ]),
+  {
+    key: 'quality_activities_on_time',
+    label: 'Adesão às atividades propostas pela qualidade dentro do prazo',
+    description: 'Atividades da qualidade concluídas no prazo ÷ propostas.',
+    unit: 'percent',
+    category: 'contractual',
+    tiers: E,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DATA_MODEL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: null,
+    note: `${IMR} O sistema não tem o dado de "atividade proposta pela qualidade" (P-15).`,
   },
   {
-    key: 'availability_over_time',
-    label: 'Disponibilidade no tempo',
-    tier: 'expert',
-    status: 'awaiting_definition',
-    note: 'Depende da definição de "tempo parado" pelo cliente.',
+    key: 'attendance',
+    label: 'Assiduidade nos postos de trabalho',
+    description: 'Presença registrada ÷ escala prevista.',
+    unit: 'percent',
+    category: 'contractual',
+    tiers: E,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DATA_MODEL',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: null,
+    note: `${IMR} O sistema não tem escala nem presença (P-15).`,
   },
   {
-    key: 'expert_advanced_indicators',
-    label: 'Indicadores avançados do modelo Expert',
-    tier: 'expert',
-    status: 'awaiting_official_model',
-    note: `${AGUARDANDO_MODELO}.`,
+    key: 'imr_penalty',
+    label: 'Glosa / desconto do IMR',
+    description: 'Desconto contratual calculado a partir do resultado dos indicadores do IMR.',
+    unit: 'none',
+    category: 'contractual',
+    tiers: E,
+    state: 'PENDING_DEFINITION',
+    pendingKind: 'DEFINITION',
+    targetDirection: 'INFORMATIONAL',
+    source: null,
+    note: 'BLOQUEADO — CLIENTE: o IMR de exemplo tem todos os descontos zerados; faixas, pesos, teto e regra cumulativa não existem (P-14). Não se aplica desconto.',
   },
 ]);
 
-const ORDEM: Record<ReportTier, number> = { basic: 0, advanced: 1, expert: 2 };
-
-/** Indicadores de um nível: os dele e os dos níveis abaixo. */
+/**
+ * Indicadores que PODEM aparecer no modelo, qualquer que seja a situação.
+ * Serve ao catálogo; quem monta relatório usa `reportableIndicatorsForTier`.
+ */
 export function indicatorsForTier(tier: ReportTier): ReportIndicator[] {
-  return REPORT_INDICATORS.filter((i) => ORDEM[i.tier] <= ORDEM[tier]);
+  return REPORT_INDICATORS.filter((i) => i.tiers.includes(tier));
+}
+
+/** Entra em relatório: tudo menos o que está pendente de definição. */
+export function isReportable(i: ReportIndicator): boolean {
+  return i.state !== 'PENDING_DEFINITION';
+}
+
+/** O que um relatório do modelo inclui quando ninguém escolheu nada: só ACTIVE. */
+export function defaultIndicatorsForTier(tier: ReportTier): ReportIndicator[] {
+  return indicatorsForTier(tier).filter((i) => i.state === 'ACTIVE');
+}
+
+export function findIndicator(key: string): ReportIndicator | undefined {
+  return REPORT_INDICATORS.find((i) => i.key === key);
 }
 
 export function isReportTier(v: unknown): v is ReportTier {

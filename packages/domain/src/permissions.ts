@@ -200,6 +200,7 @@ export const PERMISSIONS: readonly PermissionDefinition[] = Object.freeze([
   p('insight', 'read', 'Ver indicadores'),
   p('insight', 'read_financial_metrics', 'Ver indicadores financeiros', true),
   p('insight', 'manage_dashboards', 'Criar e compartilhar painéis'),
+  p('insight', 'manage_targets', 'Configurar as metas dos indicadores'),
 
   // --- automação e auditoria ------------------------------------------------
   p('automation', 'read', 'Ver automações'),
@@ -317,6 +318,7 @@ const MANAGER_BASE: readonly string[] = [
   'contract.read_financials',
   'insight.read_financial_metrics',
   'insight.manage_dashboards',
+  'insight.manage_targets',
   'audit.read',
   'inventory.read_costs',
 ];
@@ -484,6 +486,7 @@ export const FACTORY_ROLES: readonly RoleDefinition[] = Object.freeze([
       'contract.read_financials',
       'insight.read_financial_metrics',
       'insight.manage_dashboards',
+      'insight.manage_targets',
       'document.release_to_customer',
       'opportunity.authorize',
       'store.request_quote',
