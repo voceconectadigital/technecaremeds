@@ -19,9 +19,11 @@ import {
   average,
   bucketize,
   failureIntervals,
+  ratioPercent,
   type MetricResult,
   type Period,
   type Average,
+  type Ratio,
   type AgeBucket,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
@@ -681,6 +683,105 @@ export async function firstResponseTime(
     average(minutos),
     coverage(minutos.length, Number(naoTriadas!.total), 'solicitações do período')
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* avaliação da qualidade e abertos × encerrados (relatórios, Fase 1)          */
+/* -------------------------------------------------------------------------- */
+
+export interface RatingData {
+  /** Média das notas válidas (1–5), com 2 casas; nula sem avaliações. */
+  average: number | null;
+  /** Quantidade de avaliações — a MESMA lista que gerou a média e a distribuição. */
+  count: number;
+  /** Quantas notas de cada valor. A soma é sempre `count`. */
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+}
+
+/**
+ * Avaliação da qualidade dos serviços: média de `service_requests.rating`.
+ *
+ * Período = quando o atendimento TERMINOU (primeira entrada em `fulfilled` ou
+ * `closed`), porque a nota só pode ser dada depois disso e a data da nota não é
+ * gravada. Média, quantidade e distribuição saem da mesma lista — o PDF Basic
+ * mostra média de 67 avaliações sob o rótulo "64" e isto não se repete.
+ * Sem avaliação, a média é nula (não zero).
+ */
+export async function serviceRating(
+  session: TenantSession,
+  period: Period,
+  filters: MetricFilters = {}
+): Promise<MetricResult<RatingData>> {
+  const sc = scopeSql('sr.customer_id', `coalesce(l.path, '')`, 5);
+  const rows = await session.query<{ rating: number }>(
+    `SELECT sr.rating
+       FROM aurora.service_requests sr
+       LEFT JOIN aurora.locations l ON l.id = sr.location_id
+       LEFT JOIN aurora.assets a ON a.id = sr.asset_id
+       CROSS JOIN LATERAL (
+         SELECT coalesce(
+                  (SELECT min(h.changed_at) FROM aurora.service_request_status_history h
+                    WHERE h.request_id = sr.id AND h.to_status IN ('fulfilled', 'closed')),
+                  sr.closed_at, sr.submitted_at) AS ended_at
+       ) e
+      WHERE sr.rating BETWEEN 1 AND 5
+        AND e.ended_at >= $1 AND e.ended_at < $2
+        AND ($3::uuid IS NULL OR sr.customer_id = $3)
+        AND ($4::text IS NULL OR coalesce(l.path, '') LIKE $4 || '%')
+        AND ${sc}
+        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+    [
+      period.from,
+      period.to,
+      filters.customerId ?? null,
+      filters.locationPath ?? null,
+      ...scopeParams(filters),
+      filters.assetCategoryId ?? null,
+    ]
+  );
+
+  const distribuicao = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  let soma = 0;
+  for (const r of rows) {
+    const nota = Number(r.rating);
+    distribuicao[String(nota) as keyof typeof distribuicao] += 1;
+    soma += nota;
+  }
+  return withDefinition('service_rating', period, filterRecord(filters), {
+    average: rows.length > 0 ? Number((soma / rows.length).toFixed(2)) : null,
+    count: rows.length,
+    distribution: distribuicao,
+  });
+}
+
+export interface OpenedVsClosedData extends Ratio {
+  /** OS abertas no período (denominador). */
+  opened: number;
+  /** OS encerradas no período (numerador). */
+  closed: number;
+}
+
+/**
+ * Chamados Abertos x Encerrados (AxF): encerradas no período ÷ abertas no
+ * período × 100. Reutiliza as duas contagens do Painel — não há terceira
+ * fórmula — e pode passar de 100 %. Sem OS aberta no período, é nulo.
+ *
+ * NÃO é o ICRS (realizados ÷ solicitados), cuja população ainda não foi
+ * confirmada pelo cliente.
+ */
+export async function openedVsClosed(
+  session: TenantSession,
+  period: Period,
+  filters: MetricFilters = {}
+): Promise<MetricResult<OpenedVsClosedData>> {
+  const abertas = await workOrdersOpened(session, period, filters);
+  const encerradas = await workOrdersCompleted(session, period, filters);
+  const razao = ratioPercent(encerradas.data.count, abertas.data.count);
+  return withDefinition('opened_vs_closed', period, filterRecord(filters), {
+    ...razao,
+    opened: abertas.data.count,
+    closed: encerradas.data.count,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
