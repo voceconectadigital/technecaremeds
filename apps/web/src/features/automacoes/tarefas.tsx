@@ -17,6 +17,7 @@ import {
 } from '@aurora/contracts';
 import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
+import { MetaDaSecao, valorDe, type Secao } from '../painel/relatorio';
 import { ErrorScreen } from '../../shell/error-boundary';
 
 const METODO: Record<string, string> = { task: 'Tarefa', '5w2h': '5W2H', pdca: 'PDCA' };
@@ -164,29 +165,34 @@ function ItemTarefa({ t, primeiro }: { t: AutomationTask; primeiro: boolean }) {
 
 /* -------------------------------------------------------------------------- */
 
-type Secao = {
+/**
+ * Uma seção do relatório entregue. As gravadas a partir da Fase 1 de
+ * indicadores têm `state` e a meta; as mais antigas só têm `status` — e
+ * continuam legíveis.
+ */
+type SecaoEntregue = Partial<Pick<Secao, 'state' | 'target' | 'target_evaluation' | 'target_label'>> & {
   key: string;
   label: string;
-  status: string;
+  status?: string;
   value: number | null;
   unit: string;
   note: string | null;
   definition: string | null;
 };
 
-function valor(s: Secao): string {
+function valor(s: SecaoEntregue): string {
   if (s.status === 'awaiting_official_model') return 'AGUARDANDO MODELO PDF OFICIAL';
   if (s.status === 'awaiting_definition') return 'Aguardando definição do cliente';
-  if (s.value === null) return 'Sem dados suficientes no período';
-  const v = s.value.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-  return s.unit === 'percent'
-    ? `${v} %`
-    : s.unit === 'minutes'
-      ? `${v} min`
-      : s.unit === 'hours'
-        ? `${v} h`
-        : v;
+  return valorDe(s);
 }
+
+const EMAIL: Record<string, string> = {
+  queued_no_transport: 'na fila (sem transporte configurado)',
+  queued: 'na fila',
+  sent: 'enviado',
+  failed: 'falhou',
+  suppressed: 'não enviado — preferências de notificação ou e-mail não verificado/bloqueado',
+};
 
 export function RelatorioAgendadoPage() {
   const { id } = useParams({ strict: false }) as { id: string };
@@ -197,7 +203,7 @@ export function RelatorioAgendadoPage() {
           tier: string;
           schedule_slot: string;
           filters: Record<string, string | null>;
-          sections: Secao[];
+          sections: SecaoEntregue[];
           email_state: string;
         }
       | undefined;
@@ -207,16 +213,25 @@ export function RelatorioAgendadoPage() {
   };
   if (isError) return <ErrorScreen error={error} />;
   const rotulo = data ? data.tier.charAt(0).toUpperCase() + data.tier.slice(1) : '';
+  // As datas do período no fuso da organização em que o relatório foi gerado
+  // (PF-51), quando o relatório o registrou; senão, no do navegador.
+  const dia = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('pt-BR', {
+        ...(data?.filters.timezone ? { timeZone: data.filters.timezone } : {}),
+      });
+    } catch {
+      return new Date(iso).toLocaleDateString('pt-BR');
+    }
+  };
   return (
     <AppShell
       title={data ? `Relatório ${rotulo} — ${data.rule_name}` : 'Relatório agendado'}
       subtitle={
         data?.filters.from
-          ? `Período: ${new Date(data.filters.from).toLocaleDateString('pt-BR')} a ${new Date(
-              data.filters.to ?? data.schedule_slot
-            ).toLocaleDateString(
-              'pt-BR'
-            )}${data.filters.customer ? ` · Cliente: ${data.filters.customer}` : ''}`
+          ? `Período: ${dia(data.filters.from)} a ${dia(data.filters.to ?? data.schedule_slot)}${
+              data.filters.customer ? ` · Cliente: ${data.filters.customer}` : ''
+            }`
           : undefined
       }
     >
@@ -226,28 +241,47 @@ export function RelatorioAgendadoPage() {
         <Card>
           <p role="note" className="m-3 rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
             Layout provisório — AGUARDANDO MODELO PDF OFICIAL. E-mail:{' '}
-            {data.email_state === 'queued_no_transport'
-              ? 'na fila (sem transporte configurado)'
-              : data.email_state}
-            .
+            {EMAIL[data.email_state] ?? data.email_state}.
           </p>
           <section aria-label="Indicadores" className="flex flex-col divide-y divide-border-subtle">
             {data.sections.map((s) => (
               <div key={s.key} className="flex flex-col gap-0.5 px-4 py-2">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm text-text">{s.label}</span>
+                  {/* Mesmo tratamento da prévia do relatório (PF-54): PROVISÓRIO
+                      marcado e a meta — ou SEM META CONFIGURADA — ao lado. */}
+                  <span className="flex items-center gap-2 text-sm text-text">
+                    {s.label}
+                    {s.state === 'PROVISIONAL' && (
+                      <StatusChip size="sm" tone="warn" hint={s.note ?? undefined}>
+                        Provisório
+                      </StatusChip>
+                    )}
+                  </span>
                   <span
                     className={cn(
                       'text-sm font-semibold tabular-nums',
-                      s.status !== 'available' && 'text-warn-text'
+                      // relatório antigo (sem `state`): o que não estava disponível sai em destaque
+                      s.state === undefined &&
+                        s.status !== undefined &&
+                        s.status !== 'available' &&
+                        'text-warn-text'
                     )}
                   >
                     {valor(s)}
                   </span>
                 </div>
-                {(s.definition || s.note) && (
+                {s.target_evaluation !== undefined && (
+                  <MetaDaSecao
+                    s={{
+                      target: s.target ?? null,
+                      target_evaluation: s.target_evaluation,
+                      target_label: s.target_label ?? null,
+                    }}
+                  />
+                )}
+                {(s.definition || (s.state === undefined && s.note)) && (
                   <span className="text-xs text-muted">
-                    {[s.definition, s.note].filter(Boolean).join(' · ')}
+                    {[s.definition, s.state === undefined ? s.note : null].filter(Boolean).join(' · ')}
                   </span>
                 )}
               </div>

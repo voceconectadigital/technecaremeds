@@ -42,7 +42,15 @@ import {
   type InventoryItem,
   type Warehouse,
 } from '@aurora/contracts';
-import { ApiError, Can, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import {
+  ApiError,
+  Can,
+  diaLocalDaqui,
+  hojeLocal,
+  useApiMutation,
+  useApiQuery,
+  usePermissions,
+} from '@aurora/app-kit';
 
 const PERIODOS = {
   mes: { rotulo: 'Mês', dias: 30 },
@@ -60,8 +68,9 @@ export function PainelDeGestao() {
   const { can } = usePermissions();
   const [dialogo, setDialogo] = useState<'item' | 'almox' | 'entrada' | 'limites' | null>(null);
   const [periodo, setPeriodo] = useState<Periodo>('mes');
-  const [de, setDe] = useState(new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10));
-  const [ate, setAte] = useState(new Date().toISOString().slice(0, 10));
+  // Dias do calendário local (PF-72): em UTC, depois das 21 h "hoje" era amanhã.
+  const [de, setDe] = useState(() => diaLocalDaqui(-30));
+  const [ate, setAte] = useState(() => hojeLocal());
   const intervalo = useMemo(() => {
     if (periodo === 'personalizado') {
       return {

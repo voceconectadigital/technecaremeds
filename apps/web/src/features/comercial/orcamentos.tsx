@@ -22,7 +22,7 @@ import { useMemo, useState } from 'react';
 import { FileText, Search } from 'lucide-react';
 import { Card, EmptyState, Select, SkeletonList, StatusChip, cn } from '@aurora/ui';
 import { quotesList, QUOTE_STATUSES, type QuoteRow, type QuoteStatus } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import { hojeLocal, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorComercial } from './alternador';
@@ -185,7 +185,8 @@ export function OrcamentosPage() {
 export function situacaoEfetiva(q: { status: QuoteStatus; valid_until: string | null }): QuoteStatus {
   const emNegociacao = q.status === 'draft' || q.status === 'sent' || q.status === 'viewed';
   if (!emNegociacao || !q.valid_until) return q.status;
-  const hoje = new Date().toISOString().slice(0, 10);
+  // Dia do calendário local, e não de UTC (PF-72): às 22 h já era "amanhã".
+  const hoje = hojeLocal();
   return q.valid_until < hoje ? 'expired' : q.status;
 }
 

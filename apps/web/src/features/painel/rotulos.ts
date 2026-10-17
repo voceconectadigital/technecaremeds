@@ -6,6 +6,7 @@
  * divergiriam no primeiro rótulo se cada uma tivesse o seu.
  */
 import type { Tone } from '@aurora/ui';
+import { diaLocal, fimDoDiaLocal, inicioDoDiaLocal, somarDias } from '@aurora/app-kit';
 
 export const ROTULO_SITUACAO_OS: Record<string, string> = {
   draft: 'Rascunho',
@@ -97,11 +98,15 @@ export function formatarDuracao(min: number | null | undefined): { valor: string
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-/** Rótulo curto de uma fatia do período, conforme a granularidade. */
+/**
+ * Rótulo curto de uma fatia do período, conforme a granularidade. A fatia
+ * começa na meia-noite LOCAL (o período é pedido em dias locais), então o
+ * rótulo também é lido no calendário local.
+ */
 export function rotuloDaFatia(iso: string, granularidade: 'day' | 'week' | 'month'): string {
   const d = new Date(iso);
-  if (granularidade === 'month') return `${MESES[d.getUTCMonth()]}/${String(d.getUTCFullYear()).slice(2)}`;
-  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  if (granularidade === 'month') return `${MESES[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 /** "2026-05" → "mai/26". */
@@ -128,14 +133,16 @@ export const PERIODOS = [
 export type Periodo = (typeof PERIODOS)[number]['valor'] | 'custom';
 
 /**
- * O intervalo do preset, terminando no fim de HOJE (hora local). Começa à
- * meia-noite UTC do dia inicial para a fatia diária cair em dia inteiro.
+ * O intervalo do preset: os últimos N dias INTEIROS do calendário local,
+ * terminando no fim de HOJE. Era em UTC — em Brasília, depois das 21 h, "hoje"
+ * já era amanhã e o primeiro dia começava às 21 h da véspera (pente-fino
+ * 17/10/2026, PF-51/PF-72). Começa à meia-noite local para a fatia diária cair
+ * em dia inteiro.
  */
-export function intervaloDe(p: string): { from: string; to: string; dias: number } {
+export function intervaloDe(p: string, agora: Date = new Date()): { from: string; to: string; dias: number } {
   const def = PERIODOS.find((x) => x.valor === p) ?? PERIODOS[1];
-  const fim = new Date();
-  fim.setUTCHours(23, 59, 59, 999);
-  const ini = new Date(fim.getTime() - def.dias * 86_400_000 + 1);
-  ini.setUTCHours(0, 0, 0, 0);
+  const hoje = diaLocal(agora);
+  const fim = fimDoDiaLocal(hoje);
+  const ini = inicioDoDiaLocal(somarDias(hoje, 1 - def.dias));
   return { from: ini.toISOString(), to: fim.toISOString(), dias: def.dias };
 }

@@ -22,7 +22,16 @@ import { BarChart, DonutChart, Logo, RateRing, TrendChart, cn, type Tone } from 
 import { MARCA } from '@aurora/app-kit';
 import type { ControlPanel } from '@aurora/contracts';
 import { ErrorScreen } from '../../shell/error-boundary';
-import { buscaDoPainel, disponibilidadeAgora, rotuloDoRecorte, usePainel, useFiltrosDoPainel } from './dados';
+import {
+  buscaDoPainel,
+  disponibilidadeAgora,
+  metaDoPainel,
+  rotuloDoRecorte,
+  textoDaMeta,
+  tomPelaMeta,
+  usePainel,
+  useFiltrosDoPainel,
+} from './dados';
 import { PERIODOS, formatarDuracao, rotuloDaFatia } from './rotulos';
 
 const ATUALIZAR_MS = 60_000;
@@ -198,14 +207,10 @@ function Corpo({ d }: { d: ControlPanel }) {
   const k = d.kpis;
   const rotulos = d.series.map((p) => rotuloDaFatia(p.start, d.granularity));
   const mttr = formatarDuracao(k.mttr.data.value);
-  const tomSla: Tone =
-    k.sla.data.rate === null
-      ? 'neutral'
-      : k.sla.data.rate >= 90
-        ? 'good'
-        : k.sla.data.rate >= 75
-          ? 'warn'
-          : 'bad';
+  // Cores contra as METAS configuradas do recorte (PF-55), e não limiares fixos.
+  const metaSla = metaDoPainel(d, 'sla_compliance');
+  const metaDisp = metaDoPainel(d, 'park_availability_snapshot');
+  const taxaDisp = disponibilidadeAgora(d.park.byStatus).taxa;
 
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4">
@@ -218,12 +223,19 @@ function Corpo({ d }: { d: ControlPanel }) {
           tom={k.backlog.data.count > 0 ? 'warn' : 'neutral'}
         />
         <Numero rotulo="MTTR (provisório)" valor={mttr.valor} unidade={mttr.unidade} tom="info" />
-        <Numero rotulo="SLA" valor={k.sla.data.rate} unidade="%" tom={tomSla} />
+        <Numero
+          rotulo="SLA"
+          valor={k.sla.data.rate}
+          unidade="%"
+          tom={tomPelaMeta(k.sla.data.rate, metaSla)}
+          nota={textoDaMeta(metaSla)}
+        />
         <Numero
           rotulo="Disponíveis"
-          valor={disponibilidadeAgora(d.park.byStatus).taxa}
+          valor={taxaDisp}
           unidade="%"
-          tom="accent"
+          tom={tomPelaMeta(taxaDisp, metaDisp)}
+          nota={textoDaMeta(metaDisp)}
         />
       </div>
 
@@ -352,11 +364,14 @@ function Numero({
   valor,
   unidade,
   tom,
+  nota,
 }: {
   rotulo: string;
   valor: number | string | null;
   unidade?: string;
   tom: Tone;
+  /** "meta ≥ 90 %" / "sem meta": diz de onde vem a cor. */
+  nota?: string;
 }) {
   const nulo = valor === null || valor === undefined;
   return (
@@ -374,6 +389,7 @@ function Numero({
         </span>
         {!nulo && unidade && <span className="text-lg text-muted lg:text-2xl">{unidade}</span>}
       </p>
+      {nota && <p className="text-xs text-subtle lg:text-sm">{nota}</p>}
     </div>
   );
 }

@@ -35,7 +35,7 @@ import {
   indicatorTargetsUpdate,
   reportsCatalog,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
+import { ApiError, hojeLocal, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { AlternadorDeConfiguracoes } from './alternador';
 
@@ -314,7 +314,7 @@ function DialogoDeMeta({
   const [indicador, setIndicador] = useState(edicao?.indicator_key ?? inicial.indicador ?? '');
   const [cliente, setCliente] = useState(edicao?.customer_id ?? '');
   const [contrato, setContrato] = useState(edicao?.contract_id ?? '');
-  const [de, setDe] = useState(edicao?.valid_from ?? new Date().toISOString().slice(0, 10));
+  const [de, setDe] = useState(edicao?.valid_from ?? hojeLocal());
   const [ate, setAte] = useState(edicao?.valid_to ?? '');
   const [valor, setValor] = useState(edicao ? String(edicao.value) : '');
   const [nota, setNota] = useState(edicao?.note ?? '');

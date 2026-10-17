@@ -25,15 +25,17 @@
  */
 import {
   NotFoundError,
-  REPORT_TIER_LABEL,
   ValidationError,
   dayOf,
   defaultIndicatorsForTier,
   evaluateTarget,
+  findIndicator,
   indicatorsForTier,
   isReportable,
   legacyStatusOf,
+  reportSelectionProblem,
   resolveTarget,
+  DEFAULT_ORGANIZATION_TIMEZONE,
   NO_TARGET_LABEL,
   type IndicatorState,
   type IndicatorTarget,
@@ -65,9 +67,10 @@ import {
   workOrderSeries,
   openWorkOrdersSnapshot,
   parkSnapshot,
+  type MembershipScope,
 } from './painel';
 import { planBoard } from './plan-board';
-import { loadVisibleTargets } from './indicator-targets';
+import { loadVisibleTargets, organizationTimezone } from './indicator-targets';
 
 export interface ReportInput {
   tier: ReportTier;
@@ -155,15 +158,100 @@ type Calculo = Pick<ReportSection, 'value' | 'samples' | 'detail' | 'definition'
   unit?: IndicatorUnit;
 };
 
-/** O dia que vale para escolher a meta: o último dia do período, sem passar de hoje. */
-export function targetReferenceDay(to: Date, now: Date = new Date()): string {
-  return dayOf(new Date(Math.min(to.getTime(), now.getTime()) - 1));
+/**
+ * O dia que vale para escolher a meta: o último dia do período, sem passar de
+ * hoje — dia do calendário NO FUSO DA ORGANIZAÇÃO (pente-fino 17/10/2026,
+ * PF-51). Em UTC, um relatório de outubro pedido em 31/10 às 21h30 de Brasília
+ * escolhia a meta de 01/11.
+ */
+export function targetReferenceDay(
+  to: Date,
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_ORGANIZATION_TIMEZONE
+): string {
+  return dayOf(new Date(Math.min(to.getTime(), now.getTime()) - 1), timeZone);
+}
+
+/**
+ * De qual cliente é a meta que julga este contexto (pente-fino 17/10/2026,
+ * PF-50).
+ *
+ * Com cliente escolhido, é ele. Sem cliente escolhido, o vínculo restrito a UM
+ * cliente só enxerga os números desse cliente — julgá-los pela meta da
+ * organização inteira seria medir o Hospital A com a régua de todos. Então a
+ * meta é a desse cliente; sem meta de cliente, a precedência de sempre
+ * (`resolveTarget`) cai na da organização. Vínculo com dois ou mais clientes,
+ * ou sem restrição, continua na meta da organização: os números somam clientes.
+ */
+export function targetCustomerFor(escopo: MembershipScope, customerId: string | null): string | null {
+  if (customerId) return customerId;
+  return escopo.customerIds !== null && escopo.customerIds.length === 1 ? escopo.customerIds[0]! : null;
+}
+
+function metaDaSecao(valida: ReturnType<typeof resolveTarget>): ReportSectionTarget | null {
+  return valida
+    ? {
+        id: valida.target.id,
+        value: valida.target.value,
+        unit: valida.target.unit,
+        direction: valida.target.direction,
+        scope: valida.scope,
+        valid_from: valida.target.validFrom,
+        valid_to: valida.target.validTo,
+      }
+    : null;
+}
+
+/**
+ * Indicadores do catálogo que o Painel pinta (pente-fino 17/10/2026, PF-55): a
+ * cor passa a ser a da META configurada, e não um limiar fixo.
+ */
+export const PANEL_TARGET_INDICATORS = [
+  'sla_compliance',
+  'park_availability_snapshot',
+  'compliance_preventive',
+  'compliance_calibration',
+  'compliance_electrical_safety',
+  'compliance_qualification',
+] as const;
+
+export interface PanelTargets {
+  /** Dia de referência das metas (fuso da organização). */
+  target_day: string;
+  /** A meta em vigor por indicador, ou nulo (SEM META CONFIGURADA). */
+  items: Record<string, ReportSectionTarget | null>;
+}
+
+/**
+ * As metas que valem no contexto do Painel — a MESMA resolução do relatório
+ * (contrato → cliente → organização, com a regra do vínculo de um cliente só).
+ */
+export async function panelTargets(
+  s: TenantSession,
+  escopo: MembershipScope,
+  ctx: { customerId: string | null; to: Date; now?: Date }
+): Promise<PanelTargets> {
+  const fuso = await organizationTimezone(s);
+  const dia = targetReferenceDay(ctx.to, ctx.now ?? new Date(), fuso);
+  const chaves = PANEL_TARGET_INDICATORS.filter((k) => {
+    const ind = findIndicator(k);
+    return ind !== undefined && ind.targetDirection !== 'INFORMATIONAL';
+  });
+  const metas = await loadVisibleTargets(s, escopo, chaves);
+  const cliente = targetCustomerFor(escopo, ctx.customerId);
+  const items: Record<string, ReportSectionTarget | null> = {};
+  for (const k of chaves) {
+    items[k] = metaDaSecao(resolveTarget(metas, { indicatorKey: k, customerId: cliente, on: dia }));
+  }
+  return { target_day: dia, items };
 }
 
 export async function buildReport(
   s: TenantSession,
   membershipId: string | null,
-  b: ReportInput
+  b: ReportInput,
+  /** "Agora" para o dia da meta — a passada, no relatório agendado. */
+  agora: Date = new Date()
 ): Promise<{
   sections: ReportSection[];
   pending: PendingIndicator[];
@@ -217,21 +305,10 @@ export async function buildReport(
   const pedidos = b.indicators && b.indicators.length > 0 ? new Set(b.indicators) : null;
   let escolhidos: ReportIndicator[];
   if (pedidos) {
-    const fora = [...pedidos].filter((k) => !doModelo.some((i) => i.key === k));
-    if (fora.length > 0) {
-      throw new ValidationError(
-        `indicadores fora do modelo ${REPORT_TIER_LABEL[b.tier]}: ${fora.join(', ')}`,
-        { field: 'indicators' }
-      );
-    }
+    // A mesma conferência que a regra agendada faz ao SALVAR.
+    const problema = reportSelectionProblem(b.tier, [...pedidos]);
+    if (problema) throw new ValidationError(problema, { field: 'indicators' });
     escolhidos = doModelo.filter((i) => pedidos.has(i.key));
-    const pendentes = escolhidos.filter((i) => !isReportable(i)).map((i) => i.key);
-    if (pendentes.length > 0) {
-      throw new ValidationError(
-        `indicadores aguardando definição não entram em relatório: ${pendentes.join(', ')}`,
-        { field: 'indicators' }
-      );
-    }
   } else {
     escolhidos = defaultIndicatorsForTier(b.tier);
   }
@@ -244,13 +321,23 @@ export async function buildReport(
     escopo,
     escolhidos.filter((i) => i.targetDirection !== 'INFORMATIONAL').map((i) => i.key)
   );
-  const diaDaMeta = targetReferenceDay(p.to);
+  const fuso = await organizationTimezone(s);
+  const diaDaMeta = targetReferenceDay(p.to, agora, fuso);
+  const clienteDaMeta = targetCustomerFor(escopo, clienteId);
 
   let quadro: Awaited<ReturnType<typeof planBoard>> | null = null;
   const plano = async () =>
     (quadro ??= await planBoard(
       s,
-      { from: p.from, to: p.to, customerId: clienteId, sectorId: b.sector_id ?? null },
+      {
+        from: p.from,
+        to: p.to,
+        customerId: clienteId,
+        sectorId: b.sector_id ?? null,
+        // O filtro de categoria valia nos números de OS e era ignorado aqui
+        // (pente-fino 17/10/2026, PF-53).
+        assetCategoryId: b.asset_category_id ?? null,
+      },
       escopo
     ));
 
@@ -391,7 +478,7 @@ export async function buildReport(
         ? null
         : resolveTarget(metas, {
             indicatorKey: ind.key,
-            customerId: clienteId,
+            customerId: clienteDaMeta,
             contractId: b.contract_id ?? null,
             on: diaDaMeta,
           });
@@ -408,17 +495,7 @@ export async function buildReport(
       detail: calc.detail,
       definition: calc.definition,
       direction: ind.targetDirection,
-      target: valida
-        ? {
-            id: valida.target.id,
-            value: valida.target.value,
-            unit: valida.target.unit,
-            direction: valida.target.direction,
-            scope: valida.scope,
-            valid_from: valida.target.validFrom,
-            valid_to: valida.target.validTo,
-          }
-        : null,
+      target: metaDaSecao(valida),
       target_evaluation: avaliacao,
       target_label: avaliacao === 'no_target' ? NO_TARGET_LABEL : null,
     });
@@ -439,6 +516,7 @@ export async function buildReport(
       plan_kind: b.plan_kind ?? null,
       asset_category_id: b.asset_category_id ?? null,
       target_day: diaDaMeta,
+      timezone: fuso,
     },
   };
 }

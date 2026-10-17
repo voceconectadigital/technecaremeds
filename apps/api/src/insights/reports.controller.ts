@@ -16,6 +16,7 @@ import type { Response } from 'express';
 import { withTenant, buildReport, type ReportSection, type Database } from '@aurora/db';
 import {
   AGUARDANDO_MODELO,
+  DEFAULT_ORGANIZATION_TIMEZONE,
   NO_TARGET_LABEL,
   REPORT_INDICATORS,
   REPORT_LAYOUT_STATUS,
@@ -103,17 +104,20 @@ export class ReportsController {
     if (format !== 'pdf') {
       return { tier: b.tier, generated_at: geradoEm, layout_status: REPORT_LAYOUT_STATUS, ...r };
     }
+    // Datas e hora no fuso da ORGANIZAÇÃO (PF-51): o servidor roda em UTC, e o
+    // fim do dia 31/10 em Brasília (02:59 UTC de 01/11) saía impresso como 01/11.
+    const fuso = { timeZone: r.filters.timezone ?? DEFAULT_ORGANIZATION_TIMEZONE };
     const linhas: LinhaPdf[] = [
       { texto: `Relatório ${REPORT_TIER_LABEL[b.tier]}`, titulo: true },
       {
         texto:
-          `Período: ${new Date(r.filters.from!).toLocaleDateString('pt-BR')} a ${new Date(r.filters.to!).toLocaleDateString('pt-BR')}` +
+          `Período: ${new Date(r.filters.from!).toLocaleDateString('pt-BR', fuso)} a ${new Date(r.filters.to!).toLocaleDateString('pt-BR', fuso)}` +
           (r.filters.customer ? ` · Cliente: ${r.filters.customer}` : '') +
           (r.filters.contract ? ` · Contrato: ${r.filters.contract}` : '') +
           (r.filters.sector ? ` · Setor: ${r.filters.sector}` : ''),
       },
       {
-        texto: `Gerado em ${new Date(geradoEm).toLocaleString('pt-BR')}. Layout provisório — ${AGUARDANDO_MODELO}.`,
+        texto: `Gerado em ${new Date(geradoEm).toLocaleString('pt-BR', fuso)}. Layout provisório — ${AGUARDANDO_MODELO}.`,
         tamanho: 8,
       },
     ];

@@ -17,6 +17,7 @@
  *   execução. Sem o log, automação é caixa-preta — e caixa-preta que age
  *   sozinha no sistema é o que faz o operador desconfiar do próprio dado.
  */
+import { REPORT_TIERS, reportSelectionProblem, type ReportTier } from './report-tiers';
 
 /* -------------------------------------------------------------------------- */
 /* gatilhos                                                                    */
@@ -284,6 +285,13 @@ export const ACTIONS: readonly ActionDefinition[] = Object.freeze([
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Períodos nomeados do relatório agendado. Sem `periodo`, vale `periodDays`
+ * (últimos N dias até a passada) — as regras antigas não mudam.
+ */
+export const REPORT_PERIODS = ['mes_anterior'] as const;
+export type ReportPeriod = (typeof REPORT_PERIODS)[number];
+
 /** Checagens de forma das ações novas — além do "obrigatório" genérico. */
 function validarParametros(kind: string, p: Record<string, unknown>, path: string): string[] {
   const erros: string[] = [];
@@ -299,12 +307,43 @@ function validarParametros(kind: string, p: Record<string, unknown>, path: strin
     }
   }
   if (kind === 'send_report') {
-    if (!['basic', 'advanced', 'expert'].includes(String(p.tier))) {
+    const tierValido = (REPORT_TIERS as readonly string[]).includes(String(p.tier));
+    if (!tierValido) {
       erros.push(`${path}: "tier" é basic, advanced ou expert`);
     }
-    const dias = p.periodDays === undefined ? 30 : Number(p.periodDays);
+    /*
+     * Período: "os últimos N dias até a passada" (`periodDays`, o de sempre) OU
+     * o MÊS CIVIL anterior no fuso da organização (`periodo: 'mes_anterior'`,
+     * pente-fino 17/10/2026, PF-52). Os dois juntos seriam ambíguos.
+     */
+    if (p.periodo !== undefined && p.periodo !== null && !REPORT_PERIODS.includes(p.periodo as never)) {
+      erros.push(`${path}: "periodo" é ${REPORT_PERIODS.join(' ou ')}`);
+    }
+    if (p.periodo === 'mes_anterior' && p.periodDays !== undefined && p.periodDays !== null) {
+      erros.push(`${path}: use "periodDays" ou "periodo", não os dois`);
+    }
+    const dias = p.periodDays === undefined || p.periodDays === null ? 30 : Number(p.periodDays);
     if (!Number.isInteger(dias) || dias < 1 || dias > 366) {
       erros.push(`${path}: "periodDays" é de 1 a 366`);
+    }
+    /*
+     * A lista de indicadores é conferida AO SALVAR, com a mesma regra do
+     * relatório sob demanda (pente-fino 17/10/2026): fora do modelo ou
+     * aguardando definição era aceito aqui e só falhava na execução — a regra
+     * ficava "ligada" e falhando todo mês.
+     */
+    if (p.indicators !== undefined && p.indicators !== null) {
+      const lista = p.indicators;
+      if (
+        !Array.isArray(lista) ||
+        lista.length > 50 ||
+        !lista.every((x) => typeof x === 'string' && x.length > 0)
+      ) {
+        erros.push(`${path}: "indicators" é uma lista de até 50 códigos de indicador`);
+      } else if (tierValido && lista.length > 0) {
+        const problema = reportSelectionProblem(p.tier as ReportTier, lista as string[]);
+        if (problema) erros.push(`${path}: ${problema}`);
+      }
     }
     for (const k of ['customerId', 'sectorId', 'assetCategoryId']) {
       if (p[k] !== undefined && p[k] !== null && (typeof p[k] !== 'string' || !UUID.test(p[k] as string))) {

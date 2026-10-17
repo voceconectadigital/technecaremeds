@@ -20,7 +20,7 @@ import { useMemo } from 'react';
 import { FileCheck2, FileWarning, Search } from 'lucide-react';
 import { Card, EmptyState, Select, SkeletonList, StatusChip, Tabs, cn, tabIds } from '@aurora/ui';
 import { documentsList, type DocumentRow } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import { hojeLocal, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarData } from '../comercial/orcamentos';
@@ -211,7 +211,8 @@ function Validade({ validUntil }: { validUntil: string | null }) {
   if (validUntil === null) {
     return <span className="hidden shrink-0 text-xs text-subtle sm:block">sem validade</span>;
   }
-  const hoje = new Date().toISOString().slice(0, 10);
+  // Dia do calendário local, e não de UTC (PF-72): às 22 h já era "amanhã".
+  const hoje = hojeLocal();
   const vencido = validUntil < hoje;
 
   return (

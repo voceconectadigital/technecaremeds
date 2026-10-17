@@ -282,6 +282,9 @@ describe('relatório agendado', () => {
   });
 
   it('o agendador roda a passada devida; cada destinatário recebe NO SEU recorte; e-mail fica na fila', async () => {
+    // PF-56: o e-mail da automação obedece às preferências — só quem tem e-mail
+    // verificado entra na fila; a restrita (não verificada) fica suprimida.
+    await consultar(ORG, `UPDATE aurora.users SET email_verified_at = now() WHERE id = $1`, [ids.userId]);
     expect((await varrer(ORG, new Date(primeira.getTime() - 60_000))).ran).toBe(0);
     const r = await varrer(ORG, new Date(primeira.getTime() + 3 * 60_000));
     expect(r.ran).toBe(1);
@@ -301,17 +304,22 @@ describe('relatório agendado', () => {
         .sections.find((x) => x.key === 'work_orders_opened')!.value;
     expect(abertas(ids.membershipId)).toBe(4);
     expect(abertas(memR)).toBe(3);
-    const entregas = await consultar<{ channel: string; state: string; reason: string | null }>(
+    const entregas = await consultar<{
+      channel: string;
+      state: string;
+      reason: string | null;
+      membership_id: string;
+    }>(
       ORG,
-      `SELECT d.channel::text AS channel, d.state::text AS state, d.reason
+      `SELECT d.channel::text AS channel, d.state::text AS state, d.reason, n.membership_id
          FROM aurora.notification_deliveries d JOIN aurora.notifications n ON n.id = d.notification_id
         WHERE n.type_key = 'automation.scheduled_report'`
     );
-    expect(
-      entregas
-        .filter((e) => e.channel === 'email')
-        .every((e) => e.state === 'pending' && e.reason === 'awaiting_email_transport')
-    ).toBe(true);
+    const email = (m: string) => entregas.find((e) => e.channel === 'email' && e.membership_id === m);
+    expect(email(ids.membershipId)).toMatchObject({ state: 'pending', reason: 'awaiting_email_transport' });
+    expect(email(memR)).toMatchObject({ state: 'suppressed', reason: 'unverified_email' });
+    // a caixa de entrada recebe sempre
+    expect(entregas.filter((e) => e.channel === 'in_app' && e.state === 'sent')).toHaveLength(2);
     expect(entregas.some((e) => e.state === 'sent' && e.channel === 'email')).toBe(false);
   });
 
@@ -351,7 +359,8 @@ describe('relatório agendado', () => {
     const ok = await http.get(`/v1/automation-report-outputs/${minha!.id}`).set(auth(RESTRITA));
     expect(ok.status).toBe(200);
     expect(automationReportOutput.response.safeParse(ok.body).success).toBe(true);
-    expect(ok.body.email_state).toBe('queued_no_transport');
+    // e-mail não verificado: o relatório diz que o e-mail NÃO sai (PF-56)
+    expect(ok.body.email_state).toBe('suppressed');
     expect((await http.get(`/v1/automation-report-outputs/${dela!.id}`).set(auth(RESTRITA))).status).toBe(
       404
     );

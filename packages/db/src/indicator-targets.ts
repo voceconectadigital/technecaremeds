@@ -26,6 +26,7 @@ import {
   targetScopeOf,
   targetTimeline,
   dayOf,
+  safeTimezone,
   type IndicatorTarget,
   type StoredDirection,
   type TargetScope,
@@ -92,6 +93,25 @@ function visivel(scope: MembershipScope, from: number): { sql: string; params: u
   };
 }
 
+/**
+ * O fuso da organização da sessão (`organizations.timezone`, padrão
+ * `America/Sao_Paulo`). O DIA de referência das metas, os períodos prontos do
+ * relatório e o mês anterior agendado são dias do calendário LOCAL — e não de
+ * UTC, que em Brasília vira "amanhã" às 21 h (pente-fino 17/10/2026, PF-51).
+ * Fuso inválido gravado na tabela cai no padrão, nunca derruba o relatório.
+ */
+export async function organizationTimezone(session: TenantSession): Promise<string> {
+  const [org] = await session.query<{ timezone: string | null }>(
+    `SELECT timezone FROM aurora.organizations WHERE id = $1`,
+    [session.context.organizationId]
+  );
+  return safeTimezone(org?.timezone);
+}
+
+async function hojeNaOrganizacao(session: TenantSession): Promise<string> {
+  return dayOf(new Date(), await organizationTimezone(session));
+}
+
 export interface TargetFilters {
   indicatorKey?: string;
   customerId?: string;
@@ -102,7 +122,7 @@ export async function listIndicatorTargets(
   session: TenantSession,
   scope: MembershipScope,
   f: TargetFilters = {},
-  hoje: string = dayOf(new Date())
+  hoje?: string
 ): Promise<IndicatorTargetView[]> {
   const v = visivel(scope, 4);
   const rows = await session.query<Linha>(
@@ -115,7 +135,8 @@ export async function listIndicatorTargets(
       ORDER BY indicator_key, customer_id NULLS FIRST, contract_id NULLS FIRST, valid_from DESC`,
     [f.indicatorKey ?? null, f.customerId ?? null, f.contractId ?? null, ...v.params]
   );
-  return rows.map((r) => mapear(r, hoje));
+  const dia = hoje ?? (await hojeNaOrganizacao(session));
+  return rows.map((r) => mapear(r, dia));
 }
 
 /** As metas que o escopo enxerga, no formato que o resolvedor do domínio consome. */
@@ -132,7 +153,8 @@ export async function loadVisibleTargets(
         AND ${v.sql}`,
     [indicatorKeys ? [...indicatorKeys] : null, ...v.params]
   );
-  return rows.map((r) => mapear(r, dayOf(new Date())));
+  const hoje = await hojeNaOrganizacao(session);
+  return rows.map((r) => mapear(r, hoje));
 }
 
 export interface TargetInput {
@@ -219,7 +241,7 @@ export async function createIndicatorTarget(
       session.context.actorId,
     ]
   );
-  return mapear(row!, dayOf(new Date()));
+  return mapear(row!, await hojeNaOrganizacao(session));
 }
 
 async function obter(
@@ -233,7 +255,7 @@ async function obter(
     [id, ...v.params]
   );
   if (!row) throw new NotFoundError('meta', id);
-  return mapear(row, dayOf(new Date()));
+  return mapear(row, await hojeNaOrganizacao(session));
 }
 
 export interface TargetPatch {
@@ -281,7 +303,7 @@ export async function updateIndicatorTarget(
       session.context.actorId,
     ]
   );
-  return mapear(row!, dayOf(new Date()));
+  return mapear(row!, await hojeNaOrganizacao(session));
 }
 
 /** Arquiva (não apaga): a meta que pautou um relatório entregue fica na trilha. */

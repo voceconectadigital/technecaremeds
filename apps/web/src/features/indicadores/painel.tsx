@@ -42,7 +42,14 @@ import {
   type Coverage,
   type MetricDefinition,
 } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import {
+  diaLocalDaqui,
+  fimDoDiaLocal,
+  hojeLocal,
+  inicioDoDiaLocal,
+  useApiQuery,
+  useUrlState,
+} from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { AlternadorDoPainel } from '../painel/alternador';
 
@@ -59,7 +66,9 @@ export function IndicadoresPage() {
   const [ate, setAte] = useUrlState<string>('ate', hoje());
   const [explicando, setExplicando] = useState<MetricDefinition | null>(null);
 
-  const periodo = { from: `${de}T00:00:00.000Z`, to: `${ate}T23:59:59.999Z` };
+  // Dias do calendário local: meia-noite e fim do dia de QUEM ESTÁ NA TELA, e
+  // não de UTC — senão o dia 17 começava às 21 h do dia 16 (PF-51/PF-72).
+  const periodo = { from: instanteLocal(de, 'inicio'), to: instanteLocal(ate, 'fim') };
   const invalido = ate < de;
 
   return (
@@ -479,13 +488,17 @@ function DialogoDefinicao({ definicao, onFechar }: { definicao: MetricDefinition
 /* -------------------------------------------------------------------------- */
 
 function hoje(): string {
-  return new Date().toISOString().slice(0, 10);
+  return hojeLocal();
 }
 
 function trintaDiasAtras(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  return diaLocalDaqui(-30);
+}
+
+/** Dia da URL → instante local; dia malformado segue como veio e a API recusa (422). */
+function instanteLocal(dia: string, ponta: 'inicio' | 'fim'): string {
+  const d = ponta === 'inicio' ? inicioDoDiaLocal(dia) : fimDoDiaLocal(dia);
+  return Number.isNaN(d.getTime()) ? dia : d.toISOString();
 }
 
 /* -------------------------------------------------------------------------- */

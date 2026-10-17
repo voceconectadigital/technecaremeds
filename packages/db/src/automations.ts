@@ -28,6 +28,8 @@ import {
   centsFromDecimal,
   DEFAULT_AUTOMATION_TIMEZONE,
   REPORT_TIER_LABEL,
+  localDay,
+  previousLocalMonth,
   type ReportTier,
   ValidationError,
   NotFoundError,
@@ -38,7 +40,8 @@ import {
   type SimulationResult,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
-import { routeEvent } from './notifications';
+import { routeEvent, deliverAutomationNotice } from './notifications';
+import { organizationTimezone } from './indicator-targets';
 import { transitionWorkOrder, createWorkOrder } from './work-orders';
 import { buildReport } from './relatorios';
 
@@ -749,7 +752,11 @@ async function runScheduledRule(
   };
 }
 
-/** Avisa na caixa de entrada e põe o e-mail na FILA — sem transporte, não sai. */
+/**
+ * Avisa na caixa de entrada e, se a pessoa pode receber e-mail, põe o e-mail na
+ * FILA — sem transporte, não sai. As preferências de notificação valem aqui
+ * como em qualquer aviso (`deliverAutomationNotice`, PF-56).
+ */
 async function avisar(
   session: TenantSession,
   membershipId: string,
@@ -763,7 +770,7 @@ async function avisar(
     dedupe: string;
     email: boolean;
   }
-): Promise<string> {
+): Promise<{ id: string; email: 'pending' | 'sent' | 'suppressed' | 'digested' | null }> {
   const id = newId();
   await session.query(
     `INSERT INTO aurora.notifications
@@ -782,19 +789,11 @@ async function avisar(
       aviso.dedupe,
     ]
   );
-  await session.query(
-    `INSERT INTO aurora.notification_deliveries (id, organization_id, notification_id, channel, state, sent_at)
-     VALUES ($1, $2, $3, 'in_app', 'sent', now())`,
-    [newId(), session.context.organizationId, id]
-  );
-  if (aviso.email) {
-    await session.query(
-      `INSERT INTO aurora.notification_deliveries (id, organization_id, notification_id, channel, state, reason)
-       VALUES ($1, $2, $3, 'email', 'pending', $4)`,
-      [newId(), session.context.organizationId, id, EMAIL_SEM_TRANSPORTE]
-    );
-  }
-  return id;
+  const entregas = await deliverAutomationNotice(session, id, membershipId, aviso.typeKey, {
+    email: aviso.email,
+    pendingReason: EMAIL_SEM_TRANSPORTE,
+  });
+  return { id, email: entregas.find((e) => e.channel === 'email')?.state ?? null };
 }
 
 async function destinatariosAtivos(session: TenantSession, ids: unknown): Promise<string[]> {
@@ -807,7 +806,26 @@ async function destinatariosAtivos(session: TenantSession, ids: unknown): Promis
   return r.map((x) => x.id);
 }
 
-const dataISO = (d: Date): string => d.toISOString().slice(0, 10);
+/** Dia (AAAA-MM-DD) no fuso da organização — e não em UTC (PF-51/PF-72). */
+const dataLocal = (d: Date, fuso: string): string => localDay(d, fuso);
+
+/**
+ * O período do relatório agendado.
+ *
+ * `periodo: 'mes_anterior'` é o MÊS CIVIL anterior à passada, no fuso da
+ * organização: a passada de 01/11 08:00 gera outubro inteiro, de 01/10 a
+ * 31/10 23:59:59.999, e a meta é a de 31/10 (pente-fino 17/10/2026, PF-52).
+ * Sem `periodo`, é o de sempre — os últimos `periodDays` dias até a passada —
+ * e as regras antigas não mudam.
+ */
+function periodoDoRelatorio(p: Record<string, unknown>, slot: Date, fuso: string): { from: Date; to: Date } {
+  if (p.periodo === 'mes_anterior') {
+    const mes = previousLocalMonth(slot, fuso);
+    return { from: mes.from, to: mes.to };
+  }
+  const dias = p.periodDays === undefined || p.periodDays === null ? 30 : Number(p.periodDays);
+  return { from: new Date(slot.getTime() - dias * 86_400_000), to: slot };
+}
 
 async function enviarRelatorio(
   session: TenantSession,
@@ -816,19 +834,21 @@ async function enviarRelatorio(
   event: IncomingEvent
 ): Promise<string> {
   const slot = new Date(String(event.payload.slot));
-  const dias = p.periodDays === undefined ? 30 : Number(p.periodDays);
+  const fuso = await organizationTimezone(session);
+  const periodo = periodoDoRelatorio(p, slot, fuso);
   const tier = String(p.tier) as ReportTier;
   const entrada = {
     tier,
     indicators: Array.isArray(p.indicators) ? (p.indicators as string[]) : undefined,
-    from: new Date(slot.getTime() - dias * 86_400_000).toISOString(),
-    to: slot.toISOString(),
+    from: periodo.from.toISOString(),
+    to: periodo.to.toISOString(),
     ...(typeof p.customerId === 'string' ? { customer_id: p.customerId } : {}),
     ...(typeof p.sectorId === 'string' ? { sector_id: p.sectorId } : {}),
     ...(typeof p.planKind === 'string' ? { plan_kind: p.planKind } : {}),
     ...(typeof p.assetCategoryId === 'string' ? { asset_category_id: p.assetCategoryId } : {}),
   };
   let gerados = 0;
+  let suprimidos = 0;
   const pulados: string[] = [];
   for (const membershipId of await destinatariosAtivos(session, p.recipients)) {
     if (!(await temPermissao(session, membershipId, 'insight.read'))) {
@@ -840,7 +860,7 @@ async function enviarRelatorio(
     await session.query('SAVEPOINT relatorio_destinatario');
     let r: Awaited<ReturnType<typeof buildReport>>;
     try {
-      r = await buildReport(session, membershipId, entrada);
+      r = await buildReport(session, membershipId, entrada, slot);
       await session.query('RELEASE SAVEPOINT relatorio_destinatario');
     } catch (e) {
       await session.query('ROLLBACK TO SAVEPOINT relatorio_destinatario');
@@ -852,21 +872,22 @@ async function enviarRelatorio(
     }
     const saidaId = newId();
     const nome = String(event.payload.ruleName ?? 'automação');
-    const notificacao = await avisar(session, membershipId, {
+    const aviso = await avisar(session, membershipId, {
       typeKey: 'automation.scheduled_report',
       aggregateType: 'automation_report_output',
       aggregateId: saidaId,
       title: `Relatório ${REPORT_TIER_LABEL[tier]} — ${nome}`,
-      body: `Período: ${dataISO(new Date(entrada.from))} a ${dataISO(slot)}`,
+      body: `Período: ${dataLocal(periodo.from, fuso)} a ${dataLocal(new Date(periodo.to.getTime() - 1), fuso)}`,
       link: `/relatorios/agendados/${saidaId}`,
       dedupe: `automation.scheduled_report:${membershipId}:${ruleId}:${slot.toISOString()}`,
       email: true,
     });
+    if (aviso.email === 'suppressed') suprimidos++;
     await session.query(
       `INSERT INTO aurora.automation_report_outputs
          (id, organization_id, rule_id, schedule_slot, recipient_membership_id, tier, filters, sections,
-          notification_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)`,
+          notification_id, email_state)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10)`,
       [
         saidaId,
         session.context.organizationId,
@@ -876,7 +897,8 @@ async function enviarRelatorio(
         tier,
         JSON.stringify(r.filters),
         JSON.stringify(r.sections),
-        notificacao,
+        aviso.id,
+        aviso.email === 'suppressed' ? 'suppressed' : 'queued_no_transport',
       ]
     );
     gerados++;
@@ -890,6 +912,7 @@ async function enviarRelatorio(
   }
   return (
     `${gerados} relatório(s) na caixa de entrada; e-mail na fila (sem transporte configurado)` +
+    (suprimidos > 0 ? `; ${suprimidos} e-mail(s) suprimido(s) pelas preferências de notificação` : '') +
     (pulados.length > 0
       ? `; ${pulados.length} destinatário(s) pulado(s): ${[...new Set(pulados)].join(', ')}`
       : '')
@@ -926,6 +949,7 @@ async function criarTarefa(
   event: IncomingEvent
 ): Promise<string> {
   const slot = new Date(String(event.payload.slot));
+  const fuso = await organizationTimezone(session);
   const [dono] = await destinatariosAtivos(session, [p.ownerMembershipId]);
   if (!dono) throw new ValidationError('o responsável da tarefa não tem mais acesso ativo');
   const metodo = String(p.method);
@@ -952,7 +976,7 @@ async function criarTarefa(
         ? null
         : centsFromDecimal(String(p.howMuch)),
       dono,
-      dataISO(new Date(slot.getTime() + prazo * 86_400_000)),
+      dataLocal(new Date(slot.getTime() + prazo * 86_400_000), fuso),
       metodo === 'pdca' ? 'plan' : null,
     ]
   );

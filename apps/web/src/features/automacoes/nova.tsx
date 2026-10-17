@@ -72,6 +72,8 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
   const [destinatarios, setDestinatarios] = useState<string[]>([]);
   const [tier, setTier] = useState('basic');
   const [dias, setDias] = useState('30');
+  // "Últimos N dias" (o de sempre) ou o MÊS CIVIL anterior (PF-52).
+  const [janela, setJanela] = useState<'dias' | 'mes_anterior'>('dias');
   const [cliente, setCliente] = useState('');
   const [titulo, setTitulo] = useState('');
   const [mensagem, setMensagem] = useState('');
@@ -103,7 +105,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         params: {
           recipients: destinatarios,
           tier,
-          periodDays: Number(dias),
+          ...(janela === 'mes_anterior' ? { periodo: 'mes_anterior' } : { periodDays: Number(dias) }),
           ...(cliente ? { customerId: cliente } : {}),
         },
       };
@@ -236,7 +238,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         </div>
 
         {modelo === 'scheduled_report' && (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Modelo de relatório">
               <Select value={tier} onChange={(e) => setTier(e.target.value)}>
                 <option value="basic">Basic</option>
@@ -244,9 +246,30 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
                 <option value="expert">Expert</option>
               </Select>
             </Field>
-            <Field label="Período (dias)">
-              <Input type="number" min={1} max={366} value={dias} onChange={(e) => setDias(e.target.value)} />
+            <Field
+              label="Período do relatório"
+              hint={
+                janela === 'mes_anterior'
+                  ? 'Do dia 1 ao último dia do mês anterior à execução, no fuso da organização.'
+                  : undefined
+              }
+            >
+              <Select value={janela} onChange={(e) => setJanela(e.target.value as 'dias' | 'mes_anterior')}>
+                <option value="dias">Últimos dias até a execução</option>
+                <option value="mes_anterior">Mês anterior (calendário)</option>
+              </Select>
             </Field>
+            {janela === 'dias' && (
+              <Field label="Período (dias)">
+                <Input
+                  type="number"
+                  min={1}
+                  max={366}
+                  value={dias}
+                  onChange={(e) => setDias(e.target.value)}
+                />
+              </Field>
+            )}
             <Field label="Cliente">
               <Select value={cliente} onChange={(e) => setCliente(e.target.value)}>
                 <option value="">Todos os do destinatário</option>

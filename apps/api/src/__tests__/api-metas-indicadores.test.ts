@@ -301,8 +301,16 @@ describe('precedência no relatório: contrato → cliente → organização', (
   });
 
   it('o vínculo restrito ao Hospital A enxerga a meta da organização e a de A', async () => {
+    // PF-50 (pente-fino 17/10/2026): restrito a UM cliente e sem escolher
+    // cliente, os números já são só do Hospital A — então a régua é a meta de
+    // A, e não a da organização inteira.
     const r = await gerar(RESTRITA, { tier: 'advanced', indicators: ['sla_compliance'] });
-    expect(secao(r, 'sla_compliance').target).toMatchObject({ scope: 'organization', value: 90 });
+    expect(secao(r, 'sla_compliance').target).toMatchObject({ scope: 'customer', value: 95 });
+    // A meta da organização continua visível a ele (é a que vale sem meta de A).
+    const lista = await http.get('/v1/indicator-targets?indicator_key=sla_compliance').set(auth(RESTRITA));
+    expect(lista.body.items.some((x: { scope: string; value: number }) => x.scope === 'organization')).toBe(
+      true
+    );
     const a = await gerar(RESTRITA, {
       tier: 'advanced',
       indicators: ['sla_compliance'],
