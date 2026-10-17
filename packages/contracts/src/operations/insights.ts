@@ -17,9 +17,9 @@
  * ninguém detecta olhando o painel.
  */
 import { defineOperation } from '../registry';
-import { z, Uuid } from '../primitives';
+import { z, Uuid, Timestamp } from '../primitives';
 
-export const METRIC_UNITS = ['count', 'minutes', 'hours', 'percent', 'days'] as const;
+export const METRIC_UNITS = ['count', 'minutes', 'hours', 'percent', 'days', 'score'] as const;
 
 export const MetricDefinition = z.object({
   key: z.string(),
@@ -268,27 +268,43 @@ export const insightTimeByStatus = defineOperation({
 });
 
 /* -------------------------------------------------------------------------- */
-/* Relatórios BASIC / ADVANCED / EXPERT — fundação (reunião 16/10/2026)        */
+/* Relatórios BASIC / ADVANCED / EXPERT — catálogo, metas e geração            */
 /* -------------------------------------------------------------------------- */
 
 export const REPORT_TIER_KEYS = ['basic', 'advanced', 'expert'] as const;
+const INDICATOR_STATE_KEYS = ['ACTIVE', 'PROVISIONAL', 'PENDING_DEFINITION'] as const;
+const TARGET_DIRECTION_KEYS = ['HIGHER_IS_BETTER', 'LOWER_IS_BETTER', 'INFORMATIONAL'] as const;
+const INDICATOR_UNIT_KEYS = ['count', 'minutes', 'hours', 'percent', 'score', 'none'] as const;
+const LEGACY_STATUS = z.enum(['available', 'awaiting_official_model', 'awaiting_definition']);
 
 const ReportIndicator = z.object({
+  /** Código estável. */
   key: z.string(),
   label: z.string(),
-  tier: z.enum(REPORT_TIER_KEYS),
-  status: z.enum(['available', 'awaiting_official_model', 'awaiting_definition']),
+  description: z.string(),
+  unit: z.enum(INDICATOR_UNIT_KEYS),
+  category: z.string(),
+  /** Modelos em que pode aparecer. O Expert não herda o Basic nem o Advanced. */
+  tiers: z.array(z.enum(REPORT_TIER_KEYS)),
+  state: z.enum(INDICATOR_STATE_KEYS),
+  target_direction: z.enum(TARGET_DIRECTION_KEYS),
+  source: z.string().nullable(),
+  pending_kind: z.enum(['DEFINITION', 'DATA_MODEL']).optional(),
   note: z.string().optional(),
+  /** Derivada de `state`; mantida por compatibilidade. */
+  status: LEGACY_STATUS,
 });
 
 export const reportsCatalog = defineOperation({
   operationId: 'reports.catalog',
   method: 'GET',
   path: '/reports/catalog',
-  summary: 'Modelos de relatório (Basic, Advanced, Expert) e a situação de cada indicador',
+  summary: 'Catálogo central de indicadores e os modelos Basic, Advanced e Expert',
   description:
-    'Fundação: o layout final dos três modelos está AGUARDANDO MODELO PDF OFICIAL. Indicador sem ' +
-    'fórmula ou definição aparece com a situação, e nunca com número inventado.',
+    'Fonte única da definição dos indicadores: código, unidade, categoria, modelos permitidos, situação ' +
+    '(ACTIVE, PROVISIONAL, PENDING_DEFINITION) e sentido da meta. Indicador PENDING_DEFINITION aparece ' +
+    'só aqui, com o motivo: não entra em relatório e não tem número inventado. O layout final dos PDFs ' +
+    'está AGUARDANDO MODELO PDF OFICIAL.',
   permissions: ['insight.read'],
   response: z.object({
     tiers: z.array(z.object({ key: z.enum(REPORT_TIER_KEYS), label: z.string() })),
@@ -298,6 +314,16 @@ export const reportsCatalog = defineOperation({
   }),
 });
 
+const SectionTarget = z.object({
+  id: Uuid,
+  value: z.number(),
+  unit: z.string(),
+  direction: z.enum(['HIGHER_IS_BETTER', 'LOWER_IS_BETTER']),
+  scope: z.enum(['contract', 'customer', 'organization']),
+  valid_from: z.string(),
+  valid_to: z.string().nullable(),
+});
+
 export const reportsGenerate = defineOperation({
   operationId: 'reports.generate',
   method: 'POST',
@@ -305,6 +331,10 @@ export const reportsGenerate = defineOperation({
   summary: 'Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel',
   description:
     'Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. ' +
+    'Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); ' +
+    'PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais ' +
+    'específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, ' +
+    '`target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. ' +
     'Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.',
   permissions: ['insight.read'],
   body: z
@@ -314,6 +344,7 @@ export const reportsGenerate = defineOperation({
       from: z.string(),
       to: z.string(),
       customer_id: Uuid.optional(),
+      contract_id: Uuid.optional(),
       sector_id: Uuid.optional(),
       plan_kind: z.enum(['preventive', 'calibration', 'electrical_safety', 'qualification']).optional(),
       asset_category_id: Uuid.optional(),
@@ -328,16 +359,125 @@ export const reportsGenerate = defineOperation({
       z.object({
         key: z.string(),
         label: z.string(),
-        status: z.enum(['available', 'awaiting_official_model', 'awaiting_definition']),
+        state: z.enum(INDICATOR_STATE_KEYS),
+        status: LEGACY_STATUS,
         note: z.string().nullable(),
         value: z.number().nullable(),
-        unit: z.enum(['count', 'minutes', 'hours', 'percent', 'none']),
+        unit: z.enum(INDICATOR_UNIT_KEYS),
         samples: z.number().nullable(),
         detail: z.unknown(),
         definition: z.string().nullable(),
+        direction: z.enum(TARGET_DIRECTION_KEYS),
+        target: SectionTarget.nullable(),
+        target_evaluation: z.enum(['met', 'not_met', 'no_value', 'no_target', 'informational']),
+        target_label: z.string().nullable(),
+      })
+    ),
+    pending: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        state: z.enum(INDICATOR_STATE_KEYS),
+        note: z.string().nullable(),
       })
     ),
   }),
   status: 201,
   errors: ['not_found', 'validation_failed'],
+});
+
+/* --- metas dos indicadores ---------------------------------------------- */
+
+const IsoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'use AAAA-MM-DD');
+
+export const IndicatorTargetView = z.object({
+  id: Uuid,
+  indicator_key: z.string(),
+  customer_id: Uuid.nullable(),
+  contract_id: Uuid.nullable(),
+  scope: z.enum(['contract', 'customer', 'organization']),
+  valid_from: IsoDay,
+  valid_to: IsoDay.nullable(),
+  value: z.number(),
+  unit: z.enum(['count', 'minutes', 'hours', 'percent', 'score']),
+  direction: z.enum(['HIGHER_IS_BETTER', 'LOWER_IS_BETTER']),
+  /** Vigência em relação a hoje: em vigor, futura ou expirada. */
+  timeline: z.enum(['active', 'future', 'expired']),
+  note: z.string().nullable(),
+  created_at: Timestamp,
+  updated_at: Timestamp,
+});
+
+export const indicatorTargetsList = defineOperation({
+  operationId: 'indicatorTargets.list',
+  method: 'GET',
+  path: '/indicator-targets',
+  summary: 'Metas configuradas dos indicadores',
+  description:
+    'A meta da organização é visível a todos; meta de cliente ou contrato só a quem alcança o cliente. ' +
+    'Indicador sem linha aqui está SEM META CONFIGURADA — nunca zero.',
+  permissions: ['insight.read'],
+  query: z.object({
+    indicator_key: z.string().optional(),
+    customer_id: Uuid.optional(),
+    contract_id: Uuid.optional(),
+  }),
+  response: z.object({ items: z.array(IndicatorTargetView) }),
+});
+
+const TargetBody = z.object({
+  indicator_key: z.string().min(2).max(64),
+  customer_id: Uuid.nullish(),
+  contract_id: Uuid.nullish(),
+  valid_from: IsoDay,
+  valid_to: IsoDay.nullish(),
+  value: z.number().nonnegative(),
+  direction: z.enum(['HIGHER_IS_BETTER', 'LOWER_IS_BETTER']),
+  /** Opcional: se vier, precisa ser a unidade do indicador no catálogo. */
+  unit: z.enum(['count', 'minutes', 'hours', 'percent', 'score']).optional(),
+  note: z.string().max(500).nullish(),
+});
+
+export const indicatorTargetsCreate = defineOperation({
+  operationId: 'indicatorTargets.create',
+  method: 'POST',
+  path: '/indicator-targets',
+  summary: 'Configura a meta de um indicador (organização, cliente ou contrato)',
+  description:
+    'Sem cliente = meta da organização (exige acesso a todos os clientes). Com contrato, o cliente é o do ' +
+    'contrato. O sentido e a unidade precisam ser os do indicador no catálogo; indicador informativo não ' +
+    'tem meta. Vigências do mesmo escopo não se sobrepõem (409).',
+  permissions: ['insight.manage_targets'],
+  body: TargetBody.strict(),
+  response: IndicatorTargetView,
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const indicatorTargetsUpdate = defineOperation({
+  operationId: 'indicatorTargets.update',
+  method: 'PATCH',
+  path: '/indicator-targets/:id',
+  summary: 'Altera valor, vigência, sentido ou observação de uma meta',
+  description: 'Indicador, cliente e contrato não mudam: outra meta é outro registro.',
+  permissions: ['insight.manage_targets'],
+  params: z.object({ id: Uuid }),
+  body: TargetBody.pick({ valid_from: true, valid_to: true, value: true, direction: true, note: true })
+    .partial()
+    .strict(),
+  response: IndicatorTargetView,
+  status: 200,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const indicatorTargetsArchive = defineOperation({
+  operationId: 'indicatorTargets.archive',
+  method: 'DELETE',
+  path: '/indicator-targets/:id',
+  summary: 'Arquiva uma meta (não apaga: a trilha de auditoria permanece)',
+  permissions: ['insight.manage_targets'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ ok: z.literal(true) }),
+  status: 200,
+  errors: ['not_found'],
 });

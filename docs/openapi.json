@@ -14837,6 +14837,933 @@
         ]
       }
     },
+    "/v1/indicator-targets/{id}": {
+      "delete": {
+        "operationId": "indicatorTargets.archive",
+        "summary": "Arquiva uma meta (não apaga: a trilha de auditoria permanece)",
+        "tags": [
+          "IndicatorTargets"
+        ],
+        "x-aurora-permissions": [
+          "insight.manage_targets"
+        ],
+        "x-aurora-source": "apps/api/src/insights/indicator-targets.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "indicatorTargets.update",
+        "summary": "Altera valor, vigência, sentido ou observação de uma meta",
+        "description": "Indicador, cliente e contrato não mudam: outra meta é outro registro.",
+        "tags": [
+          "IndicatorTargets"
+        ],
+        "x-aurora-permissions": [
+          "insight.manage_targets"
+        ],
+        "x-aurora-source": "apps/api/src/insights/indicator-targets.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "valid_from": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "valid_to": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "HIGHER_IS_BETTER",
+                      "LOWER_IS_BETTER"
+                    ]
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "indicator_key": {
+                      "type": "string"
+                    },
+                    "customer_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "contract",
+                        "customer",
+                        "organization"
+                      ]
+                    },
+                    "valid_from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "valid_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "count",
+                        "minutes",
+                        "hours",
+                        "percent",
+                        "score"
+                      ]
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "HIGHER_IS_BETTER",
+                        "LOWER_IS_BETTER"
+                      ]
+                    },
+                    "timeline": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "future",
+                        "expired"
+                      ]
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "description": "Instante em ISO 8601 com fuso horário",
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "Instante em ISO 8601 com fuso horário",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "indicator_key",
+                    "customer_id",
+                    "contract_id",
+                    "scope",
+                    "valid_from",
+                    "valid_to",
+                    "value",
+                    "unit",
+                    "direction",
+                    "timeline",
+                    "note",
+                    "created_at",
+                    "updated_at"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/indicator-targets": {
+      "get": {
+        "operationId": "indicatorTargets.list",
+        "summary": "Metas configuradas dos indicadores",
+        "description": "A meta da organização é visível a todos; meta de cliente ou contrato só a quem alcança o cliente. Indicador sem linha aqui está SEM META CONFIGURADA — nunca zero.",
+        "tags": [
+          "IndicatorTargets"
+        ],
+        "x-aurora-permissions": [
+          "insight.read"
+        ],
+        "x-aurora-source": "apps/api/src/insights/indicator-targets.controller.ts",
+        "parameters": [
+          {
+            "name": "indicator_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          },
+          {
+            "name": "contract_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "indicator_key": {
+                            "type": "string"
+                          },
+                          "customer_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "contract_id": {
+                            "anyOf": [
+                              {
+                                "description": "Identificador UUID",
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "contract",
+                              "customer",
+                              "organization"
+                            ]
+                          },
+                          "valid_from": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          },
+                          "valid_to": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "count",
+                              "minutes",
+                              "hours",
+                              "percent",
+                              "score"
+                            ]
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "HIGHER_IS_BETTER",
+                              "LOWER_IS_BETTER"
+                            ]
+                          },
+                          "timeline": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "future",
+                              "expired"
+                            ]
+                          },
+                          "note": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          },
+                          "updated_at": {
+                            "description": "Instante em ISO 8601 com fuso horário",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "indicator_key",
+                          "customer_id",
+                          "contract_id",
+                          "scope",
+                          "valid_from",
+                          "valid_to",
+                          "value",
+                          "unit",
+                          "direction",
+                          "timeline",
+                          "note",
+                          "created_at",
+                          "updated_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "indicatorTargets.create",
+        "summary": "Configura a meta de um indicador (organização, cliente ou contrato)",
+        "description": "Sem cliente = meta da organização (exige acesso a todos os clientes). Com contrato, o cliente é o do contrato. O sentido e a unidade precisam ser os do indicador no catálogo; indicador informativo não tem meta. Vigências do mesmo escopo não se sobrepõem (409).",
+        "tags": [
+          "IndicatorTargets"
+        ],
+        "x-aurora-permissions": [
+          "insight.manage_targets"
+        ],
+        "x-aurora-source": "apps/api/src/insights/indicator-targets.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "indicator_key": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 64
+                  },
+                  "customer_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contract_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "valid_from": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "valid_to": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "value": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "HIGHER_IS_BETTER",
+                      "LOWER_IS_BETTER"
+                    ]
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "count",
+                      "minutes",
+                      "hours",
+                      "percent",
+                      "score"
+                    ]
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "indicator_key",
+                  "valid_from",
+                  "value",
+                  "direction"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "indicator_key": {
+                      "type": "string"
+                    },
+                    "customer_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "contract",
+                        "customer",
+                        "organization"
+                      ]
+                    },
+                    "valid_from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "valid_to": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "type": "number"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "count",
+                        "minutes",
+                        "hours",
+                        "percent",
+                        "score"
+                      ]
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "HIGHER_IS_BETTER",
+                        "LOWER_IS_BETTER"
+                      ]
+                    },
+                    "timeline": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "future",
+                        "expired"
+                      ]
+                    },
+                    "note": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "created_at": {
+                      "description": "Instante em ISO 8601 com fuso horário",
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "description": "Instante em ISO 8601 com fuso horário",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "indicator_key",
+                    "customer_id",
+                    "contract_id",
+                    "scope",
+                    "valid_from",
+                    "valid_to",
+                    "value",
+                    "unit",
+                    "direction",
+                    "timeline",
+                    "note",
+                    "created_at",
+                    "updated_at"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/insights/backlog": {
       "get": {
         "operationId": "insights.backlog",
@@ -14963,7 +15890,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -15296,7 +16224,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -15460,7 +16389,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -15624,7 +16554,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -15813,7 +16744,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -15989,7 +16921,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -16171,7 +17104,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -16389,7 +17323,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -16570,7 +17505,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -16757,7 +17693,8 @@
                                     "minutes",
                                     "hours",
                                     "percent",
-                                    "days"
+                                    "days",
+                                    "score"
                                   ]
                                 },
                                 "exclusions": {
@@ -17304,7 +18241,8 @@
                               "minutes",
                               "hours",
                               "percent",
-                              "days"
+                              "days",
+                              "score"
                             ]
                           },
                           "exclusions": {
@@ -17580,7 +18518,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -17893,7 +18832,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -18189,7 +19129,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -18485,7 +19426,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -18798,7 +19740,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -19094,7 +20037,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -19460,7 +20404,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -19756,7 +20701,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -20053,7 +20999,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -20378,7 +21325,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -20680,7 +21628,8 @@
                             "minutes",
                             "hours",
                             "percent",
-                            "days"
+                            "days",
+                            "score"
                           ]
                         },
                         "exclusions": {
@@ -39262,8 +40211,8 @@
     "/v1/reports/catalog": {
       "get": {
         "operationId": "reports.catalog",
-        "summary": "Modelos de relatório (Basic, Advanced, Expert) e a situação de cada indicador",
-        "description": "Fundação: o layout final dos três modelos está AGUARDANDO MODELO PDF OFICIAL. Indicador sem fórmula ou definição aparece com a situação, e nunca com número inventado.",
+        "summary": "Catálogo central de indicadores e os modelos Basic, Advanced e Expert",
+        "description": "Fonte única da definição dos indicadores: código, unidade, categoria, modelos permitidos, situação (ACTIVE, PROVISIONAL, PENDING_DEFINITION) e sentido da meta. Indicador PENDING_DEFINITION aparece só aqui, com o motivo: não entra em relatório e não tem número inventado. O layout final dos PDFs está AGUARDANDO MODELO PDF OFICIAL.",
         "tags": [
           "Reports"
         ],
@@ -39315,13 +40264,69 @@
                           "label": {
                             "type": "string"
                           },
-                          "tier": {
+                          "description": {
+                            "type": "string"
+                          },
+                          "unit": {
                             "type": "string",
                             "enum": [
-                              "basic",
-                              "advanced",
-                              "expert"
+                              "count",
+                              "minutes",
+                              "hours",
+                              "percent",
+                              "score",
+                              "none"
                             ]
+                          },
+                          "category": {
+                            "type": "string"
+                          },
+                          "tiers": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "basic",
+                                "advanced",
+                                "expert"
+                              ]
+                            }
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIVE",
+                              "PROVISIONAL",
+                              "PENDING_DEFINITION"
+                            ]
+                          },
+                          "target_direction": {
+                            "type": "string",
+                            "enum": [
+                              "HIGHER_IS_BETTER",
+                              "LOWER_IS_BETTER",
+                              "INFORMATIONAL"
+                            ]
+                          },
+                          "source": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "pending_kind": {
+                            "type": "string",
+                            "enum": [
+                              "DEFINITION",
+                              "DATA_MODEL"
+                            ]
+                          },
+                          "note": {
+                            "type": "string"
                           },
                           "status": {
                             "type": "string",
@@ -39330,15 +40335,18 @@
                               "awaiting_official_model",
                               "awaiting_definition"
                             ]
-                          },
-                          "note": {
-                            "type": "string"
                           }
                         },
                         "required": [
                           "key",
                           "label",
-                          "tier",
+                          "description",
+                          "unit",
+                          "category",
+                          "tiers",
+                          "state",
+                          "target_direction",
+                          "source",
                           "status"
                         ]
                       }
@@ -39413,7 +40421,7 @@
       "post": {
         "operationId": "reports.generate",
         "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel",
-        "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.",
+        "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, `target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.",
         "tags": [
           "Reports"
         ],
@@ -39453,6 +40461,12 @@
                     "type": "string"
                   },
                   "customer_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "contract_id": {
                     "description": "Identificador UUID",
                     "type": "string",
                     "format": "uuid",
@@ -39541,6 +40555,14 @@
                           "label": {
                             "type": "string"
                           },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIVE",
+                              "PROVISIONAL",
+                              "PENDING_DEFINITION"
+                            ]
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -39576,6 +40598,7 @@
                               "minutes",
                               "hours",
                               "percent",
+                              "score",
                               "none"
                             ]
                           },
@@ -39599,18 +40622,150 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "direction": {
+                            "type": "string",
+                            "enum": [
+                              "HIGHER_IS_BETTER",
+                              "LOWER_IS_BETTER",
+                              "INFORMATIONAL"
+                            ]
+                          },
+                          "target": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "description": "Identificador UUID",
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                                  },
+                                  "value": {
+                                    "type": "number"
+                                  },
+                                  "unit": {
+                                    "type": "string"
+                                  },
+                                  "direction": {
+                                    "type": "string",
+                                    "enum": [
+                                      "HIGHER_IS_BETTER",
+                                      "LOWER_IS_BETTER"
+                                    ]
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "contract",
+                                      "customer",
+                                      "organization"
+                                    ]
+                                  },
+                                  "valid_from": {
+                                    "type": "string"
+                                  },
+                                  "valid_to": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "value",
+                                  "unit",
+                                  "direction",
+                                  "scope",
+                                  "valid_from",
+                                  "valid_to"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "target_evaluation": {
+                            "type": "string",
+                            "enum": [
+                              "met",
+                              "not_met",
+                              "no_value",
+                              "no_target",
+                              "informational"
+                            ]
+                          },
+                          "target_label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
                           "key",
                           "label",
+                          "state",
                           "status",
                           "note",
                           "value",
                           "unit",
                           "samples",
                           "detail",
-                          "definition"
+                          "definition",
+                          "direction",
+                          "target",
+                          "target_evaluation",
+                          "target_label"
+                        ]
+                      }
+                    },
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIVE",
+                              "PROVISIONAL",
+                              "PENDING_DEFINITION"
+                            ]
+                          },
+                          "note": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "state",
+                          "note"
                         ]
                       }
                     }
@@ -39620,7 +40775,8 @@
                     "generated_at",
                     "layout_status",
                     "filters",
-                    "sections"
+                    "sections",
+                    "pending"
                   ]
                 }
               }

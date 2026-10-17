@@ -98,6 +98,7 @@ describe('migrations (EPIC-001)', () => {
       'fact_work_order',
       'import_batches',
       'import_rows',
+      'indicator_targets',
       'instrument_certificates',
       'instruments',
       'inventory_items',
