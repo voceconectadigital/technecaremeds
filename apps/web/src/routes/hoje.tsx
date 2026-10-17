@@ -39,6 +39,7 @@ import {
   ArrowRight,
   CalendarClock,
   ClipboardList,
+  CloudOff,
   Inbox,
   PackageSearch,
   PauseCircle,
@@ -47,6 +48,7 @@ import {
 } from 'lucide-react';
 import {
   BarChart,
+  Button,
   Card,
   CardHeader,
   EmptyState,
@@ -71,6 +73,25 @@ import {
 import { useApiQuery, usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { AppShell } from '../shell/app-shell';
 import { FluxoDaOperacao } from './hoje-fluxo';
+
+/**
+ * Consulta que FALHOU não se apresenta como "nada pendente" (pente-fino
+ * 17/10/2026): com a API fora, o início dizia "Nada aguardando triagem".
+ */
+function FalhaDeCarga({ onTentar }: { onTentar: () => void }) {
+  return (
+    <EmptyState
+      icon={<CloudOff className="size-5" />}
+      title="Não conseguimos carregar agora"
+      description="Confira a conexão e tente de novo."
+      action={
+        <Button variant="secondary" size="sm" onClick={onTentar}>
+          Tentar de novo
+        </Button>
+      }
+    />
+  );
+}
 
 export function HojePage() {
   const { data: sessao } = useSessionQuery();
@@ -232,9 +253,11 @@ function AtalhoDeCartao({ to, children }: { to: string; children: React.ReactNod
 /* -------------------------------------------------------------------------- */
 
 function BlocoTriagem({ className }: { className?: string }) {
-  const { data, isLoading } = useApiQuery(requestsQueue, { query: { limit: 6 } }) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(requestsQueue, { query: { limit: 6 } }) as {
     data: { items: ServiceRequestRow[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const itens = data?.items ?? [];
@@ -249,6 +272,8 @@ function BlocoTriagem({ className }: { className?: string }) {
       <div className="min-h-0 flex-1 p-3">
         {isLoading ? (
           <SkeletonList rows={4} label="solicitações" />
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : itens.length === 0 ? (
           <EmptyState
             icon={<Inbox className="size-5" />}
@@ -312,9 +337,11 @@ const ENCERRADAS = new Set(['done', 'closed', 'cancelled']);
 const FILTRAVEIS = new Set(['open', 'in_progress', 'waiting', 'done']);
 
 function BlocoQuadro({ className }: { className?: string }) {
-  const { data, isLoading } = useApiQuery(workOrdersBoard) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const colunas = (data?.columns ?? []).filter((c) => c.total > 0).sort((a, b) => a.position - b.position);
@@ -332,6 +359,8 @@ function BlocoQuadro({ className }: { className?: string }) {
       <div className="flex min-h-0 flex-1 flex-col p-5">
         {isLoading ? (
           <SkeletonList rows={4} label="ordens de serviço" className="w-full" />
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : total === 0 ? (
           <EmptyState
             className="w-full"
@@ -428,9 +457,11 @@ function BlocoQuadro({ className }: { className?: string }) {
  * decide: o atrasado entra no dia de alguém: ele não espera um segundo momento.
  */
 function BlocoAgenda({ className }: { className?: string }) {
-  const { data, isLoading } = useApiQuery(scheduleBuckets) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(scheduleBuckets) as {
     data: { counts: Record<string, number>; items: AgendaBucketItem[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const itens = data?.items ?? [];
@@ -455,6 +486,8 @@ function BlocoAgenda({ className }: { className?: string }) {
       <div className="min-h-0 flex-1 p-3">
         {isLoading ? (
           <SkeletonList rows={4} label="agenda" />
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : mostrar.length === 0 ? (
           <EmptyState
             icon={<CalendarClock className="size-5" />}
@@ -518,9 +551,11 @@ function BlocoAgenda({ className }: { className?: string }) {
  * pergunta que o §09 destravou e que a referência não respondia.
  */
 function BlocoParadas({ className }: { className?: string }) {
-  const { data, isLoading } = useApiQuery(workOrdersBoard) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
 
   const esperando = (data?.columns ?? []).filter((c) => c.category === 'waiting' && c.total > 0);
@@ -532,6 +567,8 @@ function BlocoParadas({ className }: { className?: string }) {
       <div className="min-h-0 flex-1 p-4">
         {isLoading ? (
           <SkeletonList rows={3} label="motivos de espera" />
+        ) : isError ? (
+          <FalhaDeCarga onTentar={() => void refetch()} />
         ) : motivos.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="size-5" />}

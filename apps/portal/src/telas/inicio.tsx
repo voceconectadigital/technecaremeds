@@ -20,6 +20,7 @@ import { useApiQuery } from '@aurora/app-kit';
 import { portalHome, type PortalRequest, type PortalVisit } from '@aurora/contracts';
 import { Casca } from '../casca';
 import { quando, reais } from '../formato';
+import { FalhaDeCarga } from './falha-de-carga';
 
 interface Inicio {
   pending_actions: Array<{
@@ -33,10 +34,22 @@ interface Inicio {
 }
 
 export function InicioPage() {
-  const { data, isLoading } = useApiQuery(portalHome) as {
+  const { data, isLoading, isError, refetch } = useApiQuery(portalHome) as {
     data: Inicio | undefined;
     isLoading: boolean;
+    isError: boolean;
+    refetch: () => unknown;
   };
+
+  if (isError) {
+    return (
+      <Casca titulo="Início" subtitulo="O que precisa de você, e o que está andando.">
+        <Card>
+          <FalhaDeCarga onTentar={() => void refetch()} />
+        </Card>
+      </Casca>
+    );
+  }
 
   return (
     <Casca titulo="Início" subtitulo="O que precisa de você, e o que está andando.">
