@@ -31,7 +31,7 @@
  * NENHUMA FUNÇÃO DESTE ARQUIVO CONHECE BANCO. Ele é puro sobre `node:crypto`, e
  * por isso a suíte o exercita inteiro sem subir nada.
  */
-import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { randomBytes, scrypt, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 
 /* -------------------------------------------------------------------------- */
 /* força                                                                      */
@@ -152,16 +152,53 @@ export function resumirSenha(senha: string): string {
  * mesma senha digitada em dois aparelhos produz dois resumos.
  */
 export function senhaCorresponde(senha: string, resumo: string): boolean {
+  const lido = lerResumo(resumo);
+  if (!lido) return false;
+  let obtido: Buffer;
+  try {
+    obtido = scryptSync(senha.normalize('NFKC'), lido.sal, lido.esperado.length, lido.custo);
+  } catch {
+    return false;
+  }
+  return obtido.length === lido.esperado.length && timingSafeEqual(obtido, lido.esperado);
+}
+
+/**
+ * A mesma conferência, SEM BLOQUEAR O PROCESSO (pente-fino 17/10/2026).
+ *
+ * `scryptSync` custa ~100 ms de CPU no laço de eventos: durante uma entrada,
+ * nenhuma outra requisição de nenhuma organização andava, e uma rajada de
+ * tentativas congelava a API inteira por segundos. `scrypt` assíncrono roda no
+ * pool de threads do libuv. É esta a versão que o login usa.
+ */
+export function senhaConfere(senha: string, resumo: string): Promise<boolean> {
+  const lido = lerResumo(resumo);
+  if (!lido) return Promise.resolve(false);
+  return new Promise((resolver) => {
+    scrypt(senha.normalize('NFKC'), lido.sal, lido.esperado.length, lido.custo, (erro, obtido) => {
+      if (erro) return resolver(false);
+      resolver(obtido.length === lido.esperado.length && timingSafeEqual(obtido, lido.esperado));
+    });
+  });
+}
+
+interface ResumoLido {
+  sal: Buffer;
+  esperado: Buffer;
+  custo: { N: number; r: number; p: number; maxmem: number };
+}
+
+function lerResumo(resumo: string): ResumoLido | null {
   const partes = resumo.split('$');
-  if (partes.length !== 6 || partes[0] !== 'scrypt') return false;
+  if (partes.length !== 6 || partes[0] !== 'scrypt') return null;
 
   const N = Number(partes[1]);
   const r = Number(partes[2]);
   const p = Number(partes[3]);
-  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return false;
+  if (!Number.isInteger(N) || !Number.isInteger(r) || !Number.isInteger(p)) return null;
   // Um resumo que pedisse N absurdo viraria trabalho de CPU sem fim. O teto é
   // generoso e existe.
-  if (N < 1024 || N > 1_048_576 || r < 1 || r > 32 || p < 1 || p > 16) return false;
+  if (N < 1024 || N > 1_048_576 || r < 1 || r > 32 || p < 1 || p > 16) return null;
 
   let sal: Buffer;
   let esperado: Buffer;
@@ -169,22 +206,10 @@ export function senhaCorresponde(senha: string, resumo: string): boolean {
     sal = Buffer.from(partes[4]!, 'base64');
     esperado = Buffer.from(partes[5]!, 'base64');
   } catch {
-    return false;
+    return null;
   }
-  if (sal.length === 0 || esperado.length === 0) return false;
-
-  let obtido: Buffer;
-  try {
-    obtido = scryptSync(senha.normalize('NFKC'), sal, esperado.length, {
-      N,
-      r,
-      p,
-      maxmem: PARAMETROS.maxmem,
-    });
-  } catch {
-    return false;
-  }
-  return obtido.length === esperado.length && timingSafeEqual(obtido, esperado);
+  if (sal.length === 0 || esperado.length === 0) return null;
+  return { sal, esperado, custo: { N, r, p, maxmem: PARAMETROS.maxmem } };
 }
 
 /* -------------------------------------------------------------------------- */

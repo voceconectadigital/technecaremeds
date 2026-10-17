@@ -137,3 +137,13 @@ describe('token de sessão', () => {
     }
   });
 });
+
+describe('senhaConfere (assíncrona, sem bloquear o processo)', () => {
+  it('concorda com a versão síncrona', async () => {
+    const { senhaConfere } = await import('../senha');
+    const resumo = resumirSenha('girassol tranquilo na varanda');
+    expect(await senhaConfere('girassol tranquilo na varanda', resumo)).toBe(true);
+    expect(await senhaConfere('girassol tranquilo na varandA', resumo)).toBe(false);
+    expect(await senhaConfere('qualquer', 'scrypt$1$x')).toBe(false);
+  });
+});

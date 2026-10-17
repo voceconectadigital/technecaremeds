@@ -82,6 +82,10 @@ export class AuthController {
 
     const entrada = parseWith(LoginInput, body);
 
+    // A tentativa conta ANTES da ida ao banco e é devolvida no acerto: assim
+    // uma rajada paralela não passa inteira pela conferência acima.
+    this.limiter.registrarFalha(origem);
+
     const resultado = await abrirSessaoPorSenha(this.db, {
       email: entrada.email,
       senha: entrada.senha,
@@ -91,8 +95,8 @@ export class AuthController {
 
     if ('motivo' in resultado) {
       // SÓ A FALHA CONSOME COTA — ver `bloqueado()` em attempt-limiter.ts:
-      // contar também o acerto puniria um hospital inteiro atrás de um NAT.
-      this.limiter.registrarFalha(origem);
+      // contar também o acerto puniria um hospital inteiro atrás de um NAT. A
+      // falha já foi registrada antes da ida ao banco.
 
       /*
        * O LOG REGISTRA A TENTATIVA E NÃO REGISTRA A SENHA.
@@ -107,15 +111,19 @@ export class AuthController {
         origem,
       });
 
-      if (resultado.motivo === 'conta_bloqueada') {
-        throw new UnauthenticatedError(
-          'Esta conta está temporariamente bloqueada por tentativas repetidas. ' +
-            'Tente novamente em alguns minutos.'
-        );
-      }
-      // Mensagem única para e-mail inexistente, conta sem senha e senha errada.
-      throw new UnauthenticatedError('E-mail ou senha não conferem.');
+      /*
+       * MENSAGEM ÚNICA, inclusive para a conta bloqueada (pente-fino 17/10/2026).
+       *
+       * A frase própria de "conta bloqueada" só aparecia para e-mail que tem
+       * conta ativa com senha — cinco erros e uma sexta tentativa enumeravam o
+       * cadastro. A frase única avisa do bloqueio sem dizer de quem é.
+       */
+      throw new UnauthenticatedError(
+        'E-mail ou senha não conferem. Depois de várias tentativas, a entrada fica bloqueada por alguns minutos.'
+      );
     }
+
+    this.limiter.perdoarFalha(origem);
 
     this.logger.info('entrada concedida', { user_id: resultado.user.id, origem });
 

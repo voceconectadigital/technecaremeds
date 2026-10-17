@@ -24,7 +24,7 @@
  * precisa dizer à pessoa certa por que a senha certa não está entrando.
  */
 import {
-  senhaCorresponde,
+  senhaConfere,
   resumirSenha,
   gerarTokenDeSessao,
   resumoDoToken,
@@ -116,16 +116,19 @@ export async function abrirSessaoPorSenha(
        * inteiro sem precisar acertar nenhuma senha. O resumo abaixo é de uma
        * senha impossível, e o trabalho é o mesmo.
        */
-      senhaCorresponde(entrada.senha, resumoDeEngodo());
+      await senhaConfere(entrada.senha, resumoDeEngodo());
       return { motivo: 'credencial_invalida' as const };
     }
 
     const bloqueadoAte = comoData(linha.locked_until);
     if (bloqueadoAte && bloqueadoAte > agora) {
+      // O mesmo custo de `scrypt` da conta inexistente: sem ele, a recusa por
+      // bloqueio voltava em 1 ms e denunciava que o e-mail tem conta.
+      await senhaConfere(entrada.senha, resumoDeEngodo());
       return { motivo: 'conta_bloqueada' as const, liberaEm: bloqueadoAte };
     }
 
-    if (!senhaCorresponde(entrada.senha, linha.password_hash)) {
+    if (!(await senhaConfere(entrada.senha, linha.password_hash))) {
       await c.query('SELECT aurora.registrar_tentativa_de_senha($1, false)', [linha.user_id]);
       return { motivo: 'credencial_invalida' as const };
     }

@@ -164,6 +164,30 @@ describe('bloqueio por tentativas', () => {
     expect('token' in r).toBe(true);
   });
 
+  it('depois de vencido, um erro só não fecha a conta de novo (sem bloqueio perpétuo)', async () => {
+    const id = newId();
+    await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
+      id,
+      'perpetuo@hospital.test',
+      'Pessoa Visada',
+    ]);
+    await definirSenha(t.admin, { userId: id, senha: SENHA });
+    // Dez erros: o teto (15 minutos). Antes da 0073, o contador ficava em 10 e
+    // CADA erro seguinte fechava a conta por mais 15 minutos.
+    for (let i = 0; i < 10; i++) {
+      await t.raw(`SELECT aurora.registrar_tentativa_de_senha($1, false)`, [id]);
+    }
+    await t.raw(
+      `UPDATE aurora.user_credentials SET locked_until = now() - interval '1 second' WHERE user_id = $1`,
+      [id]
+    );
+    // O atacante tenta uma vez, logo depois de o bloqueio vencer…
+    await abrirSessaoPorSenha(t.db, { email: 'perpetuo@hospital.test', senha: 'errada demais 1' });
+    // …e a pessoa certa ainda entra.
+    const r = await abrirSessaoPorSenha(t.db, { email: 'perpetuo@hospital.test', senha: SENHA });
+    expect('token' in r).toBe(true);
+  });
+
   it('o acerto zera o contador', async () => {
     const id = newId();
     await t.raw(`INSERT INTO aurora.users (id, email, name) VALUES ($1, $2, $3)`, [
