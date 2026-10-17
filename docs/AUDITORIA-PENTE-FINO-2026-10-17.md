@@ -297,5 +297,15 @@ Gates locais: typecheck ✅ · OpenAPI ✅ · segredos ✅ · SPEC ✅ · ESLint
 
 ### 10.2 CI
 
-Registrado no PR e em `docs/AI-HANDOFF.md` ao final: Estático · PostgreSQL 16 (migrations do zero + suíte com RLS
-sob papel `NOBYPASSRLS`) · Ponta a ponta (Playwright, inclusive `apresentacao.spec`) · Cloudflare Pages.
+PR [#27](https://github.com/voceconectadigital/technecaremeds/pull/27), run `39006955970` (commit `9a6db9e`):
+
+| Check | Resultado |
+| --- | --- |
+| Estático (SPEC, typecheck, lint, formatação, OpenAPI, marca, segredos) | ✅ |
+| Testes contra PostgreSQL 16 | ✅ migrations **0000–0073 do zero (74 aplicadas)** · **139 arquivos, 2 357 testes, 0 pulados, 0 falhas** (RLS sob papel sem BYPASSRLS) |
+| Ponta a ponta (Playwright) | ✅ **209 passaram**, 1 pulado (condicional pré-existente em `fluxo.spec.ts:203`, "estado de espera não disponível"), 0 falhas — inclui `apresentacao.spec` |
+| Cloudflare Pages | ✅ |
+
+A primeira execução do PR falhou em dois pontos, ambos corrigidos no commit `9a6db9e`: formatação de um teste novo e o
+E2E da apresentação contando "EM DESENVOLVIMENTO" também na frase de abertura (`getByText` sem `exact`).
+O CI da `main` depois do merge é conferido e registrado no relatório entregue ao final da rodada.
