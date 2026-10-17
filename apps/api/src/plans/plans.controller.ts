@@ -34,16 +34,17 @@ import {
   assertCustomerInScope,
   createGuidedPlan,
   planBoard,
+  executePlanItem,
   planSchedule,
   PLAN_KINDS,
   type MembershipScope,
   type TenantSession,
   type Database,
 } from '@aurora/db';
-import { NotFoundError, ValidationError } from '@aurora/domain';
+import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
 import { plansBoard, plansCreate, plansSchedule } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
-import { RequirePermissions } from '../common/permissions.guard';
+import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import type { AuroraRequest } from '../common/context.middleware';
@@ -176,7 +177,11 @@ export class PlansController {
     return withTenant(this.db, ctx, async (s) => {
       const escopo = await membershipScope(s, ctx.membershipId);
       await assertCustomerInScope(s, escopo, q.customer);
-      return planBoard(s, { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null }, escopo);
+      return planBoard(
+        s,
+        { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null, kind: q.kind ?? null },
+        escopo
+      );
     });
   }
 
@@ -190,7 +195,11 @@ export class PlansController {
     return withTenant(this.db, ctx, async (s) => {
       const escopo = await membershipScope(s, ctx.membershipId);
       await assertCustomerInScope(s, escopo, q.customer);
-      return planSchedule(s, { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null }, escopo);
+      return planSchedule(
+        s,
+        { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null, kind: q.kind ?? null },
+        escopo
+      );
     });
   }
 
@@ -378,6 +387,31 @@ export class PlansController {
    * Separado de abrir o ciclo porque são decisões diferentes: um plano manual
    * abre o ciclo e deixa alguém revisar a lista antes de criar cinquenta OS.
    */
+  /**
+   * ▶ Executar um item do cronograma (reunião 16/10/2026). Quem executa o
+   * trabalho (operador) também pode disparar, além de quem gera ciclos.
+   */
+  @Post('cycle-items/:itemId/execute')
+  @RequirePermissions('maintenance_plan.read')
+  @PermissionsCheckedInHandler('aceita maintenance_plan.generate_cycle ou work_order.execute')
+  async executar(
+    @Req() req: AuroraRequest,
+    @Param('itemId') itemId: string
+  ): Promise<{ work_order_id: string; created: boolean }> {
+    const ctx = req.auroraContext!;
+    if (
+      !ctx.permissions.has('maintenance_plan.generate_cycle') &&
+      !ctx.permissions.has('work_order.execute')
+    ) {
+      throw new ForbiddenError('maintenance_plan.generate_cycle');
+    }
+    const id = uuidParam(itemId, 'itemId');
+    const r = await withTenant(this.db, ctx, async (s) =>
+      executePlanItem(s, id, await membershipScope(s, ctx.membershipId))
+    );
+    return { work_order_id: r.workOrderId, created: r.created };
+  }
+
   @Post('cycles/:cycleId/materialize')
   @RequirePermissions('maintenance_plan.generate_cycle')
   async materialize(

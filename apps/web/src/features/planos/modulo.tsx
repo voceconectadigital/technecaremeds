@@ -17,7 +17,7 @@
  * O que ainda não foi gerado só aparece no cronograma, marcado "previsto".
  */
 import { useMemo, useState, type ReactNode } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import {
   CalendarClock,
   CalendarDays,
@@ -28,6 +28,7 @@ import {
   Plus,
   Repeat,
   TriangleAlert,
+  Play,
 } from 'lucide-react';
 import {
   Button,
@@ -45,11 +46,13 @@ import {
   Tabs,
   cn,
   tabIds,
+  useToast,
 } from '@aurora/ui';
 import {
   customersDetail,
   customersList,
   plansBoard,
+  plansExecuteItem,
   plansList,
   plansSchedule,
   type Customer,
@@ -57,7 +60,7 @@ import {
   type PlanRow,
   type ScheduleEntry,
 } from '@aurora/contracts';
-import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
+import { ApiError, Can, useApiMutation, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
@@ -68,7 +71,11 @@ import { ROTULO_ESTADO_ITEM, TOM_ESTADO_ITEM, dataCurta, rotuloDoMes, rotuloTipo
 
 type Aba = 'visao' | 'cronograma' | 'procedimentos';
 
+type Linha = { key: string; label: string; done: number; pending: number; late: number; skipped: number };
+
 interface Board {
+  byPlan?: Linha[];
+  byProcedure?: Linha[];
   totals: { done: number; pending: number; late: number; skipped: number; scheduled: number };
   rate: number | null;
   byKind: Array<{ key: string; done: number; pending: number; late: number; skipped: number }>;
@@ -161,6 +168,8 @@ export function PlanosModuloPage() {
   const [aba, setAba] = useUrlState<Aba>('aba', 'visao');
   const [cliente, setCliente] = useUrlState<string>('cliente', '');
   const [setor, setSetor] = useUrlState<string>('setor', '');
+  // Tipo combinável com cliente e setor, nas duas abas (reunião 16/10/2026) — filtro do SERVIDOR.
+  const [tipo, setTipo] = useUrlState<string>('tipo', '');
   const [criando, setCriando] = useState(false);
 
   return (
@@ -197,11 +206,13 @@ export function PlanosModuloPage() {
               setSetor('');
             }}
             onSetor={setSetor}
+            tipo={tipo}
+            onTipo={setTipo}
           />
         )}
         <div role="tabpanel" id={tabIds('planos', aba).painel} aria-labelledby={tabIds('planos', aba).aba}>
-          {aba === 'visao' && <VisaoGeral cliente={cliente} setor={setor} />}
-          {aba === 'cronograma' && <Cronograma cliente={cliente} setor={setor} />}
+          {aba === 'visao' && <VisaoGeral cliente={cliente} setor={setor} tipo={tipo} />}
+          {aba === 'cronograma' && <Cronograma cliente={cliente} setor={setor} tipo={tipo} />}
           {aba === 'procedimentos' && <ProcedimentosAba />}
         </div>
       </div>
@@ -215,16 +226,22 @@ export function PlanosModuloPage() {
   );
 }
 
+const TIPOS_DE_PLANO = ['preventive', 'calibration', 'electrical_safety', 'qualification'] as const;
+
 function FiltroClienteSetor({
   cliente,
   setor,
   onCliente,
   onSetor,
+  tipo,
+  onTipo,
 }: {
   cliente: string;
   setor: string;
   onCliente: (c: string) => void;
   onSetor: (s: string) => void;
+  tipo: string;
+  onTipo: (t: string) => void;
 }) {
   const { data: clientes } = useApiQuery(customersList) as { data: { items: Customer[] } | undefined };
   const { data: det } = useApiQuery(
@@ -235,9 +252,16 @@ function FiltroClienteSetor({
     data: { locations: CustomerLocation[] } | undefined;
   };
   const setores = (det?.locations ?? []).filter((l) => l.location_type_key === 'setor');
-  if ((clientes?.items.length ?? 0) <= 1 && setores.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 sm:flex-row">
+    <div className="flex flex-col gap-2 sm:flex-row" role="group" aria-label="Filtros dos planos">
+      <Select aria-label="Tipo" value={tipo} onChange={(e) => onTipo(e.target.value)} className="sm:w-56">
+        <option value="">Todos os tipos</option>
+        {TIPOS_DE_PLANO.map((t) => (
+          <option key={t} value={t}>
+            {rotuloTipo(t)}
+          </option>
+        ))}
+      </Select>
       {(clientes?.items.length ?? 0) > 1 && (
         <Select
           aria-label="Cliente"
@@ -276,7 +300,7 @@ function FiltroClienteSetor({
 /* visão geral                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function VisaoGeral({ cliente, setor }: { cliente: string; setor: string }) {
+function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; tipo: string }) {
   const [recorte, setRecorte] = useUrlState<keyof typeof RECORTES_VISAO>('recorte', 'ano');
   const intervalo = useMemo(() => (RECORTES_VISAO[recorte] ?? RECORTES_VISAO.ano).calc(), [recorte]);
   const query = {
@@ -284,6 +308,7 @@ function VisaoGeral({ cliente, setor }: { cliente: string; setor: string }) {
     to: intervalo.to.toISOString(),
     ...(cliente ? { customer: cliente } : {}),
     ...(setor ? { sector: setor } : {}),
+    ...(tipo ? { kind: tipo as (typeof TIPOS_DE_PLANO)[number] } : {}),
   };
   const board = useApiQuery(plansBoard, { query }) as {
     data: Board | undefined;
@@ -425,6 +450,10 @@ function VisaoGeral({ cliente, setor }: { cliente: string; setor: string }) {
                 />
                 <Distribuicao titulo="Por cliente" linhas={b.byCustomer} />
                 <Distribuicao titulo="Por setor" linhas={b.bySector} />
+                {b.byPlan && b.byPlan.length > 0 && <Distribuicao titulo="Por plano" linhas={b.byPlan} />}
+                {b.byProcedure && b.byProcedure.length > 0 && (
+                  <Distribuicao titulo="Por procedimento" linhas={b.byProcedure} />
+                )}
               </div>
             </>
           )}
@@ -619,10 +648,9 @@ const FILTROS_ESTADO = [
   { v: 'done', r: 'Realizadas' },
 ] as const;
 
-function Cronograma({ cliente, setor }: { cliente: string; setor: string }) {
+function Cronograma({ cliente, setor, tipo }: { cliente: string; setor: string; tipo: string }) {
   const [recorte, setRecorte] = useUrlState<keyof typeof RECORTES_CRONO>('janela', '90d');
   const [estado, setEstado] = useUrlState<string>('estado', '');
-  const [tipo, setTipo] = useUrlState<string>('tipo', '');
   const intervalo = useMemo(() => (RECORTES_CRONO[recorte] ?? RECORTES_CRONO['90d']).calc(), [recorte]);
   const { data, isLoading, isError, error } = useApiQuery(plansSchedule, {
     query: {
@@ -630,6 +658,7 @@ function Cronograma({ cliente, setor }: { cliente: string; setor: string }) {
       to: intervalo.to.toISOString(),
       ...(cliente ? { customer: cliente } : {}),
       ...(setor ? { sector: setor } : {}),
+      ...(tipo ? { kind: tipo as (typeof TIPOS_DE_PLANO)[number] } : {}),
     },
   }) as {
     data: { items: ScheduleEntry[]; truncated: boolean } | undefined;
@@ -639,8 +668,7 @@ function Cronograma({ cliente, setor }: { cliente: string; setor: string }) {
   };
 
   const itens = useMemo(() => data?.items ?? [], [data]);
-  const tipos = useMemo(() => [...new Set(itens.map((i) => i.kind))], [itens]);
-  const filtrados = itens.filter((i) => (!estado || i.state === estado) && (!tipo || i.kind === tipo));
+  const filtrados = itens.filter((i) => !estado || i.state === estado);
   const porMes = useMemo(() => {
     const m = new Map<string, ScheduleEntry[]>();
     for (const i of filtrados) {
@@ -744,21 +772,6 @@ function Cronograma({ cliente, setor }: { cliente: string; setor: string }) {
                 {f.r}
               </FilterChip>
             ))}
-            {tipos.length > 1 && (
-              <Select
-                aria-label="Tipo"
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value)}
-                className="ml-auto w-48"
-              >
-                <option value="">Todos os tipos</option>
-                {tipos.map((t) => (
-                  <option key={t} value={t}>
-                    {rotuloTipo(t)}
-                  </option>
-                ))}
-              </Select>
-            )}
           </div>
 
           {data?.truncated && (
@@ -845,18 +858,70 @@ function LinhaCronograma({ i, primeira }: { i: ScheduleEntry; primeira: boolean 
     </div>
   );
   return (
-    <li className={cn(!primeira && 'border-t border-border-subtle')} title={`Vence ${dataCurta(i.due_at)}`}>
-      {i.work_order_id ? (
-        <Link
-          to="/ordens/$id"
-          params={{ id: i.work_order_id }}
-          className="block transition-colors hover:bg-surface-hover"
-        >
-          {corpo}
-        </Link>
-      ) : (
-        corpo
-      )}
+    <li
+      className={cn('flex items-center', !primeira && 'border-t border-border-subtle')}
+      title={`Vence ${dataCurta(i.due_at)}`}
+    >
+      <div className="min-w-0 flex-1">
+        {i.work_order_id ? (
+          <Link
+            to="/ordens/$id"
+            params={{ id: i.work_order_id }}
+            className="block transition-colors hover:bg-surface-hover"
+          >
+            {corpo}
+          </Link>
+        ) : (
+          corpo
+        )}
+      </div>
+      <BotaoExecutarItem i={i} />
     </li>
+  );
+}
+
+/**
+ * ▶ Executar (reunião 16/10/2026): cliente → plano → setor → equipamento →
+ * procedimento. Item real e em aberto abre o assistente da OS; sem OS ainda, a
+ * OS nasce pela geração da varredura (com o procedimento da versão certa).
+ * Previsto não executa: precisa do ciclo gerado.
+ */
+function BotaoExecutarItem({ i }: { i: ScheduleEntry }) {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { can } = usePermissions();
+  const executar = useApiMutation(plansExecuteItem, {
+    invalidates: [plansSchedule, plansBoard],
+    onError: (e: ApiError) => toast.error('Não foi possível executar', e.problem.message),
+  });
+  const encerrada = ['done', 'closed', 'cancelled'].includes(i.work_order_category ?? '');
+  const pode = can('maintenance_plan.generate_cycle') || can('work_order.execute');
+  if (i.projected || !i.id || i.state === 'skipped' || i.state === 'done' || encerrada || !pode) return null;
+  return (
+    <Button
+      size="sm"
+      className="mr-3 shrink-0"
+      icon={<Play className="size-3.5" />}
+      loading={executar.isPending}
+      aria-label={`Executar ${i.task_name} em ${i.asset_name}`}
+      onClick={() => {
+        if (i.work_order_id) {
+          void navigate({ to: '/ordens/$id/executar', params: { id: i.work_order_id } });
+          return;
+        }
+        executar.mutate(
+          { params: { itemId: i.id! } },
+          {
+            onSuccess: (r) =>
+              void navigate({
+                to: '/ordens/$id/executar',
+                params: { id: (r as { work_order_id: string }).work_order_id },
+              }),
+          }
+        );
+      }}
+    >
+      Executar
+    </Button>
   );
 }

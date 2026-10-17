@@ -403,7 +403,9 @@ function ConstrutorDialog({
         });
         toast.success(
           'Revisão criada',
-          publicar ? 'A nova versão já vale para as próximas atividades.' : 'Alterações salvas — ainda não publicadas.'
+          publicar
+            ? 'A nova versão já vale para as próximas atividades.'
+            : 'Alterações salvas — ainda não publicadas.'
         );
       } else {
         await criar.mutateAsync({
