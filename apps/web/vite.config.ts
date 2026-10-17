@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cabecalhosDoPages } from '../../tools/lib/cabecalhos-pages.mjs';
 
 // `import.meta` e não `__dirname`: o carregador nativo do Vite 8 é ESM, e vai
 // virar o padrão.
@@ -68,7 +69,12 @@ export default defineConfig(({ mode }) => {
      * Com o literal, o ramo morto some, e o `import()` junto.
      */
     define: { __MODO_DEMO__: JSON.stringify(demo) },
-    plugins: [react(), tailwindcss(), ambienteDaDemonstracao(demo)],
+    plugins: [
+      react(),
+      tailwindcss(),
+      ambienteDaDemonstracao(demo),
+      cabecalhosDoPages({ apiUrl: env.VITE_API_URL }),
+    ],
     resolve: {
       // Os pacotes do monorepo são consumidos pela FONTE, não pelo `dist`: o
       // ciclo de "compilar o pacote para ver a mudança na tela" mata o

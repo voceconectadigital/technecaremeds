@@ -1,6 +1,6 @@
 # Cabeçalhos de segurança no Cloudflare Pages (pente-fino 17/10/2026).
-# Sem CSP de propósito: a origem da API muda por implantação (VITE_API_URL) e uma
-# CSP errada derruba a aplicação inteira; fica como decisão junto com o destino.
+# A CSP (Report-Only) é ACRESCENTADA no build por tools/lib/cabecalhos-pages.mjs, com a
+# origem da API daquele build e o hash dos scripts inline do index.html.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
