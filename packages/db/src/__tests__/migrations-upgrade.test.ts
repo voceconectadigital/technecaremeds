@@ -235,3 +235,102 @@ describe('papel sem BYPASSRLS', () => {
     await pg.close();
   });
 });
+
+describe('catálogos de sistema com conflito no banco legado (PF-20)', () => {
+  it('tipo de OS com chave arquivada e família com nome ocupado nascem mesmo assim', async () => {
+    const { syncCatalogDefinitions } = await import('../catalogs');
+    const pg = new PGlite();
+    const db = pgliteAdapter(pg, null);
+    await migrate(db, pastaAntiga);
+    await seed(db);
+    await syncCatalogDefinitions(db);
+    await pg.exec(`
+      -- a chave de fábrica "preventiva" pertence a um item APOSENTADO
+      INSERT INTO aurora.catalog_items (id, organization_id, catalog_key, key, label, archived_at)
+      VALUES ('${id(50)}', '${ORG}', 'work_order_type', 'preventiva', 'Preventiva antiga', now());
+      -- "Terapia" já é o nome de uma SUBcategoria viva
+      INSERT INTO aurora.asset_categories (id, organization_id, name) VALUES ('${id(51)}', '${ORG}', 'Equipamentos');
+      INSERT INTO aurora.asset_categories (id, organization_id, name, parent_id)
+      VALUES ('${id(52)}', '${ORG}', 'Terapia', '${id(51)}');
+    `);
+
+    await migrateAndSyncCatalogs(db);
+
+    const tipos = await pg.query<{ system_key: string; key: string }>(
+      `SELECT system_key, key FROM aurora.catalog_items
+        WHERE organization_id = $1 AND catalog_key = 'work_order_type' AND archived_at IS NULL
+          AND system_key IS NOT NULL ORDER BY system_key`,
+      [ORG]
+    );
+    expect(tipos.rows).toHaveLength(7);
+    expect(tipos.rows.find((x) => x.system_key === 'preventive')?.key).toBe('preventiva_2');
+
+    const familias = await pg.query<{ family_key: string; name: string }>(
+      `SELECT family_key, name FROM aurora.asset_categories
+        WHERE organization_id = $1 AND family_key IS NOT NULL AND archived_at IS NULL ORDER BY family_key`,
+      [ORG]
+    );
+    expect(familias.rows).toHaveLength(5);
+    expect(familias.rows.find((x) => x.family_key === 'therapy')?.name).toBe('Terapia (família)');
+    // a subcategoria continua como estava
+    const [sub] = (
+      await pg.query<{ family_key: string | null }>(
+        `SELECT family_key FROM aurora.asset_categories WHERE id = $1`,
+        [id(52)]
+      )
+    ).rows;
+    expect(sub?.family_key).toBeNull();
+    await pg.close();
+  });
+});
+
+describe('provisionamento em runtime com os mesmos conflitos (PF-20)', () => {
+  it('não engole o tipo de OS nem falha na família', async () => {
+    const pg = new PGlite();
+    const admin = pgliteAdapter(pg, null);
+    await migrateAndSyncCatalogs(admin);
+    const org = newId();
+    const user = newId();
+    const mem = newId();
+    await pg.query(`INSERT INTO aurora.organizations (id, slug, name) VALUES ($1, 'conflito', 'Conflito')`, [
+      org,
+    ]);
+    await pg.query(`INSERT INTO aurora.users (id, email, name) VALUES ($1, 'c@conflito.test', 'C')`, [user]);
+    await pg.transaction(async (tx) => {
+      await tx.query(
+        `INSERT INTO aurora.memberships (id, organization_id, user_id, seat_type, status, is_owner)
+         VALUES ($1, $2, $3, 'staff', 'active', true)`,
+        [mem, org, user]
+      );
+      await tx.query(
+        `INSERT INTO aurora.membership_scopes (membership_id, organization_id) VALUES ($1, $2)`,
+        [mem, org]
+      );
+    });
+    const raiz = newId();
+    await pg.exec(`
+      INSERT INTO aurora.catalog_items (id, organization_id, catalog_key, key, label, archived_at)
+      VALUES ('${newId()}', '${org}', 'work_order_type', 'preventiva', 'Preventiva antiga', now());
+      INSERT INTO aurora.asset_categories (id, organization_id, name) VALUES ('${raiz}', '${org}', 'Equipamentos');
+      INSERT INTO aurora.asset_categories (id, organization_id, name, parent_id)
+      VALUES ('${newId()}', '${org}', 'Terapia', '${raiz}');
+    `);
+    const db = pgliteAdapter(pg, 'aurora_app');
+    const ctx = buildContext({
+      organizationId: org,
+      membershipId: mem,
+      actorKind: 'system',
+      requestId: 'conflito',
+      permissions: PERMISSION_KEYS,
+    });
+    const base = await withTenant(db, ctx, (s) => provisionOrganizationBaseline(s));
+    expect(base.families.size).toBe(5);
+    const { rows } = await pg.query<{ c: number }>(
+      `SELECT count(*)::int c FROM aurora.catalog_items
+        WHERE organization_id = $1 AND catalog_key = 'work_order_type' AND system_key IS NOT NULL AND archived_at IS NULL`,
+      [org]
+    );
+    expect(rows[0]?.c).toBe(7);
+    await pg.close();
+  });
+});

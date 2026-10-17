@@ -61,11 +61,26 @@ export async function provisionAssetFamilies(session: TenantSession): Promise<Ma
       ids.set(f.key, existente.id);
       continue;
     }
+    // Subcategoria viva com o nome da família ocupa o nome (único por
+    // organização): a família nasce com o nome qualificado, em vez de o
+    // provisionamento falhar (pente-fino 17/10/2026, PF-20).
+    const [nomeOcupado] = await session.query(
+      `SELECT 1 FROM aurora.asset_categories
+        WHERE archived_at IS NULL AND normalized_name = aurora.normalize_label($1)`,
+      [f.name]
+    );
     const id = newId();
     await session.query(
       `INSERT INTO aurora.asset_categories (id, organization_id, name, family_key, position, created_by)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, session.context.organizationId, f.name, f.key, i + 1, session.context.actorId]
+      [
+        id,
+        session.context.organizationId,
+        nomeOcupado ? `${f.name} (família)` : f.name,
+        f.key,
+        i + 1,
+        session.context.actorId,
+      ]
     );
     ids.set(f.key, id);
   }
@@ -106,12 +121,27 @@ export async function provisionWorkOrderTypes(session: TenantSession): Promise<v
       }
       continue;
     }
+    /*
+     * A chave é única INCLUSIVE entre arquivados (0011). Um item aposentado com
+     * a chave de fábrica fazia o `ON CONFLICT DO NOTHING` engolir a inserção, e a
+     * organização ficava sem o tipo de sistema — sem erro nenhum (pente-fino
+     * 17/10/2026, PF-20). Agora a chave livre seguinte é usada (`preventiva_2`).
+     */
+    const ocupadas = new Set(
+      (
+        await session.query<{ key: string }>(
+          `SELECT key FROM aurora.catalog_items WHERE catalog_key = 'work_order_type' AND key LIKE $1`,
+          [`${chave}%`]
+        )
+      ).map((x) => x.key)
+    );
+    let livre = chave;
+    for (let n = 2; ocupadas.has(livre); n++) livre = `${chave}_${n}`;
     await session.query(
       `INSERT INTO aurora.catalog_items
          (id, organization_id, catalog_key, key, system_key, label, position, is_system, created_by)
-       VALUES ($1, $2, 'work_order_type', $3, $4, $5, $6, true, $7)
-       ON CONFLICT DO NOTHING`,
-      [newId(), session.context.organizationId, chave, t.key, t.label, i + 1, session.context.actorId]
+       VALUES ($1, $2, 'work_order_type', $3, $4, $5, $6, true, $7)`,
+      [newId(), session.context.organizationId, livre, t.key, t.label, i + 1, session.context.actorId]
     );
   }
 }

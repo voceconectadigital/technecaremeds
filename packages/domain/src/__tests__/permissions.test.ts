@@ -160,3 +160,13 @@ describe('administrativeEscalationCheck (pente-fino 17/10/2026)', () => {
     );
   });
 });
+
+describe('trilha de auditoria só para quem a recebe explicitamente (PF-15)', () => {
+  it('Coordenador, Gestor e Financeiro não leem a trilha global; Gestor de manutenção e Auditor leem', async () => {
+    const { FACTORY_ROLES, permissionsOfRole } = await import('../permissions');
+    const de = (k: string) => permissionsOfRole(FACTORY_ROLES.find((r) => r.key === k)!);
+    for (const k of ['coordinator', 'manager', 'finance']) expect(de(k), k).not.toContain('audit.read');
+    for (const k of ['maintenance_manager', 'auditor', 'owner', 'admin'])
+      expect(de(k), k).toContain('audit.read');
+  });
+});
