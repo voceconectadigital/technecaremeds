@@ -67,9 +67,9 @@ test('abre por link direto e continua depois de recarregar, sem chamar a API', a
 
   // Os selos do que ainda não existe estão à vista de quem rola até lá.
   const eco = page.getByRole('region', { name: /ecossistema em evolução/i });
-  await expect(eco.getByText('EM DESENVOLVIMENTO')).toHaveCount(2);
-  await expect(eco.getByText('FUTURO')).toHaveCount(5);
-  await expect(page.getByText('ROADMAP')).toBeVisible();
+  await expect(eco.getByText('EM DESENVOLVIMENTO', { exact: true })).toHaveCount(2);
+  await expect(eco.getByText('FUTURO', { exact: true })).toHaveCount(5);
+  await expect(page.getByText('ROADMAP', { exact: true })).toBeVisible();
 
   // Espera a rede assentar: uma consulta disparada na montagem chegaria aqui.
   await page.waitForLoadState('networkidle');

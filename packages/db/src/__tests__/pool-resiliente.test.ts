@@ -60,7 +60,9 @@ describe('erros de dado do PostgreSQL', () => {
     const { translatePostgresError } = await import('../pg-errors');
     const { ValidationError } = await import('@aurora/domain');
     for (const code of ['22008', '22007']) {
-      const e = translatePostgresError(Object.assign(new Error('date/time field value out of range'), { code }));
+      const e = translatePostgresError(
+        Object.assign(new Error('date/time field value out of range'), { code })
+      );
       expect(e).toBeInstanceOf(ValidationError);
     }
   });
