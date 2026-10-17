@@ -80,6 +80,9 @@ const NovaSolicitacaoPage = preguicosa(() =>
 const OrdensPage = preguicosa(() =>
   import('../features/ordens/lista').then((m) => ({ default: m.OrdensPage }))
 );
+const ExecutarOrdemPage = preguicosa(() =>
+  import('../features/ordens/executar').then((m) => ({ default: m.ExecutarOrdemPage }))
+);
 const OrdemPage = preguicosa(() =>
   import('../features/ordens/ficha').then((m) => ({ default: m.OrdemPage }))
 );
@@ -238,6 +241,12 @@ export const routeTree = raiz.addChildren([
     getParentRoute: () => raiz,
     path: '/ordens/$id',
     component: OrdemPage,
+    beforeLoad: exigirSessao,
+  }),
+  createRoute({
+    getParentRoute: () => raiz,
+    path: '/ordens/$id/executar',
+    component: ExecutarOrdemPage,
     beforeLoad: exigirSessao,
   }),
 

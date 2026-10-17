@@ -153,10 +153,12 @@ describe('migrations (EPIC-001)', () => {
       'wait_reasons',
       'warehouses',
       'work_order_comments',
+      'work_order_customer_parts',
       'work_order_status_history',
       'work_order_status_transitions',
       'work_order_statuses',
       'work_order_type_settings',
+      'work_order_visits',
       'work_orders',
     ]);
     await pg.close();

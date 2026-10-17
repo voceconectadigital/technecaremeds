@@ -272,6 +272,14 @@ export const WorkOrderDetail = z.object({
   rework_reason: z.string().nullable(),
   reopen_reason: z.string().nullable(),
 
+  /* --- Preencher Ordem de Serviço (16/10/2026); opcionais por causa da demo */
+  service_description: z.string().nullable().optional(),
+  service_observations: z.string().nullable().optional(),
+  /** Situação de uso após o serviço — não é veredito metrológico. */
+  operational_result: z.enum(['released', 'stopped']).nullable().optional(),
+  final_opinion: z.string().nullable().optional(),
+  service_report_updated_at: z.string().nullable().optional(),
+
   /* --- agregados -------------------------------------------------------- */
   history: z.array(WorkOrderHistoryEntry),
   /** O SLA vem na ficha porque é o que decide a ordem do dia de quem atende. */

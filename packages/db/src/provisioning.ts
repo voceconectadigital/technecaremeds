@@ -27,10 +27,8 @@ export interface BaselineResult {
 
 export async function provisionOrganizationBaseline(session: TenantSession): Promise<BaselineResult> {
   const roles = await provisionFactoryRoles(session);
-  const [temSituacao] = await session.query<{ ok: boolean }>(
-    `SELECT true AS ok FROM aurora.work_order_statuses LIMIT 1`
-  );
-  if (!temSituacao) await provisionWorkOrderStates(session);
+  // Idempotente por chave: numa organização existente só acrescenta o que falta.
+  await provisionWorkOrderStates(session);
   const locationTypes = await provisionStarterLocationTypes(session);
   const families = await provisionAssetFamilies(session);
   await provisionNeutralCriticalities(session);

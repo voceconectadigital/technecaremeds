@@ -106,7 +106,9 @@ export class ServiceRequestsController {
       requesterPhone: typeof body.requester_phone === 'string' ? body.requester_phone : null,
       requesterEmail: typeof body.requester_email === 'string' ? body.requester_email : null,
       requestedType: tipoDaSolicitacao(body.requested_type),
-      submit: body.submit !== false,
+      // Sem rascunho (reunião 16/10/2026): toda solicitação aberta pela API nasce
+      // enviada. O estado `draft` continua no domínio só para o histórico.
+      submit: true,
     };
     const ctx = req.auroraContext!;
 

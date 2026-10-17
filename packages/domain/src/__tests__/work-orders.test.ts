@@ -81,8 +81,8 @@ describe('categorias — o que o software sabe interpretar', () => {
 });
 
 describe('situações e motivos de fábrica', () => {
-  it('as dez situações da SPEC, com categoria válida cada', () => {
-    expect(FACTORY_STATUSES).toHaveLength(11);
+  it('as situações da SPEC (mais Em análise e Negada), com categoria válida cada', () => {
+    expect(FACTORY_STATUSES).toHaveLength(12);
     for (const s of FACTORY_STATUSES) expect(STATUS_CATEGORIES, s.key).toContain(s.category);
   });
 
@@ -196,7 +196,7 @@ describe('permissões', () => {
   it('as saídas oferecidas já vêm filtradas pelas permissões', () => {
     const soCancela = new Set(['work_order.cancel']);
     const r = mover('open', 'scheduled', {}, soCancela);
-    expect(r.allowedTargets).toEqual(['cancelled']);
+    expect(r.allowedTargets).toEqual(['denied', 'cancelled']);
   });
 
   it('reabrir OS fechada exige permissão própria', () => {

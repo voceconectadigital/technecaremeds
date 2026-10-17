@@ -33,7 +33,7 @@
  * salva metade das coisas. A ficha LÊ e faz TRANSIÇÃO; as transições é que
  * escrevem, e escrevem pelo caminho que o servidor valida.
  */
-import { useParams } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 import {
   AlertTriangle,
@@ -82,24 +82,31 @@ import {
   type WorkOrderPart,
   type WorkOrderTransition,
 } from '@aurora/contracts';
-import { ApiError, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
+import { ApiError, useApiMutation, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
 
+// A aba "Conversa" saiu da navegação da OS (reunião 16/10/2026: não tem função
+// nesse fluxo). Os comentários continuam gravados e no histórico — nada foi
+// apagado; `?aba=conversa` em link antigo ainda abre.
 const ABAS = [
   { id: 'resumo', label: 'Resumo' },
   { id: 'execucao', label: 'Execução' },
   { id: 'anexos', label: 'Anexos' },
-  { id: 'conversa', label: 'Conversa' },
   { id: 'historico', label: 'Histórico' },
 ] as const;
+
+/** Situações em que o assistente de execução faz sentido. */
+const EXECUTAVEL = new Set(['open', 'scheduled', 'in_progress', 'waiting', 'review']);
 
 export function OrdemPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const toast = useToast();
+  const navigate = useNavigate();
+  const { can } = usePermissions();
   const [pedindo, setPedindo] = useState<WorkOrderTransition | null>(null);
   // A aba fica na URL: quem manda o link da conversa quer que o outro caia na
   // conversa, e recarregar a página não deve devolver a pessoa ao resumo.
@@ -150,6 +157,17 @@ export function OrdemPage() {
       breadcrumbs={[{ label: 'Ordens de serviço', href: '/ordens' }, { label: data.number ?? '—' }]}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {EXECUTAVEL.has(data.status_category) &&
+            (can('work_order.execute') || can('work_order.execute_any')) &&
+            (data.available_transitions.length > 0 || data.status_category === 'in_progress') && (
+              <Button
+                variant="primary"
+                icon={<Play className="size-4" />}
+                onClick={() => void navigate({ to: '/ordens/$id/executar', params: { id } })}
+              >
+                Executar
+              </Button>
+            )}
           {data.available_transitions.map((t) => (
             <Button
               key={t.to}

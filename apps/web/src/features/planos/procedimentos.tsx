@@ -285,7 +285,7 @@ export function ProcedimentosAba() {
                 </span>
                 {t.status === 'draft' ? (
                   <StatusChip size="sm" tone="warn">
-                    Rascunho v{t.version}
+                    Em edição v{t.version}
                   </StatusChip>
                 ) : (
                   <StatusChip size="sm" tone="good">
@@ -403,7 +403,7 @@ function ConstrutorDialog({
         });
         toast.success(
           'Revisão criada',
-          publicar ? 'A nova versão já vale para as próximas atividades.' : 'Rascunho salvo.'
+          publicar ? 'A nova versão já vale para as próximas atividades.' : 'Alterações salvas — ainda não publicadas.'
         );
       } else {
         await criar.mutateAsync({
@@ -417,7 +417,7 @@ function ConstrutorDialog({
         });
         toast.success(
           'Checklist criado',
-          publicar ? 'Publicado — já pode ser usado em planos.' : 'Rascunho salvo.'
+          publicar ? 'Publicado — já pode ser usado em planos.' : 'Alterações salvas — ainda não publicadas.'
         );
       }
       onClose();
@@ -444,7 +444,7 @@ function ConstrutorDialog({
         <>
           <Button onClick={onClose}>Cancelar</Button>
           <Button loading={salvando} onClick={() => void salvar(false)}>
-            Salvar rascunho
+            Salvar sem publicar
           </Button>
           {can('procedure.publish') && (
             <Button variant="primary" loading={salvando} onClick={() => void salvar(true)}>
@@ -740,7 +740,7 @@ function DetalheDialog({ id, onClose }: { id: string | null; onClose: () => void
                 tone={v.status === 'published' ? 'good' : v.status === 'draft' ? 'warn' : 'neutral'}
               >
                 v{v.version} ·{' '}
-                {v.status === 'published' ? 'publicada' : v.status === 'draft' ? 'rascunho' : 'arquivada'}
+                {v.status === 'published' ? 'publicada' : v.status === 'draft' ? 'em edição' : 'arquivada'}
               </StatusChip>
             ))}
           </div>

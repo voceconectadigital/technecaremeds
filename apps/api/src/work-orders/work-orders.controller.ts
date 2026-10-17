@@ -266,6 +266,8 @@ export class WorkOrdersController {
                 w.started_at, w.completed_at, w.validated_at, w.closed_at,
                 w.cancellation_reason, w.rework_reason, w.reopen_reason,
                 w.wait_note, w.created_at, w.updated_at,
+                w.service_description, w.service_observations, w.operational_result,
+                w.final_opinion, w.service_report_updated_at,
                 st.key AS status_key, st.label AS status_label,
                 st.requires_wait_reason,
                 wr.key AS wait_reason_key, wr.label AS wait_reason_label, wr.pauses_sla,
@@ -376,7 +378,8 @@ export class WorkOrdersController {
                     allowed: REQUEST_PRIORITIES,
                   });
                 })(),
-        publish: body.publish !== false,
+        // Sem rascunho (reunião 16/10/2026): a OS criada pela API nasce aberta.
+        publish: true,
       })
     );
   }
