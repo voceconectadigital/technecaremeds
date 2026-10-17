@@ -4,7 +4,7 @@
  * Menu próprio, "Adicionar usuário" com os três perfis de acesso, profissão
  * como cadastro e escopo cliente → setores no mesmo formulário.
  */
-import { test, expect } from '../fixtures/aurora';
+import { test, expect, tolera } from '../fixtures/aurora';
 
 test.describe('Usuários', () => {
   test('o menu leva a Usuários e o botão é "Adicionar usuário"', async ({ comoCoordenadorA: page }) => {
@@ -51,6 +51,8 @@ test.describe('Usuários', () => {
   });
 
   test('CPF inválido é recusado com mensagem no campo', async ({ comoCoordenadorA: page }) => {
+    // A recusa (422) é o que este teste provoca de propósito.
+    tolera(page, /422/);
     await page.goto('/usuarios');
     await page.getByRole('button', { name: 'Adicionar usuário' }).click();
     const dialogo = page.getByRole('dialog');
