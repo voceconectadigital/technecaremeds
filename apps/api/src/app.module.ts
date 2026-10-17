@@ -24,6 +24,7 @@ import { AssetsController } from './assets/assets.controller';
 import { AssetCatalogController } from './assets/asset-catalog.controller';
 import { ExecucaoGuiadaController } from './work-orders/execucao-guiada.controller';
 import { EstoqueGestaoController } from './inventory/estoque-gestao.controller';
+import { ReportsController } from './insights/reports.controller';
 import { QrController } from './assets/qr.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
@@ -104,6 +105,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       ExecutionResourcesController,
       ExecucaoGuiadaController,
       EstoqueGestaoController,
+      ReportsController,
       FieldController,
       ContractsController,
       AssetContractController,

@@ -61,6 +61,7 @@ import {
 } from './rotulos';
 import { AlternadorDoPainel } from './alternador';
 import { AtalhosRapidos } from './atalhos';
+import { BotaoGerarRelatorio } from './relatorio';
 
 const SEM_DADOS = 'Sem dados suficientes para este período.';
 
@@ -79,6 +80,7 @@ export function PainelPage() {
       actions={
         <>
           <FiltrosDeRecorte d={data} f={filtros} atualizando={isFetching && !isLoading} />
+          <BotaoGerarRelatorio f={filtros} />
           <Link
             to="/painel/tv"
             search={buscaDoPainel(filtros) as never}

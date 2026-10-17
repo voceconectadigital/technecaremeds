@@ -37850,6 +37850,430 @@
         ]
       }
     },
+    "/v1/reports/catalog": {
+      "get": {
+        "operationId": "reports.catalog",
+        "summary": "Modelos de relatório (Basic, Advanced, Expert) e a situação de cada indicador",
+        "description": "Fundação: o layout final dos três modelos está AGUARDANDO MODELO PDF OFICIAL. Indicador sem fórmula ou definição aparece com a situação, e nunca com número inventado.",
+        "tags": [
+          "Reports"
+        ],
+        "x-aurora-permissions": [
+          "insight.read"
+        ],
+        "x-aurora-source": "apps/api/src/insights/reports.controller.ts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "tiers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "basic",
+                              "advanced",
+                              "expert"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label"
+                        ]
+                      }
+                    },
+                    "indicators": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "tier": {
+                            "type": "string",
+                            "enum": [
+                              "basic",
+                              "advanced",
+                              "expert"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "awaiting_official_model",
+                              "awaiting_definition"
+                            ]
+                          },
+                          "note": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "tier",
+                          "status"
+                        ]
+                      }
+                    },
+                    "layout_status": {
+                      "type": "string",
+                      "const": "awaiting_official_model"
+                    },
+                    "layout_note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tiers",
+                    "indicators",
+                    "layout_status",
+                    "layout_note"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/reports/generate": {
+      "post": {
+        "operationId": "reports.generate",
+        "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel",
+        "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.",
+        "tags": [
+          "Reports"
+        ],
+        "x-aurora-permissions": [
+          "insight.read"
+        ],
+        "x-aurora-source": "apps/api/src/insights/reports.controller.ts",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "tier": {
+                    "type": "string",
+                    "enum": [
+                      "basic",
+                      "advanced",
+                      "expert"
+                    ]
+                  },
+                  "indicators": {
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "customer_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "sector_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "plan_kind": {
+                    "type": "string",
+                    "enum": [
+                      "preventive",
+                      "calibration",
+                      "electrical_safety",
+                      "qualification"
+                    ]
+                  },
+                  "asset_category_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  }
+                },
+                "required": [
+                  "tier",
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "tier": {
+                      "type": "string",
+                      "enum": [
+                        "basic",
+                        "advanced",
+                        "expert"
+                      ]
+                    },
+                    "generated_at": {
+                      "type": "string"
+                    },
+                    "layout_status": {
+                      "type": "string",
+                      "const": "awaiting_official_model"
+                    },
+                    "filters": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "available",
+                              "awaiting_official_model",
+                              "awaiting_definition"
+                            ]
+                          },
+                          "note": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "count",
+                              "minutes",
+                              "hours",
+                              "percent",
+                              "none"
+                            ]
+                          },
+                          "samples": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "detail": {},
+                          "definition": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "status",
+                          "note",
+                          "value",
+                          "unit",
+                          "samples",
+                          "detail",
+                          "definition"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "tier",
+                    "generated_at",
+                    "layout_status",
+                    "filters",
+                    "sections"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/roles/{id}/permissions": {
       "get": {
         "operationId": "roles.ofRole",

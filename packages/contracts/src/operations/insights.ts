@@ -266,3 +266,78 @@ export const insightTimeByStatus = defineOperation({
   query: recorte,
   response: envelope(z.record(z.string(), z.unknown())),
 });
+
+/* -------------------------------------------------------------------------- */
+/* Relatórios BASIC / ADVANCED / EXPERT — fundação (reunião 16/10/2026)        */
+/* -------------------------------------------------------------------------- */
+
+export const REPORT_TIER_KEYS = ['basic', 'advanced', 'expert'] as const;
+
+const ReportIndicator = z.object({
+  key: z.string(),
+  label: z.string(),
+  tier: z.enum(REPORT_TIER_KEYS),
+  status: z.enum(['available', 'awaiting_official_model', 'awaiting_definition']),
+  note: z.string().optional(),
+});
+
+export const reportsCatalog = defineOperation({
+  operationId: 'reports.catalog',
+  method: 'GET',
+  path: '/reports/catalog',
+  summary: 'Modelos de relatório (Basic, Advanced, Expert) e a situação de cada indicador',
+  description:
+    'Fundação: o layout final dos três modelos está AGUARDANDO MODELO PDF OFICIAL. Indicador sem ' +
+    'fórmula ou definição aparece com a situação, e nunca com número inventado.',
+  permissions: ['insight.read'],
+  response: z.object({
+    tiers: z.array(z.object({ key: z.enum(REPORT_TIER_KEYS), label: z.string() })),
+    indicators: z.array(ReportIndicator),
+    layout_status: z.literal('awaiting_official_model'),
+    layout_note: z.string(),
+  }),
+});
+
+export const reportsGenerate = defineOperation({
+  operationId: 'reports.generate',
+  method: 'POST',
+  path: '/reports/generate',
+  summary: 'Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel',
+  description:
+    'Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. ' +
+    'Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.',
+  permissions: ['insight.read'],
+  body: z
+    .object({
+      tier: z.enum(REPORT_TIER_KEYS),
+      indicators: z.array(z.string()).max(50).optional(),
+      from: z.string(),
+      to: z.string(),
+      customer_id: Uuid.optional(),
+      sector_id: Uuid.optional(),
+      plan_kind: z.enum(['preventive', 'calibration', 'electrical_safety', 'qualification']).optional(),
+      asset_category_id: Uuid.optional(),
+    })
+    .strict(),
+  response: z.object({
+    tier: z.enum(REPORT_TIER_KEYS),
+    generated_at: z.string(),
+    layout_status: z.literal('awaiting_official_model'),
+    filters: z.record(z.string(), z.string().nullable()),
+    sections: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        status: z.enum(['available', 'awaiting_official_model', 'awaiting_definition']),
+        note: z.string().nullable(),
+        value: z.number().nullable(),
+        unit: z.enum(['count', 'minutes', 'hours', 'percent', 'none']),
+        samples: z.number().nullable(),
+        detail: z.unknown(),
+        definition: z.string().nullable(),
+      })
+    ),
+  }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
+});
