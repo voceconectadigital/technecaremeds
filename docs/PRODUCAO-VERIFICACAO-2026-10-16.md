@@ -32,21 +32,31 @@ comprado, não foi configurado. `htec.com.br` resolve para um IP de terceiro (`1
 sem vínculo verificável com o projeto — **não usado**. Status: **BLOQUEADO — INFRA** até o
 responsável indicar um domínio sob controle comprovado.
 
-## 4. Publicação desta rodada — o que falta e em que ordem
+## 4. Estratégia de infraestrutura vigente
 
-1. CI verde no PR #22 e integração em `main`.
-2. **Autorização explícita** para o deploy no HostPanel (regra do projeto).
+Decisão vigente (16/10/2026, responsável do projeto): **sem deploy no HostPanel nesta rodada** e sem tocar a VPS antiga; o **PostgreSQL remoto atual permanece no Supabase Online** da Téchne Care até a infraestrutura definitiva; **VPS dedicada fica para fase posterior**; autenticação **continua própria da aplicação** (sem Supabase Auth). Código na `main` não autoriza migration remota nem deploy de backend.
+
+Consequência: o front de produção (upload direto) e a API publicada continuam na versão de
+15/10. O front novo depende das rotas e das migrations desta rodada — publicá-lo sem o backend
+atualizado quebraria telas. Situação: **AGUARDANDO DEPLOY CONECTADO**.
+
+## 5. Plano FUTURO de publicação (não executar sem autorização)
+
+Mantido como registro da estratégia; nada abaixo está autorizado agora.
+
+1. CI verde e código em `main` — **feito** (`27a5e8c`).
+2. **Autorização explícita** para publicar o backend no destino escolhido (hoje HostPanel; futuramente a VPS dedicada).
 3. Backup do PostgreSQL de produção **antes** das migrations `0060`–`0068` (com prova:
    arquivo, tamanho, horário, restore descartável).
-4. Deploy da API pelo HostPanel com o SHA de `main` → conferir `/v1/health/version`
+4. Deploy da API no destino autorizado com o SHA de `main` → conferir `/v1/health/version`
    (`impressao` = `npm run versao` do mesmo commit).
 5. Só então o front (web, portal, campo) por `wrangler pages deploy`, e smoke remoto.
 6. Conceder o admin global de plataforma (Fase 11) é ato de DBA, com motivo — não há rota.
 
-## 5. Bloqueios desta fase
+## 6. Bloqueios desta fase
 
 - I-02 domínio "htec.b": BLOQUEADO — INFRA.
 - I-04 backup/restore comprovado: BLOQUEADO — INFRA (sem acesso/prova).
-- I-05 publicação: aguardando autorização explícita de deploy.
-- I-06 VPS dedicada: a API já roda em node nos EUA (HostPanel `apps-us-east-01`); uma VPS
-  dedicada nova é decisão/aquisição fora do repositório.
+- I-05 publicação: AGUARDANDO DEPLOY CONECTADO (sem autorização nesta rodada).
+- I-06 VPS dedicada: FUTURO — fase posterior, por decisão de 16/10. A API publicada hoje responde
+  num node do HostPanel nos EUA (`apps-us-east-01`).
