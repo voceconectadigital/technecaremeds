@@ -66,7 +66,9 @@ export function DialogoOrcamentoDaOs({ os, onFechar }: { os: WorkOrderDetail; on
   };
   // O catálogo de itens (16/10/2026), e não só os que têm saldo: o orçamento
   // pode prever peça que ainda vai ser comprada.
-  const { data: catalogo } = useApiQuery(inventoryItemsList, undefined, { enabled: can('inventory.read') }) as {
+  const { data: catalogo } = useApiQuery(inventoryItemsList, undefined, {
+    enabled: can('inventory.read'),
+  }) as {
     data: { items: InventoryItem[] } | undefined;
   };
   const itensDoCatalogo = (catalogo?.items ?? []).map((i) => [i.id, `${i.name} (${i.sku})`] as const);

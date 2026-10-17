@@ -40,7 +40,7 @@ async function criarOrdem(page: Page, titulo: string): Promise<{ id: string; num
 }
 
 test.describe('EPIC-009 · ficha da ordem de serviço', () => {
-  test('as cinco abas abrem, e a URL leva a pessoa de volta à mesma', async ({ comoCoordenadorA: page }) => {
+  test('as abas abrem, e a URL leva a pessoa de volta à mesma', async ({ comoCoordenadorA: page }) => {
     const os = await criarOrdem(page, 'OS da ficha completa');
     await page.goto(`/ordens/${os.id}`);
 
@@ -52,7 +52,8 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
     const faixa = page.getByRole('term').filter({ hasText: 'Responsável' });
     await expect(faixa).toBeVisible();
 
-    for (const aba of ['Execução', 'Anexos', 'Conversa', 'Histórico', 'Resumo']) {
+    // "Conversa" saiu da navegação da OS (16/10/2026); os comentários seguem no histórico.
+    for (const aba of ['Execução', 'Anexos', 'Histórico', 'Resumo']) {
       await page.getByRole('tab', { name: aba }).click();
       await expect(page.getByRole('tab', { name: aba })).toHaveAttribute('aria-selected', 'true');
       // O painel conhece a aba que o abriu: sem essa ligação o leitor de tela
@@ -62,12 +63,12 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
       await expect(faixa).toBeVisible();
     }
 
-    // A aba viaja na URL: quem manda o link da conversa quer que o outro caia
-    // na conversa.
-    await page.getByRole('tab', { name: 'Conversa' }).click();
-    expect(page.url()).toContain('aba=conversa');
+    // A aba viaja na URL: quem manda o link do histórico quer que o outro caia
+    // no histórico.
+    await page.getByRole('tab', { name: 'Histórico' }).click();
+    expect(page.url()).toContain('aba=historico');
     await page.reload();
-    await expect(page.getByRole('tab', { name: 'Conversa' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Histórico' })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a nota interna aparece marcada, e some para quem não pode lê-la', async ({
@@ -141,9 +142,6 @@ test.describe('EPIC-009 · ficha da ordem de serviço', () => {
 
     await page.goto(`/ordens/${os.id}?aba=anexos`);
     await expect(page.getByText('Nenhum anexo')).toBeVisible({ timeout: 15_000 });
-
-    await page.getByRole('tab', { name: 'Conversa' }).click();
-    await expect(page.getByText('Nada dito ainda')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Execução' }).click();
     await expect(page.getByText('Nenhuma hora apontada')).toBeVisible();

@@ -250,14 +250,11 @@ describe('▶ Executar: check-in, procedimento, OS, peças, parecer, conclusão'
       .set(auth(OPERADOR))
       .send({ service_description: 'Troca do sensor de pressão e recalibração do alarme.' });
     expect(a.status, JSON.stringify(a.body)).toBe(200);
-    const b = await http
-      .patch(`/v1/work-orders/${os1}/service-report`)
-      .set(auth(OPERADOR))
-      .send({
-        service_observations: 'Cliente orientado sobre limpeza do filtro.',
-        operational_result: 'released',
-        final_opinion: 'Equipamento liberado para uso.',
-      });
+    const b = await http.patch(`/v1/work-orders/${os1}/service-report`).set(auth(OPERADOR)).send({
+      service_observations: 'Cliente orientado sobre limpeza do filtro.',
+      operational_result: 'released',
+      final_opinion: 'Equipamento liberado para uso.',
+    });
     expect(b.status).toBe(200);
     const det = await http.get(`/v1/work-orders/${os1}`).set(auth(GESTORA));
     expect(workOrderDetail.response.safeParse(det.body).success).toBe(true);

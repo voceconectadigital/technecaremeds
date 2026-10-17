@@ -1,11 +1,14 @@
 /**
  * Aurora — cliente EAS × empresa corporativa e edição (reunião 16/10/2026, Fase 2).
+ *
+ * Roda na organização B: a A guarda o "cliente único" de que fluxo.spec,
+ * jornada.spec e painel-planejamento.spec dependem.
  */
 import { test, expect } from '../fixtures/aurora';
 
 test.describe('Clientes: classificação e edição', () => {
   test('cadastra uma empresa corporativa e a lista mostra a classificação', async ({
-    comoCoordenadorA: page,
+    comoCoordenadorB: page,
   }) => {
     const nome = `EngClin ${Date.now()}`;
     await page.goto('/clientes?novo=sim');
@@ -22,7 +25,7 @@ test.describe('Clientes: classificação e edição', () => {
   });
 
   test('o formulário separa EAS de empresa corporativa e troca os subtipos', async ({
-    comoCoordenadorA: page,
+    comoCoordenadorB: page,
   }) => {
     await page.goto('/clientes?novo=sim');
     const dialogo = page.getByRole('dialog');

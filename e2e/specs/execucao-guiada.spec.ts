@@ -70,22 +70,39 @@ test.describe('▶ Executar (assistente da OS)', () => {
     await page.getByRole('button', { name: /Fazer check-in com a minha localização/ }).click();
     await expect(page.getByText(/Check-in feito em/)).toBeVisible({ timeout: 15_000 });
 
-    await page.getByRole('button', { name: 'Avançar' }).click(); // procedimento
-    await page.getByRole('button', { name: 'Avançar' }).click(); // preencher OS
-    const descricao = page.getByLabel('Descrição do serviço');
-    await descricao.fill('Troca do sensor e teste funcional.');
-    await page.getByLabel('Observações').click(); // o blur grava
-    await expect(page.getByRole('radiogroup', { name: 'Origem da peça' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Avançar' }).click(); // anexos
-    await expect(page.getByText('Foto ANTES')).toBeVisible();
-    await expect(page.getByText('Foto DEPOIS')).toBeVisible();
-
-    await page.getByRole('button', { name: 'Avançar' }).click(); // parecer
-    await page.getByRole('radio', { name: /LIBERADO/ }).check();
-
-    await page.getByRole('button', { name: 'Avançar' }).click(); // revisão
-    await expect(page.getByText('Troca do sensor e teste funcional.')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('LIBERADO')).toBeVisible();
+    // O check-in abre o cronômetro da pessoa, e só pode haver UM aberto por
+    // pessoa: o teste fecha o seu no fim, passe ou falhe, para não travar o
+    // apontamento dos testes seguintes com o mesmo usuário.
+    try {
+      await percorrerAssistente(page);
+    } finally {
+      await page.request.post(`${apiUrl()}/work-orders/${id}/check-out`, {
+        headers: {
+          authorization: `Bearer local:${E2E.emailCoordA}:${E2E.emailCoordA}`,
+          'x-aurora-organization': E2E.orgA,
+        },
+        data: { justification: 'encerramento do teste ponta a ponta' },
+      });
+    }
   });
 });
+
+async function percorrerAssistente(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Avançar' }).click(); // procedimento
+  await page.getByRole('button', { name: 'Avançar' }).click(); // preencher OS
+  const descricao = page.getByLabel('Descrição do serviço');
+  await descricao.fill('Troca do sensor e teste funcional.');
+  await page.getByLabel('Observações').click(); // o blur grava
+  await expect(page.getByRole('radiogroup', { name: 'Origem da peça' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Avançar' }).click(); // anexos
+  await expect(page.getByRole('heading', { name: 'Foto ANTES' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Foto DEPOIS' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Avançar' }).click(); // parecer
+  await page.getByRole('radio', { name: /LIBERADO/ }).check();
+
+  await page.getByRole('button', { name: 'Avançar' }).click(); // revisão
+  await expect(page.getByText('Troca do sensor e teste funcional.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('LIBERADO')).toBeVisible();
+}
