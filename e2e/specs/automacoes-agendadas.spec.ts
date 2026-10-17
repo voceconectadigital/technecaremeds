@@ -42,7 +42,7 @@ test.describe('Fase 10 · automações agendadas', () => {
     const dialogo = page.getByRole('dialog', { name: 'Nova automação' });
     await dialogo.getByRole('radio', { name: /5W2H/ }).check();
     await dialogo.getByLabel('Nome da automação').fill('Plano 5W2H e2e');
-    await dialogo.getByLabel('Periodicidade').selectOption('monthly');
+    await dialogo.getByLabel('Periodicidade', { exact: true }).selectOption('monthly');
     await dialogo.getByLabel('O quê (What)').fill(TAREFA);
     await dialogo.getByLabel('Quem (Who)').selectOption({ label: 'Bruno do Beta' });
     await dialogo.getByLabel('Por quê (Why)').fill('Achado de auditoria');
@@ -68,7 +68,8 @@ test.describe('Fase 10 · automações agendadas', () => {
   test('a outra organização não vê as tarefas nem as regras de B', async ({ comoCoordenadorA: page }) => {
     await page.goto('/tarefas');
     await page.getByLabel('Ver as de toda a equipe').check();
-    await expect(page.getByText('Nenhuma tarefa').or(page.getByRole('listitem').first())).toBeVisible();
+    // A organização A não tem automação nenhuma: nem as tarefas de B aparecem.
+    await expect(page.getByText('Nenhuma tarefa')).toBeVisible();
     await expect(page.getByText(TAREFA)).toHaveCount(0);
   });
 });
