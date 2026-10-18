@@ -8,7 +8,7 @@
  * estão paradas por peça, quantas por aprovação do cliente, quantas por
  * liberação da unidade.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   listWaitReasons,
@@ -25,8 +25,10 @@ import {
   listAttachments,
   listParts,
   slaStatus,
+  setWorkOrderTeam,
   type Database,
 } from '@aurora/db';
+import { workOrderSetTeam } from '@aurora/contracts';
 import {
   STATUS_CATEGORIES,
   type StatusCategory,
@@ -42,6 +44,7 @@ import { escopoRestrito, filtroDeEscopo } from '../common/scope-sql';
 import { oneOf, optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import { runFieldOperation } from '../common/client-operation';
+import { parseWith } from '../common/contract-validation';
 import type { AuroraRequest } from '../common/context.middleware';
 
 @Controller('work-orders')
@@ -432,6 +435,30 @@ export class WorkOrdersController {
         scheduledEnd: typeof body.scheduled_end === 'string' ? new Date(body.scheduled_end) : null,
         expectedVersion: typeof body.version === 'number' ? body.version : undefined,
       })
+    );
+  }
+
+  /**
+   * A EQUIPE DA OS (PF-14).
+   *
+   * Rota própria, e não um campo a mais da transição: definir a equipe não
+   * muda a situação da OS, e a transição só aceita o responsável porque
+   * "atribuir" é uma aresta do grafo. A permissão é a mesma de atribuir o
+   * responsável (`work_order.assign`) — as duas respostas à pergunta "de quem
+   * é esta OS". O `ScopeGuard` já cobre `/work-orders/:id/…`: OS fora do
+   * escopo de quem pede é 404 antes de chegar aqui.
+   */
+  @Patch(':id/team')
+  @RequirePermissions('work_order.assign')
+  async setTeam(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ team_id: string | null; version: number }> {
+    const woId = uuidParam(id, 'id');
+    const b = parseWith(workOrderSetTeam.body, body);
+    return withTenant(this.db, req.auroraContext!, (s) =>
+      setWorkOrderTeam(s, woId, b.team_id, { expectedVersion: b.version })
     );
   }
 

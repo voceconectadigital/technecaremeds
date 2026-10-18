@@ -12588,6 +12588,20 @@
                                 "type": "null"
                               }
                             ]
+                          },
+                          "operational_result": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "released",
+                                  "stopped"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -12611,7 +12625,8 @@
                           "status_label",
                           "status_color",
                           "wait_reason_key",
-                          "wait_reason_label"
+                          "wait_reason_label",
+                          "operational_result"
                         ]
                       }
                     },
@@ -13396,6 +13411,17 @@
                         ]
                       }
                     },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "require_operational_result": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "require_operational_result"
+                      ]
+                    },
                     "counts": {
                       "type": "object",
                       "propertyNames": {
@@ -13421,6 +13447,7 @@
                     "wait_reasons",
                     "stock",
                     "open_timers",
+                    "settings",
                     "counts"
                   ]
                 }
@@ -26216,7 +26243,7 @@
       "post": {
         "operationId": "inventory.consumeWorkOrderPart",
         "summary": "Usa peça de ESTOQUE na OS: reserva e baixa do razão, vinculadas à OS",
-        "description": "Nenhuma baixa silenciosa: o movimento fica com `ref_type = work_order` e a OS.",
+        "description": "Nenhuma baixa silenciosa: o movimento fica com `ref_type = work_order` e a OS. Quem tem `work_order.execute` sem `work_order.execute_any` (técnico, operador) só lança peça na OS atribuída a si ou à sua equipe (403 com o motivo, PF-14); o almoxarife, que não executa OS, lança em qualquer uma do seu escopo.",
         "tags": [
           "Inventory"
         ],
@@ -46175,7 +46202,7 @@
       "post": {
         "operationId": "measurementSessions.open",
         "summary": "Abre a sessão de medição de um checklist anexado à OS",
-        "description": "Sob a garantia de idempotência de campo (`x-aurora-client-operation`); o identificador pode vir do aparelho. Recusa instrumento fora de operação, instrumento de categoria que o protocolo não aceita e certificado que não cobria o dia da medição. Nada aqui compara leitura com tolerância.",
+        "description": "Sob a garantia de idempotência de campo (`x-aurora-client-operation`); o identificador pode vir do aparelho. Recusa instrumento fora de operação, instrumento de categoria que o protocolo não aceita e certificado que não cobria o dia da medição. Nada aqui compara leitura com tolerância. Como toda ação de execução, só na OS atribuída à pessoa ou à equipe dela, salvo `work_order.execute_any` (403 com o motivo, PF-14) — e o mesmo vale para leituras, dado bruto e encerramento da sessão.",
         "tags": [
           "WorkOrderMeasurement"
         ],
@@ -47116,6 +47143,170 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/work-orders/{id}/team": {
+      "patch": {
+        "operationId": "workOrders.setTeam",
+        "summary": "Define (ou tira, com null) a equipe da OS",
+        "description": "Ato de gestão, como atribuir o responsável: exige `work_order.assign`. Quem é da equipe da OS passa a poder executá-la mesmo sem ser o responsável (PF-14). A equipe precisa estar ativa (senão 422); OS validada, fechada ou cancelada não muda de equipe (409). O responsável individual não é tocado. `version` é a da situação (a mesma da transição, que só sobe quando a OS muda de situação): enviada, recusa a troca se a OS andou desde que a tela a carregou (409).",
+        "tags": [
+          "WorkOrders"
+        ],
+        "x-aurora-permissions": [
+          "work_order.assign"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/work-orders.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "team_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "team_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "team_id": {
+                      "anyOf": [
+                        {
+                          "description": "Identificador UUID",
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "team_id",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {

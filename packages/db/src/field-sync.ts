@@ -25,6 +25,7 @@
  * pacote do dia chegar a centenas de megabytes numa rede de hospital.
  */
 import type { TenantSession } from './client';
+import { requiresOperationalResult } from './organization-config';
 
 /**
  * O corte incremental.
@@ -59,6 +60,8 @@ export interface FieldSyncBundle {
   stock: Record<string, unknown>[];
   /** Os cronômetros abertos DESTA pessoa (PF-65). Sempre inteiro, nunca incremental. */
   open_timers: Record<string, unknown>[];
+  /** Regras da organização que o aparelho aplica offline (PF-41). Sempre inteiro. */
+  settings: { require_operational_result: boolean };
   counts: Record<string, number>;
 }
 
@@ -122,11 +125,28 @@ export async function fieldSyncBundle(
             w.location_name_snapshot, w.asset_name_snapshot,
             w.scheduled_start, w.scheduled_end, w.created_at, w.updated_at, w.version,
             st.key AS status_key, st.label AS status_label, st.color AS status_color,
-            wr.key AS wait_reason_key, wr.label AS wait_reason_label
+            wr.key AS wait_reason_key, wr.label AS wait_reason_label,
+            w.operational_result
        FROM aurora.work_orders w
        JOIN aurora.work_order_statuses st ON st.id = w.status_id
        LEFT JOIN aurora.wait_reasons wr   ON wr.id = w.wait_reason_id
-      WHERE w.assignee_membership_id = $1
+      WHERE (
+              w.assignee_membership_id = $1
+              /*
+               * E AS DA EQUIPE (PF-14). Quem é da equipe da OS pode executá-la
+               * (assertCanExecuteWorkOrder); sem ela no aparelho, poderia
+               * pela web e não pelo campo, que é onde o trabalho acontece. Só
+               * dentro do escopo da pessoa: a equipe é da organização inteira,
+               * e o vínculo restrito a um cliente não recebe a OS de outro.
+               */
+              OR (w.team_id IN (SELECT tm.team_id
+                                  FROM aurora.team_members tm
+                                  JOIN aurora.teams t ON t.id = tm.team_id AND t.deleted_at IS NULL
+                                 WHERE tm.membership_id = $1)
+                  AND w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
+                  AND (w.location_id IS NULL
+                       OR w.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($1))))
+            )
         /*
          * ABERTAS SEM DATA ENTRAM SEMPRE.
          *
@@ -335,6 +355,13 @@ export async function fieldSyncBundle(
     [membershipId]
   );
 
+  /*
+   * A EXIGÊNCIA DO PARECER (PF-41) desce para o aparelho poder pedi-lo NA HORA
+   * de concluir, offline. Sem isto, com a regra ligada, a conclusão feita no
+   * subsolo voltava horas depois como 422 na tela de atenção.
+   */
+  const exigeParecer = await requiresOperationalResult(s);
+
   return {
     // Já vem em ISO com milissegundos, do banco. Reprocessar em JavaScript foi
     // exatamente o que perdeu a precisão antes.
@@ -350,6 +377,7 @@ export async function fieldSyncBundle(
     wait_reasons: motivos,
     stock: estoque,
     open_timers: cronometros,
+    settings: { require_operational_result: exigeParecer },
     /*
      * As contagens existem para o aparelho DIZER o que baixou.
      *

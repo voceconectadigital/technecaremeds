@@ -11,6 +11,15 @@
  * As rotas de sessão, leitura e dado bruto passam por `runFieldOperation`: o
  * técnico mede no subsolo, e reenviar a mesma leitura nunca pode duplicar nem
  * "corrigir" o que já foi gravado.
+ *
+ * QUEM MEDE NA OS DE QUEM (PF-14). Abrir sessão, registrar leitura, anexar
+ * dado bruto e encerrar são ações de EXECUÇÃO da OS, guardadas por
+ * `work_order.execute` — e por isso seguem a mesma regra do checklist que elas
+ * preenchem: sem `work_order.execute_any`, só na OS atribuída à pessoa ou à
+ * equipe dela (`assertCanExecuteWorkOrder`). Medir na OS de outro técnico
+ * gravaria leitura com a proveniência de quem não estava lá. O metrologista
+ * tem `execute_any` e mede em qualquer OS. A conferência roda DENTRO de
+ * `runFieldOperation`, na transação da escrita, como nas demais rotas de campo.
  */
 import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
@@ -28,6 +37,8 @@ import {
   attachRawData,
   measurementSessionDetail,
   measurementSessionsForWorkOrder,
+  assertCanExecuteWorkOrder,
+  assertCanExecuteMeasurementSession,
   type Database,
 } from '@aurora/db';
 import { fonteManual, NotFoundError, ValidationError } from '@aurora/domain';
@@ -210,6 +221,7 @@ export class WorkOrderMeasurementController {
       'POST /work-orders/:id/measurement-sessions',
       body,
       async (s) => {
+        await assertCanExecuteWorkOrder(s, woId);
         // A resposta tem de ser DESTA OS: abrir sessão na OS A apontando a
         // resposta da OS B é exatamente o atalho que embaralha evidência.
         const [resp] = await s.query<{ work_order_id: string }>(
@@ -271,6 +283,7 @@ export class MeasurementSessionsController {
           [sessionId]
         );
         if (!sessao) throw new NotFoundError('Sessão de medição', sessionId);
+        await assertCanExecuteMeasurementSession(s, sessionId);
         const envelope = fonteManual.normalizar({
           response_id: sessao.response_id,
           item_id: b.item_id,
@@ -289,8 +302,16 @@ export class MeasurementSessionsController {
   @Post(':id/finish')
   @RequirePermissions('work_order.execute')
   async finish(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ ok: true }> {
-    await runFieldOperation(this.db, req, 'POST /measurement-sessions/:id/finish', { session_id: id }, (s) =>
-      finishMeasurementSession(s, uuidParam(id, 'id'))
+    const sessionId = uuidParam(id, 'id');
+    await runFieldOperation(
+      this.db,
+      req,
+      'POST /measurement-sessions/:id/finish',
+      { session_id: id },
+      async (s) => {
+        await assertCanExecuteMeasurementSession(s, sessionId);
+        await finishMeasurementSession(s, sessionId);
+      }
     );
     return { ok: true };
   }
@@ -304,13 +325,21 @@ export class MeasurementSessionsController {
   ): Promise<{ attachment_id: string; storage_key: string }> {
     const b = parseWith(measurementSessionsAttachRawData.body, body);
     if (b.byte_size <= 0) throw new ValidationError('arquivo vazio', { field: 'byte_size' });
-    const r = await runFieldOperation(this.db, req, 'POST /measurement-sessions/:id/raw-data', body, (s) =>
-      attachRawData(s, uuidParam(id, 'id'), {
-        fileName: b.file_name,
-        contentType: b.content_type,
-        byteSize: b.byte_size,
-        sha256: b.sha256,
-      })
+    const sessionId = uuidParam(id, 'id');
+    const r = await runFieldOperation(
+      this.db,
+      req,
+      'POST /measurement-sessions/:id/raw-data',
+      body,
+      async (s) => {
+        await assertCanExecuteMeasurementSession(s, sessionId);
+        return attachRawData(s, sessionId, {
+          fileName: b.file_name,
+          contentType: b.content_type,
+          byteSize: b.byte_size,
+          sha256: b.sha256,
+        });
+      }
     );
     return { attachment_id: r.id, storage_key: r.storageKey };
   }

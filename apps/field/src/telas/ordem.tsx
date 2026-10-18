@@ -38,6 +38,14 @@ import type { AnexoPendente } from '../arquivos';
 import { referenciaAoAnexo } from '../anexos';
 import { cronometroAberto, horaCurta, type CronometroAberto, type CronometroBaixado } from '../cronometro';
 import { Assinatura } from './assinatura';
+import {
+  ROTULO_DO_PARECER,
+  ehParecer,
+  lerConfiguracao,
+  parecerNaFila as parecerJaNaFila,
+  planoDeConclusao,
+  type Parecer,
+} from '../parecer';
 
 interface OrdemLocal {
   id: string;
@@ -50,6 +58,8 @@ interface OrdemLocal {
   asset_id: string | null;
   asset_name_snapshot: string | null;
   location_name_snapshot: string | null;
+  /** O parecer já gravado no servidor (PF-41). Ausente em pacote de servidor anterior. */
+  operational_result?: string | null;
 }
 
 interface TransicaoLocal {
@@ -61,6 +71,8 @@ interface TransicaoLocal {
 interface SituacaoLocal {
   key: string;
   label: string;
+  /** `review` é a conclusão — onde o parecer é pedido (PF-41). */
+  category?: string;
 }
 
 interface ItemDeChecklist {
@@ -111,6 +123,16 @@ export function OrdemPage() {
   const [resolucao, setResolucao] = useRascunho(`os:${id}:resolucao`);
   const [nomeAssina, setNomeAssina] = useRascunho(`os:${id}:assina-nome`);
   const [docAssina, setDocAssina] = useRascunho(`os:${id}:assina-doc`);
+  /*
+   * O PARECER (PF-41) é rascunho até a conclusão, como a resolução: escolher
+   * LIBERADO e fechar o aplicativo não perde a escolha, e nada sobe antes de
+   * a pessoa concluir.
+   */
+  const [parecerRascunho, setParecer] = useRascunho(`os:${id}:parecer`);
+  const parecer: Parecer | null = ehParecer(parecerRascunho) ? parecerRascunho : null;
+  const [exigeParecer, setExigeParecer] = useState(false);
+  const [parecerEnfileirado, setParecerEnfileirado] = useState<Parecer | null>(null);
+  const [avisoParecer, setAvisoParecer] = useState<string | null>(null);
 
   const [enviando, setEnviando] = useState<string | null>(null);
   const [meusAnexos, setMeusAnexos] = useState<AnexoPendente[]>([]);
@@ -153,12 +175,24 @@ export function OrdemPage() {
             .filter((to): to is string => typeof to === 'string')
         );
         setCronometro(cronometroAberto(cs, baixados, (c) => fila.daSessaoAtual(c)));
+        setParecerEnfileirado(parecerJaNaFila(cs, id));
       }
     );
     return () => {
       vivo = false;
     };
   }, [fila, base, id, estado.pendentes, estado.bloqueados, estado.atencao, ultimaSincronizacao]);
+
+  /* A exigência do parecer, como o último pacote a trouxe (PF-41). */
+  useEffect(() => {
+    let vivo = true;
+    void lerConfiguracao(base).then((c) => {
+      if (vivo) setExigeParecer(c.require_operational_result);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [base, ultimaSincronizacao]);
 
   const ordem = ordens.find((o) => o.id === id);
   const rotulos = useMemo(() => new Map(situacoes.map((s) => [s.key, s.label])), [situacoes]);
@@ -230,6 +264,9 @@ export function OrdemPage() {
 
   const ordemAtual = ordem;
   const agregado = `work_order:${ordemAtual.id}`;
+  /** O parecer que a OS já tem: o que está na fila vence o gravado no servidor. */
+  const parecerInformado: Parecer | null =
+    parecerEnfileirado ?? (ehParecer(ordemAtual.operational_result) ? ordemAtual.operational_result : null);
   const modeloAtivo = modelos.find((m) => m.id === checklistAtivo?.split('|')[0]);
   const respostaId = checklistAtivo?.split('|')[1];
 
@@ -357,7 +394,33 @@ export function OrdemPage() {
   }
 
   async function mudarSituacao(para: string) {
+    const plano = planoDeConclusao({
+      categoriaDestino: situacoes.find((s) => s.key === para)?.category,
+      exige: exigeParecer,
+      escolhido: parecer,
+      jaRegistrado: parecerInformado,
+    });
+    if (!plano.ok) {
+      // Recusado AQUI, sem enfileirar: o técnico ainda está na frente do
+      // equipamento e responde na hora, em vez de achar a recusa na atenção.
+      setAvisoParecer(plano.erro);
+      return;
+    }
+    setAvisoParecer(null);
+
     await comAviso(para, async () => {
+      if (plano.enviarParecer) {
+        // ANTES da transição e no mesmo agregado: a fila manda em ordem, e o
+        // servidor confere o parecer gravado quando o "concluir" chega.
+        await enfileirar({
+          agregado,
+          metodo: 'PATCH',
+          caminho: `/work-orders/${ordemAtual.id}/service-report`,
+          corpo: { operational_result: plano.enviarParecer },
+          rotulo: `Parecer ${ROTULO_DO_PARECER[plano.enviarParecer]} — ${ordemAtual.number ?? ordemAtual.title}`,
+        });
+        setParecerEnfileirado(plano.enviarParecer);
+      }
       await enfileirar({
         agregado,
         metodo: 'POST',
@@ -379,8 +442,12 @@ export function OrdemPage() {
        * em lugar nenhum — e é justamente o texto que a pessoa levou duas horas
        * para escrever.
        */
-      await limparRascunhos(base, [`os:${id}:resolucao`]);
+      await limparRascunhos(base, [
+        `os:${id}:resolucao`,
+        ...(plano.enviarParecer ? [`os:${id}:parecer`] : []),
+      ]);
       setResolucao('');
+      if (plano.enviarParecer) setParecer('');
     });
   }
 
@@ -826,6 +893,51 @@ export function OrdemPage() {
         <h2 id="acoes" className="text-sm font-semibold text-text">
           Mudar a situação
         </h2>
+
+        {possiveis.some((t) => situacoes.find((s) => s.key === t.to_key)?.category === 'review') && (
+          /*
+           * O PARECER DO EQUIPAMENTO (PF-41), logo acima do botão que conclui:
+           * é a pergunta que a conclusão faz. Obrigatório só quando a
+           * organização exige; senão, opcional e enviado se escolhido.
+           */
+          <fieldset className="flex flex-col gap-2 rounded-control border border-border-subtle p-3">
+            <legend className="px-1 text-xs text-subtle">
+              Parecer do equipamento{exigeParecer ? ' (obrigatório para concluir)' : ' (opcional)'}
+            </legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(['released', 'stopped'] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={parecer === v}
+                  onClick={() => {
+                    setParecer(parecer === v ? '' : v);
+                    setAvisoParecer(null);
+                  }}
+                  disabled={enviando !== null}
+                  className={`min-h-12 rounded-control border px-3 text-sm font-semibold ${
+                    parecer === v
+                      ? 'border-accent bg-accent text-on-accent'
+                      : 'border-border-subtle bg-surface text-text'
+                  }`}
+                >
+                  {ROTULO_DO_PARECER[v]}
+                </button>
+              ))}
+            </div>
+            {!parecer && parecerInformado && (
+              <p className="text-xs text-muted">
+                Já informado: {ROTULO_DO_PARECER[parecerInformado]}
+                {parecerEnfileirado ? ' (no aparelho, aguardando envio)' : ''}.
+              </p>
+            )}
+            {avisoParecer && (
+              <p role="alert" className="text-sm font-medium text-bad-text">
+                {avisoParecer}
+              </p>
+            )}
+          </fieldset>
+        )}
 
         {possiveis.length === 0 ? (
           /*

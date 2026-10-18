@@ -255,7 +255,9 @@ export const measurementSessionsOpen = defineOperation({
     'Sob a garantia de idempotência de campo (`x-aurora-client-operation`); o identificador ' +
     'pode vir do aparelho. Recusa instrumento fora de operação, instrumento de categoria que o ' +
     'protocolo não aceita e certificado que não cobria o dia da medição. Nada aqui compara ' +
-    'leitura com tolerância.',
+    'leitura com tolerância. Como toda ação de execução, só na OS atribuída à pessoa ou à equipe ' +
+    'dela, salvo `work_order.execute_any` (403 com o motivo, PF-14) — e o mesmo vale para ' +
+    'leituras, dado bruto e encerramento da sessão.',
   permissions: ['work_order.execute'],
   params: z.object({ id: Uuid }),
   body: z
@@ -270,7 +272,7 @@ export const measurementSessionsOpen = defineOperation({
     })
     .strict(),
   response: z.object({ id: Uuid }),
-  errors: ['not_found', 'conflict'],
+  errors: ['not_found', 'conflict', 'forbidden'],
 });
 
 export const MeasurementPoint = z.object({
@@ -400,7 +402,7 @@ export const measurementSessionsRecord = defineOperation({
     })
     .strict(),
   response: z.object({ answer_id: Uuid, revision: z.number().int(), verdict: z.string() }),
-  errors: ['not_found', 'conflict'],
+  errors: ['not_found', 'conflict', 'forbidden'],
 });
 
 export const measurementSessionsFinish = defineOperation({
@@ -411,7 +413,7 @@ export const measurementSessionsFinish = defineOperation({
   permissions: ['work_order.execute'],
   params: z.object({ id: Uuid }),
   response: z.object({ ok: z.literal(true) }),
-  errors: ['not_found', 'conflict'],
+  errors: ['not_found', 'conflict', 'forbidden'],
 });
 
 export const measurementSessionsAttachRawData = defineOperation({
@@ -426,5 +428,5 @@ export const measurementSessionsAttachRawData = defineOperation({
   params: z.object({ id: Uuid }),
   body: RegistroDeArquivo,
   response: ArquivoRegistrado,
-  errors: ['not_found'],
+  errors: ['not_found', 'forbidden'],
 });

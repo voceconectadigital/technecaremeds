@@ -154,6 +154,9 @@ const NegociosPage = preguicosa(() =>
 const MetasPage = preguicosa(() =>
   import('../features/configuracoes/metas').then((m) => ({ default: m.MetasPage }))
 );
+const OrganizacaoPage = preguicosa(() =>
+  import('../features/configuracoes/organizacao').then((m) => ({ default: m.OrganizacaoPage }))
+);
 const TarefasPage = preguicosa(() =>
   import('../features/automacoes/tarefas').then((m) => ({ default: m.TarefasPage }))
 );
@@ -334,6 +337,7 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
   rotaProtegida('/configuracoes/negocios', NegociosPage),
   rotaProtegida('/configuracoes/metas', MetasPage),
+  rotaProtegida('/configuracoes/organizacao', OrganizacaoPage),
   rotaProtegida('/tarefas', TarefasPage),
   createRoute({
     getParentRoute: () => raiz,

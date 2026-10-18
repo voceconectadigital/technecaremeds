@@ -744,3 +744,86 @@ export interface WaitReasonRow {
   requires_note: boolean;
   position: number;
 }
+
+/* -------------------------------------------------------------------------- */
+/* equipe da OS (PF-14)                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Define (ou tira) a EQUIPE da OS.
+ *
+ * A coluna `work_orders.team_id` existia desde a 0021, era lida pela agenda e
+ * pelos indicadores, e desde o PF-14 decide quem executa (`assertCanExecuteWorkOrder`
+ * aceita quem é da equipe da OS) — mas nenhuma rota a escrevia. Esta função é
+ * esse caminho, e o que ela garante:
+ *
+ *   · é ATO DE GESTÃO, como atribuir o responsável: a rota exige
+ *     `work_order.assign`. Técnico não se põe numa OS escolhendo a equipe dela;
+ *   · a equipe é desta organização (a RLS esconde a de outra → 404) e está
+ *     ATIVA: equipe inativa, arquivada ou apagada não recebe trabalho novo
+ *     (422, dizendo o motivo);
+ *   · OS validada, fechada ou cancelada não muda de equipe (409) — o mesmo corte
+ *     do relatório de serviço. Mudar quem PODIA executar depois do fato apagaria
+ *     a resposta à pergunta "quem estava autorizado quando aconteceu". Em
+ *     análise ainda muda: a validação pode devolver para retrabalho, e quem
+ *     coordena escolhe antes quem refaz;
+ *   · `null` tira a equipe; o responsável individual não é tocado.
+ *
+ * A trilha fica no gatilho de auditoria de `work_orders` (0022). Não há evento
+ * de domínio: `work_order.assigned` notifica o RESPONSÁVEL, e disparar o aviso
+ * de atribuição para uma equipe inteira é uma decisão de produto que ninguém
+ * tomou.
+ */
+export async function setWorkOrderTeam(
+  session: TenantSession,
+  workOrderId: string,
+  teamId: string | null,
+  opts: { expectedVersion?: number } = {}
+): Promise<{ team_id: string | null; version: number }> {
+  const [os] = await session.query<{ status_category: StatusCategory; version: number }>(
+    `SELECT status_category::text AS status_category, version
+       FROM aurora.work_orders
+      WHERE id = $1
+        FOR UPDATE`,
+    [workOrderId]
+  );
+  if (!os) throw new NotFoundError('Ordem de serviço', workOrderId);
+  if (opts.expectedVersion !== undefined && opts.expectedVersion !== os.version) {
+    throw new ConflictError(
+      'a ordem de serviço mudou desde que você a carregou; recarregue e tente de novo',
+      {
+        expected_version: opts.expectedVersion,
+        current_version: os.version,
+      }
+    );
+  }
+  if (
+    os.status_category === 'done' ||
+    os.status_category === 'closed' ||
+    os.status_category === 'cancelled'
+  ) {
+    throw new ConflictError('ordem de serviço validada, fechada ou cancelada não muda de equipe');
+  }
+
+  if (teamId !== null) {
+    const [equipe] = await session.query<{ status: string; deleted_at: Date | null }>(
+      `SELECT status::text AS status, deleted_at FROM aurora.teams WHERE id = $1`,
+      [teamId]
+    );
+    if (!equipe) throw new NotFoundError('Equipe', teamId);
+    if (equipe.deleted_at !== null || equipe.status !== 'active') {
+      throw new ValidationError('a equipe não está ativa e não recebe ordens novas', {
+        field: 'team_id',
+      });
+    }
+  }
+
+  const [depois] = await session.query<{ team_id: string | null; version: number }>(
+    `UPDATE aurora.work_orders
+        SET team_id = $2, updated_by = $3
+      WHERE id = $1
+      RETURNING team_id, version`,
+    [workOrderId, teamId, session.context.actorId]
+  );
+  return { team_id: depois!.team_id, version: Number(depois!.version) };
+}

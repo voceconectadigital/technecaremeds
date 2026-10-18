@@ -32,6 +32,7 @@ import {
   workOrderParts,
   consumeForWorkOrder,
   assertWarehouseVisible,
+  assertCanExecuteWorkOrder,
   type Database,
 } from '@aurora/db';
 import { ValidationError } from '@aurora/domain';
@@ -147,6 +148,25 @@ export class InventoryController {
    * banco; o que este método faz é deixar a recusa chegar como recusa, para a
    * fila do aparelho transformá-la em pendência de atenção com o trabalho
    * preservado.
+   *
+   * QUEM LANÇA PEÇA NA OS DE QUEM (PF-14). A rota é guardada por
+   * `inventory.move`, que dois tipos de pessoa têm por motivos diferentes:
+   *
+   *   · o TÉCNICO/OPERADOR, que tem também `work_order.execute`: para ele,
+   *     lançar a peça que usou é um ato de EXECUÇÃO da OS, e vale a mesma regra
+   *     do check-in, do checklist e da conclusão — só na OS atribuída a ele ou à
+   *     equipe dele, salvo `work_order.execute_any`. Sem isso, um técnico
+   *     baixaria peça na OS de outro e o custo iria para a OS errada;
+   *   · o ALMOXARIFE e o GESTOR, que não executam OS (não têm
+   *     `work_order.execute`): para eles, é um movimento de estoque feito no
+   *     balcão em nome da OS, e `assertCanExecuteWorkOrder` não os restringe
+   *     (`executionRestrictedToAssignment` só alcança quem tem `execute` sem
+   *     `execute_any`).
+   *
+   * Quem acumula os dois papéis num vínculo só fica com a regra mais estreita:
+   * as permissões se somam e a pessoa é tratada como executora. Para lançar no
+   * balcão em qualquer OS, ela recebe `work_order.execute_any` — a mesma
+   * resposta que o coordenador já tem.
    */
   @Post('work-orders/:id/parts')
   @RequirePermissions('inventory.move')
@@ -168,6 +188,7 @@ export class InventoryController {
 
     const ctx = req.auroraContext!;
     return runFieldOperation(this.db, req, 'POST /work-orders/:id/parts', body, async (s) => {
+      await assertCanExecuteWorkOrder(s, woId);
       await assertWarehouseVisible(s, warehouseId, ctx.membershipId);
       // Consome primeiro a reserva já aberta da OS (a da aprovação do
       // orçamento) e só reserva o que passar dela — senão a peça sai duas vezes

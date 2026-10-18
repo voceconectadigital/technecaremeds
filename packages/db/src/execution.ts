@@ -740,6 +740,26 @@ export async function assertCanExecuteWorkOrder(
   }
 }
 
+/**
+ * Recusa a ação de execução numa SESSÃO DE MEDIÇÃO de quem não pode executar
+ * a OS dela (PF-14). A sessão leva à OS pela própria coluna `work_order_id`
+ * (0053), gravada na abertura e imutável — a mesma OS da resposta de checklist.
+ *
+ * Sessão inexistente é 404 aqui, antes da regra: quem chama não distingue
+ * "não existe" de "existe noutra organização" (a RLS já esconde esta).
+ */
+export async function assertCanExecuteMeasurementSession(
+  session: TenantSession,
+  measurementSessionId: string
+): Promise<void> {
+  const [m] = await session.query<{ work_order_id: string }>(
+    `SELECT work_order_id FROM aurora.measurement_sessions WHERE id = $1`,
+    [measurementSessionId]
+  );
+  if (!m) throw new NotFoundError('Sessão de medição', measurementSessionId);
+  await assertCanExecuteWorkOrder(session, m.work_order_id);
+}
+
 /** A OS a que uma resposta de checklist pertence. `null` quando não existe. */
 export async function workOrderOfChecklistResponse(
   session: TenantSession,
