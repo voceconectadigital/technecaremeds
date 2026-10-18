@@ -3,7 +3,8 @@
 > **Pedido:** fechar as lacunas de engenharia deixadas pela rodada de pendências
 > (`docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md` §6).
 > **Branch:** `fix/lacunas-pf14-pf41-demo`, saindo da `main` `f68b66d` (merge da PR #30).
-> **Remoto:** nenhuma migration nova, nenhuma migration aplicada, nenhum deploy. Só PR e CI.
+> **Remoto:** nenhuma migration nova, nenhuma migration aplicada, nenhum deploy. Só PR. O CI do GitHub ficou
+> bloqueado por cobrança e foi reproduzido localmente, sem custo (§6).
 > **Fora do escopo, de propósito:** P-01…P-16 (fórmulas do Anderson) e critérios metrológicos. Nada foi inventado.
 
 ---
@@ -161,30 +162,84 @@ Cada regra foi provada pelo lado que recusa **e** pelo lado que passa.
 | tenant-isolation, execução guiada, pente-fino-acesso, fundações, contracts | 5 | 93 | 0 |
 | web (inclui demo) | 8 | 59 | 0 |
 
-**Gates locais:** typecheck ✅ · `openapi:check` ✅ (274 rotas, 216 com contrato) · `spec:audit` ✅ · segredos ✅ ·
-ESLint e Prettier nos arquivos alterados ✅. Neste checkout Windows, `format:check` e `marca:check` acusam arquivos que
-**não foram tocados**, porque estão com CRLF. No CI, em Linux, os mesmos arquivos estão com LF.
+**Gates locais neste checkout:** typecheck ✅, `openapi:check` ✅ (274 rotas, 216 com contrato), `spec:audit` ✅,
+segredos ✅, ESLint e Prettier nos arquivos alterados ✅. Os gates completos estão na §6.
 
-**Não rodei localmente:** a suíte inteira, porque estoura a memória desta máquina, e o Playwright. Os dois rodam no CI.
 O app de campo não tem modo de demonstração, então a tela nova do campo **não foi vista no navegador**. Ela está
-coberta pelos testes de `parecer.ts` e pelo E2E `campo.spec.ts`, que continua concluindo pelo aparelho.
+coberta pelos testes de `parecer.ts` e pelo E2E `campo.spec.ts`, que roda só com PostgreSQL real (§6).
 
 ---
 
-## 6 · CI
+## 6 · CI — sem cobrança
 
-PR [#31](https://github.com/voceconectadigital/technecaremeds/pull/31), run `39090329493` (commit `f9f56b7`).
+PR [#31](https://github.com/voceconectadigital/technecaremeds/pull/31). Run do Actions: `39090329493` (commit
+`f9f56b7`).
 
-**O CI não rodou.** Os três jobs do GitHub Actions (Estático, Testes contra PostgreSQL 16 e Ponta a ponta)
-terminaram em 3 s sem executar nenhum passo. A anotação do GitHub diz: *"The job was not started because recent
-account payments have failed or your spending limit needs to be increased"*. É um bloqueio de **cobrança da conta
-do GitHub**, e não do código. Só o titular da conta resolve, em Settings → Billing & plans. O check do Cloudflare Pages
-é externo ao Actions e ficou pendente.
+### 6.1 Por que o GitHub Actions não rodou
 
-**Para fechar:** depois de regularizar a cobrança, rodar de novo a run `39090329493` (Re-run all jobs) ou fazer um
-novo push na branch. Até lá, a validação desta rodada é só a local (§5), e a PR **não está pronta para merge**.
+Os três jobs (Estático, Testes contra PostgreSQL 16 e Ponta a ponta) terminaram em 3 s sem executar nenhum passo. A
+anotação do GitHub diz:
 
----
+> *The job was not started because recent account payments have failed or your spending limit needs to be increased.*
+
+O repositório é **privado**. Em repositório privado, os minutos de Actions vêm da cota da conta. Quando essa cota
+acaba com limite de gasto zero, ou quando há um pagamento recusado, o GitHub não inicia o job. **Não consegui ver qual
+dos dois casos é**: a leitura de cobrança exige o escopo `user` no token, e o token desta máquina não o tem. O check
+do **Cloudflare Pages** não depende do Actions e **passou**.
+
+Como você não quer pagar, **não mexi em cobrança, plano nem limite de gasto**. Em vez disso, rodei aqui, sem custo, o
+mesmo que o CI roda.
+
+### 6.2 O CI reproduzido localmente, sem custo
+
+Usei um checkout temporário da branch (`7e9ec01`) com finais de linha **LF**, como o checkout Linux do CI. Neste
+checkout Windows normal, com CRLF, o `format:check` e o `marca:check` acusam arquivos que não foram tocados.
+
+**Job "Estático"** — os 7 passos do `ci.yml`, na mesma ordem:
+
+| Passo | Resultado |
+| --- | --- |
+| `npm run spec:audit` | ✅ consistente, 0 erro |
+| `npm run typecheck` | ✅ |
+| `npm run lint` (repositório inteiro) | ✅ |
+| `npm run format:check` (repositório inteiro) | ✅ |
+| `npm run openapi:check` | ✅ em dia |
+| `npm run marca:check` | ✅ em dia |
+| `node tools/ci/check-secrets.mjs` | ✅ 874 arquivos, nenhum segredo |
+
+**Job "Testes"** — a suíte inteira (`npm test`), em lotes com `--maxWorkers=1` porque de uma vez estoura a memória.
+Roda sobre **PGlite**, não sobre o PostgreSQL 16 do CI:
+
+| Lote | Arquivos | Aprovados | Pulados | Falhas |
+| --- | --- | --- | --- | --- |
+| domain + contracts + config + events | 34 | 641 | 0 | 0 |
+| db (2 lotes) | 37 | 729 | 27 | 0 |
+| api (8 lotes) | 59 | 875 | 0 | 0 |
+| workers | 3 | 30 | 5 | 0 |
+| interface (ui, app-kit, web, portal, field) | 20 | 196 | 0 | 0 |
+| **Total** | **153** | **2 471** | **32** | **0** |
+
+Os 32 pulados são os que só rodam com PostgreSQL real.
+
+**"Ponta a ponta", parte sem banco** — `npm run demo:e2e`: o Playwright sobre o build da demonstração, em mesa e
+celular. **22 aprovados**, 6 pulados de propósito (variações que só valem em uma das larguras), **0 falhas**. Cobre o
+percurso das telas, rotas profundas, busca, acessibilidade (axe) nos 4 estilos e larguras de 390 px.
+
+**Cloudflare Pages** — ✅ no próprio PR.
+
+### 6.3 O que ficou sem rodar, e por quê
+
+| O quê | Por que não rodou | Como rodar sem pagar |
+| --- | --- | --- |
+| E2E com banco (`npm run e2e`: ~210 testes, inclusive `campo.spec.ts` e o novo `organizacao-parecer.spec.ts`) | Precisa de PostgreSQL real. O Docker Desktop desta máquina não sobe, e não há PostgreSQL instalado | (a) Baixar o **PostgreSQL 16 portátil** (zip oficial da EDB, gratuito, ~300 MB) e rodar aqui. Não baixei porque download precisa da sua autorização. (b) Esperar a **cota gratuita do mês** voltar, se o bloqueio for de cota e não de pagamento recusado. |
+| Os 32 testes que exigem PostgreSQL real (RLS sob papel sem BYPASSRLS, gatilhos de concorrência) | O mesmo | Os mesmos (a) e (b). Com o PostgreSQL portátil, rodam pelo próprio `npm test` com `DATABASE_URL`. |
+
+Uma terceira saída é tornar o repositório **público**: em repositório público o Actions é gratuito. Não recomendo
+fazer isso só por causa do CI, porque expõe o código inteiro. É uma decisão sua, e eu não fiz.
+
+**Estado da PR:** tudo o que dá para rodar sem custo nem download está verde. Falta o E2E com banco. As mudanças desta
+rodada que só ele exercita de ponta a ponta são duas: a aba Organização com o banco de verdade e a conclusão pelo app
+de campo. As duas também estão cobertas por testes de API (contra PGlite) e de unidade.
 
 ## 7 · O que continua aberto
 
