@@ -371,6 +371,25 @@ export const workOrderTransition = defineOperation({
   errors: ['not_found', 'conflict', 'forbidden'],
 });
 
+export const workOrderSetTeam = defineOperation({
+  operationId: 'workOrders.setTeam',
+  method: 'PATCH',
+  path: '/work-orders/:id/team',
+  summary: 'Define (ou tira, com null) a equipe da OS',
+  description:
+    'Ato de gestão, como atribuir o responsável: exige `work_order.assign`. Quem é da equipe da OS ' +
+    'passa a poder executá-la mesmo sem ser o responsável (PF-14). A equipe precisa estar ativa ' +
+    '(senão 422); OS validada, fechada ou cancelada não muda de equipe (409). O responsável ' +
+    'individual não é tocado. `version` é a da situação (a mesma da transição, que só sobe quando ' +
+    'a OS muda de situação): enviada, recusa a troca se a OS andou desde que a tela a carregou (409).',
+  permissions: ['work_order.assign'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ team_id: Uuid.nullable(), version: z.number().int().optional() }).strict(),
+  response: z.object({ team_id: Uuid.nullable(), version: z.number().int() }),
+  status: 200,
+  errors: ['not_found', 'conflict', 'validation_failed', 'forbidden'],
+});
+
 export const workOrdersFromRequest = defineOperation({
   operationId: 'workOrders.fromRequest',
   method: 'POST',

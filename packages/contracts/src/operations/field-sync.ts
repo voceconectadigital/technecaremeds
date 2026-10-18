@@ -78,6 +78,8 @@ export const FieldWorkOrder = z.object({
   status_color: z.string().nullable(),
   wait_reason_key: z.string().nullable(),
   wait_reason_label: z.string().nullable(),
+  /** O parecer já registrado (LIBERADO/PARADO), para o aparelho não pedi-lo de novo (PF-41). */
+  operational_result: z.enum(['released', 'stopped']).nullable(),
 });
 
 export const FieldAsset = z.object({
@@ -232,6 +234,15 @@ export const fieldSync = defineOperation({
     wait_reasons: z.array(FieldWaitReason),
     stock: z.array(FieldStockBalance),
     open_timers: z.array(FieldOpenTimer),
+    /**
+     * Regras da organização que o aparelho aplica offline. Sempre inteiro,
+     * também na descida incremental: mudar a regra não altera OS nenhuma, e o
+     * corte incremental nunca a traria.
+     */
+    settings: z.object({
+      /** Concluir exige o parecer LIBERADO/PARADO (PF-41). */
+      require_operational_result: z.boolean(),
+    }),
     /**
      * As contagens existem para a tela DIZER o que baixou.
      *

@@ -34,11 +34,33 @@ interface Captura {
   body: unknown;
 }
 
+/*
+ * OS DIAS SÃO OS DE BRASÍLIA, e não os de UTC.
+ *
+ * A primeira versão pedia os períodos com `T00:00:00.000Z`: as fatias do
+ * Painel começavam à meia-noite UTC, 21h do dia anterior em Brasília, e o
+ * gráfico da demonstração rotulava cada dia com a data de ontem. A tela de
+ * verdade pede o período com a meia-noite LOCAL (`intervaloDe` em
+ * apps/web/src/features/painel/rotulos.ts, `inicioDoDiaLocal` no app-kit), e a
+ * captura passa a pedir o mesmo — no fuso da organização de demonstração
+ * (`America/Sao_Paulo`, o padrão), e não no da máquina que roda a captura.
+ *
+ * Fuso fixo de −03:00, como a semeadura: Brasília não tem horário de verão
+ * desde 2019.
+ */
+const BRASILIA_MS = -3 * 3_600_000;
+const doisDigitos = (n: number) => String(n).padStart(2, '0');
 const dia = (deslocamento: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() + deslocamento);
-  return d.toISOString().slice(0, 10);
+  const b = new Date(Date.now() + BRASILIA_MS);
+  const d = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate() + deslocamento));
+  return `${d.getUTCFullYear()}-${doisDigitos(d.getUTCMonth() + 1)}-${doisDigitos(d.getUTCDate())}`;
 };
+/** Meia-noite de Brasília do dia (AAAA-MM-DD), em ISO UTC. */
+const inicioDoDia = (d: string) => new Date(`${d}T00:00:00.000-03:00`).toISOString();
+/** Último milissegundo do dia (AAAA-MM-DD) em Brasília, em ISO UTC. */
+const fimDoDia = (d: string) => new Date(`${d}T23:59:59.999-03:00`).toISOString();
+/** "Últimos 30 dias" como a tela pede: hoje e os 29 anteriores, de Brasília. */
+const ULTIMOS_30 = { from: inicioDoDia(dia(-29)), to: fimDoDia(dia(0)) };
 
 it('captura as respostas da demonstração', async () => {
   const t = await createTestDatabase();
@@ -153,11 +175,8 @@ it('captura as respostas da demonstração', async () => {
   await ler(C.inventoryItemsList);
   await ler(C.inventoryWarehouses);
   await ler(C.inventoryValuation);
-  await ler(C.inventoryAbc, null, { from: `${dia(-30)}T00:00:00.000Z`, to: `${dia(0)}T23:59:59.999Z` });
-  await ler(C.inventoryPeriodReport, null, {
-    from: `${dia(-30)}T00:00:00.000Z`,
-    to: `${dia(0)}T23:59:59.999Z`,
-  });
+  await ler(C.inventoryAbc, null, ULTIMOS_30);
+  await ler(C.inventoryPeriodReport, null, ULTIMOS_30);
   await ler(C.storeItemsList);
 
   /* -------------------------------------------------------- comercial */
@@ -173,7 +192,7 @@ it('captura as respostas da demonstração', async () => {
   }
 
   /* ------------------------------------------------------ indicadores */
-  const periodo = { from: `${dia(-30)}T00:00:00.000Z`, to: `${dia(0)}T23:59:59.999Z` };
+  const periodo = ULTIMOS_30;
   for (const op of [
     C.insightWorkOrdersOpened,
     C.insightWorkOrdersCompleted,
@@ -215,16 +234,17 @@ it('captura as respostas da demonstração', async () => {
   await ler(C.locationTypesList);
 
   /* --------------------------------- planos: painel, cronograma, checklist */
-  const anoInicio = `${new Date().getUTCFullYear()}-01-01T00:00:00.000Z`;
-  const anoFim = `${new Date().getUTCFullYear() + 1}-01-01T00:00:00.000Z`;
+  const ano = Number(dia(0).slice(0, 4));
+  const anoInicio = inicioDoDia(`${ano}-01-01`);
+  const anoFim = inicioDoDia(`${ano + 1}-01-01`);
   await ler(C.plansFormOptions);
   await ler(C.plansBoard, null, { from: anoInicio, to: anoFim });
-  await ler(C.plansSchedule, null, { from: `${dia(-30)}T00:00:00.000Z`, to: `${dia(91)}T00:00:00.000Z` });
+  await ler(C.plansSchedule, null, { from: inicioDoDia(dia(-30)), to: inicioDoDia(dia(91)) });
   for (const c of clientesDemo?.items ?? []) {
     await ler(C.plansBoard, null, { from: anoInicio, to: anoFim, customer: c.id });
     await ler(C.plansSchedule, null, {
-      from: `${dia(-30)}T00:00:00.000Z`,
-      to: `${dia(91)}T00:00:00.000Z`,
+      from: inicioDoDia(dia(-30)),
+      to: inicioDoDia(dia(91)),
       customer: c.id,
     });
     await ler(C.plansList, null, { customer: c.id });
@@ -256,6 +276,8 @@ it('captura as respostas da demonstração', async () => {
   await ler(C.automationVocabulary);
   await ler(C.automationTasksList, null, {});
   await ler(C.platformMe);
+  // Configurações → Organização (PF-41): a exigência do parecer, desligada.
+  await ler(C.organizationsCurrent);
 
   await app.close();
   await t.close();

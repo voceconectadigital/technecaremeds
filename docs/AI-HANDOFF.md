@@ -24,6 +24,21 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Lacunas da rodada de pendências 17/10/2026 (branch `fix/lacunas-pf14-pf41-demo`) — sem migration nova.**
+> Relatório: `docs/RELATORIO-LACUNAS-PF14-PF41-2026-10-17.md`.
+> · **PF-14 completo:** `assertCanExecuteWorkOrder` também no consumo de peça (`POST /inventory/work-orders/:id/parts`)
+>   e nas quatro rotas de sessão de medição (`assertCanExecuteMeasurementSession`). Almoxarife/gestor (sem
+>   `work_order.execute`) lançam peça em qualquer OS; quem acumula almoxarife + técnico fica com a regra estreita.
+> · **Equipe da OS:** `PATCH /v1/work-orders/:id/team` (`work_order.assign`, equipe ativa, 409 em OS
+>   validada/fechada/cancelada, `version` = a da situação). O pacote do dia (`/field/sync`) traz também as OS da
+>   equipe da pessoa, dentro do escopo dela.
+> · **PF-41 com tela:** Configurações → **Organização** (`/configuracoes/organizacao`) liga/desliga
+>   `require_operational_result`. `/field/sync` traz `settings.require_operational_result` e
+>   `work_orders[].operational_result`; o app de campo pede LIBERADO/PARADO ao concluir e enfileira
+>   `PATCH /work-orders/:id/service-report` antes da transição (`apps/field/src/parecer.ts`).
+> · **Demo:** `npm run demo:capturar` pede os períodos com a meia-noite de Brasília (fatias do Painel deixam de
+>   rotular o dia anterior).
+>
 > **Rodada de pendências 17/10/2026 (branch `fix/pendencias-pente-fino-2026-10-17`) — o que muda sobre o bloco abaixo:**
 > **Migration mais recente:** `0077_bloqueio_progressivo_de_senha.sql` · **78 migrations** (0074–0077 novas, **não
 > aplicadas em banco remoto**). Relatório: `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md`.

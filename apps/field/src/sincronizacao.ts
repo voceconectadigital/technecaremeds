@@ -17,6 +17,7 @@
  */
 import type { ArmazenamentoOffline } from './armazenamento';
 import { MENSAGEM_SESSAO_EXPIRADA, mesmaIdentidade, type FilaDeSaida, type Identidade } from './fila';
+import { CHAVE_DA_CONFIGURACAO, type ConfiguracaoDoCampo } from './parecer';
 
 /**
  * A credencial venceu ao pedir o dia (401). Lançada por quem baixa o pacote,
@@ -48,6 +49,11 @@ export interface PacoteDoDia {
    * não manda, e aí a coleção local não é tocada.
    */
   open_timers?: { id: string; work_order_id: string; started_at: string }[];
+  /**
+   * Regras da organização aplicadas offline (PF-41). Opcional pelo mesmo
+   * motivo: sem ela, o aparelho mantém a que tinha.
+   */
+  settings?: ConfiguracaoDoCampo;
   counts: Record<string, number>;
 }
 
@@ -199,6 +205,8 @@ export class Sincronizacao {
     if (anterior) {
       for (const d of DESTINOS) await this.base.colecao(d.colecao).limpar();
       await this.base.colecao('meta').apagar('synced_at');
+      // A regra é da ORGANIZAÇÃO: a da sessão anterior não vale para esta.
+      await this.base.colecao('meta').apagar(CHAVE_DA_CONFIGURACAO);
     }
     await meta.gravar('identidade', atual);
   }
@@ -262,6 +270,13 @@ export class Sincronizacao {
       if (!pacote.incremental || d.sempreInteiro) await colecao.limpar();
       for (const linha of linhas) await colecao.gravar(d.chave(linha), linha);
       baixados[d.colecao] = linhas.length;
+    }
+
+    // As regras da organização vêm inteiras em toda descida (PF-41).
+    if (pacote.settings) {
+      await this.base.colecao<ConfiguracaoDoCampo>('meta').gravar(CHAVE_DA_CONFIGURACAO, {
+        require_operational_result: pacote.settings.require_operational_result === true,
+      });
     }
 
     /*

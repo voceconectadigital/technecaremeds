@@ -39,6 +39,8 @@ let A: OrgDeTeste;
 let B: OrgDeTeste;
 let metrologista: { email: string; mem: string };
 let tecnico: { email: string; mem: string };
+/** Técnico da mesma organização e do mesmo escopo, mas NÃO atribuído à OS (PF-14). */
+let outroTecnico: { email: string; mem: string };
 
 let analisador = '';
 let outroInstrumento = '';
@@ -58,6 +60,7 @@ beforeAll(async () => {
   B = await criarOrganizacao(t, 'metro-b');
   metrologista = await criarPessoa(t, A, 'metrologista', 'metrologist');
   tecnico = await criarPessoa(t, A, 'tecnico', 'technician');
+  outroTecnico = await criarPessoa(t, A, 'outro.tecnico', 'operator');
 
   await withTenant(t.db, ctxSistema(A.org), async (s) => {
     const catAnalisador = await createAssetCategory(s, { name: 'Analisador de incubadora' });
@@ -540,6 +543,63 @@ describe('sessão de medição — proveniência conferida', () => {
       .set(auth(B.email))
       .send({ item_id: pontoTemp, readings: [1, 1, 1] });
     expect(g.status).toBe(404);
+  });
+
+  it('PF-14: quem não é o responsável nem da equipe não mede na OS (403 em cada rota); o metrologista mede', async () => {
+    const tentativas = [
+      () =>
+        http.post(`/v1/work-orders/${os}/measurement-sessions`).set(auth(outroTecnico.email)).send({
+          response_id: resposta,
+          instrument_id: analisador,
+          instrument_certificate_id: certVigente,
+          measured_on: '2026-09-30',
+        }),
+      () =>
+        http
+          .post(`/v1/measurement-sessions/${sessao}/measurements`)
+          .set(auth(outroTecnico.email))
+          .send({ item_id: pontoTemp, readings: [99, 99, 99] }),
+      () =>
+        http
+          .post(`/v1/measurement-sessions/${sessao}/raw-data`)
+          .set(auth(outroTecnico.email))
+          .send({
+            file_name: 'intruso.csv',
+            content_type: 'text/csv',
+            byte_size: 10,
+            sha256: 'a'.repeat(64),
+          }),
+      () => http.post(`/v1/measurement-sessions/${sessao}/finish`).set(auth(outroTecnico.email)),
+    ];
+    for (const tentar of tentativas) {
+      const r = await tentar();
+      expect(r.status, JSON.stringify(r.body)).toBe(403);
+      expect(r.body.message).toMatch(/não está atribuída a você/);
+    }
+    // Nada mudou: a leitura é a do responsável, a sessão continua aberta, nenhum
+    // dado bruto a mais.
+    const d = await http.get(`/v1/measurement-sessions/${sessao}`).set(auth(tecnico.email));
+    expect(d.body.finished_at).toBeNull();
+    expect(d.body.points[0].readings).toEqual([37.1, 37.0, 37.2]);
+    expect(d.body.raw_data).toHaveLength(1);
+
+    // Sessão inexistente continua 404 (não 403): o ScopeGuard e a conferência
+    // respondem "não existe" antes da regra de atribuição.
+    const fantasma = await http
+      .post(`/v1/measurement-sessions/${newId()}/finish`)
+      .set(auth(outroTecnico.email));
+    expect(fantasma.status).toBe(404);
+
+    // O metrologista tem work_order.execute_any: registra a leitura sem ser o responsável.
+    const m = await http
+      .post(`/v1/measurement-sessions/${sessao}/measurements`)
+      .set(auth(metrologista.email))
+      .send({
+        item_id: pontoTemp,
+        readings: [37.1, 37.0, 37.2],
+        correction_reason: 'conferência do metrologista',
+      });
+    expect(m.status, JSON.stringify(m.body)).toBe(201);
   });
 
   it('encerrada, a sessão não aceita leitura nova', async () => {

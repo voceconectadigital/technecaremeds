@@ -315,11 +315,15 @@ export const inventoryConsumePart = defineOperation({
   method: 'POST',
   path: '/inventory/work-orders/:id/parts',
   summary: 'Usa peça de ESTOQUE na OS: reserva e baixa do razão, vinculadas à OS',
-  description: 'Nenhuma baixa silenciosa: o movimento fica com `ref_type = work_order` e a OS.',
+  description:
+    'Nenhuma baixa silenciosa: o movimento fica com `ref_type = work_order` e a OS. Quem tem ' +
+    '`work_order.execute` sem `work_order.execute_any` (técnico, operador) só lança peça na OS ' +
+    'atribuída a si ou à sua equipe (403 com o motivo, PF-14); o almoxarife, que não executa OS, ' +
+    'lança em qualquer uma do seu escopo.',
   permissions: ['inventory.move'],
   params: z.object({ id: Uuid }),
   body: z.object({ item_id: Uuid, warehouse_id: Uuid, qty: z.number().positive() }),
   response: z.object({ movement_id: Uuid, reservation_id: Uuid }),
   status: 201,
-  errors: ['not_found', 'conflict', 'validation_failed'],
+  errors: ['not_found', 'conflict', 'validation_failed', 'forbidden'],
 });
