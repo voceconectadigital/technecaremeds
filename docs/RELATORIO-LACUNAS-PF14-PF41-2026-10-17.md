@@ -4,7 +4,7 @@
 > (`docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md` §6).
 > **Branch:** `fix/lacunas-pf14-pf41-demo`, saindo da `main` `f68b66d` (merge da PR #30).
 > **Remoto:** nenhuma migration nova, nenhuma migration aplicada, nenhum deploy. Só PR. O CI do GitHub ficou
-> bloqueado por cobrança e foi reproduzido localmente, sem custo (§6).
+> bloqueado por cobrança e foi reproduzido localmente, sem custo, com PostgreSQL 16 real (§6).
 > **Fora do escopo, de propósito:** P-01…P-16 (fórmulas do Anderson) e critérios metrológicos. Nada foi inventado.
 
 ---
@@ -222,24 +222,73 @@ Roda sobre **PGlite**, não sobre o PostgreSQL 16 do CI:
 Os 32 pulados são os que só rodam com PostgreSQL real.
 
 **"Ponta a ponta", parte sem banco** — `npm run demo:e2e`: o Playwright sobre o build da demonstração, em mesa e
-celular. **22 aprovados**, 6 pulados de propósito (variações que só valem em uma das larguras), **0 falhas**. Cobre o
-percurso das telas, rotas profundas, busca, acessibilidade (axe) nos 4 estilos e larguras de 390 px.
+celular. **22 aprovados**, 6 pulados de propósito (variações que só valem em uma das larguras), **0 falhas**.
 
 **Cloudflare Pages** — ✅ no próprio PR.
 
-### 6.3 O que ficou sem rodar, e por quê
+### 6.3 Os dois jobs que precisam de PostgreSQL real — com o PostgreSQL 16 portátil
 
-| O quê | Por que não rodou | Como rodar sem pagar |
+Com a sua autorização de 18/10, baixei o **PostgreSQL 16.15 portátil oficial**, gratuito, da EDB:
+
+- arquivo: `postgresql-16.15-5-windows-x64-binaries.zip`, de `get.enterprisedb.com`, pelo link da página oficial
+  "Download PostgreSQL Binaries";
+- tamanho: 373 254 386 bytes, igual ao anunciado pelo servidor;
+- SHA-256: `43bb45f173a6f08cf1d29a97a6d8deb119e8e8093a24c00d2d1001a0ccaa8281`.
+
+Os executáveis desse pacote não têm assinatura Authenticode; só o instalador da EDB é assinado. A procedência fica
+pelo HTTPS do domínio oficial e pelo tamanho conferido. O pacote foi extraído na pasta temporária da sessão, fora do
+repositório e do OneDrive. O servidor rodou só em `localhost:5432` e foi **desligado** no fim. Nada foi instalado no
+sistema: nenhum serviço do Windows e nenhuma alteração de PATH.
+
+Os dois jobs rodaram como no `ci.yml`: bancos novos, as mesmas URLs e as mesmas senhas de teste do CI, e
+`npm run db:migrate` do zero. Usei um checkout LF temporário da branch (`1aa6f36`), **fora do OneDrive**, com o
+`node_modules` copiado do checkout principal. Sem `node_modules` próprio, o Vite recusa servir a fonte (403), e o
+vigia de console do E2E reprovaria todos os testes por esse motivo local.
+
+**Job "Testes contra PostgreSQL 16"** — `npm run db:migrate` aplicou as **78 migrations do zero**. Depois rodei as
+duas suítes que só existem com banco real (`AURORA_TEST_PG_URL`):
+
+| Suíte | Testes | Resultado |
 | --- | --- | --- |
-| E2E com banco (`npm run e2e`: ~210 testes, inclusive `campo.spec.ts` e o novo `organizacao-parecer.spec.ts`) | Precisa de PostgreSQL real. O Docker Desktop desta máquina não sobe, e não há PostgreSQL instalado | (a) Baixar o **PostgreSQL 16 portátil** (zip oficial da EDB, gratuito, ~300 MB) e rodar aqui. Não baixei porque download precisa da sua autorização. (b) Esperar a **cota gratuita do mês** voltar, se o bloqueio for de cota e não de pagamento recusado. |
-| Os 32 testes que exigem PostgreSQL real (RLS sob papel sem BYPASSRLS, gatilhos de concorrência) | O mesmo | Os mesmos (a) e (b). Com o PostgreSQL portátil, rodam pelo próprio `npm test` com `DATABASE_URL`. |
+| `packages/db/src/__tests__/real-postgres.test.ts` (RLS sob papel sem BYPASSRLS, pool, concorrência) | 27 | ✅ |
+| `apps/workers/src/__tests__/jobs-real-postgres.test.ts` | 5 | ✅ |
 
-Uma terceira saída é tornar o repositório **público**: em repositório público o Actions é gratuito. Não recomendo
-fazer isso só por causa do CI, porque expõe o código inteiro. É uma decisão sua, e eu não fiz.
+Com isso, os **32 pulados** da §6.2 também passaram. O total da suíte fica em **2 503 de 2 503**.
 
-**Estado da PR:** tudo o que dá para rodar sem custo nem download está verde. Falta o E2E com banco. As mudanças desta
-rodada que só ele exercita de ponta a ponta são duas: a aba Organização com o banco de verdade e a conclusão pelo app
-de campo. As duas também estão cobertas por testes de API (contra PGlite) e de unidade.
+**Job "Ponta a ponta"** — migrations no `aurora_e2e` e o papel `aurora_e2e_api` criado por
+`tools/e2e/provision-role.mjs` (login sim, superuser não, BYPASSRLS não, conferido pelo script). Depois,
+`npm run e2e` completo: API, web, portal e app de campo, 1 worker, **sem nova tentativa**. O CI tem 1.
+
+| Resultado | Quantos |
+| --- | --- |
+| Aprovados | **210** de 212 |
+| Pulado | 1 (`fluxo.spec.ts` "a transição que exige campo PEDE o campo", o pulo condicional que já existia) |
+| Falha | 1 — intermitente, fora desta branch (abaixo) |
+
+- **Os dois specs novos passaram:** `organizacao-parecer.spec.ts`, com o interruptor ligando, persistindo e
+  desligando, e a aba no alternador.
+- **`campo.spec.ts` passou inteiro**, inclusive "os vinte passos" sem rede, com a tela nova do parecer na OS.
+- **A falha:** `comercial.spec.ts`, "a ficha mostra a versão atual e a linha do tempo das versões". O seletor
+  `getByText('Versões')` também casa com o texto de leitor de tela "Carregando versões…" enquanto a lista ainda
+  carrega. É uma **corrida no próprio teste**, num arquivo que esta branch não tocou. Rodei o arquivo de novo,
+  isolado, **3 vezes: 12/12 aprovados**. No CI, a nova tentativa (`retries: 1`) absorveria. A correção é trocar
+  para `getByRole('heading', { name: 'Versões' })`, e ficou como pendência (§7).
+
+### 6.4 Placar final, sem custo
+
+| Check do CI | Onde rodou | Resultado |
+| --- | --- | --- |
+| Estático | local, checkout LF | ✅ 7/7 |
+| Testes contra PostgreSQL 16 | local: PGlite para a suíte e PostgreSQL 16.15 real para as 2 suítes de banco | ✅ 2 503/2 503 |
+| Ponta a ponta | local, PostgreSQL 16.15 real | ✅ 210 aprovados, 1 pulo condicional; 1 intermitente fora da branch, que passa isolado |
+| Cloudflare Pages | GitHub (externo ao Actions) | ✅ |
+
+O **GitHub Actions continua bloqueado por cobrança**, então o PR não mostra os três checks verdes. A validação está
+neste relatório. **Não paguei nada, não mudei plano nem limite de gasto e não tornei o repositório público.**
+
+Para repetir sem custo nas próximas rodadas, o caminho é este mesmo: o PostgreSQL portátil mais os comandos acima.
+O pacote ficou na pasta temporária desta sessão. Se quiser reusá-lo, ele pode ser movido para um lugar fixo, por
+exemplo `C:\tools\pgsql16`.
 
 ## 7 · O que continua aberto
 
@@ -248,5 +297,6 @@ de campo. As duas também estão cobertas por testes de API (contra PGlite) e de
 - **Equipe nova no aparelho:** quem **entra** numa equipe recebe as OS dela na próxima descida completa, ou quando a
   OS mudar. O corte incremental é por `updated_at` da OS, e entrar numa equipe não altera OS nenhuma.
 - **`due_at` dos planos na demo** à meia-noite UTC (§4).
+- **Teste intermitente** `e2e/specs/comercial.spec.ts:105` — `getByText('Versões')` → `getByRole('heading', { name: 'Versões' })` (§6.3).
 - Continua fora da engenharia, sem mudança: P-01…P-16, critérios metrológicos, migrations 0060–0077 no banco remoto,
   deploy do backend, transporte de e-mail e CSP em modo de bloqueio.
