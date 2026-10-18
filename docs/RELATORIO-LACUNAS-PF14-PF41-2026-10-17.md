@@ -173,7 +173,16 @@ coberta pelos testes de `parecer.ts` e pelo E2E `campo.spec.ts`, que continua co
 
 ## 6 · CI
 
-Preenchido depois do PR. Ver a seção de validação na descrição da PR.
+PR [#31](https://github.com/voceconectadigital/technecaremeds/pull/31), run `39090329493` (commit `f9f56b7`).
+
+**O CI não rodou.** Os três jobs do GitHub Actions (Estático, Testes contra PostgreSQL 16 e Ponta a ponta)
+terminaram em 3 s sem executar nenhum passo. A anotação do GitHub diz: *"The job was not started because recent
+account payments have failed or your spending limit needs to be increased"*. É um bloqueio de **cobrança da conta
+do GitHub**, e não do código. Só o titular da conta resolve, em Settings → Billing & plans. O check do Cloudflare Pages
+é externo ao Actions e ficou pendente.
+
+**Para fechar:** depois de regularizar a cobrança, rodar de novo a run `39090329493` (Re-run all jobs) ou fazer um
+novo push na branch. Até lá, a validação desta rodada é só a local (§5), e a PR **não está pronta para merge**.
 
 ---
 
