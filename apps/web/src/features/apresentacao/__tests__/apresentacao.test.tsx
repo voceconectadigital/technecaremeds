@@ -32,9 +32,12 @@ describe('apresentação', () => {
   it('mostra o herói, as seções e os botões de entrada', () => {
     render(<ApresentacaoPage />);
 
-    expect(screen.getByRole('heading', { level: 1, name: MARCA.produto })).toBeInTheDocument();
     expect(
-      screen.getByText('Plataforma de gestão para Engenharia Clínica e Assistência Técnica')
+      screen.getByRole('heading', { level: 1, name: 'Toda a sua operação. Uma única plataforma.' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('GESTÃO INTELIGENTE PARA O SETOR DE SAÚDE')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Conecte engenharia clínica, assistência técnica, hospitais e prestadores de serviços/)
     ).toBeInTheDocument();
 
     for (const titulo of [
@@ -148,7 +151,11 @@ describe('a rota pública dentro da aplicação inteira', () => {
     render(<App />);
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: MARCA.produto }, { timeout: 15_000 })
+      await screen.findByRole(
+        'heading',
+        { level: 1, name: 'Toda a sua operação. Uma única plataforma.' },
+        { timeout: 15_000 }
+      )
     ).toBeInTheDocument();
     // Dá tempo a qualquer consulta que fosse disparada na montagem.
     await new Promise((r) => setTimeout(r, 50));

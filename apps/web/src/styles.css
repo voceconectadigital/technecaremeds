@@ -15,3 +15,186 @@
  * produção.
  */
 @source '../../../packages/ui/src';
+
+/*
+ * APRESENTAÇÃO — movimento de entrada e microinterações (`/apresentacao`).
+ *
+ * Só `transform`/`opacity` (via `translate`/`scale`, que não brigam com o
+ * `transform` do hover). O estado vem de `data-apr`, posto por
+ * `features/apresentacao/animacao.tsx`; sem ele o conteúdo já está visível.
+ * `prefers-reduced-motion` zera duração/atraso pela regra global dos tokens.
+ */
+.apr-r {
+  --apr-x: 0px;
+  --apr-y: 24px;
+  --apr-s: 1;
+}
+.apr-r[data-tipo='esquerda'] {
+  --apr-x: -28px;
+  --apr-y: 0px;
+}
+.apr-r[data-tipo='direita'] {
+  --apr-x: 28px;
+  --apr-y: 0px;
+}
+.apr-r[data-tipo='escala'] {
+  --apr-s: 0.96;
+}
+.apr-r[data-apr='oculto'] {
+  opacity: 0;
+  translate: var(--apr-x) var(--apr-y);
+  scale: var(--apr-s);
+}
+.apr-r[data-apr='visivel'] {
+  animation: apr-entrar 640ms var(--aurora-ease-out) var(--apr-d, 0ms) both;
+}
+@keyframes apr-entrar {
+  from {
+    opacity: 0;
+    translate: var(--apr-x) var(--apr-y);
+    scale: var(--apr-s);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+/* Gráficos e barras de dentro de um bloco ainda oculto esperam a vez de aparecer. */
+[data-apr='oculto'] *,
+[data-apr='oculto'] *::before,
+[data-apr='oculto'] *::after {
+  animation-play-state: paused !important;
+}
+
+/* Quem imprime ou salva em PDF recebe tudo, sem depender de rolagem. */
+@media print {
+  .apr-r {
+    opacity: 1 !important;
+    translate: none !important;
+    scale: none !important;
+    animation: none !important;
+  }
+}
+
+/* Linhas que ligam etapas: crescem de cima para baixo, uma vez. */
+.apr-linha-y {
+  transform-origin: top center;
+  animation: aurora-crescer-y 700ms var(--aurora-ease-out) var(--apr-d2, 300ms) both;
+}
+.apr-linha-x {
+  transform-origin: left center;
+  animation: aurora-crescer-x 800ms var(--aurora-ease-out) var(--apr-d2, 300ms) both;
+}
+
+/* Cartões: elevação suave. Só em dispositivos com hover real. */
+.apr-card {
+  transition:
+    transform 260ms var(--aurora-ease-out),
+    box-shadow 260ms var(--aurora-ease-out),
+    border-color 200ms var(--aurora-ease-out),
+    background-color 200ms var(--aurora-ease-out);
+}
+.apr-icone {
+  transition:
+    transform 260ms var(--aurora-ease-out),
+    background-color 200ms var(--aurora-ease-out),
+    color 200ms var(--aurora-ease-out);
+}
+@media (hover: hover) {
+  .apr-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--aurora-shadow-raised);
+  }
+  .apr-card--borda:hover {
+    border-color: var(--aurora-brand-400);
+  }
+  .apr-card--escuro:hover {
+    background-color: rgb(255 255 255 / 0.07);
+    border-color: rgb(255 255 255 / 0.4);
+    box-shadow: 0 14px 30px -16px rgb(0 0 0 / 0.6);
+  }
+  .apr-gancho:hover .apr-icone {
+    transform: translateY(-2px) scale(1.1);
+  }
+  .apr-gancho:hover .apr-icone--tile {
+    background-color: var(--aurora-brand-500);
+    color: var(--aurora-neutral-0);
+  }
+}
+
+/* Botões: resposta imediata, sem exagero. */
+.apr-btn {
+  transition:
+    transform 180ms var(--aurora-ease-out),
+    box-shadow 220ms var(--aurora-ease-out),
+    background-color 180ms var(--aurora-ease-out),
+    border-color 180ms var(--aurora-ease-out);
+}
+.apr-btn:active {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 80ms;
+}
+@media (hover: hover) {
+  .apr-btn:hover {
+    transform: translateY(-2px);
+  }
+  .apr-btn--marca:hover {
+    box-shadow: 0 12px 28px -10px color-mix(in srgb, var(--aurora-lime-500) 75%, transparent);
+  }
+  .apr-btn--contorno:hover {
+    border-color: rgb(255 255 255 / 0.6);
+  }
+}
+
+/* Decorativos: deriva lenta, só `transform`. */
+.apr-flutua {
+  animation: apr-flutua 9s ease-in-out infinite alternate;
+}
+.apr-flutua--lento {
+  animation-duration: 12s;
+  animation-delay: -4s;
+}
+@keyframes apr-flutua {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -8px, 0);
+  }
+}
+.apr-deriva {
+  animation: apr-deriva 14s ease-in-out infinite alternate;
+}
+@keyframes apr-deriva {
+  from {
+    transform: translate3d(-3%, -2%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(3%, 3%, 0) scale(1.08);
+  }
+}
+
+/* Passo atual da execução: anel que se expande e some, devagar. */
+.apr-pulso {
+  position: relative;
+}
+.apr-pulso::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--aurora-brand-500);
+  animation: apr-pulso 2.6s var(--aurora-ease-out) 1s infinite;
+}
+@keyframes apr-pulso {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}

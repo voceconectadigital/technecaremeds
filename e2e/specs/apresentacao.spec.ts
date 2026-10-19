@@ -47,7 +47,9 @@ const TITULOS = [
 ];
 
 async function conferirPagina(page: Page) {
-  await expect(page.getByRole('heading', { level: 1, name: 'Téchne Care' })).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Toda a sua operação. Uma única plataforma.' })
+  ).toBeVisible({ timeout: 15_000 });
   for (const t of TITULOS) {
     await expect(page.getByRole('heading', { level: 2, name: t })).toBeAttached();
   }
@@ -91,7 +93,9 @@ test('cabe no celular sem rolagem lateral', async ({ page }) => {
   const v = vigiar(page);
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/apresentacao');
-  await expect(page.getByRole('heading', { level: 1, name: 'Téchne Care' })).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Toda a sua operação. Uma única plataforma.' })
+  ).toBeVisible({ timeout: 15_000 });
 
   const larguras = await page.evaluate(() => ({
     rolagem: document.documentElement.scrollWidth,
