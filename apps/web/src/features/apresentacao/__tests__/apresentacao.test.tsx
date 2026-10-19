@@ -42,7 +42,7 @@ describe('apresentação', () => {
 
     for (const titulo of [
       /do chamado ao indicador/i,
-      /catorze módulos/i,
+      /14 módulos/i,
       /painel de controle e relatórios/i,
       /operação em campo/i,
       /muitas empresas/i,
@@ -66,7 +66,7 @@ describe('apresentação', () => {
 
   it('lista os catorze módulos atuais', () => {
     render(<ApresentacaoPage />);
-    const modulos = screen.getByRole('region', { name: /catorze módulos/i });
+    const modulos = screen.getByRole('region', { name: /14 módulos/i });
     for (const nome of [
       'Clientes',
       'Equipamentos',

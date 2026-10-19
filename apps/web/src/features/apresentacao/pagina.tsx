@@ -350,7 +350,7 @@ function Modulos() {
     <Secao id="modulos" className="bg-surface">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Titulo id="modulos">Catorze módulos que já conversam entre si.</Titulo>
+          <Titulo id="modulos">14 módulos que já conversam entre si.</Titulo>
           <Abertura>
             O chamado vira ordem de serviço, a OS dá baixa no estoque, gera orçamento e alimenta o indicador.
           </Abertura>

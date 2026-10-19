@@ -36,7 +36,7 @@ function vigiar(page: Page): Vigia {
 
 const TITULOS = [
   /do chamado ao indicador/i,
-  /catorze módulos/i,
+  /14 módulos/i,
   /painel de controle e relatórios/i,
   /operação em campo/i,
   /muitas empresas/i,
