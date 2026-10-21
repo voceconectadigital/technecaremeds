@@ -1,8 +1,28 @@
 name: CI
 
+# CI EM DOIS NÍVEIS (economia de minutos de Actions)
+#
+#   · Rápido   — job `estatico` (~1 min). Roda em TODO push de PR, inclusive PR
+#                em rascunho, e em todo push na main.
+#   · Completo — `banco` + `navegador` (~13 min). Roda só em PR FORA de
+#                rascunho (opened / reopened / ready_for_review / synchronize)
+#                que mexa em algo além de documentação. Na main, só se o commit
+#                ainda não tiver sido validado como PR.
+#
+# O ÚNICO check a exigir na branch protection é `Gate` (nome do job). Ele
+# sempre roda em PR pronto e na main, e falha fechado: se o completo era
+# necessário e não passou, o Gate fica vermelho. Os jobs `banco`/`navegador`
+# podem ficar `skipped` (conta como sucesso para check obrigatório), por isso
+# NÃO devem ser exigidos individualmente. Em rascunho o Gate nem é criado — o
+# merge fica bloqueado (e rascunho não é mergeável de qualquer forma).
 on:
   push: { branches: [main] }
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,7 +43,60 @@ jobs:
   estatico:
     name: Estático
     runs-on: ubuntu-24.04
+    outputs:
+      # 'true' = o CI completo (banco + navegador) é exigido para este evento.
+      full: ${{ steps.escopo.outputs.full }}
     steps:
+      # Decide se o completo é necessário. Falha FECHADO: qualquer dúvida ou
+      # erro de API resulta em full=true (gasta minutos, nunca perde teste).
+      - name: Escopo do CI (completo ou não)
+        id: escopo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.sha }}
+        run: |
+          full=true
+          reason="padrão: completo"
+
+          # Só documentação? (docs/** ou *.md; workflows e código NÃO contam.)
+          docs_only() {
+            [ -n "$1" ] || return 1
+            ! printf '%s\n' "$1" | grep -qvE '^docs/|\.md$'
+          }
+
+          if [ "$EVENT" = "pull_request" ]; then
+            if [ "$DRAFT" = "true" ]; then
+              full=false; reason="PR em rascunho: só o rápido"
+            elif files=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename') && docs_only "$files"; then
+              full=false; reason="PR somente documental"
+            fi
+          else
+            # Push na main.
+            if files=$(gh api "repos/$REPO/commits/$SHA" --jq '.files[].filename') && docs_only "$files"; then
+              full=false; reason="commit somente documental"
+            else
+              # Já validado? O commit da main tem a MESMA árvore do head de um
+              # PR mergeado, e esse head tem o Gate verde. (Só vale com a
+              # opção "exigir branch atualizada" ligada — senão as árvores
+              # divergem e cai no completo, que é o seguro.)
+              main_tree=$(gh api "repos/$REPO/git/commits/$SHA" --jq .tree.sha || true)
+              for head in $(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[] | select(.merged_at != null) | .head.sha' || true); do
+                head_tree=$(gh api "repos/$REPO/git/commits/$head" --jq .tree.sha || true)
+                ok=$(gh api "repos/$REPO/commits/$head/check-runs?per_page=100" --jq '[.check_runs[] | select(.name == "Gate" and .conclusion == "success" and .app.slug == "github-actions")] | length' || echo 0)
+                if [ -n "$main_tree" ] && [ "$main_tree" = "$head_tree" ] && [ "${ok:-0}" -gt 0 ]; then
+                  full=false; reason="árvore idêntica ao head $head, já aprovado pelo Gate"
+                  break
+                fi
+              done
+            fi
+          fi
+          echo "full=$full ($reason)"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
@@ -85,6 +158,8 @@ jobs:
   # ---------------------------------------------------------------------------
   banco:
     name: Testes contra PostgreSQL 16
+    needs: estatico
+    if: needs.estatico.outputs.full == 'true'
     runs-on: ubuntu-24.04
 
     services:
@@ -138,6 +213,8 @@ jobs:
   # ---------------------------------------------------------------------------
   navegador:
     name: Ponta a ponta
+    needs: estatico
+    if: needs.estatico.outputs.full == 'true'
     runs-on: ubuntu-24.04
 
     services:
@@ -198,3 +275,33 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # O check OBRIGATÓRIO. Único nome a configurar na branch protection: `Gate`.
+  #
+  # Roda sempre (mesmo com dependência pulada/falha) em PR pronto e na main; em
+  # PR rascunho nem é criado. Passa somente se o estático passou E, quando o
+  # completo era exigido, banco e navegador também passaram. Se o escopo não
+  # pôde ser decidido (estatico falhou), fica vermelho.
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Gate
+    needs: [estatico, banco, navegador]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Conferir resultados
+        env:
+          ESTATICO: ${{ needs.estatico.result }}
+          BANCO: ${{ needs.banco.result }}
+          NAVEGADOR: ${{ needs.navegador.result }}
+          FULL: ${{ needs.estatico.outputs.full }}
+        run: |
+          echo "estatico=$ESTATICO banco=$BANCO navegador=$NAVEGADOR full=$FULL"
+          [ "$ESTATICO" = "success" ] || { echo "::error::Estático não passou"; exit 1; }
+          if [ "$FULL" = "true" ]; then
+            [ "$BANCO" = "success" ] && [ "$NAVEGADOR" = "success" ] \
+              || { echo "::error::CI completo exigido e não aprovado"; exit 1; }
+          elif [ "$FULL" != "false" ]; then
+            echo "::error::Escopo indeterminado"; exit 1
+          fi
