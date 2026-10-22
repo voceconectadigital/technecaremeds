@@ -70,8 +70,8 @@ function Envolver({
 /* -------------------------------------------------------------------------- */
 
 describe('menu principal', () => {
-  it('tem dez itens — acima disso deixa de ser navegação e vira lista', () => {
-    expect(MAIN_NAV).toHaveLength(13);
+  it('tem catorze itens — acima disso deixa de ser navegação e vira lista (Qualidade entrou em 21/10/2026, a pedido do cliente)', () => {
+    expect(MAIN_NAV).toHaveLength(14);
   });
 
   it('cada item declara a permissão que o torna útil', () => {

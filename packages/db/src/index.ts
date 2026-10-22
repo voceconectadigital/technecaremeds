@@ -16,6 +16,7 @@ export * from './execution';
 export * from './avaliacao-os';
 export * from './obsolescencia';
 export * from './anvisa';
+export * from './qualidade';
 export * from './sla';
 export * from './maintenance-plans';
 export * from './inventory';

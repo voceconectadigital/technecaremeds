@@ -38,6 +38,7 @@
  * errou o caminho ou se o sistema quebrou.
  */
 import {
+  Award,
   Gauge,
   Repeat,
   Sun,
@@ -166,6 +167,16 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     permissions: ['contract.read', 'quote.read'],
     hint: 'O que foi acordado, e o que foi orçado',
     grupo: 'Cadastros',
+  },
+  {
+    // Conversa com o cliente, 21/10/2026: o lugar dos certificados de calibração, segurança elétrica,
+    // qualificação e treinamento, com a validade à vista.
+    to: '/qualidade',
+    label: 'Qualidade',
+    icon: Award,
+    permissions: ['document.read'],
+    hint: 'Certificados: calibração, segurança elétrica, qualificação e treinamento',
+    grupo: 'Inteligência',
   },
   {
     to: '/painel',
