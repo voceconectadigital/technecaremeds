@@ -78,6 +78,19 @@ const DESCRICAO: Record<Tier, string> = {
   expert: 'Conjunto contratual do FHEMIG (IMR). Não herda o Basic nem o Advanced.',
 };
 
+const ROTULO_PDF: Record<Tier, string> = {
+  basic: 'Baixar PDF (provisório)',
+  advanced: 'Baixar PDF (modelo Completo)',
+  expert: 'Baixar PDF (IMR)',
+};
+const AVISO_DO_LAYOUT: Record<Tier, string> = {
+  basic: 'Layout final: AGUARDANDO MODELO PDF OFICIAL.',
+  advanced:
+    'O PDF segue o modelo Completo do cliente, com gráfico de 12 meses e linha da meta. Indicador provisório sai marcado.',
+  expert:
+    'O PDF é a casca do IMR: só os itens com definição têm resultado. Desconto, glosa e faturamento não são calculados — a regra do IMR ainda não foi definida pelo cliente.',
+};
+
 const TIPOS_DE_PLANO = [
   ['', 'Todos os tipos de plano'],
   ['preventive', 'Preventiva'],
@@ -151,6 +164,11 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
   const [contrato, setContrato] = useState('');
   const [tipoPlano, setTipoPlano] = useState('');
   const [categoria, setCategoria] = useState('');
+  // Cabeçalho e assinaturas do PDF Completo (Advanced); não são dados do sistema.
+  const [centroDeCusto, setCentroDeCusto] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [assinante1, setAssinante1] = useState({ nome: '', cargo: '' });
+  const [assinante2, setAssinante2] = useState({ nome: '', cargo: '' });
   const [resultado, setResultado] = useState<{ sections: Secao[]; pending: Pendente[] } | null>(null);
   const [baixando, setBaixando] = useState(false);
 
@@ -196,6 +214,18 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
       ...(setorValido ? { sector_id: f.setor } : {}),
       ...(tipoPlano ? { plan_kind: tipoPlano as 'preventive' } : {}),
       ...(categoria ? { asset_category_id: categoria } : {}),
+      ...(tier === 'advanced' ? cabecalhoDoCompleto() : {}),
+    };
+  }
+
+  function cabecalhoDoCompleto() {
+    const assinaturas = [assinante1, assinante2]
+      .filter((a) => a.cargo.trim() !== '')
+      .map((a) => ({ name: a.nome.trim(), role: a.cargo.trim() }));
+    return {
+      ...(centroDeCusto.trim() ? { cost_center: centroDeCusto.trim() } : {}),
+      ...(cidade.trim() ? { city: cidade.trim() } : {}),
+      ...(assinaturas.length > 0 ? { signatories: assinaturas } : {}),
     };
   }
 
@@ -247,7 +277,7 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
             disabled={Boolean(intervalo.problema) || semNada}
             onClick={() => void baixarPdf()}
           >
-            Baixar PDF (provisório)
+            {ROTULO_PDF[tier]}
           </Button>
           <Button
             variant="primary"
@@ -269,7 +299,7 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
     >
       <div className="flex flex-col gap-4">
         <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-          Layout final: AGUARDANDO MODELO PDF OFICIAL. {catalogo?.layout_note}
+          {AVISO_DO_LAYOUT[tier]}
         </p>
 
         <fieldset>
@@ -425,6 +455,49 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
             </Select>
           </Field>
         </div>
+
+        {tier === 'advanced' && (
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-text">
+              4. Cabeçalho e assinaturas do PDF Completo
+            </legend>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Centro de custo" hint="Opcional; sai no cabeçalho">
+                <Input
+                  value={centroDeCusto}
+                  maxLength={60}
+                  onChange={(e) => setCentroDeCusto(e.target.value)}
+                />
+              </Field>
+              <Field label="Cidade" hint="Opcional; sai antes da data">
+                <Input value={cidade} maxLength={60} onChange={(e) => setCidade(e.target.value)} />
+              </Field>
+              {(
+                [
+                  ['Assinatura 1', assinante1, setAssinante1],
+                  ['Assinatura 2', assinante2, setAssinante2],
+                ] as const
+              ).map(([rotulo, valor, alterar]) => (
+                <div key={rotulo} className="flex flex-col gap-2">
+                  <Field label={`${rotulo}: nome`} hint="Em branco, sai só a linha">
+                    <Input
+                      value={valor.nome}
+                      maxLength={80}
+                      onChange={(e) => alterar({ ...valor, nome: e.target.value })}
+                    />
+                  </Field>
+                  <Field label={`${rotulo}: cargo`}>
+                    <Input
+                      value={valor.cargo}
+                      maxLength={80}
+                      onChange={(e) => alterar({ ...valor, cargo: e.target.value })}
+                    />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         {resultado && (
           <section

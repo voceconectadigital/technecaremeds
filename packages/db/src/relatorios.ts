@@ -35,6 +35,7 @@ import {
   legacyStatusOf,
   reportSelectionProblem,
   resolveTarget,
+  trailingLocalMonths,
   DEFAULT_ORGANIZATION_TIMEZONE,
   NO_TARGET_LABEL,
   type IndicatorState,
@@ -529,4 +530,86 @@ export async function buildReport(
       timezone: fuso,
     },
   };
+}
+
+export interface ReportSeriesPoint {
+  /** Primeiro dia do mês (YYYY-MM-DD) no fuso da organização. */
+  month: string;
+  value: number | null;
+  /** A meta em vigor naquele mês, na unidade do indicador da seção. */
+  target: number | null;
+  target_unit: string | null;
+}
+
+export interface ReportSeries {
+  months: string[];
+  /** Indicador → um ponto por mês. Só os que têm série honesta (ver `SEM_SERIE_MENSAL`). */
+  series: Record<string, ReportSeriesPoint[]>;
+  /** Indicador → por que não há série (ex.: é a situação de agora). */
+  unavailable: Record<string, string>;
+}
+
+/**
+ * Indicadores que NÃO ganham série mensal: repetir o número de hoje em 12 meses
+ * seria uma linha reta inventada.
+ */
+const SEM_SERIE_MENSAL: Record<string, string> = {
+  park_availability_snapshot:
+    'Disponibilidade é a situação do parque agora; a série mensal depende da definição de disponibilidade no tempo (P-09).',
+  work_orders_by_status: 'É a situação das OS agora.',
+};
+
+/**
+ * A série dos últimos `quantos` meses civis (padrão 12), terminando no mês do fim do
+ * período pedido, para os indicadores escolhidos. Cada mês é o MESMO cálculo do relatório
+ * (mesmo escopo, mesma meta pela vigência daquele mês) — nenhum número novo.
+ */
+export async function buildReportSeries(
+  s: TenantSession,
+  membershipId: string | null,
+  b: ReportInput,
+  indicators: string[],
+  quantos = 12,
+  agora: Date = new Date()
+): Promise<ReportSeries> {
+  const fuso = await organizationTimezone(s);
+  const fim = periodo(b.from, b.to).to;
+  const meses = trailingLocalMonths(dayOf(new Date(fim.getTime() - 1), fuso), quantos, fuso);
+  const unavailable: Record<string, string> = {};
+  const chaves = indicators.filter((k) => {
+    if (SEM_SERIE_MENSAL[k]) {
+      unavailable[k] = SEM_SERIE_MENSAL[k]!;
+      return false;
+    }
+    return true;
+  });
+  const series: Record<string, ReportSeriesPoint[]> = Object.fromEntries(chaves.map((k) => [k, []]));
+  if (chaves.length > 0) {
+    for (const m of meses) {
+      const r = await buildReport(
+        s,
+        membershipId,
+        { ...b, indicators: chaves, from: m.from.toISOString(), to: m.to.toISOString() },
+        agora
+      );
+      for (const k of chaves) {
+        const sec = r.sections.find((x) => x.key === k);
+        series[k]!.push({
+          month: m.firstDay,
+          value: sec?.value ?? null,
+          target: sec?.target?.value ?? null,
+          target_unit: sec?.target?.unit ?? null,
+        });
+      }
+    }
+  }
+  return { months: meses.map((m) => m.firstDay), series, unavailable };
+}
+
+/** O nome da organização (a prestadora), para o cabeçalho dos relatórios. */
+export async function organizationName(s: TenantSession): Promise<string> {
+  const [o] = await s.query<{ name: string }>(
+    `SELECT name FROM aurora.organizations WHERE deleted_at IS NULL`
+  );
+  return o?.name ?? 'Prestadora';
 }

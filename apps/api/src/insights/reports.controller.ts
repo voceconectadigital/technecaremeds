@@ -8,12 +8,20 @@
  *
  * Indicador PENDING_DEFINITION não entra em relatório: fica só no catálogo e na
  * lista `pending`. PROVISIONAL sai marcado. A meta de cada seção vem de
- * `indicator_targets` ou diz SEM META CONFIGURADA. O PDF é provisório e diz
- * isso em toda página: o layout oficial vem dos PDFs que o cliente vai enviar.
+ * `indicator_targets` ou diz SEM META CONFIGURADA. O PDF Advanced segue o modelo oficial
+ * do Completo e o Expert é a casca do IMR (`relatorio-oficial.ts`); o Basic segue provisório, e diz
+ * isso em toda página, até o modelo oficial chegar.
  */
 import { Body, Controller, Get, Inject, Post, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
-import { withTenant, buildReport, type ReportSection, type Database } from '@aurora/db';
+import {
+  withTenant,
+  buildReport,
+  buildReportSeries,
+  organizationName,
+  type ReportSection,
+  type Database,
+} from '@aurora/db';
 import {
   AGUARDANDO_MODELO,
   DEFAULT_ORGANIZATION_TIMEZONE,
@@ -30,6 +38,7 @@ import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permi
 import { DATABASE } from '../common/tokens';
 import { gerarPdf, type LinhaPdf } from '../documents/pdf';
 import type { AuroraRequest } from '../common/context.middleware';
+import { CHAVES_IMR_COM_NUMERO, montarCompleto, montarImr } from './relatorio-oficial';
 
 const SUFIXO: Record<string, string> = { percent: ' %', minutes: ' min', hours: ' h', score: ' de 5' };
 
@@ -99,11 +108,80 @@ export class ReportsController {
   ): Promise<unknown> {
     const ctx = req.auroraContext!;
     const b = parseWith(reportsGenerate.body, body);
-    const r = await withTenant(this.db, ctx, (s) => buildReport(s, ctx.membershipId, b));
-    const geradoEm = new Date().toISOString();
-    if (format !== 'pdf') {
-      return { tier: b.tier, generated_at: geradoEm, layout_status: REPORT_LAYOUT_STATUS, ...r };
+    const pdf = format === 'pdf';
+    const geradoEm = new Date();
+
+    // Advanced em PDF: modelo oficial do Completo, com a série de 12 meses de cada indicador.
+    if (pdf && b.tier === 'advanced') {
+      const { r, serie, organizacao } = await withTenant(this.db, ctx, async (s) => {
+        const r = await buildReport(s, ctx.membershipId, b);
+        const serie = await buildReportSeries(
+          s,
+          ctx.membershipId,
+          b,
+          r.sections.filter((x) => x.unit !== 'none').map((x) => x.key)
+        );
+        return { r, serie, organizacao: await organizationName(s) };
+      });
+      const { linhas, rodape } = montarCompleto({
+        organizacao,
+        cliente: r.filters.customer ?? null,
+        centroDeCusto: b.cost_center || null,
+        cidade: b.city || null,
+        contrato: r.filters.contract ?? null,
+        setor: r.filters.sector ?? null,
+        de: r.filters.from!,
+        ate: r.filters.to!,
+        fuso: r.filters.timezone ?? DEFAULT_ORGANIZATION_TIMEZONE,
+        geradoEm,
+        secoes: r.sections,
+        serie,
+        assinaturas: b.signatories?.map((x) => ({ nome: x.name, cargo: x.role })) ?? null,
+      });
+      return this.enviarPdf(
+        res,
+        'advanced',
+        gerarPdf(linhas, { titulo: 'Relatório Completo', autor: organizacao, rodape })
+      );
     }
+
+    // Expert em PDF: a casca do IMR. Só entram os itens que têm número; o resto fica "aguardando".
+    if (pdf && b.tier === 'expert') {
+      const { r, organizacao } = await withTenant(this.db, ctx, async (s) => ({
+        r: await buildReport(s, ctx.membershipId, { ...b, indicators: CHAVES_IMR_COM_NUMERO }),
+        organizacao: await organizationName(s),
+      }));
+      const { linhas, rodape } = montarImr({
+        organizacao,
+        cliente: r.filters.customer ?? null,
+        de: r.filters.from!,
+        ate: r.filters.to!,
+        fuso: r.filters.timezone ?? DEFAULT_ORGANIZATION_TIMEZONE,
+        geradoEm,
+        secoes: r.sections,
+      });
+      return this.enviarPdf(
+        res,
+        'expert',
+        gerarPdf(linhas, {
+          titulo: 'Instrumento de Medição de Resultados (IMR)',
+          autor: organizacao,
+          rodape,
+          faixa: 'IMR — DESCONTO E GLOSA NÃO CALCULADOS (REGRA DO CLIENTE PENDENTE)',
+        })
+      );
+    }
+
+    const r = await withTenant(this.db, ctx, (s) => buildReport(s, ctx.membershipId, b));
+    if (!pdf) {
+      return {
+        tier: b.tier,
+        generated_at: geradoEm.toISOString(),
+        layout_status: REPORT_LAYOUT_STATUS,
+        ...r,
+      };
+    }
+    // Basic: o PDF segue provisório até o cliente mandar o modelo oficial.
     // Datas e hora no fuso da ORGANIZAÇÃO (PF-51): o servidor roda em UTC, e o
     // fim do dia 31/10 em Brasília (02:59 UTC de 01/11) saía impresso como 01/11.
     const fuso = { timeZone: r.filters.timezone ?? DEFAULT_ORGANIZATION_TIMEZONE };
@@ -117,7 +195,7 @@ export class ReportsController {
           (r.filters.sector ? ` · Setor: ${r.filters.sector}` : ''),
       },
       {
-        texto: `Gerado em ${new Date(geradoEm).toLocaleString('pt-BR', fuso)}. Layout provisório — ${AGUARDANDO_MODELO}.`,
+        texto: `Gerado em ${geradoEm.toLocaleString('pt-BR', fuso)}. Layout provisório — ${AGUARDANDO_MODELO}.`,
         tamanho: 8,
       },
     ];
@@ -134,15 +212,22 @@ export class ReportsController {
       if (sec.definition) linhas.push({ texto: `Definição: ${sec.definition}`, recuo: 12, tamanho: 8 });
       if (sec.state === 'PROVISIONAL' && sec.note) linhas.push({ texto: sec.note, recuo: 12, tamanho: 8 });
     }
-    const pdf = gerarPdf(linhas, {
-      titulo: `Relatório ${REPORT_TIER_LABEL[b.tier]}`,
-      autor: 'Téchne Care',
-      rodape: `Relatório ${REPORT_TIER_LABEL[b.tier]} — provisório`,
-      faixa: AGUARDANDO_MODELO,
-    });
+    return this.enviarPdf(
+      res,
+      b.tier,
+      gerarPdf(linhas, {
+        titulo: `Relatório ${REPORT_TIER_LABEL[b.tier]}`,
+        autor: 'Téchne Care',
+        rodape: `Relatório ${REPORT_TIER_LABEL[b.tier]} — provisório`,
+        faixa: AGUARDANDO_MODELO,
+      })
+    );
+  }
+
+  private enviarPdf(res: Response, tier: string, pdf: Buffer): StreamableFile {
     res.status(200);
     res.setHeader('content-type', 'application/pdf');
-    res.setHeader('content-disposition', `attachment; filename="relatorio-${b.tier}.pdf"`);
+    res.setHeader('content-disposition', `attachment; filename="relatorio-${tier}.pdf"`);
     res.setHeader('cache-control', 'no-store');
     return new StreamableFile(pdf);
   }

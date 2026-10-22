@@ -42270,7 +42270,7 @@
     "/v1/reports/generate": {
       "post": {
         "operationId": "reports.generate",
-        "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel",
+        "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF) sobre os dados reais do Painel",
         "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, `target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.",
         "tags": [
           "Reports"
@@ -42342,6 +42342,37 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "cost_center": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "signatories": {
+                    "maxItems": 3,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "maxLength": 80
+                        },
+                        "role": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "role"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
