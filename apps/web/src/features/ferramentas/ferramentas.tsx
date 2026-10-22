@@ -102,7 +102,8 @@ export const FERRAMENTAS: readonly Ferramenta[] = Object.freeze([
     nome: 'Inteligência Artificial',
     icone: Bot,
     situacao: 'futuro',
-    proposito: 'Apoio à decisão sobre o histórico de manutenção.',
+    proposito:
+      'Apoio à decisão sobre o histórico de manutenção e criação de planos de manutenção com ajuda de IA.',
     hoje: null,
     falta: 'Nada de IA está ativo: casos de uso, provedor e regras de procedência ainda não definidos.',
   },

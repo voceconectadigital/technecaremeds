@@ -41,6 +41,11 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
     '/v1/quality-records',
     raw({ type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], limit: '10mb' })
   );
+  // Nota fiscal do pedido da Store: o mesmo corpo cru, só neste caminho.
+  app.use(
+    '/v1/store-orders',
+    raw({ type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], limit: '10mb' })
+  );
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: false, limit: '1mb' }));
   /*
@@ -86,6 +91,7 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
         'x-aurora-final',
         // Nome do arquivo do certificado de qualidade (PUT /v1/quality-records/:id/file).
         'x-aurora-file-name',
+        'x-aurora-invoice-number',
       ],
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       maxAge: 600,

@@ -29,6 +29,7 @@ import { IndicatorTargetsController } from './insights/indicator-targets.control
 import { QrController } from './assets/qr.controller';
 import { EvaluationsController } from './work-orders/evaluations.controller';
 import { QualityController } from './quality/quality.controller';
+import { StoreOrdersController } from './store/store-orders.controller';
 import { ServiceRequestsController } from './requests/service-requests.controller';
 import { WorkOrdersController } from './work-orders/work-orders.controller';
 import { ExecutionController, ExecutionResourcesController } from './work-orders/execution.controller';
@@ -109,6 +110,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       QrController,
       EvaluationsController,
       QualityController,
+      StoreOrdersController,
       ServiceRequestsController,
       WorkOrdersController,
       ExecutionController,
