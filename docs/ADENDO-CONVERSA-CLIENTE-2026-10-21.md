@@ -22,7 +22,7 @@ Legenda: **Feito** · **Parcial** · **Não feito**. "Feito" quer dizer que exis
 | N11 | Tópico **Qualidade** com os certificados de calibração, segurança elétrica, qualificação e treinamento | Feito (PR #38) | menu Qualidade com as quatro abas; cada certificado tem emissor, datas, validade **calculada** (vigente, vence em 30 dias, vencido) e o arquivo; os vencidos abrem a lista |
 | N12 | **ONA** só como ferramenta de propaganda | Feito (PR #36) | cartão "ONA — Acreditação" em Ferramentas, marcado "em breve" (versão 2) |
 | N13 | **Plano de manutenção com ajuda de IA** (ou manual) | **Parcial** | o assistente de novo plano mostra as duas opções: "Manualmente" ativa e "Com ajuda de IA" desabilitada, dita como "em breve". A IA ainda não existe |
-| N14 | Estudar **Qualiex** e **SIGQUALI** para a V2 | Não feito | não pesquisei nada deles |
+| N14 | Estudar **Qualiex** e **SIGQUALI** para a V2 | **Parcial** | o Qualiex foi estudado em fonte aberta; **do SIGQUALI não achei nada confiável** e preciso do nome do fabricante. Ver `docs/ESTUDO-QUALIEX-SIGQUALI.md` |
 
 ## O que continua dependendo de decisão
 - **ANVISA (N9):** fonte oficial, frequência e limite de uso da consulta automática.
