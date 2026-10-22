@@ -50,6 +50,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { QrSvg, enderecoDaEtiqueta } from '../../shell/qr';
 import { BotaoLaudoDeObsolescencia } from './laudo';
+import { CartaoAnvisa } from './anvisa';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
 import { tomDaCategoria } from '../ordens/lista';
 
@@ -199,6 +200,8 @@ export function AtivoPage() {
 
           <div className="flex flex-col gap-4">
             {data.qr_token && <CartaoEtiqueta ativo={data} />}
+
+            <CartaoAnvisa ativo={data} />
 
             <Card>
               <CardHeader title="Ciclo de vida" />

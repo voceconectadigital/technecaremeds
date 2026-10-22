@@ -350,6 +350,61 @@ describe('cliente → setor → equipamento, com chip', () => {
     ).toBe(404);
   });
 
+  it('verificação ANVISA: registra quem/quando/o quê, exige descrição no alerta e emite o aviso; sem registro cadastrado, 409', async () => {
+    const base = { customer_id: hospital, location_id: uti, asset_category_id: tipoVentilador };
+    const com = await http
+      .post('/v1/assets')
+      .set(auth(GESTORA))
+      .send({ ...base, name: 'Bomba de infusão', tag: 'BI-001', anvisa_registration: '80102030099' });
+    expect(com.status, JSON.stringify(com.body)).toBe(201);
+    const sem = await http
+      .post('/v1/assets')
+      .set(auth(GESTORA))
+      .send({ ...base, name: 'Maca', tag: 'MAC-001' });
+    expect(sem.status).toBe(201);
+
+    const url = `/v1/assets/${com.body.id}/anvisa-check`;
+    // Sem registro ANVISA cadastrado não há o que verificar.
+    expect(
+      (
+        await http
+          .post(`/v1/assets/${sem.body.id}/anvisa-check`)
+          .set(auth(GESTORA))
+          .send({ status: 'regular' })
+      ).status
+    ).toBe(409);
+    // Alerta sem descrição é recusado: "alerta" sem dizer qual não orienta ninguém.
+    expect((await http.post(url).set(auth(GESTORA)).send({ status: 'alert' })).status).toBe(422);
+
+    const alerta = await http
+      .post(url)
+      .set(auth(GESTORA))
+      .send({ status: 'alert', note: 'Notificação de risco nº 1234: lote de seringas.' });
+    expect(alerta.status, JSON.stringify(alerta.body)).toBe(201);
+    expect(alerta.body).toEqual({ status: 'alert', alerted: true });
+    const ficha = await http.get(`/v1/assets/${com.body.id}`).set(auth(GESTORA));
+    expect(ficha.body).toMatchObject({
+      anvisa_status: 'alert',
+      anvisa_note: 'Notificação de risco nº 1234: lote de seringas.',
+    });
+    expect(ficha.body.anvisa_checked_at).toBeTruthy();
+
+    // O aviso nasce como evento de domínio (o despachante o entrega a gestores e coordenadores).
+    const [ev] = await t.admin.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM aurora.domain_events WHERE type = 'asset.anvisa_alert' AND aggregate_id = $1`,
+      [com.body.id]
+    );
+    expect(ev!.n).toBe('1');
+
+    // Voltou ao regular: registra, sem aviso novo.
+    const regular = await http.post(url).set(auth(GESTORA)).send({ status: 'regular' });
+    expect(regular.body).toEqual({ status: 'regular', alerted: false });
+
+    await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = ANY($1::uuid[])`, [
+      [com.body.id, sem.body.id],
+    ]);
+  });
+
   it('a etiqueta lida pela câmera acha SÓ o equipamento dela; token estranho não acha nada', async () => {
     const ficha = await http.get(`/v1/assets/${ativoUti}`).set(auth(GESTORA));
     const token = ficha.body.qr_token as string;

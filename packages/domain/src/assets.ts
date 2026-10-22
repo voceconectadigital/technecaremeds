@@ -118,6 +118,18 @@ export function assetAgeYears(
 }
 
 /**
+ * Situação do registro ANVISA, como foi VERIFICADA (migration 0081). Sem verificação, nenhuma
+ * situação: "regular" afirmaria algo que ninguém conferiu.
+ */
+export const ANVISA_STATUSES = ['regular', 'alert', 'prohibited'] as const;
+export type AnvisaStatus = (typeof ANVISA_STATUSES)[number];
+export const ANVISA_STATUS_LABELS: Record<AnvisaStatus, string> = {
+  regular: 'Regular',
+  alert: 'Alerta',
+  prohibited: 'Uso proibido',
+};
+
+/**
  * Depreciação em LINHA RETA (o "cálculo comum de depreciação de bens", pedido do
  * cliente em 21/10/2026): o valor depreciável (compra − residual) se distribui por
  * igual ao longo da vida útil, contada a partir da data de aquisição.

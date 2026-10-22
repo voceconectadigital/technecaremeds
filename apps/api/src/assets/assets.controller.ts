@@ -24,10 +24,17 @@ import {
   mttr,
   mtbf,
   createObsolescenceReport,
+  recordAnvisaCheck,
   type TenantSession,
   type Database,
 } from '@aurora/db';
-import { assetObsolescenceReport, assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
+import {
+  assetAnvisaCheck,
+  assetObsolescenceReport,
+  assetsCreate,
+  assetsTimeline,
+  assetsUpdate,
+} from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
@@ -292,7 +299,8 @@ export class AssetsController {
                 a.asset_category_id, a.asset_model_id, a.customer_id,
                 a.location_id, a.location_path, a.parent_asset_id,
                 a.criticality_id, a.operational_risk, a.default_priority, a.risk_class,
-                a.anvisa_registration, a.inmetro_ordinance,
+                a.anvisa_registration, a.anvisa_status, a.anvisa_note, a.anvisa_checked_at,
+                a.inmetro_ordinance,
                 a.requires_calibration, a.requires_electrical_test,
                 a.manufactured_at, a.acquired_at, a.installed_at, a.warranty_until,
                 a.useful_life_years, a.decommissioned_at, a.decommission_reason,
@@ -598,6 +606,37 @@ export class AssetsController {
       );
       if (!visivel) throw new NotFoundError('Ativo', assetId);
       return createObsolescenceReport(s, assetId, b.justification);
+    });
+  }
+
+  /**
+   * Registra a verificação do registro ANVISA (conversa com o cliente, 21/10/2026). Alerta ou
+   * proibição avisam gestores e coordenadores; o sistema ainda não consulta a ANVISA sozinho.
+   */
+  @Post(':id/anvisa-check')
+  @HttpCode(201)
+  @RequirePermissions('asset.update')
+  async anvisaCheck(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ status: string; alerted: boolean }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const b = parseWith(assetAnvisaCheck.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      return recordAnvisaCheck(s, assetId, { status: b.status, note: b.note ?? null });
     });
   }
 

@@ -154,6 +154,10 @@ export const AssetDetail = z.object({
   default_priority: z.string().nullable(),
   risk_class: z.string().nullable(),
   anvisa_registration: z.string().nullable(),
+  /** Verificação do registro ANVISA (0081): situação, observação e quando. Nulos se nunca verificado. */
+  anvisa_status: z.enum(['regular', 'alert', 'prohibited']).nullable().optional(),
+  anvisa_note: z.string().nullable().optional(),
+  anvisa_checked_at: Timestamp.nullable().optional(),
   inmetro_ordinance: z.string().nullable(),
   requires_calibration: z.boolean(),
   requires_electrical_test: z.boolean(),
@@ -493,6 +497,28 @@ export const assetObsolescenceReport = defineOperation({
   params: z.object({ id: Uuid }),
   body: z.object({ justification: z.string().trim().min(20).max(4000) }).strict(),
   response: z.object({ id: Uuid, number: z.string().nullable() }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const assetAnvisaCheck = defineOperation({
+  operationId: 'assets.anvisaCheck',
+  method: 'POST',
+  path: '/assets/:id/anvisa-check',
+  summary: 'Registra a verificação do registro ANVISA do equipamento',
+  description:
+    'Grava quem verificou, quando e o que encontrou (regular, alerta ou uso proibido). Alerta e ' +
+    'proibição exigem a descrição e avisam gestores e coordenadores. O sistema ainda não consulta ' +
+    'a ANVISA sozinho: esta rota é o registro da verificação feita por uma pessoa.',
+  permissions: ['asset.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      status: z.enum(['regular', 'alert', 'prohibited']),
+      note: z.string().trim().max(1000).optional(),
+    })
+    .strict(),
+  response: z.object({ status: z.enum(['regular', 'alert', 'prohibited']), alerted: z.boolean() }),
   status: 201,
   errors: ['not_found', 'conflict', 'validation_failed'],
 });
