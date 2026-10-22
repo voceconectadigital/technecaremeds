@@ -36,6 +36,7 @@ const ORG_A = newId();
 const ORG_B = newId();
 const GESTORA = 'gestora@equip-a.test';
 const OPERADOR = 'operador@equip-a.test';
+const ENGENHEIRA = 'engenheira@equip-a.test';
 const ADMIN_B = 'admin@equip-b.test';
 const auth = (email: string) => ({ authorization: `Bearer local:${email}:${email}` });
 const novoToken = () => generateQrToken((n) => new Uint8Array(randomBytes(n)));
@@ -109,6 +110,21 @@ beforeAll(async () => {
     async (s) => {
       const base = await provisionOrganizationBaseline(s);
       await assignRole(s, memOp, base.roles.get('operator')!);
+    }
+  );
+  // A engenheira (gestora de manutenção) é quem pode descomissionar — e, portanto, gerar o laudo de obsolescência.
+  const memEng = newId();
+  await seedMember(
+    t,
+    { organizationId: ORG_A, userId: newId(), membershipId: memEng },
+    { email: ENGENHEIRA, userName: 'Engenheira' }
+  );
+  await withTenant(
+    t.db,
+    buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: 's2b' }),
+    async (s) => {
+      const base = await provisionOrganizationBaseline(s);
+      await assignRole(s, memEng, base.roles.get('maintenance_manager')!);
     }
   );
   await withTenant(
@@ -304,6 +320,34 @@ describe('cliente → setor → equipamento, com chip', () => {
     expect(r.body.period.days).toBe(365);
     // Equipamento de outra organização: 404, como em qualquer outra rota do ativo.
     expect((await http.get(`/v1/assets/${ativoDeB}/indicators`).set(auth(GESTORA))).status).toBe(404);
+  });
+
+  it('laudo de obsolescência: gera uma OS OBC-…, recusa justificativa curta e laudo repetido, e NÃO desativa o equipamento', async () => {
+    const url = `/v1/assets/${ativoBloco}/obsolescence-report`;
+    const justificativa =
+      'Equipamento com 14 anos, sem peças no fabricante e reparo acima de 70% do valor de reposição.';
+    expect((await http.post(url).set(auth(ENGENHEIRA)).send({ justification: 'velho' })).status).toBe(422);
+
+    const r = await http.post(url).set(auth(ENGENHEIRA)).send({ justification: justificativa });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.number).toMatch(/^OBC-\d{4}-0001$/);
+
+    expect((await http.post(url).set(auth(ENGENHEIRA)).send({ justification: justificativa })).status).toBe(
+      409
+    );
+    expect((await http.get(`/v1/assets/${ativoBloco}`).set(auth(GESTORA))).body.status).toBe('active');
+    // Quem não pode descomissionar (o operador) nem gera o laudo; equipamento de outra organização é 404.
+    expect((await http.post(url).set(auth(OPERADOR)).send({ justification: justificativa })).status).toBe(
+      403
+    );
+    expect(
+      (
+        await http
+          .post(`/v1/assets/${ativoDeB}/obsolescence-report`)
+          .set(auth(ENGENHEIRA))
+          .send({ justification: justificativa })
+      ).status
+    ).toBe(404);
   });
 
   it('a etiqueta lida pela câmera acha SÓ o equipamento dela; token estranho não acha nada', async () => {

@@ -12,7 +12,7 @@
  * (`asset_label`, ADR-006). Quem consome não precisa saber que internamente
  * tudo é `asset`; quem opera num hospital lê "Equipamento".
  */
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createAsset,
@@ -23,10 +23,11 @@ import {
   assetTimeline,
   mttr,
   mtbf,
+  createObsolescenceReport,
   type TenantSession,
   type Database,
 } from '@aurora/db';
-import { assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
+import { assetObsolescenceReport, assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
@@ -565,6 +566,38 @@ export class AssetsController {
         downtime_minutes: Number(conta!.minutos_parado),
         last_corrective_at: conta!.ultima_corretiva,
       };
+    });
+  }
+
+  /**
+   * Laudo de obsolescência (conversa com o cliente, 21/10/2026): o equipamento vira uma OS
+   * própria, numerada OBC-AAAA-NNNN, com a justificativa técnica. Não desativa nada agora:
+   * a baixa acontece quando o laudo é validado (ver `baixarPeloLaudo`).
+   */
+  @Post(':id/obsolescence-report')
+  @HttpCode(201)
+  @RequirePermissions('asset.decommission')
+  async obsolescenceReport(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ id: string; number: string | null }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const b = parseWith(assetObsolescenceReport.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      return createObsolescenceReport(s, assetId, b.justification);
     });
   }
 

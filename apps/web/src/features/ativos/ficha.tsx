@@ -49,6 +49,7 @@ import { DialogoEquipamento, TIPOS_DE_RASTREADOR } from './formulario';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { QrSvg, enderecoDaEtiqueta } from '../../shell/qr';
+import { BotaoLaudoDeObsolescencia } from './laudo';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
 import { tomDaCategoria } from '../ordens/lista';
 
@@ -86,11 +87,19 @@ export function AtivoPage() {
         .join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
       actions={
-        <Can permission="asset.update">
-          <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
-            Editar
-          </Button>
-        </Can>
+        <>
+          <Can permission="asset.update">
+            <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
+              Editar
+            </Button>
+          </Can>
+          {/* Laudo de obsolescência: só para equipamento ainda em operação (conversa de 21/10/2026). */}
+          {data.status !== 'decommissioned' && data.status !== 'disposed' && (
+            <Can permission="asset.decommission">
+              <BotaoLaudoDeObsolescencia assetId={data.id} nome={data.name} />
+            </Can>
+          )}
+        </>
       }
     >
       <DialogoEquipamento

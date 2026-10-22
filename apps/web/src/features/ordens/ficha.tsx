@@ -402,6 +402,12 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
                 <Info rotulo="Sintoma relatado" valor={os.reported_failure_label} />
               </dl>
             )}
+            {os.number?.startsWith('OBC-') && (
+              <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+                Laudo de obsolescência: para concluir, anexe ao menos uma foto do equipamento. Quando o laudo
+                for validado, o equipamento é desativado com a justificativa acima.
+              </p>
+            )}
           </div>
         </Card>
 

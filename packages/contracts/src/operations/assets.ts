@@ -480,6 +480,23 @@ export const assetIndicators = defineOperation({
 
 export type AssetIndicators = z.infer<typeof assetIndicators.response>;
 
+export const assetObsolescenceReport = defineOperation({
+  operationId: 'assets.obsolescenceReport',
+  method: 'POST',
+  path: '/assets/:id/obsolescence-report',
+  summary: 'Gera o laudo de obsolescência do equipamento (uma OS OBC-AAAA-NNNN)',
+  description:
+    'O laudo é uma ordem de serviço de tipo próprio e numeração própria, com a justificativa técnica. ' +
+    'Gerar o laudo NÃO desativa o equipamento: ao concluir, o laudo exige a justificativa e ao menos uma ' +
+    'foto; ao ser validado, o equipamento é descomissionado com a justificativa do laudo.',
+  permissions: ['asset.decommission'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ justification: z.string().trim().min(20).max(4000) }).strict(),
+  response: z.object({ id: Uuid, number: z.string().nullable() }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
 export const assetsTransfer = defineOperation({
   operationId: 'assets.transfer',
   method: 'POST',
