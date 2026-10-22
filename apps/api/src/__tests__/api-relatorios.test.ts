@@ -24,6 +24,8 @@ import {
   createWorkOrder,
   createAsset,
   provisionOrganizationBaseline,
+  buildReport,
+  buildReportSeries,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
 import { reportsCatalog, reportsGenerate } from '@aurora/contracts';
@@ -373,5 +375,83 @@ describe('geração com dados reais', () => {
     expect((await gerar(SOLICITANTE, { tier: 'basic' })).status).toBe(403);
     const b = await gerar(ADMIN_B, { tier: 'basic', indicators: ['work_orders_opened'] });
     expect(b.body.sections[0].value).toBe(0);
+  });
+
+  const baixarPdf = (body: Record<string, unknown>) =>
+    gerar(GESTORA, body, true)
+      .buffer(true)
+      .parse((res, cb) => {
+        const partes: Buffer[] = [];
+        res.on('data', (c: Buffer) => partes.push(c));
+        res.on('end', () => cb(null, Buffer.concat(partes)));
+      });
+  const SETEMBRO = { from: '2026-09-01T03:00:00.000Z', to: '2026-10-01T02:59:59.999Z' };
+
+  it('Advanced em PDF segue o modelo Completo: cabeçalho, competência, texto e assinaturas; sem a faixa de provisório', async () => {
+    const pdf = await baixarPdf({
+      tier: 'advanced',
+      indicators: ['service_rating', 'opened_vs_closed'],
+      ...SETEMBRO,
+      customer_id: hospitalA,
+      cost_center: 'HCSL020',
+      city: 'Pouso Alegre',
+      signatories: [{ name: 'Natália Santos', role: 'Engenheira Clínica' }],
+    });
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-disposition']).toContain('relatorio-advanced.pdf');
+    // Os acentos vão para o PDF como escape octal (WinAnsi): \352 = ê, \341 = á.
+    const corpo = (pdf.body as Buffer).toString('latin1');
+    expect(corpo.startsWith('%PDF')).toBe(true);
+    expect(corpo).toContain('A/C Srs. Diretores');
+    expect(corpo).toContain('Hospital A');
+    expect(corpo).toContain('Centro de Custo: HCSL020');
+    expect(corpo).toContain('Compet\\352ncia: SETEMBRO / 2026');
+    expect(corpo).toContain('Pouso Alegre, ');
+    expect(corpo).toContain('Nat\\341lia Santos');
+    expect(corpo).not.toContain('AGUARDANDO MODELO PDF OFICIAL');
+  });
+
+  it('Advanced em PDF: o escopo restrito continua valendo, e cabeçalho fora do contrato é 422', async () => {
+    const fora = await gerar(RESTRITA, { tier: 'advanced', customer_id: hospitalB, ...SETEMBRO }, true);
+    expect(fora.status).toBe(404);
+    const invalido = await gerar(
+      GESTORA,
+      { tier: 'advanced', ...SETEMBRO, signatories: [{ name: 'x' }] },
+      true
+    );
+    expect(invalido.status).toBe(422);
+  });
+
+  it('Expert em PDF é a casca do IMR: 16 itens, sem desconto nem glosa inventados', async () => {
+    const pdf = await baixarPdf({ tier: 'expert', ...SETEMBRO, indicators: ['service_rating'] });
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-disposition']).toContain('relatorio-expert.pdf');
+    const corpo = (pdf.body as Buffer).toString('latin1');
+    expect(corpo).toContain('INSTRUMENTO DE MEDI');
+    expect(corpo).toContain('DESCONTO E GLOSA N');
+    // A célula quebra "Aguardando / definição" em duas linhas: cada uma é um texto no PDF.
+    expect(corpo).toContain('(defini\\347\\343o)');
+    expect(corpo).toContain('Valor total do desconto a ser aplicado: n');
+    expect(corpo).not.toMatch(/R\$ ?\d/);
+  });
+
+  it('série mensal: 12 meses terminando no mês do fim; a situação de agora não ganha série', async () => {
+    const ctx = buildContext({ organizationId: ORG, actorKind: 'system', requestId: 's' });
+    const r = await withTenant(t.db, ctx, (s) =>
+      buildReportSeries(s, null, { tier: 'advanced', from: DE, to: ATE }, [
+        'work_orders_opened',
+        'park_availability_snapshot',
+      ])
+    );
+    expect(r.months).toHaveLength(12);
+    expect(r.series.work_orders_opened).toHaveLength(12);
+    expect(r.series.work_orders_opened!.map((p) => p.month)).toEqual(r.months);
+    expect(r.unavailable.park_availability_snapshot).toMatch(/situação do parque agora/);
+    expect(r.series.park_availability_snapshot).toBeUndefined();
+    const total = r.series.work_orders_opened!.reduce((a, p) => a + (p.value ?? 0), 0);
+    const janela = await withTenant(t.db, ctx, (s) =>
+      buildReport(s, null, { tier: 'advanced', from: DE, to: ATE, indicators: ['work_orders_opened'] })
+    );
+    expect(total).toBeGreaterThanOrEqual(janela.sections[0]!.value ?? 0);
   });
 });

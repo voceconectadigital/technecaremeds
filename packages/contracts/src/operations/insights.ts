@@ -328,7 +328,7 @@ export const reportsGenerate = defineOperation({
   operationId: 'reports.generate',
   method: 'POST',
   path: '/reports/generate',
-  summary: 'Gera o relatório (JSON; `?format=pdf` para o PDF provisório) sobre os dados reais do Painel',
+  summary: 'Gera o relatório (JSON; `?format=pdf` para o PDF) sobre os dados reais do Painel',
   description:
     'Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. ' +
     'Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); ' +
@@ -348,6 +348,13 @@ export const reportsGenerate = defineOperation({
       sector_id: Uuid.optional(),
       plan_kind: z.enum(['preventive', 'calibration', 'electrical_safety', 'qualification']).optional(),
       asset_category_id: Uuid.optional(),
+      /** Só para o PDF Advanced: campos do cabeçalho e das assinaturas do modelo oficial. */
+      cost_center: z.string().trim().max(60).optional(),
+      city: z.string().trim().max(60).optional(),
+      signatories: z
+        .array(z.object({ name: z.string().trim().max(80), role: z.string().trim().min(1).max(80) }).strict())
+        .max(3)
+        .optional(),
     })
     .strict(),
   response: z.object({

@@ -104,3 +104,33 @@ export function previousLocalMonth(
     to: endOfLocalDay(lastDay, tz),
   };
 }
+
+/** O mês civil local que contém o dia (YYYY-MM-DD). */
+export function localMonthOfDay(dia: string, timeZone: string = DEFAULT_ORGANIZATION_TIMEZONE): LocalMonth {
+  const tz = safeTimezone(timeZone);
+  const p = partesDoDia(dia);
+  const firstDay = chave(p.ano, p.mes, 1);
+  const proximo = p.mes === 12 ? chave(p.ano + 1, 1, 1) : chave(p.ano, p.mes + 1, 1);
+  const lastDay = addDaysToDay(proximo, -1);
+  return { firstDay, lastDay, from: startOfLocalDay(firstDay, tz), to: endOfLocalDay(lastDay, tz) };
+}
+
+/**
+ * Os `quantos` meses civis locais terminando no mês que contém `dia`, do mais antigo
+ * ao mais recente — a janela dos gráficos de 12 meses dos relatórios.
+ */
+export function trailingLocalMonths(
+  dia: string,
+  quantos: number,
+  timeZone: string = DEFAULT_ORGANIZATION_TIMEZONE
+): LocalMonth[] {
+  const fim = partesDoDia(dia);
+  const meses: LocalMonth[] = [];
+  for (let k = quantos - 1; k >= 0; k--) {
+    const indice = fim.ano * 12 + (fim.mes - 1) - k;
+    const ano = Math.floor(indice / 12);
+    const mes = (indice % 12) + 1;
+    meses.push(localMonthOfDay(chave(ano, mes, 1), timeZone));
+  }
+  return meses;
+}
