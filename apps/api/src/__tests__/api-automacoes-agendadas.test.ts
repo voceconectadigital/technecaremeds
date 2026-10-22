@@ -175,11 +175,12 @@ async function ligar(id: string): Promise<void> {
 }
 
 describe('Nova automação: vocabulário e validação', () => {
-  it('modelos de relatório, lembrete, tarefa, 5W2H e PDCA; e-mail sem transporte declarado', async () => {
+  it('modelos de relatório, lembrete, aviso de peça, tarefa, 5W2H e PDCA; e-mail sem transporte declarado', async () => {
     const r = await http.get('/v1/automations/vocabulary').set(auth(ADMIN));
     expect(r.body.templates.map((x: { key: string }) => x.key)).toEqual([
       'scheduled_report',
       'reminder',
+      'parts_alert',
       'task',
       '5w2h',
       'pdca',
@@ -248,6 +249,19 @@ describe('Nova automação: vocabulário e validação', () => {
   });
 });
 
+describe('aviso imediato: OS aguardando peça (gatilho por evento)', () => {
+  it('o lembrete aceita gatilho de evento, com filtro pelo motivo de espera e {{number}} no título', async () => {
+    const r = await criar(ADMIN, {
+      name: 'Aviso ao compras: OS aguardando peça',
+      triggerKind: 'event',
+      triggerEvent: 'work_order.blocked',
+      conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
+      actions: [{ kind: 'reminder', params: { recipients: [memO], title: 'OS {{number}} aguardando peça' } }],
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+  });
+});
+
 describe('relatório agendado', () => {
   let regra: string;
   let primeira: Date;
@@ -268,7 +282,12 @@ describe('relatório agendado', () => {
     expect((await http.post(`/v1/automations/${regra}/activate`).set(auth(ADMIN)).send({})).status).toBe(409);
     const sim = await http.post(`/v1/automations/${regra}/simulate`).set(auth(ADMIN)).send({ days: 28 });
     expect(sim.body.matched).toBe(4);
-    expect(sim.body.next_runs).toHaveLength(5);
+    // `nextRuns` olha 31 dias à frente: numa segunda-feira de manhã cabem 5 passadas
+    // semanais, noutros dias da semana só 4 (a quinta cai no 32º dia). O teste não pode
+    // depender do dia em que roda — o que importa é que sejam passadas futuras, em ordem.
+    expect(sim.body.next_runs.length).toBeGreaterThanOrEqual(4);
+    expect(sim.body.next_runs.length).toBeLessThanOrEqual(5);
+    expect([...sim.body.next_runs].sort()).toEqual(sim.body.next_runs);
     expect(sim.body.summary).toMatch(/vai rodar 4 vez/);
     expect((await http.post(`/v1/automations/${regra}/activate`).set(auth(ADMIN)).send({})).status).toBe(201);
     const lista = await http.get('/v1/automations').set(auth(ADMIN));

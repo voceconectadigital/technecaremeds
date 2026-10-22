@@ -212,6 +212,7 @@ export const scheduleBuckets = defineOperation({
     'Os contadores vêm prontos do servidor: fazer a tela contar significaria carregar a lista ' +
     'inteira só para exibir três números.',
   permissions: ['work_order.read'],
+  query: z.object({ customer: Uuid.optional() }),
   response: z.object({
     labels: z.record(z.string(), z.string()),
     counts: z.record(z.string(), z.number()),

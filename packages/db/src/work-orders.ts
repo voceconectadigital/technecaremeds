@@ -562,10 +562,25 @@ export async function transitionWorkOrder(
     }
   );
   if (evento) {
+    // O motivo de espera vai no evento: "aguardando peça" é o que o setor de
+    // compras precisa saber NA HORA (reunião de 16/10/2026), e a automação só
+    // consegue filtrar por aquilo que o evento carrega.
+    let motivoDeEspera: string | null = null;
+    if (destino.category === 'waiting' && input.waitReasonId) {
+      const [m] = await session.query<{ key: string }>(`SELECT key FROM aurora.wait_reasons WHERE id = $1`, [
+        input.waitReasonId,
+      ]);
+      motivoDeEspera = m?.key ?? null;
+    }
     await emitEvent(session, {
       type: evento as EventType,
       aggregateId: workOrderId,
-      payload: { number: atual.number, from: atual.status_key, to: destino.key },
+      payload: {
+        number: atual.number,
+        from: atual.status_key,
+        to: destino.key,
+        ...(motivoDeEspera ? { wait_reason_key: motivoDeEspera } : {}),
+      },
     });
   }
 

@@ -234,7 +234,12 @@ export function ProcedimentosAba() {
           {[
             { v: '', r: 'Todos' },
             { v: 'none', r: 'Preventiva' },
-            ...TIPOS_PROC.filter((t) => t.v).map((t) => ({ v: t.v, r: rotuloTipo(t.v) })),
+            // "Aceite" saiu dos filtros (reunião de 16/10/2026: o checklist já gravado se acha em
+            // "Todos"); o dado antigo continua existindo e aparece lá.
+            ...TIPOS_PROC.filter((t) => t.v && t.v !== 'acceptance').map((t) => ({
+              v: t.v,
+              r: rotuloTipo(t.v),
+            })),
           ].map((t) => (
             <FilterChip key={t.v} active={filtro === t.v} onClick={() => setFiltro(t.v)}>
               {t.r}
@@ -471,7 +476,8 @@ function ConstrutorDialog({
               disabled={Boolean(base)}
               onChange={(e) => setTipo(e.target.value as TipoProc)}
             >
-              {TIPOS_PROC.map((t) => (
+              {/* Novo procedimento não oferece "Aceite"; um antigo desse tipo ainda abre. */}
+              {TIPOS_PROC.filter((t) => t.v !== 'acceptance' || tipo === 'acceptance').map((t) => (
                 <option key={t.v} value={t.v}>
                   {t.r}
                 </option>

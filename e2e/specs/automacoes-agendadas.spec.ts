@@ -34,6 +34,26 @@ test.describe('Fase 10 · automações agendadas', () => {
     await expect(page.getByText(/lembrete\(s\)/)).toBeVisible();
   });
 
+  test('aviso de peça: cria pela tela um gatilho por evento, sem periodicidade, e liga', async ({
+    comoCoordenadorB: page,
+  }) => {
+    await page.goto('/configuracoes/automacoes');
+    await page.getByRole('button', { name: 'Nova automação' }).click();
+    const dialogo = page.getByRole('dialog', { name: 'Nova automação' });
+    await dialogo.getByRole('radio', { name: /Aviso: OS aguardando peça/ }).check();
+    // Por evento: não há periodicidade nem horário para escolher.
+    await expect(dialogo.getByLabel('Periodicidade', { exact: true })).toHaveCount(0);
+    await dialogo.getByLabel('Nome da automação').fill('Aviso ao compras e2e');
+    await dialogo
+      .getByRole('group', { name: 'Destinatários' })
+      .getByRole('checkbox', { name: 'Bruno do Beta' })
+      .check();
+    await dialogo.getByRole('button', { name: 'Criar automação' }).click();
+    await expect(page.getByText('Automação criada e ligada')).toBeVisible();
+    const item = page.getByRole('listitem').filter({ hasText: 'Aviso ao compras e2e' });
+    await expect(item).toContainText('Ligada');
+  });
+
   test('5W2H: a tarefa chega em /tarefas e é concluída pelo responsável', async ({
     comoCoordenadorB: page,
   }) => {

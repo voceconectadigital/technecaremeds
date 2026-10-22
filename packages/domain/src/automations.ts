@@ -272,7 +272,8 @@ export const ACTIONS: readonly ActionDefinition[] = Object.freeze([
     label: 'Lembrete',
     required: ['recipients', 'title'],
     permission: 'automation.read',
-    triggers: ['schedule'],
+    // Por relógio (lembrete periódico) ou por evento (aviso imediato, p.ex. OS aguardando peça).
+    triggers: ['schedule', 'event'],
   },
   {
     kind: 'create_task',

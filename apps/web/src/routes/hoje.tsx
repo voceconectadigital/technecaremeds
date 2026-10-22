@@ -33,6 +33,7 @@
  *    crescer conforme o dia — a pessoa perde a referência de onde as coisas
  *    ficam.
  */
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   AlertTriangle,
@@ -42,6 +43,7 @@ import {
   CloudOff,
   Inbox,
   PackageSearch,
+  FileCheck2,
   PauseCircle,
   Timer,
   Wrench,
@@ -55,18 +57,22 @@ import {
   Metric,
   MetricGrid,
   Section,
+  Select,
   SkeletonList,
   StatusChip,
   Thumb,
   cn,
 } from '@aurora/ui';
 import {
+  customersList,
   inventoryBalances,
+  quotesList,
   requestsQueue,
   scheduleBuckets,
   workOrdersBoard,
   type AgendaBucketItem,
   type BoardColumn,
+  type QuoteRow,
   type ServiceRequestRow,
   type StockBalance,
 } from '@aurora/contracts';
@@ -93,9 +99,14 @@ function FalhaDeCarga({ onTentar }: { onTentar: () => void }) {
   );
 }
 
+/** `{ customer }` só quando há um cliente escolhido: sem ele a rota devolve tudo. */
+const doCliente = (cliente: string) => (cliente ? { customer: cliente } : {});
+
 export function HojePage() {
   const { data: sessao } = useSessionQuery();
   const { can } = usePermissions();
+  // Reunião de 16/10/2026: o gestor da plataforma vê todos os clientes ou escolhe um.
+  const [cliente, setCliente] = useState('');
 
   const primeiroNome = (sessao?.user.name ?? '').split(/\s+/)[0];
 
@@ -106,23 +117,56 @@ export function HojePage() {
       actions={<DataDeHoje />}
     >
       <div className="flex flex-col gap-8">
-        {can('work_order.read') && <PainelDoTurno />}
+        {can('customer.read') && <SeletorDeCliente valor={cliente} onChange={setCliente} />}
 
-        {can('work_order.read') && <FluxoDaOperacao />}
+        {can('work_order.read') && <PainelDoTurno cliente={cliente} />}
+
+        {can('work_order.read') && <FluxoDaOperacao cliente={cliente} />}
+
+        {can('work_order.read') && <PendenciasDeEspera cliente={cliente} />}
 
         <div className="grid gap-5 lg:grid-cols-3">
-          {can('service_request.read') && <BlocoTriagem className="lg:col-span-1" />}
-          {can('work_order.read') && <BlocoQuadro className="lg:col-span-2" />}
+          {can('service_request.read') && <BlocoTriagem className="lg:col-span-1" cliente={cliente} />}
+          {can('work_order.read') && <BlocoQuadro className="lg:col-span-2" cliente={cliente} />}
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">
-          {can('work_order.read') && <BlocoAgenda className="lg:col-span-2" />}
-          {can('work_order.read') && <BlocoParadas className="lg:col-span-1" />}
+          {can('work_order.read') && <BlocoAgenda className="lg:col-span-2" cliente={cliente} />}
+          {can('work_order.read') && <BlocoParadas className="lg:col-span-1" cliente={cliente} />}
         </div>
 
         {can('inventory.read') && <BlocoEstoque />}
       </div>
     </AppShell>
+  );
+}
+
+/**
+ * Filtro de cliente do Hoje. Só aparece para quem enxerga mais de um: a clínica
+ * que atende só a si mesma não ganha um seletor com uma opção.
+ */
+function SeletorDeCliente({ valor, onChange }: { valor: string; onChange: (v: string) => void }) {
+  const { data } = useApiQuery(customersList) as {
+    data: { items: Array<{ id: string; name: string }>; single_customer: boolean } | undefined;
+  };
+  const clientes = data?.items ?? [];
+  if (data?.single_customer || clientes.length < 2) return null;
+  return (
+    <div className="flex justify-end">
+      <Select
+        aria-label="Cliente"
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-10 w-full sm:w-64"
+      >
+        <option value="">Todos os clientes</option>
+        {clientes.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </Select>
+    </div>
   );
 }
 
@@ -137,12 +181,14 @@ export function HojePage() {
  * os baldes da agenda), então a faixa não custa nenhuma ida extra ao servidor —
  * o que importa numa tela que abre a cada troca de aba.
  */
-function PainelDoTurno() {
-  const { data: quadro, isLoading: carregandoQuadro } = useApiQuery(workOrdersBoard) as {
+function PainelDoTurno({ cliente }: { cliente: string }) {
+  const { data: quadro, isLoading: carregandoQuadro } = useApiQuery(workOrdersBoard, {
+    query: doCliente(cliente),
+  }) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
   };
-  const { data: baldes } = useApiQuery(scheduleBuckets) as {
+  const { data: baldes } = useApiQuery(scheduleBuckets, { query: doCliente(cliente) }) as {
     data: { counts: Record<string, number>; items: AgendaBucketItem[] } | undefined;
   };
   const { data: faltando } = useApiQuery(inventoryBalances, { query: { below_minimum: 'true' } }) as {
@@ -234,6 +280,55 @@ function PainelDoTurno() {
   );
 }
 
+/**
+ * Os dois painéis que a reunião de 16/10/2026 pediu para quem solicita: o que
+ * espera a APROVAÇÃO de um orçamento e o que espera PEÇA. Os dois são "a bola
+ * está com alguém" — e a pergunta de quem abriu o chamado é de quem é a vez.
+ */
+function PendenciasDeEspera({ cliente }: { cliente: string }) {
+  const { can } = usePermissions();
+  const { data: quadro } = useApiQuery(workOrdersBoard, { query: doCliente(cliente) }) as {
+    data: { columns: BoardColumn[] } | undefined;
+  };
+  const { data: orcamentos } = useApiQuery(
+    quotesList,
+    { query: cliente ? { customerId: cliente } : {} },
+    { enabled: can('quote.read') }
+  ) as { data: { items: QuoteRow[] } | undefined };
+
+  const aguardandoPeca = (quadro?.columns ?? []).reduce(
+    (soma, coluna) =>
+      soma + (coluna.by_wait_reason ?? []).filter((m) => m.key === 'parts').reduce((s, m) => s + m.total, 0),
+    0
+  );
+  const aguardandoAprovacao = (orcamentos?.items ?? []).filter(
+    (q) => q.status === 'sent' || q.status === 'viewed'
+  ).length;
+
+  return (
+    <MetricGrid columns={2}>
+      {can('quote.read') && (
+        <Metric
+          label="Orçamentos aguardando aprovação"
+          value={orcamentos ? aguardandoAprovacao : '—'}
+          hint={aguardandoAprovacao === 0 ? 'Nenhum orçamento esperando resposta' : 'A decisão é do cliente'}
+          icon={<FileCheck2 className="size-4" />}
+          tone={aguardandoAprovacao > 0 ? 'warn' : 'good'}
+          action={<AtalhoDeCartao to="/orcamentos">Ver orçamentos</AtalhoDeCartao>}
+        />
+      )}
+      <Metric
+        label="Equipamentos aguardando peças"
+        value={quadro ? aguardandoPeca : '—'}
+        hint={aguardandoPeca === 0 ? 'Nenhuma ordem esperando peça' : 'Ordens paradas por falta de peça'}
+        icon={<PackageSearch className="size-4" />}
+        tone={aguardandoPeca > 0 ? 'warn' : 'good'}
+        action={<AtalhoDeCartao to="/ordens">Ver as ordens</AtalhoDeCartao>}
+      />
+    </MetricGrid>
+  );
+}
+
 function AtalhoDeCartao({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
@@ -252,8 +347,10 @@ function AtalhoDeCartao({ to, children }: { to: string; children: React.ReactNod
 
 /* -------------------------------------------------------------------------- */
 
-function BlocoTriagem({ className }: { className?: string }) {
-  const { data, isLoading, isError, refetch } = useApiQuery(requestsQueue, { query: { limit: 6 } }) as {
+function BlocoTriagem({ className, cliente }: { className?: string; cliente: string }) {
+  const { data, isLoading, isError, refetch } = useApiQuery(requestsQueue, {
+    query: { limit: 6, ...doCliente(cliente) },
+  }) as {
     data: { items: ServiceRequestRow[] } | undefined;
     isLoading: boolean;
     isError: boolean;
@@ -336,8 +433,10 @@ const COR_DA_CATEGORIA: Record<string, string> = {
 const ENCERRADAS = new Set(['done', 'closed', 'cancelled']);
 const FILTRAVEIS = new Set(['open', 'in_progress', 'waiting', 'done']);
 
-function BlocoQuadro({ className }: { className?: string }) {
-  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard) as {
+function BlocoQuadro({ className, cliente }: { className?: string; cliente: string }) {
+  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard, {
+    query: doCliente(cliente),
+  }) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
     isError: boolean;
@@ -456,8 +555,10 @@ function BlocoQuadro({ className }: { className?: string }) {
  * Mostra hoje e atrasadas juntas, nessa ordem, porque é assim que a coordenação
  * decide: o atrasado entra no dia de alguém: ele não espera um segundo momento.
  */
-function BlocoAgenda({ className }: { className?: string }) {
-  const { data, isLoading, isError, refetch } = useApiQuery(scheduleBuckets) as {
+function BlocoAgenda({ className, cliente }: { className?: string; cliente: string }) {
+  const { data, isLoading, isError, refetch } = useApiQuery(scheduleBuckets, {
+    query: doCliente(cliente),
+  }) as {
     data: { counts: Record<string, number>; items: AgendaBucketItem[] } | undefined;
     isLoading: boolean;
     isError: boolean;
@@ -550,8 +651,10 @@ function BlocoAgenda({ className }: { className?: string }) {
  * "cinco esperando peça, duas esperando o cliente" diz o que fazer. É a
  * pergunta que o §09 destravou e que a referência não respondia.
  */
-function BlocoParadas({ className }: { className?: string }) {
-  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard) as {
+function BlocoParadas({ className, cliente }: { className?: string; cliente: string }) {
+  const { data, isLoading, isError, refetch } = useApiQuery(workOrdersBoard, {
+    query: doCliente(cliente),
+  }) as {
     data: { columns: BoardColumn[] } | undefined;
     isLoading: boolean;
     isError: boolean;

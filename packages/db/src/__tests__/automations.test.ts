@@ -428,3 +428,80 @@ describe('isolamento', () => {
     expect(await withTenant(t.db, ctx2, (s) => listRules(s))).toHaveLength(0);
   });
 });
+
+describe('aviso imediato: OS aguardando peça (reunião de 16/10/2026)', () => {
+  let regraPeca: string;
+
+  it('a OS que passa a aguardar peça emite o evento COM o motivo de espera', async () => {
+    const { transitionWorkOrder } = await import('../work-orders');
+    const motivo = await withTenant(t.db, ctx, (s) =>
+      s.query<{ id: string }>(`SELECT id FROM aurora.wait_reasons WHERE key = 'parts'`)
+    );
+    expect(motivo).toHaveLength(1);
+
+    await withTenant(t.db, ctx, async (s) => {
+      await transitionWorkOrder(s, os, 'in_progress');
+      await transitionWorkOrder(s, os, 'waiting', { waitReasonId: motivo[0]!.id });
+    });
+
+    const [ev] = await withTenant(t.db, ctx, (s) =>
+      s.query<{ payload: { to: string; wait_reason_key?: string; number: string } }>(
+        `SELECT payload FROM aurora.domain_events
+          WHERE aggregate_id = $1 AND type = 'work_order.blocked'
+          ORDER BY occurred_at DESC LIMIT 1`,
+        [os]
+      )
+    );
+    expect(ev!.payload.to).toBe('waiting');
+    expect(ev!.payload.wait_reason_key).toBe('parts');
+  });
+
+  it('o lembrete por evento avisa quem foi escolhido, com o número da OS, e só para peça', async () => {
+    regraPeca = await withTenant(t.db, ctx, (s) =>
+      createRule(s, {
+        name: 'Aviso ao compras',
+        triggerKind: 'event',
+        triggerEvent: 'work_order.blocked',
+        conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
+        actions: [
+          { kind: 'reminder', params: { recipients: [TEC_MEM], title: 'OS {{number}} aguardando peça' } },
+        ],
+      })
+    );
+    await withTenant(t.db, ctx, (s) => simulateRule(s, regraPeca));
+    await withTenant(t.db, ctx, (s) => activateRule(s, regraPeca));
+
+    const deOutroMotivo = await withTenant(t.db, ctx, (s) =>
+      runAutomations(s, {
+        id: newId(),
+        type: 'work_order.blocked',
+        aggregateType: 'work_order',
+        aggregateId: os,
+        payload: { number: 'WO-9', from: 'in_progress', to: 'waiting', wait_reason_key: 'customer' },
+      })
+    );
+    expect(deOutroMotivo.find((e) => e.ruleId === regraPeca)!.outcome).toBe('skipped_conditions');
+
+    const dePeca = await withTenant(t.db, ctx, (s) =>
+      runAutomations(s, {
+        id: newId(),
+        type: 'work_order.blocked',
+        aggregateType: 'work_order',
+        aggregateId: os,
+        payload: { number: 'WO-9', from: 'in_progress', to: 'waiting', wait_reason_key: 'parts' },
+      })
+    );
+    const minha = dePeca.find((e) => e.ruleId === regraPeca)!;
+    expect(minha.outcome).toBe('matched');
+    expect(minha.actionsRun[0]!.ok).toBe(true);
+
+    const avisos = await withTenant(t.db, ctx, (s) =>
+      s.query<{ title: string }>(
+        `SELECT title FROM aurora.notifications
+          WHERE membership_id = $1 AND type_key = 'automation.reminder'`,
+        [TEC_MEM]
+      )
+    );
+    expect(avisos.map((a) => a.title)).toContain('OS WO-9 aguardando peça');
+  });
+});

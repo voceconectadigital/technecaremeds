@@ -168,13 +168,17 @@ export class ScheduleController {
   /** Lente LISTA: os três baldes do painel lateral. */
   @Get('buckets')
   @RequirePermissions('work_order.read')
-  async sidePanel(@Req() req: AuroraRequest): Promise<{
+  async sidePanel(
+    @Req() req: AuroraRequest,
+    @Query('customer') customer?: string
+  ): Promise<{
     labels: Record<string, string>;
     counts: Record<string, number>;
     items: unknown[];
   }> {
     const ctx = req.auroraContext!;
-    const items = await withTenant(this.db, ctx, (s) => buckets(s));
+    const customerId = customer === undefined || customer === '' ? null : uuidParam(customer, 'customer');
+    const items = await withTenant(this.db, ctx, (s) => buckets(s, new Date(), customerId));
 
     // Os contadores vêm prontos: o painel mostra o número em cada balde antes
     // de qualquer rolagem, e fazer a tela contar significaria carregar a lista

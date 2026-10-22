@@ -412,6 +412,18 @@ describe('fila de triagem', () => {
     expect(['emergency', 'very_urgent', 'urgent', 'low', 'none']).toContain(primeiro.priority);
   });
 
+  it('filtra por cliente (tela Hoje do gestor): o cliente certo traz a fila, outro traz nada', async () => {
+    const todas = await withTenant(t.db, ctxA, (s) => triageQueue(s));
+    const doCliente = await withTenant(t.db, ctxA, (s) => triageQueue(s, { customerId: cliente }));
+    expect(doCliente.length).toBeGreaterThan(0);
+    expect(doCliente.every((f) => f.customer_id === cliente)).toBe(true);
+    expect(doCliente.length).toBeLessThanOrEqual(todas.length);
+    const deOutro = await withTenant(t.db, ctxA, (s) =>
+      triageQueue(s, { customerId: '0193d900-0003-7000-8000-0000000000ff' })
+    );
+    expect(deOutro).toEqual([]);
+  });
+
   it('a fila de uma organização não mostra a outra', async () => {
     const filaB = await withTenant(t.db, ctxB, (s) => triageQueue(s));
     expect(filaB.every((f) => f.summary === 'Primeira da B')).toBe(true);

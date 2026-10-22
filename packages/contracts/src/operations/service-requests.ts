@@ -152,7 +152,10 @@ export const requestsQueue = defineOperation({
     'Só o que aguarda decisão: enviada, em triagem ou aguardando informação. A ordem é a da ' +
     '§08 — prioridade primeiro, idade como desempate.',
   permissions: ['service_request.read'],
-  query: z.object({ limit: z.coerce.number().int().positive().max(500).optional() }),
+  query: z.object({
+    limit: z.coerce.number().int().positive().max(500).optional(),
+    customer: Uuid.optional(),
+  }),
   response: z.object({ items: z.array(ServiceRequestRow) }),
 });
 

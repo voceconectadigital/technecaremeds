@@ -225,6 +225,17 @@ describe('férias bloqueiam, e arrastam consigo o que estava marcado', () => {
     expect(baldes.find((b) => b.work_order_id === osMarcada)?.bucket).toBe('to_reschedule');
   });
 
+  it('os baldes filtram por cliente (tela Hoje do gestor)', async () => {
+    const agora = new Date('2025-04-01T12:00:00Z');
+    const todos = await withTenant(t.db, ctx, (s) => buckets(s, agora));
+    const doCliente = await withTenant(t.db, ctx, (s) => buckets(s, agora, cliente));
+    expect(doCliente.length).toBe(todos.length);
+    const deOutro = await withTenant(t.db, ctx, (s) =>
+      buckets(s, agora, '0193d900-0003-7000-8000-0000000000ff')
+    );
+    expect(deOutro).toEqual([]);
+  });
+
   it('a janela NÃO é apagada — é ela que o coordenador usa para remarcar perto', async () => {
     const [w] = await withTenant(t.db, ctx, (s) =>
       s.query<{ scheduled_start: Date | null }>(

@@ -137,11 +137,20 @@ export class ServiceRequestsController {
   /** Fila de triagem, já na ordem de prioridade e idade. */
   @Get('queue')
   @RequirePermissions('service_request.read')
-  async queue(@Req() req: AuroraRequest, @Query('limit') limit?: string): Promise<{ items: unknown[] }> {
+  async queue(
+    @Req() req: AuroraRequest,
+    @Query('limit') limit?: string,
+    @Query('customer') customer?: string
+  ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const max = Math.min(Number.parseInt(limit ?? '200', 10) || 200, 500);
+    const customerId = customer === undefined || customer === '' ? null : uuidParam(customer, 'customer');
     const items = await withTenant(this.db, ctx, (s) =>
-      triageQueue(s, { limit: max, scopeMembershipId: escopoRestrito(ctx) ? ctx.membershipId : null })
+      triageQueue(s, {
+        limit: max,
+        scopeMembershipId: escopoRestrito(ctx) ? ctx.membershipId : null,
+        customerId,
+      })
     );
     return { items };
   }

@@ -254,6 +254,20 @@ Auditoria completa do sistema — achados, correções e evidência em `docs/AUD
 | PF2 | Rodada de pendências do pente-fino (24 itens + revisão adversarial da PR #27) | — | VALIDADO | ver `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md` | 0074–0077 (locais) | `pente-fino-campo`, `pente-fino-estoque2`, `pente-fino-orcamento2`, `pente-fino-indicadores` + suítes existentes | PR da rodada | P-01…P-16 seguem com o Anderson |
 | I-05 | Publicar build validado, smoke remoto | PARCIAL | BLOQUEADO — CLIENTE | — | — | — | — | migrations **0060–0077** não aplicadas em banco remoto; sem deploy de backend (decisão de 16/10 mantida) |
 
+## Rodada de pendências da reunião (21/10/2026)
+
+Conferência item a item em `docs/VALIDACAO-REUNIAO-2026-10-16.md`. Fechado nesta rodada:
+
+| ID | Demanda | Status | Arquivos | Testes |
+| --- | --- | --- | --- | --- |
+| H-01 | Filtro de cliente na tela Hoje (`?customer=` na fila de triagem e nos baldes da agenda) | IMPLEMENTADO | web `routes/hoje.tsx`, `hoje-fluxo.tsx`; api `requests`, `schedule`; db `triageQueue`, `buckets` | suítes existentes |
+| H-02 | Painéis "orçamentos aguardando aprovação" e "equipamentos aguardando peças" | IMPLEMENTADO | web `routes/hoje.tsx` (`PendenciasDeEspera`) | — |
+| A-06 | Automação "Aviso: OS aguardando peça" (evento `work_order.blocked` com `wait_reason_key`; lembrete por evento com `{{number}}`) | IMPLEMENTADO | db `work-orders.ts`, `automations.ts`; domain `automations.ts`, `automation-schedule.ts`; web `automacoes/nova.tsx` | `db/automations.test`, `api-automacoes-agendadas` |
+| P-07 | "Aceite" sai das opções e dos filtros de procedimento | IMPLEMENTADO | web `planos/procedimentos.tsx` | — |
+| U-12 | Selo de profissão sobre o avatar em Usuários | IMPLEMENTADO | web `configuracoes/profissao.ts`, `membros.tsx` | `profissao.test` |
+| Z-06 | Teste de automações agendadas independente do dia da semana | IMPLEMENTADO | `api-automacoes-agendadas.test.ts` | — |
+| U-09 | Senha inicial no "Adicionar usuário" | BLOQUEADO — DECISÃO | `aurora.definir_senha` é negada à API de propósito (0045) | — |
+
 ---
 
 ## Não inventar (registro)
