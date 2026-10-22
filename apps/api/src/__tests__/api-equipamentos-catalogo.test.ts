@@ -285,6 +285,9 @@ describe('cliente → setor → equipamento, com chip', () => {
     expect(
       (await http.patch(`/v1/assets/${r.body.id}`).set(auth(GESTORA)).send({ useful_life_years: 0 })).status
     ).toBe(422);
+    // Este equipamento só existe para este teste: sai de cena para não entrar nos filtros e
+    // nas listas dos testes seguintes (que contam equipamentos exatos).
+    await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = $1`, [r.body.id]);
   });
 
   it('chip repetido → 409; chip pela metade → 422', async () => {

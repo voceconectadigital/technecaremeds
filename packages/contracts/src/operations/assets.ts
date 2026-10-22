@@ -384,7 +384,7 @@ const CamposDoEquipamento = {
   /** Data de aquisição (AAAA-MM-DD) e vida útil em anos: base da depreciação automática. */
   acquired_at: z
     .string()
-    .regex(/^d{4}-d{2}-d{2}$/, 'use AAAA-MM-DD')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'use AAAA-MM-DD')
     .nullable()
     .optional(),
   useful_life_years: z.number().int().min(1).max(100).nullable().optional(),
