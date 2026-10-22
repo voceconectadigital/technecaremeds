@@ -89,6 +89,8 @@ export const assetsList = defineOperation({
     /** Tipo (categoria). */
     category: Uuid.optional(),
     model: Uuid.optional(),
+    /** Token da etiqueta QR (leitura por câmera em `/q/:token`): devolve só o equipamento dela. */
+    qr: z.string().max(80).optional(),
     /** Nome do fabricante, exato. */
     manufacturer: z.string().max(200).optional(),
     criticality: Uuid.optional(),
@@ -209,6 +211,22 @@ export const AssetDetail = z.object({
    * diferente de zero, que diria "novo".
    */
   age_years: z.number().nullable(),
+  /**
+   * Depreciação em linha reta (conversa com o cliente, 21/10/2026). Nula sem data de aquisição
+   * ou vida útil. Os campos de valor vêm nulos para quem não tem `asset.read_financials`.
+   */
+  depreciation: z
+    .object({
+      elapsedYears: z.number(),
+      remainingYears: z.number(),
+      percentDepreciated: z.number(),
+      fullyDepreciated: z.boolean(),
+      annualDepreciation: z.number().nullable(),
+      accumulatedDepreciation: z.number().nullable(),
+      bookValue: z.number().nullable(),
+    })
+    .nullable()
+    .optional(),
   transfers: z.array(AssetTransfer),
 
   created_at: Timestamp,
@@ -429,6 +447,38 @@ export const assetsUpdate = defineOperation({
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'validation_failed', 'conflict'],
 });
+
+export const assetIndicators = defineOperation({
+  operationId: 'assets.indicators',
+  method: 'GET',
+  path: '/assets/:id/indicators',
+  summary: 'Indicadores pontuais do equipamento (ficha de vida)',
+  description:
+    'OS, MTTR, MTBF e tempo parado SÓ deste equipamento, no período (padrão 365 dias). ' +
+    'Usa a mesma definição das métricas do painel; MTTR/MTBF vêm nulos sem amostra suficiente ' +
+    '(MTBF exige duas corretivas) — zero diria "sem falha", e isso seria afirmar demais.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  query: z.object({ days: z.coerce.number().int().min(7).max(1825).optional() }),
+  response: z.object({
+    period: z.object({ from: z.string(), to: z.string(), days: z.number() }),
+    work_orders: z.object({
+      total: z.number(),
+      corrective: z.number(),
+      preventive: z.number(),
+      open: z.number(),
+    }),
+    mttr_minutes: z.number().nullable(),
+    mttr_samples: z.number(),
+    mtbf_minutes: z.number().nullable(),
+    mtbf_samples: z.number(),
+    downtime_minutes: z.number(),
+    last_corrective_at: z.string().nullable(),
+  }),
+  errors: ['not_found'],
+});
+
+export type AssetIndicators = z.infer<typeof assetIndicators.response>;
 
 export const assetsTransfer = defineOperation({
   operationId: 'assets.transfer',

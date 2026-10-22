@@ -99,6 +99,9 @@ const AtivosPage = preguicosa(() =>
 const AtivoPage = preguicosa(() =>
   import('../features/ativos/ficha').then((m) => ({ default: m.AtivoPage }))
 );
+const EtiquetaPage = preguicosa(() =>
+  import('../features/ativos/etiqueta').then((m) => ({ default: m.EtiquetaPage }))
+);
 const StorePage = preguicosa(() => import('../features/store/store').then((m) => ({ default: m.StorePage })));
 const EstoquePage = preguicosa(() =>
   import('../features/estoque/lista').then((m) => ({ default: m.EstoquePage }))
@@ -302,6 +305,8 @@ export const routeTree = raiz.addChildren([
     component: AtivoPage,
     beforeLoad: exigirSessao,
   }),
+  // O destino do QR da etiqueta: lido pela câmera, abre o equipamento (exige sessão).
+  rotaProtegida('/q/$token', EtiquetaPage),
   rotaProtegida('/estoque', EstoquePage),
   rotaProtegida('/store', StorePage),
   rotaProtegida('/ferramentas', FerramentasPage),

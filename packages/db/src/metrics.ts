@@ -37,6 +37,8 @@ export interface MetricFilters {
   /** Subárvore de locais, por prefixo do caminho materializado. */
   locationPath?: string | null;
   assetCategoryId?: string | null;
+  /** Um equipamento só (ficha de vida do ativo). */
+  assetId?: string | null;
   teamId?: string | null;
   membershipId?: string | null;
   /**
@@ -56,6 +58,7 @@ function filterRecord(f: MetricFilters): Record<string, string | null> {
     customerId: f.customerId ?? null,
     locationPath: f.locationPath ?? null,
     assetCategoryId: f.assetCategoryId ?? null,
+    assetId: f.assetId ?? null,
     teamId: f.teamId ?? null,
     membershipId: f.membershipId ?? null,
   };
@@ -76,6 +79,7 @@ function factFilter(f: MetricFilters, from = 1): { sql: string; params: unknown[
     f.teamId ?? null,
     f.membershipId ?? null,
     ...scopeParams(f),
+    f.assetId ?? null,
   ];
   const sql = `
       AND ($${from}::uuid IS NULL OR f.customer_id = $${from})
@@ -83,7 +87,8 @@ function factFilter(f: MetricFilters, from = 1): { sql: string; params: unknown[
       AND ($${from + 2}::uuid IS NULL OR f.asset_category_id = $${from + 2})
       AND ($${from + 3}::uuid IS NULL OR f.team_id = $${from + 3})
       AND ($${from + 4}::uuid IS NULL OR f.assignee_membership_id = $${from + 4})
-      AND ${scopeSql('f.customer_id', 'f.location_path', from + 5)}`;
+      AND ${scopeSql('f.customer_id', 'f.location_path', from + 5)}
+      AND ($${from + 7}::uuid IS NULL OR f.asset_id = $${from + 7})`;
   return { sql, params: p };
 }
 

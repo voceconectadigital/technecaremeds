@@ -273,6 +273,10 @@ describe('cliente → setor → equipamento, com chip', () => {
     expect(ficha.body.useful_life_years).toBe(10);
     expect(ficha.body.purchase_value).toBe('25000.50');
     expect(ficha.body.acquisition_invoice).toBe('NF-123456');
+    // Depreciação em linha reta, calculada no servidor a partir da data e da vida útil.
+    expect(ficha.body.depreciation.percentDepreciated).toBeGreaterThan(0);
+    expect(ficha.body.depreciation.percentDepreciated).toBeLessThanOrEqual(100);
+    expect(ficha.body.depreciation.bookValue).toBeLessThan(25000.5);
 
     // Edita: a NF muda; a vida útil inválida é recusada.
     expect(
@@ -288,6 +292,27 @@ describe('cliente → setor → equipamento, com chip', () => {
     // Este equipamento só existe para este teste: sai de cena para não entrar nos filtros e
     // nas listas dos testes seguintes (que contam equipamentos exatos).
     await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = $1`, [r.body.id]);
+  });
+
+  it('indicadores pontuais do equipamento: contagens, e MTTR/MTBF nulos sem amostra (nunca zero)', async () => {
+    const r = await http.get(`/v1/assets/${ativoUti}/indicators`).set(auth(GESTORA));
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.work_orders).toEqual({ total: 0, corrective: 0, preventive: 0, open: 0 });
+    expect(r.body.mttr_minutes).toBeNull();
+    expect(r.body.mtbf_minutes).toBeNull();
+    expect(r.body.downtime_minutes).toBe(0);
+    expect(r.body.period.days).toBe(365);
+    // Equipamento de outra organização: 404, como em qualquer outra rota do ativo.
+    expect((await http.get(`/v1/assets/${ativoDeB}/indicators`).set(auth(GESTORA))).status).toBe(404);
+  });
+
+  it('a etiqueta lida pela câmera acha SÓ o equipamento dela; token estranho não acha nada', async () => {
+    const ficha = await http.get(`/v1/assets/${ativoUti}`).set(auth(GESTORA));
+    const token = ficha.body.qr_token as string;
+    const achou = await http.get(`/v1/assets?qr=${token}`).set(auth(GESTORA));
+    expect(achou.body.items.map((a: { id: string }) => a.id)).toEqual([ativoUti]);
+    const nada = await http.get('/v1/assets?qr=lixo').set(auth(GESTORA));
+    expect(nada.body.items).toEqual([]);
   });
 
   it('chip repetido → 409; chip pela metade → 422', async () => {

@@ -118,6 +118,70 @@ export function assetAgeYears(
 }
 
 /**
+ * Depreciação em LINHA RETA (o "cálculo comum de depreciação de bens", pedido do
+ * cliente em 21/10/2026): o valor depreciável (compra − residual) se distribui por
+ * igual ao longo da vida útil, contada a partir da data de aquisição.
+ *
+ * Duas coisas são devolvidas separadas de propósito:
+ *   · o PERCENTUAL e os ANOS — dependem só de data e vida útil, e a barra da ficha os
+ *     mostra a quem pode ver o equipamento;
+ *   · os VALORES — dependem do valor de compra, que é dado financeiro. Chegam `null`
+ *     quando o valor não foi informado (ou quem pede não pode vê-lo: a API nem o lê).
+ *
+ * `null` quando faltam data de aquisição válida ou vida útil: sem esses dois não há
+ * o que depreciar, e "0 % depreciado" seria afirmar que o bem é novo.
+ */
+export interface Depreciation {
+  /** Anos desde a aquisição, limitado à vida útil. */
+  elapsedYears: number;
+  /** Anos que restam (nunca negativo). */
+  remainingYears: number;
+  /** 0–100, limitado. */
+  percentDepreciated: number;
+  fullyDepreciated: boolean;
+  /** Depreciação por ano, e acumulada: `null` sem valor de compra. */
+  annualDepreciation: number | null;
+  accumulatedDepreciation: number | null;
+  /** Valor contábil atual (compra − acumulada): `null` sem valor de compra. */
+  bookValue: number | null;
+}
+
+export function straightLineDepreciation(input: {
+  acquiredAt: string | null | undefined;
+  usefulLifeYears: number | null | undefined;
+  purchaseValue?: number | null;
+  residualValue?: number | null;
+  now: Date;
+}): Depreciation | null {
+  const { acquiredAt, usefulLifeYears, now } = input;
+  if (!acquiredAt || !usefulLifeYears || usefulLifeYears <= 0) return null;
+  const inicio = new Date(acquiredAt);
+  if (Number.isNaN(inicio.getTime())) return null;
+
+  const decorrido = Math.max(0, (now.getTime() - inicio.getTime()) / (365.2425 * 24 * 60 * 60 * 1000));
+  const anos = Math.min(decorrido, usefulLifeYears);
+  const percentual = (anos / usefulLifeYears) * 100;
+
+  const compra = input.purchaseValue ?? null;
+  const residual = input.residualValue ?? 0;
+  const baseDepreciavel = compra === null ? null : Math.max(0, compra - residual);
+  const arred = (n: number) => Math.round(n * 100) / 100;
+
+  return {
+    elapsedYears: Math.round(anos * 100) / 100,
+    remainingYears: Math.round((usefulLifeYears - anos) * 100) / 100,
+    percentDepreciated: Math.round(percentual * 10) / 10,
+    fullyDepreciated: decorrido >= usefulLifeYears,
+    annualDepreciation: baseDepreciavel === null ? null : arred(baseDepreciavel / usefulLifeYears),
+    accumulatedDepreciation: baseDepreciavel === null ? null : arred((baseDepreciavel * percentual) / 100),
+    bookValue:
+      compra === null || baseDepreciavel === null
+        ? null
+        : arred(compra - (baseDepreciavel * percentual) / 100),
+  };
+}
+
+/**
  * Data ISO válida de verdade.
  *
  * `Date.parse('2025-02-30')` devolve um número perfeitamente válido — o
