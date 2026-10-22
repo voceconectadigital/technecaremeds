@@ -12452,6 +12452,160 @@
         ]
       }
     },
+    "/v1/evaluations/pending": {
+      "get": {
+        "operationId": "evaluations.pending",
+        "summary": "As OS concluídas que esta pessoa pediu e ainda não avaliou e assinou",
+        "description": "É o campo de pendências do solicitante: ao entrar, toda OS de qualquer tipo, pedida por ele, concluída e sem avaliação aparece aqui. Quem não pediu nenhuma recebe a lista vazia.",
+        "tags": [
+          "Evaluations"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/evaluations.controller.ts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "work_order_id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "number": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "type_label": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "completed_at": {
+                            "anyOf": [
+                              {
+                                "description": "Instante em ISO 8601 com fuso horário",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "asset_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "customer_name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "work_order_id",
+                          "number",
+                          "title",
+                          "type_label",
+                          "completed_at",
+                          "asset_name",
+                          "customer_name"
+                        ]
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/field/attachments/{id}/bytes": {
       "put": {
         "operationId": "FieldUploadController.bytes",
@@ -46383,6 +46537,317 @@
                   },
                   "required": [
                     "id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/work-orders/{id}/evaluation": {
+      "get": {
+        "operationId": "workOrders.evaluation",
+        "summary": "A avaliação desta OS e se esta pessoa ainda pode avaliá-la",
+        "tags": [
+          "Evaluations"
+        ],
+        "x-aurora-permissions": [
+          "work_order.read"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/evaluations.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "evaluation": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            },
+                            "work_order_id": {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            },
+                            "rating": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "maximum": 5
+                            },
+                            "comment": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "evaluated_at": {
+                              "description": "Instante em ISO 8601 com fuso horário",
+                              "type": "string"
+                            },
+                            "evaluator_name": {
+                              "type": "string"
+                            },
+                            "signature_id": {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "work_order_id",
+                            "rating",
+                            "comment",
+                            "evaluated_at",
+                            "evaluator_name",
+                            "signature_id"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "can_evaluate": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "evaluation",
+                    "can_evaluate"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "workOrders.evaluate",
+        "summary": "Avalia (1 a 5) e assina a OS, no mesmo ato",
+        "description": "Só quem pediu o atendimento avalia, só depois de concluída e uma vez só. A nota e a assinatura nascem juntas: a assinatura é pela sessão autenticada e guarda o resumo do que foi assinado.",
+        "tags": [
+          "Evaluations"
+        ],
+        "x-aurora-permissions": [
+          "service_request.create"
+        ],
+        "x-aurora-source": "apps/api/src/work-orders/evaluations.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "rating"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    },
+                    "signature_id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "signature_id"
                   ]
                 }
               }

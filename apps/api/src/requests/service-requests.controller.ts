@@ -20,6 +20,7 @@ import {
   duplicateHints,
   triageQueue,
   statusHistory,
+  assertSemAvaliacaoPendente,
   type Database,
 } from '@aurora/db';
 import {
@@ -119,6 +120,11 @@ export class ServiceRequestsController {
      * viram duas triagens, e alguém precisa descobrir qual fechar.
      */
     return runFieldOperation(this.db, req, 'POST /service-requests', body, async (s) => {
+      // Quem SOLICITA (e não executa) avalia e assina as OS concluídas antes de abrir outro
+      // chamado — o "obrigar" do cliente, 21/10/2026. A equipe (que edita OS) não é travada.
+      if (ctx.membershipId && !ctx.permissions.has('work_order.update')) {
+        await assertSemAvaliacaoPendente(s, ctx.membershipId);
+      }
       // Escopo de quem abre: cliente, setor e equipamento (16/10/2026).
       if (ctx.membershipId) {
         const alvo = await conferirAlvoDaSolicitacao(s, ctx.membershipId, entrada);

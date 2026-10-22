@@ -40,6 +40,7 @@ export const METRIC_KEYS = [
   'first_response_time',
   'opened_vs_closed',
   'service_rating',
+  'work_order_rating',
 ] as const;
 export type MetricKey = (typeof METRIC_KEYS)[number];
 
@@ -230,6 +231,20 @@ export const METRIC_DEFINITIONS: Readonly<Record<MetricKey, MetricDefinition>> =
     ],
     comparability:
       'derivada do modelo Advanced (valores de 117 % e 125 % só são possíveis com fluxos do período); não é o ICRS',
+  },
+  work_order_rating: {
+    key: 'work_order_rating',
+    label: 'Avaliação das ordens de serviço',
+    purpose: 'Percepção de quem pediu o atendimento, ordem de serviço por ordem de serviço',
+    numerator: 'soma das notas (1 a 5) dadas e assinadas pelo solicitante às OS avaliadas no período',
+    denominator: 'quantidade de OS avaliadas no período',
+    unit: 'score',
+    exclusions: [
+      'OS concluídas e ainda não avaliadas: ausência de nota não é nota baixa',
+      'avaliações dadas fora do período',
+    ],
+    comparability:
+      'é por ORDEM DE SERVIÇO e exige assinatura (pela sessão); o indicador "Avaliação da qualidade dos serviços" é por solicitação e não se soma a este',
   },
   service_rating: {
     key: 'service_rating',

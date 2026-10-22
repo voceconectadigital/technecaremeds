@@ -271,6 +271,19 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     source: 'metrics.slaCompliance',
   },
   {
+    key: 'work_order_rating',
+    label: 'Avaliação das ordens de serviço',
+    description:
+      'Média das notas de 1 a 5 que o solicitante deu e assinou a cada OS concluída, no período, com a distribuição.',
+    unit: 'score',
+    category: 'quality',
+    tiers: A,
+    state: 'ACTIVE',
+    targetDirection: 'HIGHER_IS_BETTER',
+    source: 'metrics.workOrderRating',
+    note: 'É por OS (a de "Avaliação da qualidade dos serviços" é por solicitação) e só conta OS avaliadas e assinadas.',
+  },
+  {
     key: 'service_rating',
     label: 'Avaliação da qualidade dos serviços',
     description: 'Média das avaliações de 1 a 5 dadas pelo solicitante, no período, com a distribuição.',

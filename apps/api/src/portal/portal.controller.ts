@@ -35,6 +35,7 @@ import {
   portalQuotes,
   portalSchedule,
   createServiceRequest,
+  assertSemAvaliacaoPendente,
   documentForPdf,
   portalQuoteDecision,
   portalRejectionReasons,
@@ -234,6 +235,9 @@ export class PortalController {
         [ctx.membershipId, pedido]
       );
       if (!meu) throw new ForbiddenError('portal.customer');
+
+      // Avaliar e assinar as OS concluídas vem ANTES de abrir um chamado novo (cliente, 21/10/2026).
+      await assertSemAvaliacaoPendente(s, ctx.membershipId!);
 
       const alvo = await conferirAlvoDaSolicitacao(s, ctx.membershipId!, {
         customerId: meu.customer_id,

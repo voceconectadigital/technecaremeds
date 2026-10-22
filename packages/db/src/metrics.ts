@@ -782,6 +782,55 @@ export async function serviceRating(
   });
 }
 
+/**
+ * Avaliação das ORDENS DE SERVIÇO (conversa com o cliente, 21/10/2026): a nota que o
+ * solicitante deu e assinou a cada OS concluída, no período em que a deu.
+ *
+ * Mesma forma e mesmas garantias de `serviceRating` — média, quantidade e distribuição saem
+ * da mesma lista, e sem avaliação a média é nula, nunca zero —, mas a unidade aqui é a OS e
+ * não a solicitação. Uma solicitação que gera três OS dá até três notas.
+ */
+export async function workOrderRating(
+  session: TenantSession,
+  period: Period,
+  filters: MetricFilters = {}
+): Promise<MetricResult<RatingData>> {
+  const sc = scopeSql('w.customer_id', `coalesce(l.path, '')`, 5);
+  const rows = await session.query<{ rating: number }>(
+    `SELECT e.rating
+       FROM aurora.work_order_evaluations e
+       JOIN aurora.work_orders w ON w.id = e.work_order_id
+       LEFT JOIN aurora.locations l ON l.id = w.location_id
+       LEFT JOIN aurora.assets a ON a.id = w.asset_id
+      WHERE e.evaluated_at >= $1 AND e.evaluated_at < $2
+        AND ($3::uuid IS NULL OR w.customer_id = $3)
+        AND ($4::text IS NULL OR coalesce(l.path, '') LIKE $4 || '%')
+        AND ${sc}
+        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+    [
+      period.from,
+      period.to,
+      filters.customerId ?? null,
+      filters.locationPath ?? null,
+      ...scopeParams(filters),
+      filters.assetCategoryId ?? null,
+    ]
+  );
+
+  const distribuicao = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  let soma = 0;
+  for (const r of rows) {
+    const nota = Number(r.rating);
+    distribuicao[String(nota) as keyof typeof distribuicao] += 1;
+    soma += nota;
+  }
+  return withDefinition('work_order_rating', period, filterRecord(filters), {
+    average: rows.length > 0 ? Number((soma / rows.length).toFixed(2)) : null,
+    count: rows.length,
+    distribution: distribuicao,
+  });
+}
+
 export interface OpenedVsClosedData extends Ratio {
   /** OS abertas no período (denominador). */
   opened: number;

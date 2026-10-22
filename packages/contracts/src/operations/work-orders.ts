@@ -441,3 +441,71 @@ export const workOrderStatuses = defineOperation({
   permissions: ['work_order.read'],
   response: z.object({ items: z.array(z.record(z.string(), z.unknown())) }),
 });
+
+/* -------------------------------------------------------------------------- */
+/* avaliação e assinatura da OS pelo solicitante (conversa com o cliente, 21/10/2026) */
+/* -------------------------------------------------------------------------- */
+
+export const PendingEvaluationRow = z.object({
+  work_order_id: Uuid,
+  number: z.string().nullable(),
+  title: z.string(),
+  type_label: z.string().nullable(),
+  completed_at: Timestamp.nullable(),
+  asset_name: z.string().nullable(),
+  customer_name: z.string(),
+});
+export type PendingEvaluationRow = z.infer<typeof PendingEvaluationRow>;
+
+export const WorkOrderEvaluationView = z.object({
+  id: Uuid,
+  work_order_id: Uuid,
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().nullable(),
+  evaluated_at: Timestamp,
+  evaluator_name: z.string(),
+  signature_id: Uuid,
+});
+export type WorkOrderEvaluationView = z.infer<typeof WorkOrderEvaluationView>;
+
+export const evaluationsPending = defineOperation({
+  operationId: 'evaluations.pending',
+  method: 'GET',
+  path: '/evaluations/pending',
+  summary: 'As OS concluídas que esta pessoa pediu e ainda não avaliou e assinou',
+  description:
+    'É o campo de pendências do solicitante: ao entrar, toda OS de qualquer tipo, pedida por ele, ' +
+    'concluída e sem avaliação aparece aqui. Quem não pediu nenhuma recebe a lista vazia.',
+  permissions: ['work_order.read'],
+  response: z.object({ items: z.array(PendingEvaluationRow), total: z.number().int() }),
+});
+
+export const workOrderEvaluation = defineOperation({
+  operationId: 'workOrders.evaluation',
+  method: 'GET',
+  path: '/work-orders/:id/evaluation',
+  summary: 'A avaliação desta OS e se esta pessoa ainda pode avaliá-la',
+  permissions: ['work_order.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ evaluation: WorkOrderEvaluationView.nullable(), can_evaluate: z.boolean() }),
+  errors: ['not_found'],
+});
+
+export const workOrderEvaluate = defineOperation({
+  operationId: 'workOrders.evaluate',
+  method: 'POST',
+  path: '/work-orders/:id/evaluation',
+  summary: 'Avalia (1 a 5) e assina a OS, no mesmo ato',
+  description:
+    'Só quem pediu o atendimento avalia, só depois de concluída e uma vez só. A nota e a assinatura ' +
+    'nascem juntas: a assinatura é pela sessão autenticada e guarda o resumo do que foi assinado.',
+  // Escrita guardada por permissão de ESCRITA: a mesma com que o solicitante abre chamado.
+  permissions: ['service_request.create'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({ rating: z.number().int().min(1).max(5), comment: z.string().trim().max(2000).optional() })
+    .strict(),
+  response: z.object({ id: Uuid, signature_id: Uuid }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
