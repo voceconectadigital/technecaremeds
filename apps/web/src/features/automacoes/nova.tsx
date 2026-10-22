@@ -152,7 +152,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
                 name: nome.trim(),
                 // Gatilho por EVENTO: dispara quando uma OS passa a aguardar peça.
                 triggerKind: 'event',
-                triggerEvent: 'work_order.status_changed',
+                triggerEvent: 'work_order.blocked',
                 conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
                 actions: [acao()],
               }

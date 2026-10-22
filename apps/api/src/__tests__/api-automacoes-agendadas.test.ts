@@ -254,7 +254,7 @@ describe('aviso imediato: OS aguardando peça (gatilho por evento)', () => {
     const r = await criar(ADMIN, {
       name: 'Aviso ao compras: OS aguardando peça',
       triggerKind: 'event',
-      triggerEvent: 'work_order.status_changed',
+      triggerEvent: 'work_order.blocked',
       conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
       actions: [{ kind: 'reminder', params: { recipients: [memO], title: 'OS {{number}} aguardando peça' } }],
     });
