@@ -22,7 +22,7 @@ import {
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
 
-type Modelo = 'scheduled_report' | 'reminder' | 'task' | '5w2h' | 'pdca';
+type Modelo = 'scheduled_report' | 'reminder' | 'parts_alert' | 'task' | '5w2h' | 'pdca';
 type Periodo = 'daily' | 'weekly' | 'monthly';
 
 const MODELOS: ReadonlyArray<{ key: Modelo; label: string; dica: string }> = [
@@ -32,6 +32,11 @@ const MODELOS: ReadonlyArray<{ key: Modelo; label: string; dica: string }> = [
     dica: 'Basic, Advanced ou Expert, na periodicidade escolhida',
   },
   { key: 'reminder', label: 'Lembrete', dica: 'Aviso para as pessoas escolhidas' },
+  {
+    key: 'parts_alert',
+    label: 'Aviso: OS aguardando peça',
+    dica: 'Avisa na hora, p.ex. o setor de compras, quando uma OS passa a aguardar peça',
+  },
   { key: 'task', label: 'Tarefa', dica: 'Tarefa com responsável e prazo' },
   { key: '5w2h', label: '5W2H', dica: 'O quê, por quê, onde, quando, quem, como, quanto' },
   { key: 'pdca', label: 'PDCA', dica: 'Planejar → Executar → Checar → Agir' },
@@ -113,6 +118,16 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
     if (modelo === 'reminder') {
       return { kind: 'reminder', params: { recipients: destinatarios, title: titulo, message: mensagem } };
     }
+    if (modelo === 'parts_alert') {
+      return {
+        kind: 'reminder',
+        params: {
+          recipients: destinatarios,
+          title: titulo.trim() || 'OS {{number}} aguardando peça',
+          message: mensagem.trim() || 'A ordem de serviço parou por falta de peça. Verifique a compra.',
+        },
+      };
+    }
     return {
       kind: 'create_task',
       params: {
@@ -131,13 +146,23 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
     setSalvando(true);
     try {
       const r = (await criar.mutateAsync({
-        body: {
-          name: nome.trim(),
-          triggerKind: 'schedule',
-          triggerCron: cronDe(periodo, hora, diaSemana, diaMes),
-          triggerTimezone: 'America/Sao_Paulo',
-          actions: [acao()],
-        },
+        body:
+          modelo === 'parts_alert'
+            ? {
+                name: nome.trim(),
+                // Gatilho por EVENTO: dispara quando uma OS passa a aguardar peça.
+                triggerKind: 'event',
+                triggerEvent: 'work_order.status_changed',
+                conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
+                actions: [acao()],
+              }
+            : {
+                name: nome.trim(),
+                triggerKind: 'schedule',
+                triggerCron: cronDe(periodo, hora, diaSemana, diaMes),
+                triggerTimezone: 'America/Sao_Paulo',
+                actions: [acao()],
+              },
       })) as { id: string };
       if (ligar) {
         await simular.mutateAsync({ params: { id: r.id }, body: { days: 30 } });
@@ -202,6 +227,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
           <Input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={200} />
         </Field>
 
+        {modelo !== 'parts_alert' && (
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Periodicidade">
             <Select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
@@ -236,6 +262,7 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
             <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
           </Field>
         </div>
+        )}
 
         {modelo === 'scheduled_report' && (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -283,18 +310,18 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
           </div>
         )}
 
-        {(modelo === 'reminder' || ehTarefa) && (
+        {(modelo === 'reminder' || modelo === 'parts_alert' || ehTarefa) && (
           <Field label={modelo === '5w2h' ? 'O quê (What)' : 'Título'}>
             <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={200} />
           </Field>
         )}
-        {modelo === 'reminder' && (
+        {(modelo === 'reminder' || modelo === 'parts_alert') && (
           <Field label="Mensagem">
             <Textarea value={mensagem} onChange={(e) => setMensagem(e.target.value)} rows={2} />
           </Field>
         )}
 
-        {(modelo === 'scheduled_report' || modelo === 'reminder') && (
+        {(modelo === 'scheduled_report' || modelo === 'reminder' || modelo === 'parts_alert') && (
           <fieldset>
             <legend className="mb-2 text-sm font-medium text-text">Destinatários</legend>
             <ul className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
@@ -363,7 +390,13 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
           <input type="checkbox" checked={ligar} onChange={(e) => setLigar(e.target.checked)} />
           Ligar agora (simula a agenda e ativa). Desmarcado, fica desligada.
         </label>
-        {(modelo === 'scheduled_report' || modelo === 'reminder') && (
+        {modelo === 'parts_alert' && (
+          <p role="note" className="rounded-control bg-surface-sunken px-3 py-2 text-xs text-muted">
+            Dispara quando uma OS passa a <strong>aguardar peça</strong>. No título e na mensagem, use{' '}
+            <code>{'{{number}}'}</code> para o número da OS.
+          </p>
+        )}
+        {(modelo === 'scheduled_report' || modelo === 'reminder' || modelo === 'parts_alert') && (
           <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
             Entrega na caixa de entrada do sistema. E-mail: fica na fila — não há transporte de e-mail
             configurado nesta instalação.

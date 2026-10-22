@@ -14,7 +14,21 @@
  *     permissão. O servidor aplica o escopo; a tela só o escolhe.
  */
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  Briefcase,
+  Building2,
+  Cog,
+  HeartPulse,
+  Plus,
+  ShoppingCart,
+  Stethoscope,
+  Trash2,
+  User,
+  UserPlus,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   Avatar,
   Button,
@@ -48,6 +62,7 @@ import { ApiError, Can, useApiMutation, useApiQuery, usePermissions, MARCA } fro
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { GavetaDeAcesso } from './acesso';
+import { iconeDaProfissao, type IconeDeProfissao } from './profissao';
 import { AlternadorDeConfiguracoes } from './alternador';
 
 /* -------------------------------------------------------------------------- */
@@ -128,6 +143,32 @@ interface Registro {
 
 /* -------------------------------------------------------------------------- */
 
+const ICONES_DE_PROFISSAO: Record<IconeDeProfissao, { Icone: LucideIcon; rotulo: string }> = {
+  doctor: { Icone: Stethoscope, rotulo: 'Médico(a)' },
+  nurse: { Icone: HeartPulse, rotulo: 'Enfermagem' },
+  engineer: { Icone: Cog, rotulo: 'Engenharia' },
+  technician: { Icone: Wrench, rotulo: 'Técnico(a)' },
+  buyer: { Icone: ShoppingCart, rotulo: 'Compras' },
+  manager: { Icone: Briefcase, rotulo: 'Gestão' },
+  executive: { Icone: Building2, rotulo: 'Direção' },
+  person: { Icone: User, rotulo: 'Profissão não informada' },
+};
+
+/** O selo da profissão sobre o avatar. Só mostra quando a profissão foi informada. */
+function IconeDeProfissao({ titulo }: { titulo: string | null }) {
+  if (!titulo?.trim()) return null;
+  const { Icone, rotulo } = ICONES_DE_PROFISSAO[iconeDaProfissao(titulo)];
+  return (
+    <span
+      title={`${rotulo}: ${titulo}`}
+      className="absolute -bottom-1 -right-1 grid size-5 place-items-center rounded-full border border-card-border bg-surface text-accent-text"
+    >
+      <Icone aria-hidden="true" className="size-3" />
+      <span className="sr-only">{rotulo}</span>
+    </span>
+  );
+}
+
 export function MembrosPage() {
   const [adicionando, setAdicionando] = useState(false);
   const [mudandoSituacao, setMudandoSituacao] = useState<{ membro: Member; para: Situacao } | null>(null);
@@ -196,7 +237,10 @@ export function MembrosPage() {
                     i > 0 && 'border-t border-border-subtle'
                   )}
                 >
-                  <Avatar name={nome} />
+                  <span className="relative">
+                    <Avatar name={nome} />
+                    <IconeDeProfissao titulo={m.job_title} />
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base text-text">
                       {nome}

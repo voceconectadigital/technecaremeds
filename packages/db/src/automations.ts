@@ -925,15 +925,18 @@ async function lembrar(
   p: Record<string, unknown>,
   event: IncomingEvent
 ): Promise<string> {
-  const slot = String(event.payload.slot);
+  // Por relógio o "slot" identifica a passada; por evento, o próprio evento.
+  const slot = String(event.payload.slot ?? event.id ?? `${event.type}:${event.aggregateId}`);
   const pessoas = await destinatariosAtivos(session, p.recipients);
+  // {{number}} vira o número da OS do evento (ausente no relógio: fica vazio).
+  const comNumero = (t: string): string => t.replace(/{{number}}/g, String(event.payload.number ?? ''));
   for (const membershipId of pessoas) {
     await avisar(session, membershipId, {
       typeKey: 'automation.reminder',
       aggregateType: 'automation_rule',
       aggregateId: ruleId,
-      title: String(p.title),
-      body: typeof p.message === 'string' && p.message.trim() ? p.message : null,
+      title: comNumero(String(p.title)),
+      body: typeof p.message === 'string' && p.message.trim() ? comNumero(p.message) : null,
       link: null,
       dedupe: `automation.reminder:${membershipId}:${ruleId}:${slot}`,
       email: true,

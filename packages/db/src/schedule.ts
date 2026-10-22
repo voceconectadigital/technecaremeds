@@ -529,7 +529,11 @@ export interface BucketEntry extends Omit<AgendaEntry, 'scheduled_start'> {
  * arrasto, e três idas ao banco por arrasto é o tipo de lentidão que faz a
  * pessoa parar de arrastar.
  */
-export async function buckets(session: TenantSession, now: Date = new Date()): Promise<BucketEntry[]> {
+export async function buckets(
+  session: TenantSession,
+  now: Date = new Date(),
+  customerId: string | null = null
+): Promise<BucketEntry[]> {
   const rows = await session.query<
     AgendaEntry & { scheduled_start: Date | null; started_at: Date | null; due_at: Date | null }
   >(
@@ -548,7 +552,9 @@ export async function buckets(session: TenantSession, now: Date = new Date()): P
        LEFT JOIN aurora.locations l   ON l.id = w.location_id
       WHERE w.status_category NOT IN ('closed', 'cancelled')
         AND w.started_at IS NULL
-      ORDER BY w.scheduled_start NULLS LAST, w.created_at`
+        AND ($1::uuid IS NULL OR w.customer_id = $1)
+      ORDER BY w.scheduled_start NULLS LAST, w.created_at`,
+    [customerId]
   );
 
   const saida: BucketEntry[] = [];

@@ -331,19 +331,20 @@ export async function transitionRequest(
  */
 export async function triageQueue(
   session: TenantSession,
-  opts: { limit?: number; scopeMembershipId?: string | null } = {}
+  opts: { limit?: number; scopeMembershipId?: string | null; customerId?: string | null } = {}
 ): Promise<ServiceRequestRow[]> {
   const rows = await session.query<ServiceRequestRow>(
     `SELECT id, number, status::text AS status, priority::text AS priority, summary,
             customer_id, location_id, asset_id, created_at, version
        FROM aurora.service_requests r
       WHERE status IN ('submitted', 'triage', 'info_needed')
+        AND ($3::uuid IS NULL OR r.customer_id = $3)
         AND ($2::uuid IS NULL
              OR (r.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
                  AND (r.location_id IS NULL
                       OR r.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))))
       LIMIT $1`,
-    [opts.limit ?? 200, opts.scopeMembershipId ?? null]
+    [opts.limit ?? 200, opts.scopeMembershipId ?? null, opts.customerId ?? null]
   );
   return triageOrder(rows);
 }

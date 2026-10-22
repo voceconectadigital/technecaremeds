@@ -226,6 +226,13 @@ export const AUTOMATION_TEMPLATES = [
     description: 'Avisa as pessoas escolhidas, na periodicidade escolhida.',
   },
   {
+    key: 'parts_alert',
+    label: 'Aviso: OS aguardando peça',
+    action: 'reminder',
+    description:
+      'Avisa na hora as pessoas escolhidas (p.ex. o setor de compras) quando uma OS passa a aguardar peça. Gatilho por evento, sem periodicidade.',
+  },
+  {
     key: 'task',
     label: 'Tarefa',
     action: 'create_task',

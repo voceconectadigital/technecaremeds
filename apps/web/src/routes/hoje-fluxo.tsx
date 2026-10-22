@@ -39,10 +39,13 @@ interface Etapa {
   destaque?: 'warn' | 'good' | 'accent';
 }
 
-export function FluxoDaOperacao() {
+export function FluxoDaOperacao({ cliente = '' }: { cliente?: string }) {
   const { can } = usePermissions();
-  const { data: quadro } = useApiQuery(workOrdersBoard) as { data: { columns: Coluna[] } | undefined };
-  const { data: fila } = useApiQuery(requestsQueue, { query: { limit: LIMITE_FILA } }) as {
+  const filtro = cliente ? { customer: cliente } : {};
+  const { data: quadro } = useApiQuery(workOrdersBoard, { query: filtro }) as {
+    data: { columns: Coluna[] } | undefined;
+  };
+  const { data: fila } = useApiQuery(requestsQueue, { query: { limit: LIMITE_FILA, ...filtro } }) as {
     data: { items: unknown[] } | undefined;
   };
 
