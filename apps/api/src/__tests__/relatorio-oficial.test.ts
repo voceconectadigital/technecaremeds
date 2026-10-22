@@ -211,6 +211,26 @@ describe('Completo', () => {
     expect(sem.map((a) => a.nome)).toEqual(['', '']);
   });
 
+  it('mês sem dado continua dizendo a meta e não desenha gráfico de número inventado', () => {
+    const r = montarCompleto({
+      ...base,
+      serie: null,
+      secoes: [
+        sec({
+          key: 'opened_vs_closed',
+          label: 'Chamados Abertos x Encerrados',
+          unit: 'percent',
+          value: null,
+          target: meta(95, 'percent'),
+          target_evaluation: 'no_value',
+        }),
+      ],
+    });
+    const x = texto(r.linhas);
+    expect(x).toContain('Sem dados suficientes no período. Meta >= 95,0%.'.replace('>=', '≥'));
+    expect(r.linhas.some((l) => l.grafico)).toBe(false);
+  });
+
   it('sem cliente nem centro de custo, o cabeçalho não inventa nada', () => {
     const r = montarCompleto({ ...base, cliente: null, centroDeCusto: null, cidade: null });
     const x = texto(r.linhas);

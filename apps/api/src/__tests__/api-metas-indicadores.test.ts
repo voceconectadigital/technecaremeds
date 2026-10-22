@@ -473,7 +473,7 @@ describe('isolamento entre organizações', () => {
   });
 });
 
-describe('PDF provisório', () => {
+describe('PDF Advanced (modelo Completo)', () => {
   it('mostra a meta, o rótulo de sem meta e marca o provisório', async () => {
     // obsolescence é PENDING_DEFINITION: pedir é 422, e não gera PDF
     const recusado = await gerar(GESTORA, { tier: 'advanced', indicators: ['obsolescence'] }, true);
@@ -487,8 +487,8 @@ describe('PDF provisório', () => {
       });
     expect(ok.status).toBe(200);
     const corpo = (ok.body as Buffer).toString('latin1');
-    expect(corpo).toContain('AGUARDANDO MODELO PDF OFICIAL');
-    expect(corpo).toContain('SEM META CONFIGURADA'); // mtbf não tem meta
+    expect(corpo).not.toContain('AGUARDANDO MODELO PDF OFICIAL'); // o Advanced agora segue o modelo oficial
+    expect(corpo).toContain('Sem meta configurada'); // mtbf não tem meta
     expect(corpo).toContain('PROVIS'); // mtbf é PROVISIONAL
   });
 });

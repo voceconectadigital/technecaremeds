@@ -261,7 +261,7 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
         texto:
           sec.unit === 'none'
             ? `${sec.definition ?? 'Indicador de detalhamento.'} O detalhamento está na tela do sistema.`
-            : 'Sem dados suficientes no período.',
+            : ['Sem dados suficientes no período.', fraseDaMeta(sec, familia)].filter(Boolean).join(' '),
         recuo: 6,
       });
       return;
