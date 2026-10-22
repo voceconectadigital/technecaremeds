@@ -16,7 +16,16 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Check, ClipboardCheck, GraduationCap, ShieldCheck, Thermometer, Wrench, Zap } from 'lucide-react';
+import {
+  Bot,
+  Check,
+  ClipboardCheck,
+  GraduationCap,
+  ShieldCheck,
+  Thermometer,
+  Wrench,
+  Zap,
+} from 'lucide-react';
 import { Button, Dialog, Field, Input, Select, StatusChip, cn, useToast } from '@aurora/ui';
 import {
   assetsList,
@@ -274,6 +283,44 @@ export function NovoPlanoDialog({
       }
     >
       <div className="flex flex-col gap-5">
+        {/*
+         * COMO CRIAR O PLANO (conversa com o cliente, 21/10/2026: "criar plano com ajuda de IA ou
+         * criar plano manualmente"). A IA AINDA NÃO EXISTE no produto — a escolha aparece para o
+         * cliente ver o caminho, desabilitada e dita como "em breve", e o plano manual segue como
+         * o único modo. Fingir um assistente que não há seria pior do que não mostrá-lo.
+         */}
+        {passo === 0 && (
+          <div role="radiogroup" aria-label="Como criar o plano" className="grid gap-2 sm:grid-cols-2">
+            <div
+              role="radio"
+              aria-checked="true"
+              tabIndex={0}
+              className="flex min-h-12 flex-col gap-0.5 rounded-control border border-accent bg-accent-soft p-3 text-sm"
+            >
+              <span className="flex items-center gap-2 font-semibold text-text">
+                <Wrench aria-hidden="true" className="size-4" /> Manualmente
+              </span>
+              <span className="text-xs text-muted">Você escolhe onde, o quê, como e quando.</span>
+            </div>
+            <div
+              role="radio"
+              aria-checked="false"
+              aria-disabled="true"
+              className="flex min-h-12 flex-col gap-0.5 rounded-control border border-border-subtle p-3 text-sm opacity-70"
+            >
+              <span className="flex items-center gap-2 font-semibold text-text">
+                <Bot aria-hidden="true" className="size-4" /> Com ajuda de IA
+                <StatusChip tone="neutral" size="sm" withoutDot>
+                  em breve
+                </StatusChip>
+              </span>
+              <span className="text-xs text-muted">
+                Ainda não está ativa. Por enquanto, o plano é criado manualmente.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Trilho dos passos: nome, não número — e o atual em três canais. */}
         <ol className="flex gap-1 overflow-x-auto pb-1" aria-label="Passos">
           {PASSOS.map((p, i) => (

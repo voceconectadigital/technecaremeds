@@ -229,6 +229,15 @@ test.describe('Planos de manutenção', () => {
     await page.goto('/planos');
     await page.getByRole('button', { name: 'Novo plano' }).click();
     const d = page.getByRole('dialog', { name: 'Novo plano de manutenção' });
+    // Conversa com o cliente (21/10/2026): manual ou com ajuda de IA. A IA ainda não existe: aparece
+    // desabilitada e dita como "em breve", e o manual é o único modo.
+    const modo = d.getByRole('radiogroup', { name: 'Como criar o plano' });
+    await expect(modo.getByRole('radio', { name: /Manualmente/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(modo.getByRole('radio', { name: /Com ajuda de IA/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await expect(modo.getByText('em breve')).toBeVisible();
     await d.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
     await d.getByRole('button', { name: 'Continuar' }).click();
     await d.getByLabel('Setor').selectOption({ index: 1 });
