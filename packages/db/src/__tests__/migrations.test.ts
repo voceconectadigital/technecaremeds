@@ -158,6 +158,7 @@ describe('migrations (EPIC-001)', () => {
       'warehouses',
       'work_order_comments',
       'work_order_customer_parts',
+      'work_order_evaluations',
       'work_order_status_history',
       'work_order_status_transitions',
       'work_order_statuses',

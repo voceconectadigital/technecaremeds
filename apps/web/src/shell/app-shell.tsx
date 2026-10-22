@@ -20,6 +20,7 @@ import { Sidebar } from './sidebar';
 import { Topbar } from './topbar';
 import { useAmbiente } from '../dados/ambiente';
 import { FaixaDemonstracao } from './faixa-demonstracao';
+import { BotaoImprimir } from './botao-imprimir';
 
 export interface AppShellProps {
   /** Título da página. Vira o `<h1>` e o título do documento. */
@@ -32,9 +33,23 @@ export interface AppShellProps {
   children: ReactNode;
   /** Tira o preenchimento do conteúdo — para quadro e agenda, que ocupam tudo. */
   bleed?: boolean;
+  /**
+   * Mostra o botão Imprimir ao lado das ações. Ligado por padrão (o cliente pediu a
+   * impressão "em todos os lugares necessários"); desligado nas telas sangradas — quadro
+   * e agenda —, que não fazem sentido no papel.
+   */
+  imprimir?: boolean;
 }
 
-export function AppShell({ title, subtitle, breadcrumbs, actions, children, bleed = false }: AppShellProps) {
+export function AppShell({
+  title,
+  subtitle,
+  breadcrumbs,
+  actions,
+  children,
+  bleed = false,
+  imprimir = !bleed,
+}: AppShellProps) {
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const ambiente = useAmbiente();
 
@@ -60,7 +75,11 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
      * de 768px. No celular o canvas ocupa a tela inteira.
      */
     <div className="flex h-dvh flex-col bg-nav">
-      {ambiente.demonstracao && <FaixaDemonstracao />}
+      {ambiente.demonstracao && (
+        <div className="aurora-no-print">
+          <FaixaDemonstracao />
+        </div>
+      )}
       {/* Primeira parada do teclado, invisível até receber foco. */}
       <a href="#conteudo" className="aurora-skip-link">
         Pular para o conteúdo
@@ -71,7 +90,7 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
 
         {/* Acima de 768px ela é permanente. Abaixo, vira gaveta: encolher a
             barra até virar uma coluna de ícones ilegíveis não é responsivo. */}
-        <div className="hidden md:block">
+        <div className="aurora-no-print hidden md:block">
           <Sidebar />
         </div>
 
@@ -107,19 +126,21 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
 
         <div className="flex min-w-0 flex-1 flex-col md:py-2.5 md:pr-2.5">
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-bg md:rounded-[20px] md:shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_10px_40px_-12px_rgb(0_0_0/0.35)]">
-            <Topbar
-              onOpenMenu={() => setGavetaAberta(true)}
-              menuButton={
-                <Button
-                  aria-label="Abrir menu"
-                  variant="ghost"
-                  size="sm"
-                  className="md:hidden"
-                  onClick={() => setGavetaAberta(true)}
-                  icon={<MenuIcon className="size-5" />}
-                />
-              }
-            />
+            <div className="aurora-no-print">
+              <Topbar
+                onOpenMenu={() => setGavetaAberta(true)}
+                menuButton={
+                  <Button
+                    aria-label="Abrir menu"
+                    variant="ghost"
+                    size="sm"
+                    className="md:hidden"
+                    onClick={() => setGavetaAberta(true)}
+                    icon={<MenuIcon className="size-5" />}
+                  />
+                }
+              />
+            </div>
 
             {/*
             O CABEÇALHO DA PÁGINA ROLA JUNTO COM O CONTEÚDO (09/10/2026).
@@ -230,6 +251,10 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
                   >
                     {title}
                   </h1>
+                  {/* Só no papel: de quando é esta cópia. */}
+                  <p className="mt-1 hidden text-xs text-muted print:block">
+                    Impresso em {new Date().toLocaleString('pt-BR')}
+                  </p>
                   {subtitle && (
                     <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-muted">{subtitle}</p>
                   )}
@@ -243,7 +268,12 @@ export function AppShell({ title, subtitle, breadcrumbs, actions, children, blee
               em linhas quando o espaço aperta, que é o que uma barra de ações
               deve fazer.
             */}
-                {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+                {(actions || imprimir) && (
+                  <div className="aurora-no-print flex flex-wrap items-center gap-2">
+                    {actions}
+                    {imprimir && <BotaoImprimir />}
+                  </div>
+                )}
               </section>
 
               <main

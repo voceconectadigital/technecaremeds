@@ -37,6 +37,7 @@ import {
 } from '@aurora/ui';
 import {
   assetDetail,
+  assetIndicators,
   assetsLinkQr,
   assetsList,
   workOrdersList,
@@ -47,6 +48,9 @@ import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { DialogoEquipamento, TIPOS_DE_RASTREADOR } from './formulario';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
+import { QrSvg, enderecoDaEtiqueta } from '../../shell/qr';
+import { BotaoLaudoDeObsolescencia } from './laudo';
+import { CartaoAnvisa } from './anvisa';
 import { formatarDataRelativa, PrioridadeChip } from '../../routes/hoje';
 import { tomDaCategoria } from '../ordens/lista';
 
@@ -84,11 +88,19 @@ export function AtivoPage() {
         .join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
       actions={
-        <Can permission="asset.update">
-          <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
-            Editar
-          </Button>
-        </Can>
+        <>
+          <Can permission="asset.update">
+            <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
+              Editar
+            </Button>
+          </Can>
+          {/* Laudo de obsolescência: só para equipamento ainda em operação (conversa de 21/10/2026). */}
+          {data.status !== 'decommissioned' && data.status !== 'disposed' && (
+            <Can permission="asset.decommission">
+              <BotaoLaudoDeObsolescencia assetId={data.id} nome={data.name} />
+            </Can>
+          )}
+        </>
       }
     >
       <DialogoEquipamento
@@ -180,10 +192,17 @@ export function AtivoPage() {
 
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <HistoricoDeOs assetId={id} />
+            <div className="flex flex-col gap-4">
+              <IndicadoresDoAtivo assetId={id} />
+              <HistoricoDeOs assetId={id} />
+            </div>
           </div>
 
           <div className="flex flex-col gap-4">
+            {data.qr_token && <CartaoEtiqueta ativo={data} />}
+
+            <CartaoAnvisa ativo={data} />
+
             <Card>
               <CardHeader title="Ciclo de vida" />
               <dl className="flex flex-col gap-3 p-4 text-sm">
@@ -203,6 +222,8 @@ export function AtivoPage() {
               </dl>
             </Card>
 
+            {data.depreciation && <CartaoDeDepreciacao d={data.depreciation} moedaDoBem={data.currency} />}
+
             {financeiroVisivel && (
               /*
                * O bloco inteiro só existe quando os valores existem.
@@ -217,6 +238,7 @@ export function AtivoPage() {
                   <Info rotulo="Compra" valor={moeda(data.purchase_value, data.currency)} />
                   <Info rotulo="Residual" valor={moeda(data.residual_value, data.currency)} />
                   <Info rotulo="Reposição" valor={moeda(data.replacement_value, data.currency)} />
+                  <Info rotulo="Nota fiscal de aquisição" valor={data.acquisition_invoice ?? null} />
                 </dl>
               </Card>
             )}
@@ -306,6 +328,120 @@ export function AtivoPage() {
  * funcionaria com trinta ordens e não com cem mil — e "não funcionar" aqui
  * significa a página não abrir.
  */
+/**
+ * A etiqueta do equipamento, com o QR desenhado (conversa com o cliente, 21/10/2026).
+ * O QR carrega o endereço `/q/<token>`: ler com a câmera abre este equipamento no sistema.
+ * "Imprimir etiqueta" imprime só este cartão, e não a ficha inteira.
+ */
+function CartaoEtiqueta({ ativo }: { ativo: AssetDetail }) {
+  const token = ativo.qr_token;
+  if (!token) return null;
+  function imprimirEtiqueta() {
+    document.body.dataset.imprimir = 'etiqueta';
+    const limpar = () => {
+      delete document.body.dataset.imprimir;
+      window.removeEventListener('afterprint', limpar);
+    };
+    window.addEventListener('afterprint', limpar);
+    window.print();
+  }
+  return (
+    <Card className="aurora-etiqueta">
+      <CardHeader title="Etiqueta QR" description="Leia com a câmera para abrir este equipamento." />
+      <div className="flex flex-col items-center gap-3 p-4">
+        <QrSvg
+          texto={enderecoDaEtiqueta(token)}
+          rotulo={`QR code do equipamento ${ativo.tag ?? ativo.name}`}
+        />
+        <p className="text-center text-sm font-semibold text-text">{ativo.tag ?? ativo.name}</p>
+        <p className="text-center text-xs text-muted">{ativo.name}</p>
+        <Button size="sm" className="aurora-no-print" onClick={imprimirEtiqueta}>
+          Imprimir etiqueta
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/** Minutos em linguagem de gente: "45 min", "3 h 20 min", "2 d 4 h". */
+export function duracao(minutos: number | null | undefined): string {
+  if (minutos === null || minutos === undefined) return '—';
+  const m = Math.round(minutos);
+  if (m < 60) return `${m} min`;
+  if (m < 60 * 24) return `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ''}`.trim();
+  const d = Math.floor(m / (60 * 24));
+  const h = Math.floor((m % (60 * 24)) / 60);
+  return `${d} d${h ? ` ${h} h` : ''}`;
+}
+
+/**
+ * Indicadores PONTUAIS deste equipamento (conversa com o cliente, 21/10/2026): o que o
+ * painel mostra para o parque, aqui só para ele. MTTR e MTBF vêm vazios quando não há
+ * amostra — "—" com a explicação, nunca zero.
+ */
+function IndicadoresDoAtivo({ assetId }: { assetId: string }) {
+  const { data, isLoading } = useApiQuery(assetIndicators, { params: { id: assetId } }) as {
+    data: import('@aurora/contracts').AssetIndicators | undefined;
+    isLoading: boolean;
+  };
+  return (
+    <Card>
+      <CardHeader
+        title="Indicadores do equipamento"
+        description={data ? `Últimos ${data.period.days} dias.` : 'Calculando…'}
+      />
+      {isLoading || !data ? (
+        <div className="p-4">
+          <SkeletonList rows={2} label="indicadores" />
+        </div>
+      ) : (
+        <dl className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Indicador
+            rotulo="Ordens de serviço"
+            valor={String(data.work_orders.total)}
+            dica={`${data.work_orders.corrective} corretivas · ${data.work_orders.preventive} preventivas · ${data.work_orders.open} abertas`}
+          />
+          <Indicador
+            rotulo="MTTR (tempo de reparo)"
+            valor={duracao(data.mttr_minutes)}
+            dica={
+              data.mttr_minutes === null
+                ? 'Sem corretiva concluída no período'
+                : `${data.mttr_samples} corretivas`
+            }
+          />
+          <Indicador
+            rotulo="MTBF (entre falhas)"
+            valor={duracao(data.mtbf_minutes)}
+            dica={
+              data.mtbf_minutes === null
+                ? 'Precisa de duas corretivas no período'
+                : `${data.mtbf_samples} intervalos`
+            }
+          />
+          <Indicador
+            rotulo="Tempo parado"
+            valor={duracao(data.downtime_minutes)}
+            dica="Soma do tempo das corretivas concluídas"
+          />
+        </dl>
+      )}
+    </Card>
+  );
+}
+
+function Indicador({ rotulo, valor, dica }: { rotulo: string; valor: string; dica: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs text-subtle">{rotulo}</dt>
+      <dd className="text-xl font-semibold text-text tabular-nums" data-numeric>
+        {valor}
+      </dd>
+      <p className="text-xs text-muted">{dica}</p>
+    </div>
+  );
+}
+
 function HistoricoDeOs({ assetId }: { assetId: string }) {
   const { data, isLoading } = useApiQuery(workOrdersList, {
     query: { asset: assetId, limit: 50 },
@@ -507,6 +643,56 @@ function Info({
         {valor || <span className="text-subtle">{vazio ?? '—'}</span>}
       </dd>
     </div>
+  );
+}
+
+type Depreciacao = NonNullable<AssetDetail['depreciation']>;
+
+/**
+ * A depreciação em linha reta, como o cliente pediu em 21/10/2026: uma BARRA que
+ * mostra quanto da vida útil já passou e quanto resta. O percentual e os anos são de
+ * quem vê o equipamento; os valores só aparecem quando vieram do servidor (quem tem
+ * permissão financeira e há valor de compra).
+ */
+function CartaoDeDepreciacao({ d, moedaDoBem }: { d: Depreciacao; moedaDoBem?: string | null }) {
+  const pct = Math.min(100, Math.max(0, d.percentDepreciated));
+  const tom = d.fullyDepreciated ? 'bg-bad' : pct >= 80 ? 'bg-warn' : 'bg-accent';
+  return (
+    <Card>
+      <CardHeader
+        title="Depreciação"
+        description="Linha reta, a partir da data de aquisição e pela vida útil informada."
+      />
+      <div className="flex flex-col gap-3 p-4 text-sm">
+        <div
+          role="progressbar"
+          aria-label="Vida útil consumida"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={pct}
+          aria-valuetext={`${pct.toFixed(0)} % da vida útil consumida`}
+          className="h-3 w-full overflow-hidden rounded-full bg-surface-sunken"
+        >
+          <div className={cn('h-full rounded-full', tom)} style={{ width: `${pct}%` }} />
+        </div>
+        <p className="text-muted">
+          <span className="font-medium text-text">{pct.toFixed(0)} %</span> depreciado ·{' '}
+          {d.fullyDepreciated
+            ? 'vida útil esgotada'
+            : `restam ${d.remainingYears.toFixed(1).replace('.', ',')} anos`}
+        </p>
+        {d.bookValue !== null && (
+          <dl className="flex flex-col gap-2">
+            <Info rotulo="Valor contábil atual" valor={moeda(String(d.bookValue), moedaDoBem)} />
+            <Info rotulo="Depreciação por ano" valor={moeda(String(d.annualDepreciation), moedaDoBem)} />
+            <Info
+              rotulo="Depreciação acumulada"
+              valor={moeda(String(d.accumulatedDepreciation), moedaDoBem)}
+            />
+          </dl>
+        )}
+      </div>
+    </Card>
   );
 }
 

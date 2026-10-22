@@ -26,6 +26,7 @@ import { assertCanExecuteWorkOrder, completionCheck, completionRequirementsFor }
 import { requiresOperationalResult } from './organization-config';
 import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
 import { releaseReservations } from './inventory';
+import { decommissionAsset } from './assets';
 
 export interface StatusRow {
   id: string;
@@ -190,6 +191,8 @@ export interface WorkOrderInput {
   source?: 'request' | 'plan' | 'manual' | 'inspection' | 'automation';
   /** Nasce publicada (`open`) ou como rascunho. */
   publish?: boolean;
+  /** Série da numeração (padrão `WO`; o laudo de obsolescência usa `OBC`). */
+  numberSeries?: string;
 }
 
 async function statusIdByKey(session: TenantSession, key: string): Promise<string> {
@@ -222,11 +225,12 @@ export async function createWorkOrder(
   let numero: string | null = null;
   if (publica) {
     const ano = new Date().getUTCFullYear();
+    const serie = input.numberSeries ?? 'WO';
     const [seq] = await session.query<{ next_number: string }>(
-      `SELECT aurora.next_number($1, 'WO', $2) AS next_number`,
-      [session.context.organizationId, ano]
+      `SELECT aurora.next_number($1, $3, $2) AS next_number`,
+      [session.context.organizationId, ano, serie]
     );
-    numero = formatWorkOrderNumber(ano, Number(seq!.next_number));
+    numero = formatWorkOrderNumber(ano, Number(seq!.next_number), serie);
   }
 
   const id = newId();
@@ -459,6 +463,9 @@ export async function transitionWorkOrder(
     );
   }
 
+  // Laudo de obsolescência: concluir exige a justificativa e ao menos uma foto.
+  if (destino.category === 'review') await exigirLaudoCompleto(session, workOrderId);
+
   const rows = await session.query<{ status_category: StatusCategory; version: number }>(
     `UPDATE aurora.work_orders
         SET status_id = $2,
@@ -552,6 +559,11 @@ export async function transitionWorkOrder(
     }
   }
 
+  // Laudo de obsolescência validado: o equipamento sai de operação com a justificativa do laudo.
+  if (destino.category === 'done' || destino.category === 'closed') {
+    await baixarPeloLaudo(session, workOrderId);
+  }
+
   const evento = eventForTransition(
     { key: atual.status_key, label: atual.status_label, category: atual.category },
     {
@@ -585,6 +597,71 @@ export async function transitionWorkOrder(
   }
 
   return { status: destino.key, category: destino.category, version: rows[0]!.version };
+}
+
+/* -------------------------------------------------------------------------- */
+/* laudo de obsolescência (conversa com o cliente, 21/10/2026)                 */
+/* -------------------------------------------------------------------------- */
+
+const MIN_JUSTIFICATIVA_DO_LAUDO = 20;
+
+async function dadosDoLaudo(
+  session: TenantSession,
+  workOrderId: string
+): Promise<{
+  asset_id: string | null;
+  description: string;
+  resolution: string | null;
+  laudo: boolean;
+} | null> {
+  const [o] = await session.query<{
+    asset_id: string | null;
+    description: string;
+    resolution: string | null;
+    laudo: boolean;
+  }>(
+    `SELECT w.asset_id, w.description, w.resolution, (t.system_key = 'obsolescence') AS laudo
+       FROM aurora.work_orders w
+       JOIN aurora.catalog_items t ON t.id = w.work_order_type_id
+      WHERE w.id = $1`,
+    [workOrderId]
+  );
+  return o ?? null;
+}
+
+/** Concluir um laudo exige a justificativa técnica e ao menos uma foto: sem foto, não há prova. */
+async function exigirLaudoCompleto(session: TenantSession, workOrderId: string): Promise<void> {
+  const l = await dadosDoLaudo(session, workOrderId);
+  if (!l?.laudo) return;
+  if (l.description.trim().length < MIN_JUSTIFICATIVA_DO_LAUDO) {
+    throw new ValidationError(
+      `o laudo de obsolescência precisa da justificativa técnica (${MIN_JUSTIFICATIVA_DO_LAUDO}+ caracteres) na descrição`,
+      { field: 'description' }
+    );
+  }
+  const [f] = await session.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM aurora.attachments WHERE work_order_id = $1`,
+    [workOrderId]
+  );
+  if ((f?.n ?? 0) < 1) {
+    throw new ValidationError(
+      'o laudo de obsolescência exige ao menos uma foto do equipamento antes de ser concluído',
+      { field: 'attachments' }
+    );
+  }
+}
+
+/** Laudo validado: descomissiona o equipamento, com a justificativa do laudo como motivo. */
+async function baixarPeloLaudo(session: TenantSession, workOrderId: string): Promise<void> {
+  const l = await dadosDoLaudo(session, workOrderId);
+  if (!l?.laudo || !l.asset_id) return;
+  const [a] = await session.query<{ status: string }>(
+    `SELECT status::text AS status FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL`,
+    [l.asset_id]
+  );
+  if (!a || a.status === 'decommissioned' || a.status === 'disposed') return;
+  const motivo = [l.description.trim(), l.resolution?.trim()].filter(Boolean).join(' — ');
+  await decommissionAsset(session, l.asset_id, motivo);
 }
 
 /* -------------------------------------------------------------------------- */

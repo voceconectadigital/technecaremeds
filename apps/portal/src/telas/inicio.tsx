@@ -21,6 +21,7 @@ import { portalHome, type PortalRequest, type PortalVisit } from '@aurora/contra
 import { Casca } from '../casca';
 import { quando, reais } from '../formato';
 import { FalhaDeCarga } from './falha-de-carga';
+import { AvaliarEAssinarOs } from './avaliar-os';
 
 interface Inicio {
   pending_actions: Array<{
@@ -54,6 +55,9 @@ export function InicioPage() {
   return (
     <Casca titulo="Início" subtitulo="O que precisa de você, e o que está andando.">
       <div className="flex flex-col gap-4">
+        {/* O que o cliente pediu que apareça ao entrar: as OS concluídas a avaliar e assinar. */}
+        <AvaliarEAssinarOs />
+
         <Card>
           <CardHeader title="Precisa de você" />
           <div className="p-2">

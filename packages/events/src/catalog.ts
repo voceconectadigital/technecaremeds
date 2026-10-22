@@ -45,6 +45,7 @@ export const EVENT_TYPES = [
   'asset.status_changed',
   'asset.decommissioned',
   'asset.warranty_expiring',
+  'asset.anvisa_alert',
   'asset.qr_generated',
   'meter.reading_recorded',
 

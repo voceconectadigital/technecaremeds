@@ -15,3 +15,65 @@
  * produção.
  */
 @source '../../../packages/ui/src';
+
+/*
+ * IMPRESSÃO (conversa com o cliente, 21/10/2026: "a função imprimir tem que aparecer em
+ * todos os lugares necessários").
+ *
+ * A moldura da aplicação prende a altura na janela e rola por dentro; no papel isso
+ * imprimiria só o pedaço visível. Em impressão tudo flui na altura natural, a navegação
+ * e os botões somem, e cada cartão evita ser cortado ao meio entre duas folhas.
+ */
+@media print {
+  .aurora-no-print,
+  .aurora-skip-link,
+  button {
+    display: none !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    background: #fff !important;
+  }
+  .h-dvh {
+    height: auto !important;
+  }
+  .overflow-hidden,
+  .overflow-y-auto,
+  main {
+    overflow: visible !important;
+  }
+  .min-h-0 {
+    min-height: auto !important;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  [class*='shadow'] {
+    box-shadow: none !important;
+  }
+  [class*='rounded-card'] {
+    break-inside: avoid;
+  }
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* "Imprimir etiqueta" (ficha do ativo): só o cartão da etiqueta sai no papel. */
+@media print {
+  body[data-imprimir='etiqueta'] * {
+    visibility: hidden;
+  }
+  body[data-imprimir='etiqueta'] .aurora-etiqueta,
+  body[data-imprimir='etiqueta'] .aurora-etiqueta * {
+    visibility: visible;
+  }
+  body[data-imprimir='etiqueta'] .aurora-etiqueta {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+}

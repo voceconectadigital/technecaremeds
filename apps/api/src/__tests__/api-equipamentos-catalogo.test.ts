@@ -36,6 +36,7 @@ const ORG_A = newId();
 const ORG_B = newId();
 const GESTORA = 'gestora@equip-a.test';
 const OPERADOR = 'operador@equip-a.test';
+const ENGENHEIRA = 'engenheira@equip-a.test';
 const ADMIN_B = 'admin@equip-b.test';
 const auth = (email: string) => ({ authorization: `Bearer local:${email}:${email}` });
 const novoToken = () => generateQrToken((n) => new Uint8Array(randomBytes(n)));
@@ -109,6 +110,21 @@ beforeAll(async () => {
     async (s) => {
       const base = await provisionOrganizationBaseline(s);
       await assignRole(s, memOp, base.roles.get('operator')!);
+    }
+  );
+  // A engenheira (gestora de manutenção) é quem pode descomissionar — e, portanto, gerar o laudo de obsolescência.
+  const memEng = newId();
+  await seedMember(
+    t,
+    { organizationId: ORG_A, userId: newId(), membershipId: memEng },
+    { email: ENGENHEIRA, userName: 'Engenheira' }
+  );
+  await withTenant(
+    t.db,
+    buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: 's2b' }),
+    async (s) => {
+      const base = await provisionOrganizationBaseline(s);
+      await assignRole(s, memEng, base.roles.get('maintenance_manager')!);
     }
   );
   await withTenant(
@@ -273,6 +289,10 @@ describe('cliente → setor → equipamento, com chip', () => {
     expect(ficha.body.useful_life_years).toBe(10);
     expect(ficha.body.purchase_value).toBe('25000.50');
     expect(ficha.body.acquisition_invoice).toBe('NF-123456');
+    // Depreciação em linha reta, calculada no servidor a partir da data e da vida útil.
+    expect(ficha.body.depreciation.percentDepreciated).toBeGreaterThan(0);
+    expect(ficha.body.depreciation.percentDepreciated).toBeLessThanOrEqual(100);
+    expect(ficha.body.depreciation.bookValue).toBeLessThan(25000.5);
 
     // Edita: a NF muda; a vida útil inválida é recusada.
     expect(
@@ -288,6 +308,110 @@ describe('cliente → setor → equipamento, com chip', () => {
     // Este equipamento só existe para este teste: sai de cena para não entrar nos filtros e
     // nas listas dos testes seguintes (que contam equipamentos exatos).
     await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = $1`, [r.body.id]);
+  });
+
+  it('indicadores pontuais do equipamento: contagens, e MTTR/MTBF nulos sem amostra (nunca zero)', async () => {
+    const r = await http.get(`/v1/assets/${ativoUti}/indicators`).set(auth(GESTORA));
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.work_orders).toEqual({ total: 0, corrective: 0, preventive: 0, open: 0 });
+    expect(r.body.mttr_minutes).toBeNull();
+    expect(r.body.mtbf_minutes).toBeNull();
+    expect(r.body.downtime_minutes).toBe(0);
+    expect(r.body.period.days).toBe(365);
+    // Equipamento de outra organização: 404, como em qualquer outra rota do ativo.
+    expect((await http.get(`/v1/assets/${ativoDeB}/indicators`).set(auth(GESTORA))).status).toBe(404);
+  });
+
+  it('laudo de obsolescência: gera uma OS OBC-…, recusa justificativa curta e laudo repetido, e NÃO desativa o equipamento', async () => {
+    const url = `/v1/assets/${ativoBloco}/obsolescence-report`;
+    const justificativa =
+      'Equipamento com 14 anos, sem peças no fabricante e reparo acima de 70% do valor de reposição.';
+    expect((await http.post(url).set(auth(ENGENHEIRA)).send({ justification: 'velho' })).status).toBe(422);
+
+    const r = await http.post(url).set(auth(ENGENHEIRA)).send({ justification: justificativa });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.number).toMatch(/^OBC-\d{4}-0001$/);
+
+    expect((await http.post(url).set(auth(ENGENHEIRA)).send({ justification: justificativa })).status).toBe(
+      409
+    );
+    expect((await http.get(`/v1/assets/${ativoBloco}`).set(auth(GESTORA))).body.status).toBe('active');
+    // Quem não pode descomissionar (o operador) nem gera o laudo; equipamento de outra organização é 404.
+    expect((await http.post(url).set(auth(OPERADOR)).send({ justification: justificativa })).status).toBe(
+      403
+    );
+    expect(
+      (
+        await http
+          .post(`/v1/assets/${ativoDeB}/obsolescence-report`)
+          .set(auth(ENGENHEIRA))
+          .send({ justification: justificativa })
+      ).status
+    ).toBe(404);
+  });
+
+  it('verificação ANVISA: registra quem/quando/o quê, exige descrição no alerta e emite o aviso; sem registro cadastrado, 409', async () => {
+    const base = { customer_id: hospital, location_id: uti, asset_category_id: tipoVentilador };
+    const com = await http
+      .post('/v1/assets')
+      .set(auth(GESTORA))
+      .send({ ...base, name: 'Bomba de infusão', tag: 'BI-001', anvisa_registration: '80102030099' });
+    expect(com.status, JSON.stringify(com.body)).toBe(201);
+    const sem = await http
+      .post('/v1/assets')
+      .set(auth(GESTORA))
+      .send({ ...base, name: 'Maca', tag: 'MAC-001' });
+    expect(sem.status).toBe(201);
+
+    const url = `/v1/assets/${com.body.id}/anvisa-check`;
+    // Sem registro ANVISA cadastrado não há o que verificar.
+    expect(
+      (
+        await http
+          .post(`/v1/assets/${sem.body.id}/anvisa-check`)
+          .set(auth(GESTORA))
+          .send({ status: 'regular' })
+      ).status
+    ).toBe(409);
+    // Alerta sem descrição é recusado: "alerta" sem dizer qual não orienta ninguém.
+    expect((await http.post(url).set(auth(GESTORA)).send({ status: 'alert' })).status).toBe(422);
+
+    const alerta = await http
+      .post(url)
+      .set(auth(GESTORA))
+      .send({ status: 'alert', note: 'Notificação de risco nº 1234: lote de seringas.' });
+    expect(alerta.status, JSON.stringify(alerta.body)).toBe(201);
+    expect(alerta.body).toEqual({ status: 'alert', alerted: true });
+    const ficha = await http.get(`/v1/assets/${com.body.id}`).set(auth(GESTORA));
+    expect(ficha.body).toMatchObject({
+      anvisa_status: 'alert',
+      anvisa_note: 'Notificação de risco nº 1234: lote de seringas.',
+    });
+    expect(ficha.body.anvisa_checked_at).toBeTruthy();
+
+    // O aviso nasce como evento de domínio (o despachante o entrega a gestores e coordenadores).
+    const [ev] = await t.admin.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM aurora.domain_events WHERE type = 'asset.anvisa_alert' AND aggregate_id = $1`,
+      [com.body.id]
+    );
+    expect(ev!.n).toBe('1');
+
+    // Voltou ao regular: registra, sem aviso novo.
+    const regular = await http.post(url).set(auth(GESTORA)).send({ status: 'regular' });
+    expect(regular.body).toEqual({ status: 'regular', alerted: false });
+
+    await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = ANY($1::uuid[])`, [
+      [com.body.id, sem.body.id],
+    ]);
+  });
+
+  it('a etiqueta lida pela câmera acha SÓ o equipamento dela; token estranho não acha nada', async () => {
+    const ficha = await http.get(`/v1/assets/${ativoUti}`).set(auth(GESTORA));
+    const token = ficha.body.qr_token as string;
+    const achou = await http.get(`/v1/assets?qr=${token}`).set(auth(GESTORA));
+    expect(achou.body.items.map((a: { id: string }) => a.id)).toEqual([ativoUti]);
+    const nada = await http.get('/v1/assets?qr=lixo').set(auth(GESTORA));
+    expect(nada.body.items).toEqual([]);
   });
 
   it('chip repetido → 409; chip pela metade → 422', async () => {

@@ -53,6 +53,7 @@ import {
   workOrdersCompleted,
   openedVsClosed,
   serviceRating,
+  workOrderRating,
   backlog,
   mttr,
   mtbf,
@@ -395,6 +396,15 @@ export async function buildReport(
             opened: r.data.opened,
             closed: r.data.closed,
           },
+          definition: definicao(r),
+        };
+      }
+      case 'work_order_rating': {
+        const r = await workOrderRating(s, p, f);
+        return {
+          value: r.data.average,
+          samples: r.data.count,
+          detail: { count: r.data.count, distribution: r.data.distribution },
           definition: definicao(r),
         };
       }

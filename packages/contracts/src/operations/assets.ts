@@ -89,6 +89,8 @@ export const assetsList = defineOperation({
     /** Tipo (categoria). */
     category: Uuid.optional(),
     model: Uuid.optional(),
+    /** Token da etiqueta QR (leitura por câmera em `/q/:token`): devolve só o equipamento dela. */
+    qr: z.string().max(80).optional(),
     /** Nome do fabricante, exato. */
     manufacturer: z.string().max(200).optional(),
     criticality: Uuid.optional(),
@@ -152,6 +154,10 @@ export const AssetDetail = z.object({
   default_priority: z.string().nullable(),
   risk_class: z.string().nullable(),
   anvisa_registration: z.string().nullable(),
+  /** Verificação do registro ANVISA (0081): situação, observação e quando. Nulos se nunca verificado. */
+  anvisa_status: z.enum(['regular', 'alert', 'prohibited']).nullable().optional(),
+  anvisa_note: z.string().nullable().optional(),
+  anvisa_checked_at: Timestamp.nullable().optional(),
   inmetro_ordinance: z.string().nullable(),
   requires_calibration: z.boolean(),
   requires_electrical_test: z.boolean(),
@@ -209,6 +215,22 @@ export const AssetDetail = z.object({
    * diferente de zero, que diria "novo".
    */
   age_years: z.number().nullable(),
+  /**
+   * Depreciação em linha reta (conversa com o cliente, 21/10/2026). Nula sem data de aquisição
+   * ou vida útil. Os campos de valor vêm nulos para quem não tem `asset.read_financials`.
+   */
+  depreciation: z
+    .object({
+      elapsedYears: z.number(),
+      remainingYears: z.number(),
+      percentDepreciated: z.number(),
+      fullyDepreciated: z.boolean(),
+      annualDepreciation: z.number().nullable(),
+      accumulatedDepreciation: z.number().nullable(),
+      bookValue: z.number().nullable(),
+    })
+    .nullable()
+    .optional(),
   transfers: z.array(AssetTransfer),
 
   created_at: Timestamp,
@@ -428,6 +450,77 @@ export const assetsUpdate = defineOperation({
   body: z.object(CamposDoEquipamento).partial().strict(),
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+export const assetIndicators = defineOperation({
+  operationId: 'assets.indicators',
+  method: 'GET',
+  path: '/assets/:id/indicators',
+  summary: 'Indicadores pontuais do equipamento (ficha de vida)',
+  description:
+    'OS, MTTR, MTBF e tempo parado SÓ deste equipamento, no período (padrão 365 dias). ' +
+    'Usa a mesma definição das métricas do painel; MTTR/MTBF vêm nulos sem amostra suficiente ' +
+    '(MTBF exige duas corretivas) — zero diria "sem falha", e isso seria afirmar demais.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  query: z.object({ days: z.coerce.number().int().min(7).max(1825).optional() }),
+  response: z.object({
+    period: z.object({ from: z.string(), to: z.string(), days: z.number() }),
+    work_orders: z.object({
+      total: z.number(),
+      corrective: z.number(),
+      preventive: z.number(),
+      open: z.number(),
+    }),
+    mttr_minutes: z.number().nullable(),
+    mttr_samples: z.number(),
+    mtbf_minutes: z.number().nullable(),
+    mtbf_samples: z.number(),
+    downtime_minutes: z.number(),
+    last_corrective_at: z.string().nullable(),
+  }),
+  errors: ['not_found'],
+});
+
+export type AssetIndicators = z.infer<typeof assetIndicators.response>;
+
+export const assetObsolescenceReport = defineOperation({
+  operationId: 'assets.obsolescenceReport',
+  method: 'POST',
+  path: '/assets/:id/obsolescence-report',
+  summary: 'Gera o laudo de obsolescência do equipamento (uma OS OBC-AAAA-NNNN)',
+  description:
+    'O laudo é uma ordem de serviço de tipo próprio e numeração própria, com a justificativa técnica. ' +
+    'Gerar o laudo NÃO desativa o equipamento: ao concluir, o laudo exige a justificativa e ao menos uma ' +
+    'foto; ao ser validado, o equipamento é descomissionado com a justificativa do laudo.',
+  permissions: ['asset.decommission'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ justification: z.string().trim().min(20).max(4000) }).strict(),
+  response: z.object({ id: Uuid, number: z.string().nullable() }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
+});
+
+export const assetAnvisaCheck = defineOperation({
+  operationId: 'assets.anvisaCheck',
+  method: 'POST',
+  path: '/assets/:id/anvisa-check',
+  summary: 'Registra a verificação do registro ANVISA do equipamento',
+  description:
+    'Grava quem verificou, quando e o que encontrou (regular, alerta ou uso proibido). Alerta e ' +
+    'proibição exigem a descrição e avisam gestores e coordenadores. O sistema ainda não consulta ' +
+    'a ANVISA sozinho: esta rota é o registro da verificação feita por uma pessoa.',
+  permissions: ['asset.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      status: z.enum(['regular', 'alert', 'prohibited']),
+      note: z.string().trim().max(1000).optional(),
+    })
+    .strict(),
+  response: z.object({ status: z.enum(['regular', 'alert', 'prohibited']), alerted: z.boolean() }),
+  status: 201,
+  errors: ['not_found', 'conflict', 'validation_failed'],
 });
 
 export const assetsTransfer = defineOperation({

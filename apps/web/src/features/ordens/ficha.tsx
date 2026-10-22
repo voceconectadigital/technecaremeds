@@ -89,6 +89,7 @@ import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
 import { AndamentoDaOs, DialogoOrcamentoDaOs, rotuloDoOrcamento } from './orcamento-da-os';
+import { AvaliacaoDaOs } from './avaliacao';
 
 // A aba "Conversa" saiu da navegação da OS (reunião 16/10/2026: não tem função
 // nesse fluxo). Os comentários continuam gravados e no histórico — nada foi
@@ -401,6 +402,12 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
                 <Info rotulo="Sintoma relatado" valor={os.reported_failure_label} />
               </dl>
             )}
+            {os.number?.startsWith('OBC-') && (
+              <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+                Laudo de obsolescência: para concluir, anexe ao menos uma foto do equipamento. Quando o laudo
+                for validado, o equipamento é desativado com a justificativa acima.
+              </p>
+            )}
           </div>
         </Card>
 
@@ -434,6 +441,8 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
             )}
           </div>
         </Card>
+
+        <AvaliacaoDaOs workOrderId={os.id} />
       </div>
 
       <Card>

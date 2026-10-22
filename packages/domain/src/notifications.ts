@@ -139,6 +139,19 @@ export const NOTIFICATION_TYPES: readonly NotificationTypeDefinition[] = Object.
     bypassesQuietHours: false,
   },
   {
+    // Conversa com o cliente, 21/10/2026: avisar quando o registro ANVISA de um equipamento
+    // tem alerta ou uso proibido. Fura o silêncio? Não: é decisão para o próximo expediente,
+    // exceto a proibição, que a própria mensagem destaca.
+    key: 'anvisa_alert',
+    label: 'Alerta ou proibição ANVISA em equipamento',
+    event: 'asset.anvisa_alert',
+    audiences: ['managers', 'coordinators'],
+    channels: ['in_app', 'email'],
+    phase: 'F2',
+    dedupeMinutes: 1440,
+    bypassesQuietHours: false,
+  },
+  {
     key: 'stock_below_minimum',
     label: 'Estoque abaixo do mínimo',
     event: 'stock.below_minimum',

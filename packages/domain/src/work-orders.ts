@@ -709,8 +709,8 @@ export function checkCompletion(
 }
 
 /** Número visível da OS: série própria, separada da de solicitações. */
-export function formatWorkOrderNumber(year: number, sequence: number): string {
-  return `WO-${year}-${String(sequence).padStart(4, '0')}`;
+export function formatWorkOrderNumber(year: number, sequence: number, prefix = 'WO'): string {
+  return `${prefix}-${year}-${String(sequence).padStart(4, '0')}`;
 }
 
 /**

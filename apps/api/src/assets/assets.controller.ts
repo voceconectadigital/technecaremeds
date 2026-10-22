@@ -12,7 +12,7 @@
  * (`asset_label`, ADR-006). Quem consome não precisa saber que internamente
  * tudo é `asset`; quem opera num hospital lê "Equipamento".
  */
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createAsset,
@@ -21,10 +21,20 @@ import {
   importAssets,
   curationQueue,
   assetTimeline,
+  mttr,
+  mtbf,
+  createObsolescenceReport,
+  recordAnvisaCheck,
   type TenantSession,
   type Database,
 } from '@aurora/db';
-import { assetsCreate, assetsTimeline, assetsUpdate } from '@aurora/contracts';
+import {
+  assetAnvisaCheck,
+  assetObsolescenceReport,
+  assetsCreate,
+  assetsTimeline,
+  assetsUpdate,
+} from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import {
   ValidationError,
@@ -35,6 +45,8 @@ import {
   overriddenSpecKeys,
   isUnderWarranty,
   assetAgeYears,
+  straightLineDepreciation,
+  isQrToken,
   type AssetImportRow,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
@@ -160,7 +172,8 @@ export class AssetsController {
     @Query('model') model?: string,
     @Query('manufacturer') manufacturer?: string,
     @Query('criticality') criticality?: string,
-    @Query('tracker') tracker?: string
+    @Query('tracker') tracker?: string,
+    @Query('qr') qr?: string
   ): Promise<{ items: unknown[]; asset_label: string }> {
     const ctx = req.auroraContext!;
     if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
@@ -210,6 +223,8 @@ export class AssetsController {
             AND ($11::text IS NULL
                  OR ($11 = 'yes' AND a.tracker_tag IS NOT NULL)
                  OR ($11 = 'no' AND a.tracker_tag IS NULL))
+            -- Etiqueta lida pela câmera (/q/:token): o token e SÓ ele, dentro do escopo de quem lê.
+            AND ($12::text IS NULL OR a.qr_token = $12)
           ORDER BY a.name
           LIMIT $4`,
         [
@@ -224,6 +239,7 @@ export class AssetsController {
           manufacturer ?? null,
           criticality === undefined ? null : uuidParam(criticality, 'criticality'),
           tracker === 'yes' || tracker === 'no' ? tracker : null,
+          qr ? (isQrToken(qr) ? qr : 'etiqueta-invalida') : null,
         ]
       );
       return { items, asset_label: org?.asset_label ?? 'Ativo' };
@@ -283,7 +299,8 @@ export class AssetsController {
                 a.asset_category_id, a.asset_model_id, a.customer_id,
                 a.location_id, a.location_path, a.parent_asset_id,
                 a.criticality_id, a.operational_risk, a.default_priority, a.risk_class,
-                a.anvisa_registration, a.inmetro_ordinance,
+                a.anvisa_registration, a.anvisa_status, a.anvisa_note, a.anvisa_checked_at,
+                a.inmetro_ordinance,
                 a.requires_calibration, a.requires_electrical_test,
                 a.manufactured_at, a.acquired_at, a.installed_at, a.warranty_until,
                 a.useful_life_years, a.decommissioned_at, a.decommission_reason,
@@ -337,6 +354,21 @@ export class AssetsController {
         specs: effectiveSpecs(modelSpecs, assetSpecs),
         specs_overridden: overriddenSpecKeys(modelSpecs, assetSpecs),
         under_warranty: isUnderWarranty(row.warranty_until as string | null, new Date()),
+        // Depreciação em linha reta: o percentual e os anos saem para quem vê o ativo; os
+        // valores só existem quando o valor de compra saiu da consulta (asset.read_financials).
+        depreciation: straightLineDepreciation({
+          acquiredAt: row.acquired_at as string | null,
+          usefulLifeYears: row.useful_life_years as number | null,
+          purchaseValue:
+            row.purchase_value === null || row.purchase_value === undefined
+              ? null
+              : Number(row.purchase_value),
+          residualValue:
+            row.residual_value === null || row.residual_value === undefined
+              ? null
+              : Number(row.residual_value),
+          now: new Date(),
+        }),
         age_years: assetAgeYears(
           {
             installedAt: row.installed_at as string | null,
@@ -466,6 +498,146 @@ export class AssetsController {
         .catch(rastreadorDuplicado);
     });
     return { ok: true };
+  }
+
+  /**
+   * Indicadores PONTUAIS do equipamento (conversa com o cliente, 21/10/2026): a ficha de
+   * vida mostra, só para este ativo, o que o painel mostra para o parque.
+   *
+   * Reaproveita as métricas do painel com o filtro de ativo — a mesma definição de MTTR e
+   * MTBF, e a mesma cobertura: ativo com uma única corretiva não tem MTBF, e a resposta
+   * diz isso (`null`), em vez de inventar um número.
+   */
+  @Get(':id/indicators')
+  @RequirePermissions('asset.read')
+  async indicators(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Query('days') days?: string
+  ): Promise<Record<string, unknown>> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const dias = Math.min(Math.max(Number.parseInt(days ?? '365', 10) || 365, 7), 1825);
+    const to = new Date();
+    const from = new Date(to.getTime() - dias * 24 * 60 * 60 * 1000);
+
+    return withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+
+      const periodo = { from, to };
+      const filtro = { assetId };
+      const tempoDeReparo = await mttr(s, periodo, filtro);
+      const entreFalhas = await mtbf(s, periodo, filtro);
+      const [conta] = await s.query<{
+        total: string;
+        corretivas: string;
+        preventivas: string;
+        abertas: string;
+        ultima_corretiva: Date | null;
+        minutos_parado: string;
+      }>(
+        `SELECT count(*)::text AS total,
+                count(*) FILTER (WHERE f.work_order_type_key = 'corrective')::text AS corretivas,
+                count(*) FILTER (WHERE f.work_order_type_key = 'preventive')::text AS preventivas,
+                count(*) FILTER (WHERE f.completed_at IS NULL)::text AS abertas,
+                max(f.opened_at) FILTER (WHERE f.work_order_type_key = 'corrective') AS ultima_corretiva,
+                COALESCE(sum(f.resolution_minutes) FILTER (WHERE f.work_order_type_key = 'corrective'), 0)::text AS minutos_parado
+           FROM aurora.fact_work_order f
+          WHERE f.asset_id = $1 AND NOT f.cancelled
+            AND f.opened_at >= $2 AND f.opened_at < $3`,
+        [assetId, from, to]
+      );
+
+      return {
+        period: { from: from.toISOString(), to: to.toISOString(), days: dias },
+        work_orders: {
+          total: Number(conta!.total),
+          corrective: Number(conta!.corretivas),
+          preventive: Number(conta!.preventivas),
+          open: Number(conta!.abertas),
+        },
+        // `null` = sem amostra suficiente. Zero diria "reparo instantâneo", e isso seria falso.
+        mttr_minutes: tempoDeReparo.data.value,
+        mttr_samples: tempoDeReparo.data.samples,
+        mtbf_minutes: entreFalhas.data.value,
+        mtbf_samples: entreFalhas.data.samples,
+        downtime_minutes: Number(conta!.minutos_parado),
+        last_corrective_at: conta!.ultima_corretiva,
+      };
+    });
+  }
+
+  /**
+   * Laudo de obsolescência (conversa com o cliente, 21/10/2026): o equipamento vira uma OS
+   * própria, numerada OBC-AAAA-NNNN, com a justificativa técnica. Não desativa nada agora:
+   * a baixa acontece quando o laudo é validado (ver `baixarPeloLaudo`).
+   */
+  @Post(':id/obsolescence-report')
+  @HttpCode(201)
+  @RequirePermissions('asset.decommission')
+  async obsolescenceReport(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ id: string; number: string | null }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const b = parseWith(assetObsolescenceReport.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      return createObsolescenceReport(s, assetId, b.justification);
+    });
+  }
+
+  /**
+   * Registra a verificação do registro ANVISA (conversa com o cliente, 21/10/2026). Alerta ou
+   * proibição avisam gestores e coordenadores; o sistema ainda não consulta a ANVISA sozinho.
+   */
+  @Post(':id/anvisa-check')
+  @HttpCode(201)
+  @RequirePermissions('asset.update')
+  async anvisaCheck(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ status: string; alerted: boolean }> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const b = parseWith(assetAnvisaCheck.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      const [visivel] = await s.query<{ ok: boolean }>(
+        `SELECT true AS ok FROM aurora.assets a
+          WHERE a.id = $1 AND a.deleted_at IS NULL
+            AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+            AND (a.location_id IS NULL
+                 OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
+        [assetId, membershipId]
+      );
+      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      return recordAnvisaCheck(s, assetId, { status: b.status, note: b.note ?? null });
+    });
   }
 
   /** Transferência: motivo obrigatório, porque movimentação sem motivo não explica nada depois. */

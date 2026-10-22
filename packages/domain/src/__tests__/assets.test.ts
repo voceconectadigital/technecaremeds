@@ -10,6 +10,7 @@ import {
   effectiveSpecs,
   overriddenSpecKeys,
   assetAgeYears,
+  straightLineDepreciation,
   isUnderWarranty,
   validateImportRow,
   ASSET_STATUSES,
@@ -144,5 +145,61 @@ describe('validação de linha de importação', () => {
     expect(validateImportRow({ ...base, purchase_value: -1 })[0]?.message).toMatch(/negativo/);
     expect(validateImportRow({ ...base, purchase_value: 0 })).toEqual([]);
     expect(validateImportRow({ ...base, purchase_value: '' })).toEqual([]);
+  });
+});
+
+describe('depreciação em linha reta', () => {
+  const agora = new Date('2025-01-01T00:00:00Z');
+
+  it('metade da vida útil: 50 %, metade do valor depreciável acumulada', () => {
+    const d = straightLineDepreciation({
+      acquiredAt: '2020-01-01',
+      usefulLifeYears: 10,
+      purchaseValue: 10000,
+      residualValue: 1000,
+      now: agora,
+    })!;
+    expect(d.percentDepreciated).toBeCloseTo(50, 0);
+    expect(d.annualDepreciation).toBe(900); // (10000 − 1000) / 10
+    expect(d.accumulatedDepreciation).toBeCloseTo(4500, -1);
+    expect(d.bookValue).toBeCloseTo(5500, -1);
+    expect(d.fullyDepreciated).toBe(false);
+    expect(d.remainingYears).toBeCloseTo(5, 0);
+  });
+
+  it('passou da vida útil: 100 %, valor contábil = residual, sem anos negativos', () => {
+    const d = straightLineDepreciation({
+      acquiredAt: '2010-01-01',
+      usefulLifeYears: 10,
+      purchaseValue: 10000,
+      residualValue: 1000,
+      now: agora,
+    })!;
+    expect(d.percentDepreciated).toBe(100);
+    expect(d.fullyDepreciated).toBe(true);
+    expect(d.remainingYears).toBe(0);
+    expect(d.bookValue).toBe(1000);
+  });
+
+  it('sem valor de compra: percentual e anos existem, valores são nulos', () => {
+    const d = straightLineDepreciation({ acquiredAt: '2020-01-01', usefulLifeYears: 10, now: agora })!;
+    expect(d.percentDepreciated).toBeGreaterThan(0);
+    expect(d.annualDepreciation).toBeNull();
+    expect(d.accumulatedDepreciation).toBeNull();
+    expect(d.bookValue).toBeNull();
+  });
+
+  it('data no futuro: 0 % — comprado hoje não está depreciado', () => {
+    const d = straightLineDepreciation({ acquiredAt: '2026-01-01', usefulLifeYears: 5, now: agora })!;
+    expect(d.percentDepreciated).toBe(0);
+    expect(d.remainingYears).toBe(5);
+  });
+
+  it('sem data de aquisição ou sem vida útil: não há o que depreciar (null, e não 0 %)', () => {
+    expect(straightLineDepreciation({ acquiredAt: null, usefulLifeYears: 10, now: agora })).toBeNull();
+    expect(
+      straightLineDepreciation({ acquiredAt: '2020-01-01', usefulLifeYears: null, now: agora })
+    ).toBeNull();
+    expect(straightLineDepreciation({ acquiredAt: 'lixo', usefulLifeYears: 10, now: agora })).toBeNull();
   });
 });

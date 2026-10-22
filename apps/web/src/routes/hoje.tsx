@@ -79,6 +79,7 @@ import {
 import { useApiQuery, usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { AppShell } from '../shell/app-shell';
 import { FluxoDaOperacao } from './hoje-fluxo';
+import { PendenciasDeAvaliacao } from '../features/ordens/avaliacao';
 
 /**
  * Consulta que FALHOU não se apresenta como "nada pendente" (pente-fino
@@ -117,6 +118,9 @@ export function HojePage() {
       actions={<DataDeHoje />}
     >
       <div className="flex flex-col gap-8">
+        {/* O que o cliente quer que a pessoa veja ao entrar: o que falta avaliar e assinar. */}
+        {can('work_order.read') && <PendenciasDeAvaliacao />}
+
         {can('customer.read') && <SeletorDeCliente valor={cliente} onChange={setCliente} />}
 
         {can('work_order.read') && <PainelDoTurno cliente={cliente} />}

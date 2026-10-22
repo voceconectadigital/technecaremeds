@@ -1101,7 +1101,7 @@ export async function signWorkOrder(
   input: {
     signerRole: 'technician' | 'customer' | 'supervisor';
     signerName: string;
-    method: 'drawn' | 'email_code';
+    method: 'drawn' | 'email_code' | 'session';
     signerEmail?: string | null;
     signerDocument?: string | null;
     attachmentId?: string | null;
