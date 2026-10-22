@@ -198,6 +198,8 @@ export const AssetDetail = z.object({
   residual_value: z.string().nullable().optional(),
   replacement_value: z.string().nullable().optional(),
   currency: z.string().nullable().optional(),
+  /** Nº da nota fiscal de aquisição (0078): dado financeiro, só para `asset.read_financials`. */
+  acquisition_invoice: z.string().nullable().optional(),
 
   /** Calculado no servidor a partir de `warranty_until` e da data de hoje. */
   under_warranty: z.boolean(),
@@ -377,6 +379,18 @@ const CamposDoEquipamento = {
   /** Chip geolocalizador / etiqueta de localização: tipo + identificador, juntos ou nenhum. */
   tracker_kind: z.enum(['gps', 'ble', 'rfid', 'nfc', 'outro']).nullable().optional(),
   tracker_tag: z.string().trim().min(2).max(80).nullable().optional(),
+  /** Registro na ANVISA (conversa com o cliente, 21/10/2026). */
+  anvisa_registration: z.string().trim().max(40).nullable().optional(),
+  /** Data de aquisição (AAAA-MM-DD) e vida útil em anos: base da depreciação automática. */
+  acquired_at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'use AAAA-MM-DD')
+    .nullable()
+    .optional(),
+  useful_life_years: z.number().int().min(1).max(100).nullable().optional(),
+  /** Valor do bem e nº da NF: só quem tem `asset.read_financials` pode informar. */
+  purchase_value: z.number().min(0).max(1_000_000_000_000).nullable().optional(),
+  acquisition_invoice: z.string().trim().max(60).nullable().optional(),
 };
 
 export const assetsCreate = defineOperation({
@@ -389,7 +403,14 @@ export const assetsCreate = defineOperation({
     'no escopo de quem cadastra e ser de um tipo de local que aceita equipamento. Identificador ' +
     'de outro cliente ou de outra organização é recusado.',
   permissions: ['asset.create'],
-  body: z.object({ ...CamposDoEquipamento, customer_id: Uuid, location_id: Uuid }),
+  body: z.object({
+    ...CamposDoEquipamento,
+    // Tag obrigatória no cadastro (conversa com o cliente, 21/10/2026). Na EDIÇÃO segue
+    // opcional: o parque já cadastrado sem tag continua editável.
+    tag: z.string().trim().min(1, 'a tag é obrigatória').max(80),
+    customer_id: Uuid,
+    location_id: Uuid,
+  }),
   response: z.object({ id: Uuid }),
   errors: ['not_found', 'validation_failed', 'conflict'],
 });

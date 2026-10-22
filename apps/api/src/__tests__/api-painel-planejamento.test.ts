@@ -409,6 +409,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
 
   it('cadastra equipamento com cliente E setor', async () => {
     const r = await http.post('/v1/assets').set(auth(GESTOR)).send({
+      tag: 'TAG-4',
       name: 'Desfibrilador UTI',
       customer_id: clienteA,
       location_id: setorA,
@@ -425,12 +426,13 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
     const r = await http
       .post('/v1/assets')
       .set(auth(GESTOR))
-      .send({ name: 'Sem setor', customer_id: clienteA, asset_category_id: categoria });
+      .send({ tag: 'TAG-5', name: 'Sem setor', customer_id: clienteA, asset_category_id: categoria });
     expect(r.status).toBe(422);
   });
 
   it('SETOR DE OUTRO CLIENTE é recusado, com o campo nomeado', async () => {
     const r = await http.post('/v1/assets').set(auth(GESTOR)).send({
+      tag: 'TAG-6',
       name: 'Intruso',
       customer_id: clienteA,
       location_id: setorB,
@@ -442,6 +444,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
 
   it('SETOR DE OUTRA ORGANIZAÇÃO não é encontrado', async () => {
     const r = await http.post('/v1/assets').set(auth(GESTOR)).send({
+      tag: 'TAG-7',
       name: 'Intruso',
       customer_id: clienteA,
       location_id: setorDaVizinha,
@@ -452,6 +455,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
 
   it('local que não recebe equipamento (unidade) é recusado', async () => {
     const r = await http.post('/v1/assets').set(auth(GESTOR)).send({
+      tag: 'TAG-8',
       name: 'Na unidade',
       customer_id: clienteA,
       location_id: unidadeA,

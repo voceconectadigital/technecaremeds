@@ -155,6 +155,8 @@ test.describe('Setores e Cliente → Setor → Equipamento', () => {
     await expect(dialogo.getByLabel('Setor')).toBeEnabled();
     await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
     await dialogo.getByLabel('Nome do equipamento').fill(`Desfibrilador E2E ${Date.now() % 10_000}`);
+    // A tag é obrigatória no cadastro (conversa com o cliente, 21/10/2026).
+    await dialogo.getByLabel('Tag (obrigatória)').fill(`TAG-E2E-${Date.now() % 100_000}`);
     // Família → Tipo (16/10/2026): o tipo do equipamento nasce do catálogo.
     await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
     await dialogo.getByLabel('Tipo do equipamento').selectOption({ label: 'Ventilador pulmonar' });
@@ -162,6 +164,22 @@ test.describe('Setores e Cliente → Setor → Equipamento', () => {
 
     await expect(page).toHaveURL(/\/ativos\/[0-9a-f-]{36}/);
     await expect(page.getByText('UTI Alfa').first()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('sem a tag o cadastro não segue, e a mensagem diz por quê', async ({ comoCoordenadorA: page }) => {
+    await page.goto('/ativos');
+    await page.getByRole('button', { name: 'Novo equipamento' }).click();
+    const dialogo = page.getByRole('dialog', { name: 'Novo equipamento' });
+    await dialogo.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
+    await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
+    await dialogo.getByLabel('Nome do equipamento').fill('Sem tag e2e');
+    await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
+    await dialogo.getByLabel('Tipo do equipamento').selectOption({ label: 'Ventilador pulmonar' });
+    // O navegador já barra o campo vazio (required); tira o atributo para provar a regra do formulário.
+    await dialogo.getByLabel('Tag (obrigatória)').evaluate((el) => el.removeAttribute('required'));
+    await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
+    await expect(dialogo.getByText(/A tag é obrigatória/)).toBeVisible();
+    await expect(dialogo).toBeVisible();
   });
 });
 

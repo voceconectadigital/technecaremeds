@@ -107,6 +107,11 @@ export function AtivoPage() {
           asset_number: data.asset_number,
           tracker_kind: data.tracker_kind ?? null,
           tracker_tag: data.tracker_tag ?? null,
+          anvisa_registration: data.anvisa_registration ?? null,
+          acquired_at: data.acquired_at ?? null,
+          useful_life_years: data.useful_life_years ?? null,
+          purchase_value: data.purchase_value ?? null,
+          acquisition_invoice: data.acquisition_invoice ?? null,
         }}
       />
       <div className="flex flex-col gap-4">

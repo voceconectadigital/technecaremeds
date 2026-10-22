@@ -11,7 +11,7 @@
  * N1 arquivo · N2 gateway · N3 protocolo/SDK · N4 instrumento próprio — todas
  * produzem o MESMO envelope; nenhuma está implementada nesta rodada.
  */
-import { Bot, Cable, Gauge, MapPin, Recycle, Thermometer, Wind, type LucideIcon } from 'lucide-react';
+import { Award, Bot, Cable, Gauge, MapPin, Recycle, Thermometer, Wind, type LucideIcon } from 'lucide-react';
 import { Card, StatusChip } from '@aurora/ui';
 import { AppShell } from '../../shell/app-shell';
 
@@ -105,6 +105,17 @@ export const FERRAMENTAS: readonly Ferramenta[] = Object.freeze([
     proposito: 'Apoio à decisão sobre o histórico de manutenção.',
     hoje: null,
     falta: 'Nada de IA está ativo: casos de uso, provedor e regras de procedência ainda não definidos.',
+  },
+  {
+    key: 'ona',
+    nome: 'ONA — Acreditação',
+    icone: Award,
+    situacao: 'futuro',
+    // Pedido do cliente em 21/10/2026: a ONA entra só como ferramenta de apresentação; o
+    // acompanhamento de acreditação fica para a V2.
+    proposito: 'Apoio ao preparo e ao acompanhamento da acreditação hospitalar (ONA).',
+    hoje: null,
+    falta: 'Vitrine para apresentação: os requisitos da ONA e o acompanhamento entram na versão 2.',
   },
 ]);
 

@@ -187,6 +187,10 @@ export interface AssetInput {
   acquiredAt?: string | null;
   purchaseValue?: number | null;
   replacementValue?: number | null;
+  /** Registro ANVISA, vida útil (anos) e nº da NF de aquisição (0078). */
+  anvisaRegistration?: string | null;
+  usefulLifeYears?: number | null;
+  acquisitionInvoice?: string | null;
   specs?: Record<string, unknown>;
   /** Origem e identificador no sistema legado (0048). Opcionais, e sempre juntos. */
   externalSource?: string | null;
@@ -201,9 +205,9 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
        (id, organization_id, name, customer_id, asset_category_id, location_id, asset_model_id,
         criticality_id, parent_asset_id, tag, serial_number, asset_number, qr_token, status,
         acquired_at, purchase_value, replacement_value, specs, created_by,
-        external_source, external_id)
+        external_source, external_id, anvisa_registration, useful_life_years, acquisition_invoice)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::aurora.asset_status,
-             $15, $16, $17, $18, $19, $20, $21)`,
+             $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
     [
       id,
       session.context.organizationId,
@@ -226,6 +230,9 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
       session.context.actorId,
       externo?.source ?? null,
       externo?.id ?? null,
+      input.anvisaRegistration ?? null,
+      input.usefulLifeYears ?? null,
+      input.acquisitionInvoice ?? null,
     ]
   );
   return id;

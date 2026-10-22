@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { FERRAMENTAS, ROTULO_SITUACAO } from '../features/ferramentas/ferramentas';
 
 describe('Ferramentas', () => {
-  it('as sete ferramentas pedidas, na ordem da reunião', () => {
+  it('as sete ferramentas da reunião, mais a ONA pedida depois, na ordem', () => {
     expect(FERRAMENTAS.map((f) => f.nome)).toEqual([
       'Temperatura e Umidade',
       'Geolocalização',
@@ -15,6 +15,7 @@ describe('Ferramentas', () => {
       'Simuladores e Analisadores',
       'Integrações de Engenharia Clínica',
       'Inteligência Artificial',
+      'ONA — Acreditação',
     ]);
   });
 

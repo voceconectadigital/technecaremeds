@@ -1719,6 +1719,16 @@
                         }
                       ]
                     },
+                    "acquisition_invoice": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "under_warranty": {
                       "type": "boolean"
                     },
@@ -2064,6 +2074,63 @@
                         "type": "string",
                         "minLength": 2,
                         "maxLength": 80
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "anvisa_registration": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "acquired_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "useful_life_years": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "purchase_value": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1000000000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "acquisition_invoice": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
                       },
                       {
                         "type": "null"
@@ -2993,15 +3060,9 @@
                     ]
                   },
                   "tag": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 80
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
                   },
                   "serial_number": {
                     "anyOf": [
@@ -3054,6 +3115,63 @@
                       }
                     ]
                   },
+                  "anvisa_registration": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "acquired_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "useful_life_years": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "purchase_value": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1000000000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "acquisition_invoice": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 60
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "customer_id": {
                     "description": "Identificador UUID",
                     "type": "string",
@@ -3070,6 +3188,7 @@
                 "required": [
                   "name",
                   "asset_category_id",
+                  "tag",
                   "customer_id",
                   "location_id"
                 ]

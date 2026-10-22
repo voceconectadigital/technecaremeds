@@ -328,7 +328,12 @@ describe('o que cada perfil NÃO faz', () => {
   it('SOLICITANTE não cadastra cliente, equipamento nem plano; não lê estoque', async () => {
     expect((await http.post('/v1/customers').set(auth(SOLICITANTE)).send({ name: 'Novo' })).status).toBe(403);
     expect(
-      (await http.post('/v1/assets').set(auth(SOLICITANTE)).send({ name: 'X', customer_id: hospital })).status
+      (
+        await http
+          .post('/v1/assets')
+          .set(auth(SOLICITANTE))
+          .send({ tag: 'TAG-9', name: 'X', customer_id: hospital })
+      ).status
     ).toBe(403);
     expect((await http.post('/v1/maintenance-plans').set(auth(SOLICITANTE)).send({})).status).toBe(403);
     expect((await http.post('/v1/checklist-templates').set(auth(SOLICITANTE)).send({})).status).toBe(403);

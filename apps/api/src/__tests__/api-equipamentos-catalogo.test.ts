@@ -242,17 +242,65 @@ describe('cliente → setor → equipamento, com chip', () => {
     expect(ficha.body.tracker_tag).toBe('GPS-000123');
   });
 
+  it('sem tag o cadastro é recusado (422): a tag é obrigatória', async () => {
+    const r = await http.post('/v1/assets').set(auth(GESTORA)).send({
+      name: 'Sem tag',
+      customer_id: hospital,
+      location_id: uti,
+      asset_category_id: tipoVentilador,
+    });
+    expect(r.status).toBe(422);
+    expect(JSON.stringify(r.body)).toMatch(/tag/i);
+  });
+
+  it('aquisição e registro: ANVISA, data, vida útil, valor e NF gravam e voltam na ficha', async () => {
+    const r = await http.post('/v1/assets').set(auth(GESTORA)).send({
+      name: 'Monitor multiparâmetro',
+      tag: 'MON-001',
+      customer_id: hospital,
+      location_id: uti,
+      asset_category_id: tipoVentilador,
+      anvisa_registration: '80102030040',
+      acquired_at: '2020-03-15',
+      useful_life_years: 10,
+      purchase_value: 25000.5,
+      acquisition_invoice: 'NF-123456',
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    const ficha = await http.get(`/v1/assets/${r.body.id}`).set(auth(GESTORA));
+    expect(ficha.body.anvisa_registration).toBe('80102030040');
+    expect(String(ficha.body.acquired_at).slice(0, 10)).toBe('2020-03-15');
+    expect(ficha.body.useful_life_years).toBe(10);
+    expect(ficha.body.purchase_value).toBe('25000.50');
+    expect(ficha.body.acquisition_invoice).toBe('NF-123456');
+
+    // Edita: a NF muda; a vida útil inválida é recusada.
+    expect(
+      (await http.patch(`/v1/assets/${r.body.id}`).set(auth(GESTORA)).send({ acquisition_invoice: 'NF-999' }))
+        .status
+    ).toBe(200);
+    expect((await http.get(`/v1/assets/${r.body.id}`).set(auth(GESTORA))).body.acquisition_invoice).toBe(
+      'NF-999'
+    );
+    expect(
+      (await http.patch(`/v1/assets/${r.body.id}`).set(auth(GESTORA)).send({ useful_life_years: 0 })).status
+    ).toBe(422);
+    // Este equipamento só existe para este teste: sai de cena para não entrar nos filtros e
+    // nas listas dos testes seguintes (que contam equipamentos exatos).
+    await t.admin.query(`UPDATE aurora.assets SET deleted_at = now() WHERE id = $1`, [r.body.id]);
+  });
+
   it('chip repetido → 409; chip pela metade → 422', async () => {
     const base = { customer_id: hospital, location_id: uti, asset_category_id: tipoVentilador };
     const dup = await http
       .post('/v1/assets')
       .set(auth(GESTORA))
-      .send({ ...base, name: 'Outro', tracker_kind: 'gps', tracker_tag: 'GPS-000123' });
+      .send({ tag: 'TAG-2', ...base, name: 'Outro', tracker_kind: 'gps', tracker_tag: 'GPS-000123' });
     expect(dup.status).toBe(409);
     const meio = await http
       .post('/v1/assets')
       .set(auth(GESTORA))
-      .send({ ...base, name: 'Outro', tracker_kind: 'rfid' });
+      .send({ tag: 'TAG-3', ...base, name: 'Outro', tracker_kind: 'rfid' });
     expect(meio.status).toBe(422);
   });
 
