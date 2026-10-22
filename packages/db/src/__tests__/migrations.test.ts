@@ -129,6 +129,7 @@ describe('migrations (EPIC-001)', () => {
       'platform_admins',
       'price_list_items',
       'price_lists',
+      'quality_records',
       'quote_items',
       'quote_status_history',
       'quotes',

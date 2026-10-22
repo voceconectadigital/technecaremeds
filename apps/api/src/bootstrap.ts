@@ -36,6 +36,11 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
    * grande.
    */
   app.use('/v1/field/attachments', raw({ type: 'application/octet-stream', limit: '8mb' }));
+  // Certificados de qualidade: PDF e imagem, só neste caminho (conversa com o cliente, 21/10/2026).
+  app.use(
+    '/v1/quality-records',
+    raw({ type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], limit: '10mb' })
+  );
   app.use(json({ limit: '12mb' }));
   app.use(urlencoded({ extended: false, limit: '1mb' }));
   /*
@@ -79,6 +84,8 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
         'x-aurora-sha256',
         'x-aurora-storage-key',
         'x-aurora-final',
+        // Nome do arquivo do certificado de qualidade (PUT /v1/quality-records/:id/file).
+        'x-aurora-file-name',
       ],
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
       maxAge: 600,
