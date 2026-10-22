@@ -15,4 +15,14 @@ test.describe('Estoque e Store', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Store');
     await expect(page.getByText(/Disponível|em estoque|saldo/i)).toHaveCount(0);
   });
+
+  test('a Store tem as abas Catálogo e Pedidos; sem pedido, a aba Pedidos diz isso', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/store');
+    await expect(page.getByRole('tab', { name: 'Catálogo' })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'Pedidos' }).click();
+    await expect(page.getByText('Nenhum pedido ainda')).toBeVisible();
+    expect(page.url()).toContain('aba=pedidos');
+  });
 });

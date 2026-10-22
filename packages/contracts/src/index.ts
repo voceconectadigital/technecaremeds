@@ -39,6 +39,7 @@ export * from './operations/insights';
 export * from './operations/notifications';
 export * from './operations/documents';
 export * from './operations/quality';
+export * from './operations/store-orders';
 export * from './operations/automations';
 export * from './operations/portal';
 export * from './operations/field';

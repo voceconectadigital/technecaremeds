@@ -6,6 +6,10 @@
  * almoxarifado. O objetivo desta versão é ver, consultar e PEDIR PROPOSTA: o
  * pedido vira oportunidade para o comercial. Não há carrinho, checkout nem
  * pagamento.
+ *
+ * 21/10/2026 (conversa com o cliente): a Store também recebe PEDIDOS — o cliente monta o pedido, a
+ * prestadora confirma com a previsão de entrega, despacha, entrega e anexa a nota fiscal, e o
+ * cliente acompanha tudo na aba Pedidos (`pedidos.tsx`). Continua sem pagamento.
  */
 import { useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
@@ -18,8 +22,10 @@ import {
   Input,
   Select,
   Skeleton,
+  Tabs,
   Textarea,
   Thumb,
+  tabIds,
   useToast,
 } from '@aurora/ui';
 import {
@@ -29,9 +35,10 @@ import {
   type Customer,
   type StoreItem,
 } from '@aurora/contracts';
-import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { ApiError, Can, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
+import { DialogoDoPedido, PedidosDaStore, type Carrinho } from './pedidos';
 
 function reais(centavos: string | null): string {
   return centavos === null
@@ -41,6 +48,10 @@ function reais(centavos: string | null): string {
 
 export function StorePage() {
   const [pedindo, setPedindo] = useState<StoreItem | null>(null);
+  const [aba, setAba] = useUrlState<string>('aba', 'catalogo');
+  // O carrinho é local: um pedido ainda não feito não é dado do servidor.
+  const [carrinho, setCarrinho] = useState<Carrinho>(new Map());
+  const [revisando, setRevisando] = useState(false);
   const { data, isLoading, isError, error } = useApiQuery(storeItemsList) as {
     data: { items: StoreItem[] } | undefined;
     isLoading: boolean;
@@ -48,48 +59,119 @@ export function StorePage() {
     error: unknown;
   };
   if (isError) return <ErrorScreen error={error} />;
+  const abaAtual = aba === 'pedidos' ? 'pedidos' : 'catalogo';
+  const totalDoCarrinho = [...carrinho.entries()].reduce((soma, [id, qtd]) => {
+    const preco = data?.items.find((i) => i.id === id)?.list_price_cents;
+    return preco === null || preco === undefined ? soma : soma + Number(preco) * qtd;
+  }, 0);
+
+  function adicionar(item: StoreItem) {
+    setCarrinho((c) => new Map(c).set(item.id, (c.get(item.id) ?? 0) + 1));
+  }
+
   return (
     <AppShell
       title="Store"
-      subtitle="Catálogo comercial: produtos e ofertas. Peça uma proposta — o comercial responde com orçamento."
+      subtitle="Catálogo comercial: compre peças e acessórios, acompanhe a entrega e receba a nota fiscal — ou peça uma proposta."
     >
-      {isLoading ? (
-        <Skeleton className="h-48 w-full" />
-      ) : (data?.items.length ?? 0) === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<ShoppingBag className="size-5" />}
-            title="Nenhuma oferta publicada"
-            description="Os itens aparecem aqui quando o estoque os publica na Store (Estoque › Gestão › Itens na Store)."
-          />
-        </Card>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {data!.items.map((i) => (
-            <li key={i.id}>
-              <Card className="flex h-full flex-col gap-3 p-4">
-                <div className="flex items-start gap-3">
-                  <Thumb src={i.image_url ?? undefined} name={i.name} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-text">{i.name}</p>
-                    <p className="text-xs text-muted">{[i.category, i.sku].filter(Boolean).join(' · ')}</p>
-                  </div>
-                </div>
-                {i.summary && <p className="text-sm text-text">{i.summary}</p>}
-                <p className="mt-auto text-base font-semibold text-text tabular-nums">
-                  {reais(i.list_price_cents)}
-                </p>
-                <Can permission="store.request_quote">
-                  <Button variant="primary" onClick={() => setPedindo(i)}>
-                    Solicitar proposta
-                  </Button>
-                </Can>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-col gap-4">
+        <Tabs
+          idPrefix="store"
+          value={abaAtual}
+          onChange={setAba}
+          aria-label="Store"
+          items={[
+            { id: 'catalogo', label: 'Catálogo' },
+            { id: 'pedidos', label: 'Pedidos' },
+          ]}
+        />
+        <div
+          role="tabpanel"
+          id={tabIds('store', abaAtual).painel}
+          aria-labelledby={tabIds('store', abaAtual).aba}
+        >
+          {abaAtual === 'pedidos' ? (
+            <PedidosDaStore />
+          ) : isLoading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (data?.items.length ?? 0) === 0 ? (
+            <Card>
+              <EmptyState
+                icon={<ShoppingBag className="size-5" />}
+                title="Nenhuma oferta publicada"
+                description="Os itens aparecem aqui quando o estoque os publica na Store (Estoque › Gestão › Itens na Store)."
+              />
+            </Card>
+          ) : (
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {data!.items.map((i) => (
+                <li key={i.id}>
+                  <Card className="flex h-full flex-col gap-3 p-4">
+                    <div className="flex items-start gap-3">
+                      <Thumb src={i.image_url ?? undefined} name={i.name} />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-text">{i.name}</p>
+                        <p className="text-xs text-muted">
+                          {[i.category, i.sku].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                    </div>
+                    {i.summary && <p className="text-sm text-text">{i.summary}</p>}
+                    <p className="mt-auto text-base font-semibold text-text tabular-nums">
+                      {reais(i.list_price_cents)}
+                    </p>
+                    <Can permission="store.request_quote">
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="primary" onClick={() => adicionar(i)}>
+                          Adicionar ao pedido
+                        </Button>
+                        <Button onClick={() => setPedindo(i)}>Solicitar proposta</Button>
+                      </div>
+                    </Can>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {abaAtual === 'catalogo' && carrinho.size > 0 && (
+          <div
+            role="region"
+            aria-label="Seu pedido"
+            className="sticky bottom-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent bg-surface p-3 shadow-card"
+          >
+            <span className="text-sm text-text">
+              <strong>{carrinho.size}</strong> {carrinho.size === 1 ? 'item' : 'itens'} no pedido ·{' '}
+              <strong className="tabular-nums">{reais(String(totalDoCarrinho))}</strong>
+            </span>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setCarrinho(new Map())}>
+                Esvaziar
+              </Button>
+              <Button variant="primary" onClick={() => setRevisando(true)}>
+                Revisar e fazer o pedido
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
       {pedindo && <DialogoProposta item={pedindo} onFechar={() => setPedindo(null)} />}
+      {revisando && (
+        <DialogoDoPedido
+          itens={data?.items ?? []}
+          carrinho={carrinho}
+          onMudar={(c) => {
+            setCarrinho(c);
+            if (c.size === 0) setRevisando(false);
+          }}
+          onFechar={() => setRevisando(false)}
+          onFeito={() => {
+            setCarrinho(new Map());
+            setRevisando(false);
+            setAba('pedidos');
+          }}
+        />
+      )}
     </AppShell>
   );
 }
