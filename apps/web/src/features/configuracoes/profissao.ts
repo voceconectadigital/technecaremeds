@@ -7,14 +7,7 @@
  * livre ("Enfermeira", "ENFERMEIRO(A)").
  */
 export type IconeDeProfissao =
-  | 'doctor'
-  | 'nurse'
-  | 'engineer'
-  | 'technician'
-  | 'buyer'
-  | 'manager'
-  | 'executive'
-  | 'person';
+  'doctor' | 'nurse' | 'engineer' | 'technician' | 'buyer' | 'manager' | 'executive' | 'person';
 
 export function iconeDaProfissao(titulo: string | null | undefined): IconeDeProfissao {
   const t = (titulo ?? '')

@@ -228,40 +228,40 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         </Field>
 
         {modelo !== 'parts_alert' && (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Periodicidade">
-            <Select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
-              <option value="daily">Diária</option>
-              <option value="weekly">Semanal</option>
-              <option value="monthly">Mensal</option>
-            </Select>
-          </Field>
-          {periodo === 'weekly' && (
-            <Field label="Dia da semana">
-              <Select value={String(diaSemana)} onChange={(e) => setDiaSemana(Number(e.target.value))}>
-                {DIAS_DA_SEMANA.map((d, i) => (
-                  <option key={d} value={i}>
-                    {d}
-                  </option>
-                ))}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Periodicidade">
+              <Select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)}>
+                <option value="daily">Diária</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensal</option>
               </Select>
             </Field>
-          )}
-          {periodo === 'monthly' && (
-            <Field label="Dia do mês">
-              <Select value={String(diaMes)} onChange={(e) => setDiaMes(Number(e.target.value))}>
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
+            {periodo === 'weekly' && (
+              <Field label="Dia da semana">
+                <Select value={String(diaSemana)} onChange={(e) => setDiaSemana(Number(e.target.value))}>
+                  {DIAS_DA_SEMANA.map((d, i) => (
+                    <option key={d} value={i}>
+                      {d}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            {periodo === 'monthly' && (
+              <Field label="Dia do mês">
+                <Select value={String(diaMes)} onChange={(e) => setDiaMes(Number(e.target.value))}>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+            <Field label="Horário">
+              <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
             </Field>
-          )}
-          <Field label="Horário">
-            <Input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
-          </Field>
-        </div>
+          </div>
         )}
 
         {modelo === 'scheduled_report' && (

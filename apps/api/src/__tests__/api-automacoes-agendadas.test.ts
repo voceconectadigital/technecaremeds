@@ -256,9 +256,7 @@ describe('aviso imediato: OS aguardando peça (gatilho por evento)', () => {
       triggerKind: 'event',
       triggerEvent: 'work_order.status_changed',
       conditions: { field: 'wait_reason_key', op: 'eq', value: 'parts' },
-      actions: [
-        { kind: 'reminder', params: { recipients: [memO], title: 'OS {{number}} aguardando peça' } },
-      ],
+      actions: [{ kind: 'reminder', params: { recipients: [memO], title: 'OS {{number}} aguardando peça' } }],
     });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
   });

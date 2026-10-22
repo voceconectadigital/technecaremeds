@@ -290,10 +290,11 @@ function PendenciasDeEspera({ cliente }: { cliente: string }) {
   const { data: quadro } = useApiQuery(workOrdersBoard, { query: doCliente(cliente) }) as {
     data: { columns: BoardColumn[] } | undefined;
   };
-  const { data: orcamentos } = useApiQuery(quotesList, {
-    query: cliente ? { customerId: cliente } : {},
-    enabled: can('quote.read'),
-  }) as { data: { items: QuoteRow[] } | undefined };
+  const { data: orcamentos } = useApiQuery(
+    quotesList,
+    { query: cliente ? { customerId: cliente } : {} },
+    { enabled: can('quote.read') }
+  ) as { data: { items: QuoteRow[] } | undefined };
 
   const aguardandoPeca = (quadro?.columns ?? []).reduce(
     (soma, coluna) =>
@@ -305,7 +306,7 @@ function PendenciasDeEspera({ cliente }: { cliente: string }) {
   ).length;
 
   return (
-    <MetricGrid columns={can('quote.read') ? 2 : 1}>
+    <MetricGrid columns={2}>
       {can('quote.read') && (
         <Metric
           label="Orçamentos aguardando aprovação"

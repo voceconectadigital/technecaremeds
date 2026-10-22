@@ -155,7 +155,7 @@ const ICONES_DE_PROFISSAO: Record<IconeDeProfissao, { Icone: LucideIcon; rotulo:
 };
 
 /** O selo da profissão sobre o avatar. Só mostra quando a profissão foi informada. */
-function IconeDeProfissao({ titulo }: { titulo: string | null }) {
+function IconeDeProfissao({ titulo }: { titulo: string | null | undefined }) {
   if (!titulo?.trim()) return null;
   const { Icone, rotulo } = ICONES_DE_PROFISSAO[iconeDaProfissao(titulo)];
   return (
