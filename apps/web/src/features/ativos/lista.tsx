@@ -28,6 +28,7 @@ import { Button, Card, EmptyState, Select, SkeletonList, StatusChip, Thumb, cn }
 import {
   assetsFormOptions,
   assetsList,
+  customersList,
   locationsList,
   ASSET_STATUSES,
   type AssetRow,
@@ -68,6 +69,11 @@ export function AtivosPage() {
   const [tipo, setTipo] = useUrlState<string>('tipo', '');
   const [criticidade, setCriticidade] = useUrlState<string>('criticidade', '');
   const [chip, setChip] = useUrlState<string>('chip', '');
+  // Filtro por cliente (conversa com o cliente, 21/10/2026): ativo × cliente, no servidor.
+  const [cliente, setCliente] = useUrlState<string>('cliente', '');
+  const { data: clientes } = useApiQuery(customersList, undefined, { staleTime: 5 * 60_000 }) as {
+    data: { items: { id: string; name: string }[]; single_customer: boolean } | undefined;
+  };
   const { data: opcoes } = useApiQuery(assetsFormOptions, undefined, { staleTime: 5 * 60_000 }) as {
     data:
       | {
@@ -96,6 +102,7 @@ export function AtivosPage() {
   const { data, isLoading, isError, error } = useApiQuery(assetsList, {
     query: {
       ...(local ? { location: local } : {}),
+      ...(cliente ? { customer: cliente } : {}),
       ...(situacao ? { status: situacao as AssetStatus } : {}),
       ...(familia ? { family: familia } : {}),
       ...(tipo ? { category: tipo } : {}),
@@ -202,6 +209,16 @@ export function AtivosPage() {
               </Select>
             </div>
             <div className="grid gap-2 border-b border-border-subtle p-3 sm:grid-cols-2 lg:grid-cols-4">
+              {!clientes?.single_customer && (clientes?.items.length ?? 0) > 1 && (
+                <Select value={cliente} aria-label="Cliente" onChange={(e) => setCliente(e.target.value)}>
+                  <option value="">Todos os clientes</option>
+                  {(clientes?.items ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
               <Select
                 value={familia}
                 aria-label="Família"

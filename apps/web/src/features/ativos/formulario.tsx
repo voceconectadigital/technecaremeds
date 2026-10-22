@@ -65,6 +65,20 @@ export interface EquipamentoInicial {
   asset_number: string | null;
   tracker_kind?: string | null;
   tracker_tag?: string | null;
+  anvisa_registration?: string | null;
+  acquired_at?: string | null;
+  useful_life_years?: number | null;
+  /** Só chegam do servidor para quem tem `asset.read_financials`. */
+  purchase_value?: string | null;
+  acquisition_invoice?: string | null;
+}
+
+/** "1.500,00" ou "1500.00" → 1500. Vazio → null; texto que não é número → NaN. */
+export function valorEmReais(texto: string): number | null {
+  const t = texto.trim();
+  if (!t) return null;
+  const normal = t.includes(',') ? t.replace(/./g, '').replace(',', '.') : t;
+  return /^d+(.d+)?$/.test(normal) ? Number(normal) : Number.NaN;
 }
 
 export const TIPOS_DE_RASTREADOR = [
@@ -125,6 +139,13 @@ export function DialogoEquipamento({
   const [familia, setFamilia] = useState('');
   const [rastreadorTipo, setRastreadorTipo] = useState(inicial?.tracker_kind ?? '');
   const [rastreadorId, setRastreadorId] = useState(inicial?.tracker_tag ?? '');
+  const [anvisa, setAnvisa] = useState(inicial?.anvisa_registration ?? '');
+  const [adquiridoEm, setAdquiridoEm] = useState(inicial?.acquired_at?.slice(0, 10) ?? '');
+  const [vidaUtil, setVidaUtil] = useState(
+    inicial?.useful_life_years ? String(inicial.useful_life_years) : ''
+  );
+  const [valorBem, setValorBem] = useState(inicial?.purchase_value ?? '');
+  const [notaFiscal, setNotaFiscal] = useState(inicial?.acquisition_invoice ?? '');
   const [novoTipo, setNovoTipo] = useState<string | null>(null);
   const [novoModelo, setNovoModelo] = useState<{ fabricante: string; nome: string } | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -145,6 +166,11 @@ export function DialogoEquipamento({
     setFamilia('');
     setRastreadorTipo(inicial?.tracker_kind ?? '');
     setRastreadorId(inicial?.tracker_tag ?? '');
+    setAnvisa(inicial?.anvisa_registration ?? '');
+    setAdquiridoEm(inicial?.acquired_at?.slice(0, 10) ?? '');
+    setVidaUtil(inicial?.useful_life_years ? String(inicial.useful_life_years) : '');
+    setValorBem(inicial?.purchase_value ?? '');
+    setNotaFiscal(inicial?.acquisition_invoice ?? '');
     setNovoTipo(null);
     setNovoModelo(null);
     setMotivo('');
@@ -187,6 +213,7 @@ export function DialogoEquipamento({
     [categorias, familiaEfetiva]
   );
   const podeCurar = can('organization.manage_catalogs');
+  const podeVerFinanceiro = can('asset.read_financials');
   const criarTipo = useApiMutation(assetCategoriesCreate, {
     invalidates: [assetsFormOptions],
     onError: (e: ApiError) => setErro({ campo: 'asset_category_id', mensagem: e.problem.message }),
@@ -226,6 +253,14 @@ export function DialogoEquipamento({
     if (!setor) return falhar('location_id', 'Escolha o setor onde o equipamento está.');
     if (nome.trim().length < 2) return falhar('name', 'Dê um nome ao equipamento.');
     if (!categoria) return falhar('asset_category_id', 'Escolha o tipo do equipamento.');
+    if (!tag.trim()) return falhar('tag', 'A tag é obrigatória: é ela que identifica o equipamento.');
+    if (
+      vidaUtil.trim() &&
+      !(Number.isInteger(Number(vidaUtil)) && Number(vidaUtil) >= 1 && Number(vidaUtil) <= 100)
+    )
+      return falhar('useful_life_years', 'A vida útil é um número inteiro de anos, de 1 a 100.');
+    if (podeVerFinanceiro && Number.isNaN(valorEmReais(valorBem)))
+      return falhar('purchase_value', 'Valor inválido. Use números, por exemplo 1.500,00.');
     if (Boolean(rastreadorTipo) !== Boolean(rastreadorId.trim()))
       return falhar('tracker_tag', 'Informe o tipo e o identificador do chip juntos (ou nenhum).');
     if (mudouDeSetor && motivo.trim().length < 5)
@@ -251,6 +286,13 @@ export function DialogoEquipamento({
       asset_number: patrimonio.trim() || null,
       tracker_kind: (rastreadorTipo || null) as (typeof TIPOS_DE_RASTREADOR)[number]['valor'] | null,
       tracker_tag: rastreadorId.trim() || null,
+      anvisa_registration: anvisa.trim() || null,
+      acquired_at: adquiridoEm || null,
+      useful_life_years: vidaUtil.trim() ? Number(vidaUtil) : null,
+      // Valor e nota fiscal são dado financeiro: só vão quem tem permissão (a API recusa o resto).
+      ...(podeVerFinanceiro
+        ? { purchase_value: valorEmReais(valorBem), acquisition_invoice: notaFiscal.trim() || null }
+        : {}),
     };
     try {
       if (!editando) {
@@ -289,6 +331,9 @@ export function DialogoEquipamento({
     'tracker_tag',
     'tracker_kind',
     'reason',
+    'tag',
+    'useful_life_years',
+    'purchase_value',
   ];
   const salvando = criar.isPending || editar.isPending || transferir.isPending;
 
@@ -530,8 +575,14 @@ export function DialogoEquipamento({
               ))}
             </Select>
           </Field>
-          <Field label="Tag" error={erroDe('tag')}>
-            <Input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Opcional" />
+          <Field label="Tag (obrigatória)" error={erroDe('tag')}>
+            <Input
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              required
+              aria-required="true"
+              placeholder="Ex.: UTI-VM-014"
+            />
           </Field>
           <Field label="Número de série" error={erroDe('serial_number')}>
             <Input value={serie} onChange={(e) => setSerie(e.target.value)} placeholder="Opcional" />
@@ -544,6 +595,49 @@ export function DialogoEquipamento({
             />
           </Field>
         </div>
+
+        <fieldset className="grid gap-4 rounded-card border border-border-subtle p-4 sm:grid-cols-2">
+          <legend className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">
+            Aquisição e registro
+          </legend>
+          <Field label="Registro ANVISA" error={erroDe('anvisa_registration')}>
+            <Input value={anvisa} onChange={(e) => setAnvisa(e.target.value)} placeholder="Opcional" />
+          </Field>
+          <Field label="Data de aquisição" error={erroDe('acquired_at')}>
+            <Input type="date" value={adquiridoEm} onChange={(e) => setAdquiridoEm(e.target.value)} />
+          </Field>
+          <Field
+            label="Durabilidade (anos)"
+            error={erroDe('useful_life_years')}
+            hint="A depreciação conta a partir da data de aquisição, em linha reta, por este prazo."
+          >
+            <Input
+              inputMode="numeric"
+              value={vidaUtil}
+              onChange={(e) => setVidaUtil(e.target.value)}
+              placeholder="Ex.: 10"
+            />
+          </Field>
+          {podeVerFinanceiro && (
+            <>
+              <Field label="Valor do bem (R$)" error={erroDe('purchase_value')}>
+                <Input
+                  inputMode="decimal"
+                  value={valorBem}
+                  onChange={(e) => setValorBem(e.target.value)}
+                  placeholder="Ex.: 25.000,00"
+                />
+              </Field>
+              <Field label="Nota fiscal de aquisição">
+                <Input
+                  value={notaFiscal}
+                  onChange={(e) => setNotaFiscal(e.target.value)}
+                  placeholder="Número da NF"
+                />
+              </Field>
+            </>
+          )}
+        </fieldset>
 
         <fieldset className="grid gap-4 rounded-card border border-border-subtle p-4 sm:grid-cols-2">
           <legend className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">

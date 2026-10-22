@@ -98,6 +98,21 @@ async function conferirClienteESetor(
  * Chip geolocalizador / etiqueta de localização: tipo e identificador andam
  * juntos. Só cadastro — nenhuma leitura de hardware acontece aqui.
  */
+/**
+ * Valor do bem e nº da NF são dado financeiro: a API os devolve só a quem tem
+ * `asset.read_financials`, e só essa pessoa os informa. Quem não tem a permissão e
+ * manda o campo recebe 403, em vez de ver o valor ser gravado e sumir da resposta.
+ */
+function conferirPermissaoFinanceira(
+  ctx: { permissions: ReadonlySet<string> },
+  b: { purchase_value?: unknown; acquisition_invoice?: unknown }
+): void {
+  const mexeEmFinanceiro = b.purchase_value !== undefined || b.acquisition_invoice !== undefined;
+  if (mexeEmFinanceiro && !ctx.permissions.has('asset.read_financials')) {
+    throw new ForbiddenError('valor do bem e nota fiscal exigem a permissão asset.read_financials');
+  }
+}
+
 function conferirRastreador(
   kind: string | null | undefined,
   tag: string | null | undefined
@@ -281,6 +296,7 @@ export class AssetsController {
                 CASE WHEN $3::boolean THEN a.residual_value::text END AS residual_value,
                 CASE WHEN $3::boolean THEN a.replacement_value::text END AS replacement_value,
                 CASE WHEN $3::boolean THEN a.currency END AS currency,
+                CASE WHEN $3::boolean THEN a.acquisition_invoice END AS acquisition_invoice,
                 c.name AS category_name, l.name AS location_name,
                 m.name AS model_name, m.specs AS model_specs,
                 f.name AS manufacturer_name, cu.name AS customer_name,
@@ -349,6 +365,7 @@ export class AssetsController {
     const membershipId = ctx.membershipId;
     const b = parseWith(assetsCreate.body, body);
     const rastreador = conferirRastreador(b.tracker_kind, b.tracker_tag);
+    conferirPermissaoFinanceira(ctx, b);
     const id = await withTenant(this.db, ctx, async (s) => {
       await conferirClienteESetor(s, membershipId, b.customer_id, b.location_id);
       const novo = await createAsset(s, {
@@ -361,6 +378,11 @@ export class AssetsController {
         tag: b.tag || null,
         serialNumber: b.serial_number || null,
         assetNumber: b.asset_number || null,
+        acquiredAt: b.acquired_at ?? null,
+        purchaseValue: b.purchase_value ?? null,
+        anvisaRegistration: b.anvisa_registration || null,
+        usefulLifeYears: b.useful_life_years ?? null,
+        acquisitionInvoice: b.acquisition_invoice || null,
       });
       if (rastreador) {
         await s
@@ -403,7 +425,13 @@ export class AssetsController {
       asset_number: 'asset_number',
       tracker_kind: 'tracker_kind',
       tracker_tag: 'tracker_tag',
+      anvisa_registration: 'anvisa_registration',
+      acquired_at: 'acquired_at',
+      useful_life_years: 'useful_life_years',
+      purchase_value: 'purchase_value',
+      acquisition_invoice: 'acquisition_invoice',
     };
+    conferirPermissaoFinanceira(ctx, b);
     if (b.tracker_kind !== undefined || b.tracker_tag !== undefined) {
       // O par vai junto: tipo sem identificador (ou o contrário) não localiza nada.
       conferirRastreador(b.tracker_kind ?? null, b.tracker_tag ?? null);

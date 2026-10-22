@@ -7,7 +7,9 @@
 import { test, expect } from '../fixtures/aurora';
 
 test.describe('Fase 12 · Ferramentas', () => {
-  test('o menu leva às sete ferramentas, todas com situação', async ({ comoCoordenadorA: page }) => {
+  test('o menu leva às oito ferramentas (sete da reunião e a ONA), todas com situação', async ({
+    comoCoordenadorA: page,
+  }) => {
     const chamadas: string[] = [];
     page.on('request', (r) => {
       if (/\/v1\/(tools|ferramentas)/.test(r.url())) chamadas.push(r.url());
@@ -16,7 +18,7 @@ test.describe('Fase 12 · Ferramentas', () => {
     await page.getByRole('link', { name: 'Ferramentas' }).first().click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Ferramentas');
     const lista = page.getByRole('list', { name: 'Ferramentas' });
-    await expect(lista.getByRole('listitem')).toHaveCount(7);
+    await expect(lista.getByRole('listitem')).toHaveCount(8);
     for (const nome of ['Temperatura e Umidade', 'Rastreabilidade CME', 'Inteligência Artificial']) {
       await expect(lista.getByRole('heading', { name: nome })).toBeVisible();
     }

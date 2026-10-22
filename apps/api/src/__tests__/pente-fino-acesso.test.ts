@@ -458,7 +458,10 @@ describe('P1 — escopo nas rotas de equipe', () => {
 
 describe('P2 — Operador não cadastra equipamento', () => {
   it('POST /assets → 403', async () => {
-    const r = await http.post('/v1/assets').set(auth(OPERADOR)).send({ name: 'X', customer_id: hospital });
+    const r = await http
+      .post('/v1/assets')
+      .set(auth(OPERADOR))
+      .send({ tag: 'TAG-10', name: 'X', customer_id: hospital });
     expect(r.status).toBe(403);
     expect(JSON.stringify(r.body)).toContain('asset.create');
   });
