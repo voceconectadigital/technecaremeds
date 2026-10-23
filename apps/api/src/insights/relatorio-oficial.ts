@@ -270,7 +270,9 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
     const partes = [
       fraseDoValor(sec, textoDoValor(familia, paraExibicao(familia, sec.unit, sec.value))),
       fraseDaMeta(sec, familia),
-      fraseDaVariacao(sec, d.serie, familia),
+      // "Em relação ao mês anterior" só faz sentido quando o relatório é um mês civil inteiro:
+      // comparar 30 dias corridos com um mês fechado diria "caiu" ou "subiu" sem ter caído nem subido.
+      comp ? fraseDaVariacao(sec, d.serie, familia) : null,
     ].filter((x): x is string => !!x);
     linhas.push({ texto: partes.join(' '), recuo: 6 });
     if (sec.key === 'opened_vs_closed') {
@@ -287,7 +289,10 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
 
     const pontos = d.serie?.series[sec.key];
     const semSerie = d.serie?.unavailable[sec.key];
-    if (pontos || semSerie) {
+    if (semSerie) {
+      // Sem série mensal não há o que desenhar: uma nota basta, e não um quadro vazio.
+      linhas.push({ texto: `Sem gráfico mensal: ${semSerie}`, recuo: 6, tamanho: 8, espacoAntes: 2 });
+    } else if (pontos) {
       figura += 1;
       linhas.push({
         texto: `Gráfico ${doisDigitos(figura)}: ${sigla}`,

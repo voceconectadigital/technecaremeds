@@ -239,6 +239,8 @@ export function desenharGrafico(
     const folga = (hi - lo) * 0.15;
     lo -= folga;
     hi += folga;
+    // Contagem e percentual não vão abaixo de zero: o eixo não pode mostrar "-3 chamados".
+    if (Math.min(...pontos) >= 0 && lo < 0) lo = 0;
   }
   const yDe = (v: number) => py + ((v - lo) / (hi - lo)) * ph;
   const xDe = (i: number) => px + ((i + 0.5) * pw) / n;
@@ -281,10 +283,12 @@ export function desenharGrafico(
   const ly = yTopo - 7;
   ops.push(`q ${AZUL} RG 1.5 w ${num(lx)} ${num(ly + 2)} m ${num(lx + 14)} ${num(ly + 2)} l S Q`);
   ops.push(escrever('F1', 6.5, lx + 18, ly, 'Valor'));
-  ops.push(
-    `q ${VERMELHO} RG 1 w [4 3] 0 d ${num(lx + 52)} ${num(ly + 2)} m ${num(lx + 66)} ${num(ly + 2)} l S Q`
-  );
-  ops.push(escrever('F1', 6.5, lx + 70, ly, 'Meta'));
+  if (metaTrecho) {
+    ops.push(
+      `q ${VERMELHO} RG 1 w [4 3] 0 d ${num(lx + 52)} ${num(ly + 2)} m ${num(lx + 66)} ${num(ly + 2)} l S Q`
+    );
+    ops.push(escrever('F1', 6.5, lx + 70, ly, 'Meta'));
+  }
   return ops;
 }
 

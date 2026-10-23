@@ -193,16 +193,28 @@ describe('Completo', () => {
 
   it('gráfico de 12 meses com meta; a situação de agora não ganha série inventada', () => {
     const graficos = linhas.filter((l) => l.grafico);
-    expect(graficos).toHaveLength(4);
+    expect(graficos).toHaveLength(3); // IAR, MTTR e AxF; a situação de agora não tem gráfico
     const iar = graficos[0]!.grafico!;
     expect(iar.valores).toHaveLength(12);
     expect(iar.metas.every((m) => m === 3)).toBe(true);
     const mttr = graficos[1]!.grafico!;
     expect(mttr.valores[11]).toBeCloseTo(829 / 60, 5);
     expect(mttr.metas[11]).toBe(72);
-    const dpt = graficos[3]!.grafico!;
-    expect(dpt.valores).toEqual([]);
-    expect(dpt.semSerie).toMatch(/situação do parque agora/);
+    expect(texto(linhas)).toContain('Sem gráfico mensal: Disponibilidade é a situação do parque agora.');
+  });
+
+  it('só compara com o mês anterior quando o relatório é um mês civil inteiro', () => {
+    // 30 dias corridos contra um mês fechado diria "subiu" ou "caiu" sem ter subido nem caído.
+    const quinzena = montarCompleto({
+      ...base,
+      de: '2026-09-01T03:00:00.000Z',
+      ate: '2026-09-16T03:00:00.000Z',
+    });
+    const x = texto(quinzena.linhas);
+    expect(x).not.toContain('em relação ao mês anterior');
+    expect(x).toContain('A avaliação geral do serviço ficou em 4,6.');
+    expect(x).toContain('Período 01/09/2026 a 15/09/2026');
+    expect(texto(linhas)).toContain('em relação ao mês anterior');
   });
 
   it('assinaturas: as informadas, ou as linhas em branco do modelo', () => {
@@ -367,5 +379,25 @@ describe('escritor de PDF: blocos novos', () => {
   it('quebra de página força página nova', () => {
     const s = gerarPdf([{ texto: 'a' }, { texto: 'b', quebraDePagina: true }], opcoes).toString('latin1');
     expect(Number(/\/Count (\d+)/.exec(s)![1])).toBe(2);
+  });
+});
+
+describe('escritor de PDF: eixo e legenda', () => {
+  const opcoes = { titulo: 'T', autor: 'A', rodape: 'R' };
+  const rotulos = ['a', 'b', 'c'];
+  it('série só de números não negativos não desenha eixo abaixo de zero', () => {
+    const s = gerarPdf(
+      [{ texto: '', grafico: { rotulos, valores: [0, 3, 1], metas: [null, null, null], casas: 0 } }],
+      opcoes
+    ).toString('latin1');
+    expect(s).not.toMatch(/\(-\d/);
+  });
+  it('sem meta, a legenda não fala em meta e não há linha tracejada', () => {
+    const s = gerarPdf(
+      [{ texto: '', grafico: { rotulos, valores: [1, 2, 3], metas: [null, null, null], casas: 0 } }],
+      opcoes
+    ).toString('latin1');
+    expect(s).not.toContain('(Meta)');
+    expect(s).not.toContain('[4 3] 0 d');
   });
 });
