@@ -13,6 +13,13 @@
  *   · sem cliente e com escopo de toda a organização (a prestadora), não há trava: o relatório é da
  *     carteira inteira, não de um contrato.
  * Entre vários clientes vale o nível MAIS BAIXO informado. Cliente sem nível informado não trava.
+ *
+ * O cliente do pedido é o escolhido OU o do contrato OU o do setor (`clienteDoRecorte`): escolher
+ * só o setor de um hospital é pedir o relatório daquele hospital.
+ *
+ * RELATÓRIO AGENDADO (REL-13 / AUT-05, 29/10/2026): a mesma trava ao CRIAR a automação (cliente
+ * escolhido, ou cada destinatário restrito a clientes) e de novo na EXECUÇÃO — o contrato pode ter
+ * mudado depois; aí o destinatário fica sem o relatório e o log da automação diz por quê.
  */
 import { DomainError, REPORT_TIER_LABEL, type ReportTier } from '@aurora/domain';
 import type { TenantSession } from './client';
@@ -52,6 +59,18 @@ export async function nivelDeRelatorioPermitido(
   return menor;
 }
 
+/** A frase de negócio quando o pedido passa do contratado; nulo quando cabe. */
+export function excessoDeNivel(
+  teto: { tier: ReportTier; customer: string } | null,
+  pedido: ReportTier
+): string | null {
+  if (!teto || ORDEM[pedido] <= ORDEM[teto.tier]) return null;
+  return (
+    `O contrato de ${teto.customer} inclui o relatório ${REPORT_TIER_LABEL[teto.tier]}; ` +
+    `o ${REPORT_TIER_LABEL[pedido]} não está contratado.`
+  );
+}
+
 export async function assertNivelDeRelatorioContratado(
   session: TenantSession,
   membershipId: string | null,
@@ -59,11 +78,57 @@ export async function assertNivelDeRelatorioContratado(
   pedido: ReportTier
 ): Promise<void> {
   const teto = await nivelDeRelatorioPermitido(session, membershipId, customerId);
-  if (teto && ORDEM[pedido] > ORDEM[teto.tier]) {
-    throw new NivelDeRelatorioNaoContratadoError(
-      `O contrato de ${teto.customer} inclui o relatório ${REPORT_TIER_LABEL[teto.tier]}; ` +
-        `o ${REPORT_TIER_LABEL[pedido]} não está contratado.`,
-      { contracted_tier: teto.tier, requested_tier: pedido }
-    );
+  const excesso = excessoDeNivel(teto, pedido);
+  if (teto && excesso) {
+    throw new NivelDeRelatorioNaoContratadoError(excesso, {
+      contracted_tier: teto.tier,
+      requested_tier: pedido,
+    });
   }
+}
+
+/**
+ * O cliente de que o relatório trata: o escolhido, senão o do contrato, senão o do setor. Nulo
+ * quando nada aponta um cliente (o relatório é da carteira). Contrato ou setor inexistente não
+ * é erro aqui — a montagem do relatório responde 404 por eles.
+ */
+export async function clienteDoRecorte(
+  session: TenantSession,
+  r: { customer_id?: string | null; contract_id?: string | null; sector_id?: string | null }
+): Promise<string | null> {
+  if (r.customer_id) return r.customer_id;
+  if (r.contract_id) {
+    const [c] = await session.query<{ customer_id: string }>(
+      `SELECT customer_id FROM aurora.contracts WHERE id = $1`,
+      [r.contract_id]
+    );
+    if (c) return c.customer_id;
+  }
+  if (r.sector_id) {
+    const [l] = await session.query<{ customer_id: string }>(
+      `SELECT customer_id FROM aurora.locations WHERE id = $1 AND deleted_at IS NULL`,
+      [r.sector_id]
+    );
+    if (l) return l.customer_id;
+  }
+  return null;
+}
+
+/**
+ * O teto do relatório AGENDADO para um destinatário. Com cliente no recorte, é o contrato desse
+ * cliente — quem cria a regra pode não alcançá-lo, e o nível é do cliente, não de quem lê. Sem
+ * cliente, é a regra do pedido manual aplicada ao destinatário (restrito a clientes → o menor
+ * nível entre os que ele alcança; carteira inteira → sem trava).
+ */
+export async function tetoDoRelatorioAgendado(
+  session: TenantSession,
+  destinatario: string,
+  customerId: string | null
+): Promise<{ tier: ReportTier; customer: string } | null> {
+  if (!customerId) return nivelDeRelatorioPermitido(session, destinatario, null);
+  const [c] = await session.query<{ name: string; report_tier: ReportTier | null }>(
+    `SELECT name, report_tier FROM aurora.customers WHERE id = $1 AND deleted_at IS NULL`,
+    [customerId]
+  );
+  return c?.report_tier ? { tier: c.report_tier, customer: c.name } : null;
 }

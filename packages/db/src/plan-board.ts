@@ -86,6 +86,12 @@ export interface GuidedPlanInput {
   toleranceDays: number;
   autoGenerate: boolean;
   estimatedDurationMin?: number | null;
+  /**
+   * Procedimentos que vão JUNTO na mesma OS (OS-15): preventiva + TSE no mesmo
+   * atendimento, por exemplo. Cada um precisa ter versão publicada; o tipo é
+   * livre — a combinação existe justamente para juntar tipos diferentes.
+   */
+  extraChecklistTemplateKeys?: string[];
 }
 
 /**
@@ -184,6 +190,22 @@ export async function createGuidedPlan(
     }
   }
 
+  const extras = [...new Set(input.extraChecklistTemplateKeys ?? [])].filter(
+    (k) => k !== input.checklistTemplateKey
+  );
+  for (const chave of extras) {
+    const [publicado] = await session.query<{ id: string }>(
+      `SELECT id FROM aurora.checklist_templates WHERE key = $1 AND status = 'published' LIMIT 1`,
+      [chave]
+    );
+    if (!publicado) {
+      throw new ValidationError('um dos procedimentos adicionais não tem versão publicada', {
+        field: 'extra_checklist_template_keys',
+        key: chave,
+      });
+    }
+  }
+
   const planId = await createPlan(session, {
     name: input.name,
     description: input.description ?? '',
@@ -200,6 +222,7 @@ export async function createGuidedPlan(
     leadTimeDays: input.leadTimeDays,
     toleranceDays: input.toleranceDays,
     checklistTemplateKey: input.checklistTemplateKey,
+    extraChecklistTemplateKeys: extras,
     estimatedDurationMin: input.estimatedDurationMin ?? null,
   };
   const taskIds: string[] = [];
@@ -246,6 +269,13 @@ export interface PlanBoardFilters {
   to: Date;
   customerId?: string | null;
   sectorId?: string | null;
+  /**
+   * VÁRIOS setores ao mesmo tempo (PLN-11): o item entra se o equipamento está
+   * em QUALQUER um deles. Somado a `sectorId` quando os dois vêm. Cada setor é
+   * conferido contra o escopo de quem pergunta — fora dele é 404, e não um
+   * quadro vazio que confirmaria que o setor existe.
+   */
+  sectorIds?: readonly string[] | null;
   /** Tipo (preventiva, calibração, TSE, qualificação) — combinável com cliente e setor. */
   kind?: string | null;
   /**
@@ -278,18 +308,39 @@ interface ItemRow {
   procedure_title: string | null;
 }
 
-async function sectorPath(
+/**
+ * Os caminhos dos setores pedidos, ou nulo quando nenhum foi pedido.
+ *
+ * Setor de outra organização some pela RLS; setor de cliente ou local fora do
+ * escopo do vínculo também é "não encontrado" — e não um filtro que zera o
+ * quadro, que diria que o setor existe e só não tem atividade.
+ */
+export async function sectorPaths(
   session: TenantSession,
-  sectorId: string | null | undefined
-): Promise<string | null> {
-  if (!sectorId) return null;
-  const [s] = await session.query<{ path: string }>(
-    `SELECT path FROM aurora.locations WHERE id = $1 AND deleted_at IS NULL`,
-    [sectorId]
+  f: Pick<PlanBoardFilters, 'sectorId' | 'sectorIds'>,
+  scope: MembershipScope
+): Promise<string[] | null> {
+  const ids = [...new Set([...(f.sectorId ? [f.sectorId] : []), ...(f.sectorIds ?? [])])];
+  if (ids.length === 0) return null;
+  const rows = await session.query<{ id: string; path: string; customer_id: string }>(
+    `SELECT id, path, customer_id FROM aurora.locations WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [ids]
   );
-  if (!s) throw new NotFoundError('setor', sectorId);
-  return s.path;
+  for (const id of ids) {
+    const s = rows.find((r) => r.id === id);
+    const noEscopo =
+      s !== undefined &&
+      (scope.customerIds === null || scope.customerIds.includes(s.customer_id)) &&
+      (scope.locationPaths === null ||
+        scope.locationPaths.some((p) => s.path.startsWith(p) || p.startsWith(s.path)));
+    if (!noEscopo) throw new NotFoundError('setor', id);
+  }
+  return rows.map((r) => r.path);
 }
+
+/** Condição "o caminho está em algum dos setores" — `$n` é `text[]` ou nulo. */
+const EM_ALGUM_SETOR = (col: string, n: number) =>
+  `($${n}::text[] IS NULL OR EXISTS (SELECT 1 FROM unnest($${n}::text[]) AS setor(p) WHERE ${col} LIKE setor.p || '%'))`;
 
 /** Itens reais (gerados) com vencimento no período, já recortados pelo escopo. */
 async function realItems(
@@ -298,7 +349,7 @@ async function realItems(
   scope: MembershipScope,
   limit = 5000
 ): Promise<ItemRow[]> {
-  const caminho = await sectorPath(session, f.sectorId);
+  const caminho = await sectorPaths(session, f, scope);
   return session.query<ItemRow>(
     `SELECT i.id, i.due_at, i.status::text AS status, t.tolerance_days,
             st.category::text AS wo_category, i.work_order_id, w.number AS work_order_number,
@@ -327,7 +378,7 @@ async function realItems(
       WHERE p.archived_at IS NULL
         AND i.due_at >= $1 AND i.due_at < $2
         AND ($3::uuid IS NULL OR p.customer_id = $3)
-        AND ($4::text IS NULL OR a.location_path LIKE $4 || '%')
+        AND ${EM_ALGUM_SETOR('a.location_path', 4)}
         AND ${scopeSql('a.customer_id', 'a.location_path', 5)}
         AND ($7::text IS NULL OR ${TIPO_DA_TAREFA_SQL} = $7)
         AND ($8::uuid IS NULL OR a.asset_category_id = $8)
@@ -346,22 +397,42 @@ async function realItems(
   );
 }
 
+/** Uma fatia do quadro, com a taxa de conformidade DELA (PLN-10). */
+type Fatia = Record<BoardState, number> & { rate: number | null };
+
 export interface PlanBoard {
   totals: Record<BoardState, number> & { scheduled: number };
   rate: number | null;
-  byKind: Array<{ key: string } & Record<BoardState, number>>;
-  byCustomer: Array<{ key: string; label: string } & Record<BoardState, number>>;
-  bySector: Array<{ key: string; label: string } & Record<BoardState, number>>;
-  byMonth: Array<{ key: string } & Record<BoardState, number>>;
+  byKind: Array<{ key: string } & Fatia>;
+  byCustomer: Array<{ key: string; label: string } & Fatia>;
+  bySector: Array<{ key: string; label: string } & Fatia>;
+  byMonth: Array<{ key: string } & Fatia>;
   /** Por plano e por procedimento (reunião 16/10/2026) — dos mesmos itens reais. */
-  byPlan: Array<{ key: string; label: string } & Record<BoardState, number>>;
-  byProcedure: Array<{ key: string; label: string } & Record<BoardState, number>>;
+  byPlan: Array<{ key: string; label: string } & Fatia>;
+  byProcedure: Array<{ key: string; label: string } & Fatia>;
   plans: { active: number; tasks: number };
 }
 
 function vazio(): Record<BoardState, number> {
   return { done: 0, pending: 0, late: 0, skipped: 0 };
 }
+
+/**
+ * A taxa de conformidade de qualquer fatia: realizados ÷ (programados −
+ * dispensados), em %, uma casa. É a MESMA conta do indicador e da taxa global
+ * — programados são todos os itens da fatia (feitos + pendentes + vencidos +
+ * dispensados); dispensado com justificativa sai do denominador. Sem
+ * denominador é NULO, e não zero: zero diria "nada foi cumprido".
+ */
+export function complianceRate(v: Record<BoardState, number>): number | null {
+  const denominador = v.done + v.pending + v.late;
+  return denominador > 0 ? Number(((v.done / denominador) * 100).toFixed(1)) : null;
+}
+
+const comTaxa = <T extends Record<BoardState, number>>(v: T): T & { rate: number | null } => ({
+  ...v,
+  rate: complianceRate(v),
+});
 
 /**
  * Programados, realizados, pendentes, vencidos e dispensados no período.
@@ -422,27 +493,155 @@ export async function planBoard(
     porProcedimento.set(pk, pr);
   }
 
-  const [contagem] = await session.query<{ planos: string; tarefas: string }>(
-    `SELECT count(DISTINCT p.id)::text AS planos, count(t.id)::text AS tarefas
-       FROM aurora.maintenance_plans p
-       LEFT JOIN aurora.plan_tasks t ON t.plan_id = p.id AND t.archived_at IS NULL
-      WHERE p.archived_at IS NULL AND p.is_active
-        AND ($1::uuid IS NULL OR p.customer_id = $1)
-        AND ($2::uuid[] IS NULL OR p.customer_id = ANY($2::uuid[]))`,
-    [f.customerId ?? null, scope.customerIds]
-  );
+  const plans = await activePlanCount(session, f, scope);
 
   const denominador = totals.scheduled - totals.skipped;
   return {
     totals,
     rate: denominador > 0 ? Number(((totals.done / denominador) * 100).toFixed(1)) : null,
-    byKind: [...porTipo.entries()].map(([key, v]) => ({ key, ...v })),
-    byCustomer: [...porCliente.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
-    bySector: [...porSetor.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
-    byMonth: [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, v]) => ({ key, ...v })),
-    byPlan: [...porPlano.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
-    byProcedure: [...porProcedimento.entries()].map(([key, x]) => ({ key, label: x.label, ...x.v })),
-    plans: { active: Number(contagem?.planos ?? 0), tasks: Number(contagem?.tarefas ?? 0) },
+    byKind: [...porTipo.entries()].map(([key, v]) => comTaxa({ key, ...v })),
+    byCustomer: [...porCliente.entries()].map(([key, x]) => comTaxa({ key, label: x.label, ...x.v })),
+    bySector: [...porSetor.entries()].map(([key, x]) => comTaxa({ key, label: x.label, ...x.v })),
+    byMonth: [...porMes.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, v]) => comTaxa({ key, ...v })),
+    byPlan: [...porPlano.entries()].map(([key, x]) => comTaxa({ key, label: x.label, ...x.v })),
+    byProcedure: [...porProcedimento.entries()].map(([key, x]) => comTaxa({ key, label: x.label, ...x.v })),
+    plans,
+  };
+}
+
+/**
+ * "Planos ativos" (PLN-02): PLANOS distintos — não programações nem execuções
+ * do período —, ativos, não arquivados, com os MESMOS recortes do quadro.
+ *
+ * Um plano conta quando tem ao menos uma tarefa que passa no filtro: do tipo
+ * pedido e, quando há setor ou categoria, cujo alvo alcança HOJE algum
+ * equipamento daquele setor/categoria dentro do escopo. `tasks` conta essas
+ * tarefas. Sem filtro de equipamento, o recorte é o do cliente (como antes).
+ */
+export async function activePlanCount(
+  session: TenantSession,
+  f: PlanBoardFilters,
+  scope: MembershipScope
+): Promise<{ active: number; tasks: number }> {
+  const caminhos = await sectorPaths(session, f, scope);
+  const porEquipamento = caminhos !== null || Boolean(f.assetCategoryId);
+  const [contagem] = await session.query<{ planos: string; tarefas: string }>(
+    `SELECT count(DISTINCT p.id)::text AS planos, count(t.id)::text AS tarefas
+       FROM aurora.maintenance_plans p
+       LEFT JOIN aurora.plan_tasks t
+              ON t.plan_id = p.id AND t.archived_at IS NULL
+             AND ($3::text IS NULL OR ${TIPO_DA_TAREFA_SQL} = $3)
+             AND (NOT $4::boolean OR EXISTS (
+                   SELECT 1 FROM aurora.resolve_plan_task_assets(t.id) r
+                     JOIN aurora.assets a ON a.id = r.asset_id
+                    WHERE ${EM_ALGUM_SETOR('a.location_path', 5)}
+                      AND ($6::uuid IS NULL OR a.asset_category_id = $6)
+                      AND ${scopeSql('a.customer_id', 'a.location_path', 7)}))
+      WHERE p.archived_at IS NULL AND p.is_active
+        AND ($1::uuid IS NULL OR p.customer_id = $1)
+        AND ($2::uuid[] IS NULL OR p.customer_id = ANY($2::uuid[]))
+        -- Sem recorte de tipo nem de equipamento, o plano sem tarefa ainda é um
+        -- plano ativo (e a lista avisa "sem tarefa"); com recorte, só conta o
+        -- plano que tem tarefa dentro dele.
+        AND (($3::text IS NULL AND NOT $4::boolean) OR t.id IS NOT NULL)`,
+    [
+      f.customerId ?? null,
+      scope.customerIds,
+      f.kind ?? null,
+      porEquipamento,
+      caminhos,
+      f.assetCategoryId ?? null,
+      scope.customerIds,
+      scope.locationPaths,
+    ]
+  );
+  return { active: Number(contagem?.planos ?? 0), tasks: Number(contagem?.tarefas ?? 0) };
+}
+
+/* -------------------------------------------------------------------------- */
+/* relatório de conformidade (REL-12)                                          */
+/* -------------------------------------------------------------------------- */
+
+export const COMPLIANCE_DEFINITION = {
+  numerator: 'Realizados: itens de ciclo com vencimento no período cuja OS foi concluída/validada.',
+  denominator:
+    'Programados − dispensados: todos os itens de ciclo com vencimento no período (realizados, ' +
+    'pendentes e vencidos), menos os dispensados com justificativa. O que ainda não foi gerado ' +
+    '(previsto) não entra.',
+  formula: 'Conformidade = realizados ÷ (programados − dispensados) × 100',
+} as const;
+
+export interface ComplianceRankRow {
+  position: number;
+  key: string;
+  label: string;
+  scheduled: number;
+  done: number;
+  pending: number;
+  late: number;
+  skipped: number;
+  denominator: number;
+  rate: number | null;
+}
+
+/**
+ * Ordena pela CONFORMIDADE, e não pelo volume: a maior taxa primeiro; empate,
+ * o maior denominador (mais atividades sustentando a mesma taxa); depois o
+ * nome. Fatia sem denominador (tudo dispensado) vai para o fim, sem posição
+ * inventada.
+ */
+export function rankByCompliance(
+  linhas: ReadonlyArray<{ key: string; label: string } & Record<BoardState, number>>
+): ComplianceRankRow[] {
+  const comConta = linhas.map((l) => {
+    const denominator = l.done + l.pending + l.late;
+    return {
+      key: l.key,
+      label: l.label,
+      scheduled: denominator + l.skipped,
+      done: l.done,
+      pending: l.pending,
+      late: l.late,
+      skipped: l.skipped,
+      denominator,
+      rate: complianceRate(l),
+    };
+  });
+  comConta.sort((a, b) => {
+    if (a.rate === null && b.rate === null) return a.label.localeCompare(b.label, 'pt-BR');
+    if (a.rate === null) return 1;
+    if (b.rate === null) return -1;
+    return b.rate - a.rate || b.denominator - a.denominator || a.label.localeCompare(b.label, 'pt-BR');
+  });
+  return comConta.map((l, i) => ({ position: i + 1, ...l }));
+}
+
+export interface ComplianceReport {
+  definition: typeof COMPLIANCE_DEFINITION;
+  totals: Record<BoardState, number> & { scheduled: number; denominator: number };
+  rate: number | null;
+  byPlan: ComplianceRankRow[];
+  byCustomer: ComplianceRankRow[];
+  bySector: ComplianceRankRow[];
+}
+
+/** O relatório de conformidade: o quadro, ranqueado por taxa, com a definição escrita. */
+export async function planComplianceReport(
+  session: TenantSession,
+  f: PlanBoardFilters,
+  scope: MembershipScope,
+  now = new Date()
+): Promise<ComplianceReport> {
+  const b = await planBoard(session, f, scope, now);
+  return {
+    definition: COMPLIANCE_DEFINITION,
+    totals: { ...b.totals, denominator: b.totals.scheduled - b.totals.skipped },
+    rate: b.rate,
+    byPlan: rankByCompliance(b.byPlan),
+    byCustomer: rankByCompliance(b.byCustomer),
+    bySector: rankByCompliance(b.bySector),
   };
 }
 
@@ -516,7 +715,7 @@ export async function planSchedule(
     work_order_number: i.work_order_number,
   }));
 
-  const caminho = await sectorPath(session, f.sectorId);
+  const caminho = await sectorPaths(session, f, scope);
   const tarefas = await session.query<{
     id: string;
     name: string;
@@ -563,7 +762,7 @@ export async function planSchedule(
                 ORDER BY s.depth DESC LIMIT 1) AS sector_name
          FROM aurora.resolve_plan_task_assets($1) r
          JOIN aurora.assets a ON a.id = r.asset_id
-        WHERE ($2::text IS NULL OR a.location_path LIKE $2 || '%')
+        WHERE ${EM_ALGUM_SETOR('a.location_path', 2)}
           AND ${scopeSql('a.customer_id', 'a.location_path', 3)}
           AND ($5::uuid IS NULL OR a.asset_category_id = $5)
         ORDER BY a.name`,
@@ -615,6 +814,97 @@ export async function planSchedule(
 /* -------------------------------------------------------------------------- */
 /* ▶ Executar um item do plano (reunião 16/10/2026, Fase 6)                    */
 /* -------------------------------------------------------------------------- */
+
+export interface EligibleItem {
+  id: string;
+  due_at: string;
+  state: BoardState;
+  task_id: string;
+  task_name: string;
+  asset_id: string;
+  asset_name: string;
+  sector_name: string | null;
+  work_order_id: string | null;
+  work_order_number: string | null;
+}
+
+/**
+ * ▶ Play (PLN-09): os equipamentos ELEGÍVEIS de um plano — itens de ciclo
+ * ainda em aberto (pendentes ou com OS gerada e não encerrada), dentro do
+ * escopo de quem pergunta. Dispensado, realizado ou com OS encerrada não
+ * aparece: não há o que executar. O passo seguinte do assistente é o mesmo
+ * `executePlanItem` do botão da linha do cronograma.
+ */
+export async function planEligibleItems(
+  session: TenantSession,
+  planId: string,
+  scope: MembershipScope,
+  now = new Date()
+): Promise<EligibleItem[]> {
+  const [plano] = await session.query<{ customer_id: string }>(
+    `SELECT customer_id FROM aurora.maintenance_plans WHERE id = $1 AND archived_at IS NULL`,
+    [planId]
+  );
+  if (!plano || (scope.customerIds !== null && !scope.customerIds.includes(plano.customer_id))) {
+    throw new NotFoundError('Plano de manutenção', planId);
+  }
+  const rows = await session.query<{
+    id: string;
+    due_at: Date;
+    status: CycleItemStatus;
+    tolerance_days: number;
+    wo_category: string | null;
+    task_id: string;
+    task_name: string;
+    asset_id: string;
+    asset_name: string;
+    sector_name: string | null;
+    work_order_id: string | null;
+    work_order_number: string | null;
+  }>(
+    `SELECT i.id, i.due_at, i.status::text AS status, t.tolerance_days,
+            w.status_category::text AS wo_category,
+            t.id AS task_id, t.name AS task_name, a.id AS asset_id, a.name AS asset_name,
+            (SELECT s.name FROM aurora.locations s
+               JOIN aurora.location_types lt ON lt.id = s.location_type_id AND lt.key = 'setor'
+              WHERE a.location_path LIKE s.path || '%' AND s.deleted_at IS NULL
+              ORDER BY s.depth DESC LIMIT 1) AS sector_name,
+            i.work_order_id, w.number AS work_order_number
+       FROM aurora.plan_cycle_items i
+       JOIN aurora.plan_tasks t ON t.id = i.task_id AND t.archived_at IS NULL
+       JOIN aurora.assets a ON a.id = i.asset_id AND a.deleted_at IS NULL
+       LEFT JOIN aurora.work_orders w ON w.id = i.work_order_id
+      WHERE t.plan_id = $1
+        AND i.status IN ('pending', 'generated', 'overdue')
+        AND (w.id IS NULL OR w.status_category NOT IN ('done', 'closed', 'cancelled'))
+        AND ${scopeSql('a.customer_id', 'a.location_path', 2)}
+      ORDER BY i.due_at, a.name
+      LIMIT 500`,
+    [planId, scope.customerIds, scope.locationPaths]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    due_at: new Date(r.due_at).toISOString(),
+    state: boardState(
+      complianceState(
+        {
+          dueAt: new Date(r.due_at).toISOString(),
+          toleranceDays: Number(r.tolerance_days),
+          status: r.status,
+          workOrderCategory: r.wo_category,
+        },
+        now
+      )
+    ),
+    task_id: r.task_id,
+    task_name: r.task_name,
+    asset_id: r.asset_id,
+    asset_name: r.asset_name,
+    sector_name: r.sector_name,
+    work_order_id: r.work_order_id,
+    work_order_number: r.work_order_number,
+  }));
+}
 
 /**
  * Devolve a OS do item do ciclo, criando-a se ainda não existe.

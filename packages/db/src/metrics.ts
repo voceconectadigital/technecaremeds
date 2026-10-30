@@ -36,7 +36,13 @@ export interface MetricFilters {
   customerId?: string | null;
   /** Subárvore de locais, por prefixo do caminho materializado. */
   locationPath?: string | null;
+  /** Categoria do equipamento; uma FAMÍLIA inclui os tipos dela (REL-03, 29/10/2026). */
   assetCategoryId?: string | null;
+  /**
+   * Tipo de manutenção da OS — a chave de sistema da natureza da OS (os sete tipos de
+   * `request-types`). Vale para as métricas de OS e para as avaliações (REL-03).
+   */
+  workOrderTypeKey?: string | null;
   /** Um equipamento só (ficha de vida do ativo). */
   assetId?: string | null;
   teamId?: string | null;
@@ -58,6 +64,7 @@ function filterRecord(f: MetricFilters): Record<string, string | null> {
     customerId: f.customerId ?? null,
     locationPath: f.locationPath ?? null,
     assetCategoryId: f.assetCategoryId ?? null,
+    workOrderTypeKey: f.workOrderTypeKey ?? null,
     assetId: f.assetId ?? null,
     teamId: f.teamId ?? null,
     membershipId: f.membershipId ?? null,
@@ -80,15 +87,17 @@ function factFilter(f: MetricFilters, from = 1): { sql: string; params: unknown[
     f.membershipId ?? null,
     ...scopeParams(f),
     f.assetId ?? null,
+    f.workOrderTypeKey ?? null,
   ];
   const sql = `
       AND ($${from}::uuid IS NULL OR f.customer_id = $${from})
       AND ($${from + 1}::text IS NULL OR f.location_path LIKE $${from + 1} || '%')
-      AND ($${from + 2}::uuid IS NULL OR f.asset_category_id = $${from + 2})
+      AND ${categoriaSql('f.asset_category_id', from + 2)}
       AND ($${from + 3}::uuid IS NULL OR f.team_id = $${from + 3})
       AND ($${from + 4}::uuid IS NULL OR f.assignee_membership_id = $${from + 4})
       AND ${scopeSql('f.customer_id', 'f.location_path', from + 5)}
-      AND ($${from + 7}::uuid IS NULL OR f.asset_id = $${from + 7})`;
+      AND ($${from + 7}::uuid IS NULL OR f.asset_id = $${from + 7})
+      AND ($${from + 8}::text IS NULL OR f.work_order_type_key = $${from + 8})`;
   return { sql, params: p };
 }
 
@@ -103,6 +112,15 @@ export function scopeSql(customerCol: string, pathCol: string, from: number): st
   return `($${from}::uuid[] IS NULL OR ${customerCol} = ANY($${from}::uuid[]))
       AND ($${from + 1}::text[] IS NULL OR ${pathCol} = ''
            OR EXISTS (SELECT 1 FROM unnest($${from + 1}::text[]) AS sp(p) WHERE ${pathCol} LIKE sp.p || '%'))`;
+}
+
+/**
+ * O filtro de categoria do equipamento: a categoria escolhida e, quando ela é uma FAMÍLIA (raiz
+ * com `family_key`), os tipos dela (REL-03, 29/10/2026). Tipo continua casando só consigo.
+ */
+export function categoriaSql(col: string, n: number): string {
+  return `($${n}::uuid IS NULL OR ${col} IN (
+            SELECT ac.id FROM aurora.asset_categories ac WHERE ac.id = $${n} OR ac.parent_id = $${n}))`;
 }
 
 export function scopeParams(f: MetricFilters): [string[] | null, string[] | null] {
@@ -313,11 +331,12 @@ export async function slaCompliance(
                  AND ${scopeSql('f.customer_id', 'f.location_path', 4)}))
         -- Setor e categoria do equipamento: o relatório os passava e o SLA os
         -- ignorava (pente-fino 17/10/2026, junto do PF-53).
-        AND (($6::text IS NULL AND $7::uuid IS NULL) OR EXISTS (
+        AND (($6::text IS NULL AND $7::uuid IS NULL AND $8::text IS NULL) OR EXISTS (
               SELECT 1 FROM aurora.fact_work_order f
                WHERE f.work_order_id = c.document_id
                  AND ($6::text IS NULL OR f.location_path LIKE $6 || '%')
-                 AND ($7::uuid IS NULL OR f.asset_category_id = $7)))
+                 AND ${categoriaSql('f.asset_category_id', 7)}
+                 AND ($8::text IS NULL OR f.work_order_type_key = $8)))
       GROUP BY 1, 2`,
     [
       period.from,
@@ -326,6 +345,7 @@ export async function slaCompliance(
       ...scopeParams(filters),
       filters.locationPath ?? null,
       filters.assetCategoryId ?? null,
+      filters.workOrderTypeKey ?? null,
     ]
   );
 
@@ -557,7 +577,7 @@ export async function planCompliance(
         AND ($3::uuid IS NULL OR a.customer_id = $3)
         AND ${scopeSql('a.customer_id', 'a.location_path', 4)}
         AND ($6::text IS NULL OR a.location_path LIKE $6 || '%')
-        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+        AND ${categoriaSql('a.asset_category_id', 7)}`,
     [
       period.from,
       period.to,
@@ -757,7 +777,8 @@ export async function serviceRating(
         AND ($3::uuid IS NULL OR sr.customer_id = $3)
         AND ($4::text IS NULL OR coalesce(l.path, '') LIKE $4 || '%')
         AND ${sc}
-        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+        AND ${categoriaSql('a.asset_category_id', 7)}
+        AND ($8::text IS NULL OR sr.requested_type = $8)`,
     [
       period.from,
       period.to,
@@ -765,6 +786,7 @@ export async function serviceRating(
       filters.locationPath ?? null,
       ...scopeParams(filters),
       filters.assetCategoryId ?? null,
+      filters.workOrderTypeKey ?? null,
     ]
   );
 
@@ -806,7 +828,10 @@ export async function workOrderRating(
         AND ($3::uuid IS NULL OR w.customer_id = $3)
         AND ($4::text IS NULL OR coalesce(l.path, '') LIKE $4 || '%')
         AND ${sc}
-        AND ($7::uuid IS NULL OR a.asset_category_id = $7)`,
+        AND ${categoriaSql('a.asset_category_id', 7)}
+        AND ($8::text IS NULL OR EXISTS (
+              SELECT 1 FROM aurora.catalog_items ci
+               WHERE ci.id = w.work_order_type_id AND ci.system_key = $8))`,
     [
       period.from,
       period.to,
@@ -814,6 +839,7 @@ export async function workOrderRating(
       filters.locationPath ?? null,
       ...scopeParams(filters),
       filters.assetCategoryId ?? null,
+      filters.workOrderTypeKey ?? null,
     ]
   );
 

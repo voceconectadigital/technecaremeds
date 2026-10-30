@@ -128,6 +128,7 @@ export class QualityController {
         title: b.title,
         customerId: b.customer_id ?? null,
         assetId: b.asset_id ?? null,
+        procedureTemplateId: b.procedure_template_id ?? null,
         personName: b.person_name ?? null,
         certificateNumber: b.certificate_number ?? null,
         issuer: b.issuer ?? null,

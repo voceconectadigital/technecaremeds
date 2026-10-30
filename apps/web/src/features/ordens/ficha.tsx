@@ -34,7 +34,7 @@
  * escrevem, e escrevem pelo caminho que o servidor valida.
  */
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CalendarClock,
@@ -43,7 +43,9 @@ import {
   MessageSquare,
   Package,
   Paperclip,
+  PenLine,
   Play,
+  Printer,
   User,
 } from 'lucide-react';
 import {
@@ -66,8 +68,10 @@ import {
   workOrderAttachments,
   workOrderComment,
   workOrderComments,
+  workOrderCompletion,
   workOrderDetail,
   workOrderParts,
+  workOrderSignatures,
   workOrderTimeEntries,
   workOrdersBoard,
   workOrdersList,
@@ -79,6 +83,7 @@ import {
   type WorkOrderDetail,
   type WorkOrderHistoryEntry,
   type WorkOrderPart,
+  type WorkOrderSignature,
   type WorkOrderTransition,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
@@ -87,8 +92,27 @@ import { ErrorScreen } from '../../shell/error-boundary';
 import { PrioridadeChip, formatarDataRelativa } from '../../routes/hoje';
 import { tomDaCategoria } from './lista';
 import { useCatalogo, useMotivosDeEspera } from '../../lib/catalogos';
-import { AndamentoDaOs, DialogoOrcamentoDaOs, rotuloDoOrcamento } from './orcamento-da-os';
+import { AndamentoDaOs, DialogoOrcamentoDaOs, rotuloDoOrcamento, usaOrcamento } from './orcamento-da-os';
 import { AvaliacaoDaOs } from './avaliacao';
+import { FolhaDeImpressao } from './folha-de-impressao';
+
+/** Motivos de espera que só existem para quem usa orçamento (recurso `quotes`). */
+const MOTIVOS_DE_ORCAMENTO = new Set(['quote_approval', 'quote_preparation']);
+
+/**
+ * "Gerar orçamento" aparece? (OS-03 · ORC-01 · CLI-07)
+ *
+ * Só quando a organização usa orçamento, a pessoa pode criar, a OS não terminou e
+ * não há orçamento vivo (um reprovado, vencido ou cancelado pode ser refeito).
+ */
+export function podeGerarOrcamento(os: WorkOrderDetail, podeCriar: boolean): boolean {
+  return (
+    podeCriar &&
+    os.uses_quotes !== false &&
+    !['closed', 'cancelled'].includes(os.status_category) &&
+    (!os.quote_summary || ['rejected', 'expired', 'cancelled'].includes(os.quote_summary.status))
+  );
+}
 
 // A aba "Conversa" saiu da navegação da OS (reunião 16/10/2026: não tem função
 // nesse fluxo). Os comentários continuam gravados e no histórico — nada foi
@@ -113,6 +137,15 @@ export function OrdemPage() {
   // A aba fica na URL: quem manda o link da conversa quer que o outro caia na
   // conversa, e recarregar a página não deve devolver a pessoa ao resumo.
   const [aba, setAba] = useUrlState<string>('aba', 'resumo');
+  // O modo de impressão também (OS-20): `?modo=impressao` mostra a folha única
+  // com tudo o que a OS registrou, e não só a aba aberta.
+  const [modo, setModo] = useUrlState<string>('modo', 'ficha');
+  const imprimiu = useRef(false);
+  const imprimirQuandoPronta = useCallback(() => {
+    if (imprimiu.current) return;
+    imprimiu.current = true;
+    window.print();
+  }, []);
 
   const { data, isLoading, isError, error } = useApiQuery(workOrderDetail, { params: { id } }) as {
     data: WorkOrderDetail | undefined;
@@ -139,10 +172,40 @@ export function OrdemPage() {
     );
   }
 
+  if (modo === 'impressao') {
+    return (
+      <AppShell
+        title={`Imprimir ${data.number ?? 'OS'}`}
+        subtitle={`${data.title} · ${data.customer_name}`}
+        breadcrumbs={[
+          { label: 'Ordens de serviço', href: '/ordens' },
+          { label: data.number ?? '—', href: `/ordens/${id}` },
+          { label: 'Imprimir' },
+        ]}
+        actions={
+          <Button
+            onClick={() => {
+              imprimiu.current = false;
+              setModo('ficha');
+            }}
+          >
+            Voltar à ficha
+          </Button>
+        }
+      >
+        <FolhaDeImpressao os={data} onPronta={imprimirQuandoPronta} />
+      </AppShell>
+    );
+  }
+
+  // Concluir OS de equipamento pede o parecer LIBERADO/PARADO (OS-16); o laudo, não.
+  const pedeParecer = (t: WorkOrderTransition) =>
+    t.category === 'review' && Boolean(data!.asset_id) && !data!.number?.startsWith('OBC-');
+
   function pedir(t: WorkOrderTransition) {
     // Exige campo? Pergunta primeiro. Enviar e traduzir o 422 de volta em
     // formulário é o caminho que produz "o sistema não deixa e não diz por quê".
-    if (t.requires.length > 0) {
+    if (t.requires.length > 0 || (pedeParecer(t) && !data!.operational_result)) {
       setPedindo(t);
       return;
     }
@@ -157,8 +220,23 @@ export function OrdemPage() {
       title={data.title}
       subtitle={`${data.number ?? 'sem número'} · ${data.customer_name}`}
       breadcrumbs={[{ label: 'Ordens de serviço', href: '/ordens' }, { label: data.number ?? '—' }]}
+      // O Imprimir genérico levaria só a aba aberta: aqui ele dá lugar ao "Imprimir OS",
+      // que monta a folha completa (OS-20 · OS-26).
+      imprimir={false}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="aurora-no-print"
+            icon={<Printer className="size-4" aria-hidden="true" />}
+            onClick={() => {
+              imprimiu.current = false;
+              setModo('impressao');
+            }}
+          >
+            {data.number?.startsWith('OBC-') ? 'Imprimir laudo' : 'Imprimir OS'}
+          </Button>
           {EXECUTAVEL.has(data.status_category) &&
             (can('work_order.execute') || can('work_order.execute_any')) &&
             (data.available_transitions.length > 0 || data.status_category === 'in_progress') && (
@@ -170,12 +248,9 @@ export function OrdemPage() {
                 Executar
               </Button>
             )}
-          {can('quote.create') &&
-            !['closed', 'cancelled'].includes(data.status_category) &&
-            (!data.quote_summary ||
-              ['rejected', 'expired', 'cancelled'].includes(data.quote_summary.status)) && (
-              <Button onClick={() => setOrcando(true)}>Gerar orçamento</Button>
-            )}
+          {podeGerarOrcamento(data, can('quote.create')) && (
+            <Button onClick={() => setOrcando(true)}>Gerar orçamento</Button>
+          )}
           {data.available_transitions.map((t) => (
             <Button
               key={t.to}
@@ -219,6 +294,8 @@ export function OrdemPage() {
       {pedindo && (
         <DialogoDeTransicao
           transicao={pedindo}
+          usaOrcamento={usaOrcamento(data)}
+          parecer={pedeParecer(pedindo) ? { id, atual: data.operational_result ?? null } : null}
           onFechar={() => setPedindo(null)}
           onConfirmar={(campos) => {
             transicao.mutate(
@@ -400,11 +477,14 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
             {os.number?.startsWith('OBC-') && (
               <p role="note" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
                 Laudo de obsolescência: para concluir, anexe ao menos uma foto do equipamento. Quando o laudo
-                for validado, o equipamento é desativado com a justificativa acima.
+                for validado, o equipamento é desativado com a justificativa acima e a validação é assinada
+                por quem validou.
               </p>
             )}
           </div>
         </Card>
+
+        {os.number?.startsWith('OBC-') && <AssinaturaDoLaudo id={os.id} />}
 
         <Card>
           <CardHeader
@@ -462,6 +542,46 @@ function AbaResumo({ os }: { os: WorkOrderDetail }) {
         </dl>
       </Card>
     </div>
+  );
+}
+
+/**
+ * A assinatura de quem validou o laudo (OS-24): pela sessão, com e-mail, IP, hora e o
+ * resumo SHA-256 do que foi assinado. Não é ICP-Brasil — e a tela não finge que é.
+ */
+export function AssinaturaDoLaudo({ id }: { id: string }) {
+  const { data } = useApiQuery(workOrderSignatures, { params: { id } }) as {
+    data: { items: WorkOrderSignature[] } | undefined;
+  };
+  const validacoes = (data?.items ?? []).filter((s) => s.signer_role === 'supervisor');
+  return (
+    <Card>
+      <CardHeader
+        title="Validação do laudo"
+        description="Quem validou assina pela sessão autenticada. Não é assinatura ICP-Brasil."
+      />
+      <div className="flex flex-col gap-2 p-4 text-sm" data-testid="assinatura-do-laudo">
+        {validacoes.length === 0 ? (
+          <p className="text-subtle">Ainda não validado: a assinatura é registrada na validação.</p>
+        ) : (
+          validacoes.map((s) => (
+            <div key={s.id} className="flex items-start gap-2">
+              <PenLine aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-subtle" />
+              <p>
+                <span className="font-medium text-text">{s.signer_name}</span>
+                {s.signer_email ? ` <${s.signer_email}>` : ''} ·{' '}
+                {new Date(s.signed_at).toLocaleString('pt-BR')}
+                {s.client_ip ? ` · IP ${s.client_ip}` : ''}
+                <span className="block font-mono text-xs break-all text-muted">
+                  SHA-256 {s.signed_content_sha256}
+                  {s.still_valid ? '' : ' · o laudo mudou depois desta assinatura'}
+                </span>
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -837,13 +957,27 @@ function DialogoDeTransicao({
   onFechar,
   onConfirmar,
   ocupado,
+  usaOrcamento = true,
+  parecer = null,
 }: {
   transicao: WorkOrderTransition;
   onFechar: () => void;
   onConfirmar: (campos: Record<string, unknown>) => void;
   ocupado: boolean;
+  usaOrcamento?: boolean;
+  /** Concluir OS de equipamento: o parecer LIBERADO/PARADO vai junto (OS-16). */
+  parecer?: { id: string; atual: 'released' | 'stopped' | null } | null;
 }) {
-  const motivos = useMotivosDeEspera();
+  // A organização exige o parecer? A MESMA resposta que o servidor usa para recusar.
+  const { data: conclusao } = useApiQuery(
+    workOrderCompletion,
+    { params: { id: parecer?.id ?? '' } },
+    { enabled: Boolean(parecer) }
+  ) as { data: { requires_operational_result?: boolean } | undefined };
+  const exigeParecer = Boolean(parecer) && conclusao?.requires_operational_result !== false;
+  const [resultado, setResultado] = useState<string>(parecer?.atual ?? '');
+  // Sem orçamento na organização, "aguardando aprovação do orçamento" não é motivo de parada.
+  const motivos = useMotivosDeEspera().filter((m) => usaOrcamento || !MOTIVOS_DE_ORCAMENTO.has(m.key));
   const causas = useCatalogo('failure_cause');
   const [valores, setValores] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
@@ -864,11 +998,14 @@ function DialogoDeTransicao({
             loading={ocupado}
             onClick={() => {
               const faltando = transicao.requires.filter((c) => !valores[c]?.trim());
-              if (faltando.length > 0) {
+              if (faltando.length > 0 || (exigeParecer && !resultado)) {
                 setErro('Preencha os campos obrigatórios.');
                 return;
               }
               onConfirmar({
+                ...(parecer && resultado && resultado !== parecer.atual
+                  ? { operational_result: resultado }
+                  : {}),
                 ...(valores.wait_reason_id ? { wait_reason_id: valores.wait_reason_id } : {}),
                 ...(valores.resolution ? { resolution: valores.resolution } : {}),
                 ...(valores.cause_failure_code_id
@@ -884,6 +1021,21 @@ function DialogoDeTransicao({
       }
     >
       <div className="flex flex-col gap-4">
+        {parecer && (
+          <Field
+            label="Parecer do equipamento"
+            required={exigeParecer}
+            error={exigeParecer && !resultado ? erro : null}
+            hint="PARADO coloca o equipamento “em manutenção”; LIBERADO o devolve “em operação” se estava em manutenção."
+          >
+            <Select value={resultado} onChange={(e) => setResultado(e.target.value)}>
+              <option value="">Selecione…</option>
+              <option value="released">LIBERADO para uso</option>
+              <option value="stopped">Equipamento PARADO</option>
+            </Select>
+          </Field>
+        )}
+
         {precisa('wait_reason_id') && (
           <Field
             label="Motivo da parada"

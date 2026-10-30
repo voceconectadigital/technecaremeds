@@ -104,8 +104,17 @@ export const AssetRow = z.object({
   criticality_name: z.string().nullable().optional(),
   tracker_kind: z.string().nullable().optional(),
   tracker_tag: z.string().nullable().optional(),
+  /**
+   * Registro ANVISA e a marcação "não se aplica" (ATV-11 · 0089): a lista os traz para a busca
+   * por número e o filtro de situação. Opcionais: capturas da demo anteriores não os têm.
+   */
+  anvisa_registration: z.string().nullable().optional(),
+  anvisa_not_applicable: z.boolean().optional(),
 });
 export type AssetRow = z.infer<typeof AssetRow>;
+
+/** Situação do registro ANVISA na lista: com número, "não se aplica", ou nenhum dos dois (pendente). */
+export const ASSET_ANVISA_FILTERS = ['registered', 'not_applicable', 'pending'] as const;
 
 export const assetsList = defineOperation({
   operationId: 'assets.list',
@@ -135,6 +144,13 @@ export const assetsList = defineOperation({
     criticality: Uuid.optional(),
     /** `yes` = com chip/etiqueta de localização; `no` = sem. */
     tracker: z.enum(['yes', 'no']).optional(),
+    /**
+     * Busca por texto NO SERVIDOR: nome, tag, série, patrimônio e registro ANVISA (contém, sem
+     * diferenciar maiúsculas). Dentro do escopo, como todo o resto.
+     */
+    q: z.string().trim().max(120).optional(),
+    /** Situação do registro ANVISA (ATV-11). */
+    anvisa: z.enum(ASSET_ANVISA_FILTERS).optional(),
     limit: z.coerce.number().int().positive().max(500).optional(),
   }),
   response: z.object({
@@ -197,6 +213,8 @@ export const AssetDetail = z.object({
   anvisa_status: z.enum(['regular', 'alert', 'prohibited']).nullable().optional(),
   anvisa_note: z.string().nullable().optional(),
   anvisa_checked_at: Timestamp.nullable().optional(),
+  /** "Não se aplica" (0089): o equipamento não tem registro ANVISA aplicável. */
+  anvisa_not_applicable: z.boolean().optional(),
   inmetro_ordinance: z.string().nullable(),
   requires_calibration: z.boolean(),
   requires_electrical_test: z.boolean(),
@@ -269,6 +287,21 @@ export const AssetDetail = z.object({
    */
   depreciation: z
     .object({
+      /**
+       * A metodologia, explícita e auditável (ATV-10): método (só linha reta), data-base, vida
+       * útil, fim da vida útil, residual e base depreciável. Residual e base saem nulos para quem
+       * não tem `asset.read_financials`. Opcional: capturas anteriores não a têm.
+       */
+      methodology: z
+        .object({
+          method: z.literal('straight_line'),
+          baseDate: z.string(),
+          usefulLifeYears: z.number(),
+          endDate: z.string(),
+          residualValue: z.number().nullable(),
+          depreciableBase: z.number().nullable(),
+        })
+        .optional(),
       elapsedYears: z.number(),
       remainingYears: z.number(),
       percentDepreciated: z.number(),
@@ -401,6 +434,66 @@ export const assetsTimeline = defineOperation({
 });
 
 /* -------------------------------------------------------------------------- */
+/* ficha de vida: planos, procedimentos e histórico de campos (ATV-13)         */
+/* -------------------------------------------------------------------------- */
+
+export const AssetLifePlan = z.object({
+  plan_id: Uuid,
+  plan_name: z.string(),
+  plan_active: z.boolean(),
+  task_id: Uuid,
+  task_name: z.string(),
+  /** Como a tarefa alcança o equipamento: ele mesmo, o tipo (categoria) ou a subárvore do local. */
+  target_kind: z.enum(['asset', 'asset_category', 'location_subtree']),
+  frequency_unit: z.enum(['day', 'week', 'month', 'quarter', 'semester', 'year']),
+  frequency_interval: z.number().int(),
+  checklist_template_key: z.string().nullable(),
+});
+
+export const AssetLifeProcedure = z.object({
+  response_id: Uuid,
+  work_order_id: Uuid,
+  work_order_number: z.string().nullable(),
+  template_key: z.string(),
+  template_title: z.string(),
+  template_version: z.number().int(),
+  started_at: Timestamp,
+  finished_at: Timestamp.nullable(),
+  /** Itens respondidos por veredito — conforme, não conforme, não se aplica. */
+  answers: z.object({ pass: z.number().int(), fail: z.number().int(), na: z.number().int() }),
+});
+
+export const AssetFieldChange = z.object({
+  at: Timestamp,
+  actor_name: z.string().nullable(),
+  action: z.enum(['create', 'update', 'delete', 'restore']),
+  changes: z.array(z.object({ field: z.string(), from: z.unknown(), to: z.unknown() })),
+});
+
+export const assetsLifeRecord = defineOperation({
+  operationId: 'assets.lifeRecord',
+  method: 'GET',
+  path: '/assets/:id/life-record',
+  summary:
+    'Ficha de vida: planos que cobrem o equipamento, procedimentos executados nele e histórico de campos',
+  description:
+    'Cada seção tem a sua permissão, conferida no servidor: planos com `maintenance_plan.read`; ' +
+    'procedimentos (respostas de checklist das OS do equipamento) com `work_order.read`; histórico de ' +
+    'campos (trilha de auditoria) com `audit.read` ou `asset.update`. Sem a permissão a seção vem ' +
+    '`null` — diferente de lista vazia. No histórico, valores financeiros só aparecem para ' +
+    '`asset.read_financials` e a observação interna só para `asset.read_internal_notes`. ' +
+    'Equipamento fora do escopo ou de outra organização: 404.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({
+    plans: z.array(AssetLifePlan).nullable(),
+    procedures: z.array(AssetLifeProcedure).nullable(),
+    field_changes: z.array(AssetFieldChange).nullable(),
+  }),
+  errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
 /* cadastro e edição: Cliente → Setor → Equipamento                            */
 /* -------------------------------------------------------------------------- */
 
@@ -453,6 +546,8 @@ const CamposDoEquipamento = {
   tracker_tag: z.string().trim().min(2).max(80).nullable().optional(),
   /** Registro na ANVISA (conversa com o cliente, 21/10/2026). */
   anvisa_registration: z.string().trim().max(40).nullable().optional(),
+  /** "Não se aplica" (ATV-11): sem registro ANVISA aplicável. Não anda junto com o número. */
+  anvisa_not_applicable: z.boolean().optional(),
   /** Data de aquisição (AAAA-MM-DD) e vida útil em anos: base da depreciação automática. */
   acquired_at: z
     .string()
@@ -462,6 +557,11 @@ const CamposDoEquipamento = {
   useful_life_years: z.number().int().min(1).max(100).nullable().optional(),
   /** Valor do bem e nº da NF: só quem tem `asset.read_financials` pode informar. */
   purchase_value: z.number().min(0).max(1_000_000_000_000).nullable().optional(),
+  /**
+   * Valor residual (ATV-10): opcional, padrão 0, nunca maior que o de compra. Dado financeiro,
+   * como o valor de compra.
+   */
+  residual_value: z.number().min(0).max(1_000_000_000_000).nullable().optional(),
   acquisition_invoice: z.string().trim().max(60).nullable().optional(),
   /**
    * SLA do equipamento (ATV-15): liga/desliga e, ligado, a política própria (nula = herda a

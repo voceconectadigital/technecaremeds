@@ -119,9 +119,19 @@ export const customersCreate = defineOperation({
       report_tier: z.enum(CUSTOMER_REPORT_TIERS).nullable().optional(),
       contract_starts_on: Dia.nullable().optional(),
       contract_ends_on: Dia.nullable().optional(),
+      /**
+       * CLI-03: cliente EAS nasce com os setores padrão (Pronto Atendimento, Bloco Cirúrgico, UTI,
+       * Enfermaria) sob uma unidade com o nome do cliente. O formulário traz a opção MARCADA; pela
+       * API é pedida explicitamente (ausente = não cria). Ignorada para empresa corporativa. Exige
+       * `location.create` de quem cadastra.
+       */
+      create_default_sectors: z.boolean().optional(),
     })
     .strict(),
-  response: Customer,
+  response: Customer.extend({
+    /** Quantos setores padrão nasceram com o cliente (0 quando não pedidos ou não aplicáveis). */
+    default_sectors_created: z.number().int().optional(),
+  }),
   errors: ['conflict'],
 });
 

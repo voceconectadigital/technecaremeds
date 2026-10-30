@@ -77,6 +77,59 @@ export interface ReportIndicator {
   readonly pendingKind?: PendingKind;
   /** O que está faltando, ou como o número é lido hoje. */
   readonly note?: string;
+  /**
+   * Versão da fórmula (REL-07), quando difere da derivada da situação — ver `formulaInfo`.
+   * Só se declara aqui quando a fórmula MUDOU depois de entrar no catálogo.
+   */
+  readonly formulaVersion?: string;
+  /** Data (AAAA-MM-DD) em que a definição em uso entrou no catálogo, quando não é a da Fase 1. */
+  readonly definedOn?: string;
+  /** De onde veio a definição em uso, quando não é a da Fase 1. */
+  readonly definitionSource?: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* versionamento das fórmulas (REL-07, 29/10/2026)                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A primeira versão do catálogo: reunião de 16/10/2026 e Fase 1 de indicadores (auditoria de
+ * 17/10/2026). É a data e a fonte de toda definição que não declara outra.
+ */
+export const FORMULA_BASELINE_DATE = '2026-10-17';
+export const FORMULA_BASELINE_SOURCE =
+  'Catálogo de indicadores: reunião de 16/10/2026 e Fase 1 de indicadores (auditoria de 17/10/2026)';
+
+/** Versão de quem ainda não tem fórmula: NADA é versionado como se existisse. */
+export const FORMULA_VERSION_PENDING = 'pendente';
+
+export interface FormulaInfo {
+  /** `v1` (confirmada), `v1-provisoria` (calculada, a confirmar) ou `pendente` (sem fórmula). */
+  version: string;
+  /** Quando a definição em uso entrou no catálogo; nulo para pendente (não há definição). */
+  definedOn: string | null;
+  /** De onde veio a definição em uso — ou o que falta, para pendente. */
+  source: string;
+}
+
+/**
+ * A versão da fórmula de um indicador. Derivada da situação, a menos que o catálogo declare outra:
+ *
+ *   · ACTIVE → `v1`; PROVISIONAL → `v1-provisoria` (a conta existe, a definição do cliente não);
+ *   · PENDING_DEFINITION → `pendente`, sem data — não há fórmula para versionar.
+ *
+ * Mudar a conta de um indicador é declarar `formulaVersion`, `definedOn` e `definitionSource`
+ * no item; o relatório agendado guarda, em cada seção, a versão com que foi gerado.
+ */
+export function formulaInfo(i: ReportIndicator): FormulaInfo {
+  if (i.state === 'PENDING_DEFINITION') {
+    return { version: FORMULA_VERSION_PENDING, definedOn: null, source: 'Aguardando definição do cliente' };
+  }
+  return {
+    version: i.formulaVersion ?? (i.state === 'PROVISIONAL' ? 'v1-provisoria' : 'v1'),
+    definedOn: i.definedOn ?? FORMULA_BASELINE_DATE,
+    source: i.definitionSource ?? FORMULA_BASELINE_SOURCE,
+  };
 }
 
 /**
@@ -193,7 +246,7 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     source: null,
     note:
       'A razão está comprovada no Data Studio (1.713 ÷ 1.967 = 87,09 %), mas a população de "solicitados" e ' +
-      '"realizados" não foi confirmada (P-04). Calculadora genérica pronta; nenhum registro é mapeado ainda.',
+      '"realizados" não foi confirmada (P-04). O cálculo está pronto, mas nenhum registro é contado até essa definição.',
   },
   // --- tempos --------------------------------------------------------------
   {
@@ -291,6 +344,8 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     state: 'ACTIVE',
     targetDirection: 'HIGHER_IS_BETTER',
     source: 'metrics.workOrderRating',
+    definedOn: '2026-10-21',
+    definitionSource: 'Conversa com o cliente, 21/10/2026 ("gerar um indicador de avaliação de OS")',
     note: 'É por OS (a de "Avaliação da qualidade dos serviços" é por solicitação) e só conta OS avaliadas e assinadas.',
   },
   {
@@ -317,9 +372,9 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     targetDirection: 'HIGHER_IS_BETTER',
     source: null,
     note:
-      'Sem vínculo inequívoco solicitado → realizado: a solicitação `requested_type = training` pode gerar OS de ' +
-      'qualquer tipo, a OS do tipo treinamento não aponta para o treinamento solicitado, e não há critério de ' +
-      '"realizado" nem entidade de educação continuada.',
+      'Sem vínculo seguro entre solicitado e realizado: uma solicitação de treinamento pode gerar OS de ' +
+      'qualquer tipo, a OS de treinamento não aponta para o treinamento solicitado, e não há critério de ' +
+      '"realizado" nem cadastro de educação continuada.',
   },
   // --- parque e disponibilidade -------------------------------------------
   {
@@ -359,7 +414,10 @@ export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
     pendingKind: 'DEFINITION',
     targetDirection: 'LOWER_IS_BETTER',
     source: null,
-    note: 'Cinco marcos candidatos para o fim do relógio; horas corridas ou úteis (P-03). Não usar o `firstResponseTime` do Painel como se fosse este.',
+    // Texto que vai ao cliente (PDF e tela): sem identificador de código.
+    note:
+      'Falta definir o que encerra a contagem (há cinco momentos possíveis) e se ela é em horas corridas ou ' +
+      'úteis (P-03). O tempo de primeira resposta mostrado no Painel é outra medida e não substitui este.',
   },
   ...(
     [

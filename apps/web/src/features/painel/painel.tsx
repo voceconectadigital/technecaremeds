@@ -29,6 +29,7 @@ import {
   Gauge,
   Inbox,
   Monitor,
+  Star,
   Timer,
   TriangleAlert,
 } from 'lucide-react';
@@ -62,6 +63,7 @@ import {
 import {
   PERIODOS,
   ROTULO_SITUACAO_OS,
+  cartaoDaAvaliacao,
   formatarDuracao,
   rotuloDaFatia,
   rotuloDoMes,
@@ -250,6 +252,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
   const totalAbertas = abertasAgora.reduce((a, [, v]) => a + v, 0);
   const amostrasMttr = d.series.reduce((a, p) => a + (p.mttrSamples ?? 0), 0);
   const fatia = d.granularity === 'day' ? 'dia' : d.granularity === 'week' ? 'semana' : 'mês';
+  // REL-14: a avaliação das OS (1–5), a mesma função do relatório, no mesmo recorte.
+  const avaliacao = cartaoDaAvaliacao(k.work_order_rating?.data, k.work_order_rating?.period);
 
   return (
     <div className="flex flex-col gap-6">
@@ -328,12 +332,20 @@ function Conteudo({ d }: { d: ControlPanel }) {
               dica={prev ? `${prev.totals.done} realizadas de ${prev.totals.scheduled} programadas` : null}
               vazio={SEM_DADOS}
               link="/planos?aba=cronograma&estado=late"
-              largo
               progresso={
                 prev && prev.totals.scheduled > 0
                   ? { feito: prev.totals.done, total: prev.totals.scheduled }
                   : undefined
               }
+            />
+            <Kpi
+              rotulo="Avaliação das OS"
+              valor={avaliacao.valor}
+              unidade="de 5"
+              icone={Star}
+              dica={avaliacao.dica}
+              vazio={avaliacao.vazio}
+              link="/ordens?vista=lista&categoria=done"
             />
           </div>
         </Card>

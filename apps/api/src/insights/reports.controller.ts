@@ -29,6 +29,8 @@ import {
   organizationTimezone,
   type Database,
   assertNivelDeRelatorioContratado,
+  clienteDoRecorte,
+  membershipScope,
 } from '@aurora/db';
 import {
   DEFAULT_ORGANIZATION_TIMEZONE,
@@ -37,7 +39,9 @@ import {
   REPORT_LAYOUT_STATUS,
   REPORT_TIER_LABEL,
   REPORT_TIERS,
+  SERVICE_REQUEST_TYPES,
   ValidationError,
+  formulaInfo,
   legacyStatusOf,
 } from '@aurora/domain';
 import { reportsAssets, reportsGenerate } from '@aurora/contracts';
@@ -84,12 +88,53 @@ export class ReportsController {
         ...(i.pendingKind ? { pending_kind: i.pendingKind } : {}),
         ...(i.note ? { note: i.note } : {}),
         status: legacyStatusOf(i.state),
+        ...(() => {
+          const fi = formulaInfo(i);
+          return { formula_version: fi.version, formula_defined_on: fi.definedOn, formula_source: fi.source };
+        })(),
       })),
       layout_status: REPORT_LAYOUT_STATUS,
       layout_note:
         'Advanced segue o modelo do cliente (gráfico de 12 meses e assinaturas); Basic usa o mesmo padrão ' +
         'visual; Expert é a casca do IMR. Exportação em PDF e em Excel (.xlsx).',
     };
+  }
+
+  /**
+   * Opções dos filtros do gerador (REL-03): setores no escopo do vínculo (a mesma consulta do
+   * Painel), os sete tipos de manutenção e as famílias/tipos de equipamento.
+   */
+  @Get('options')
+  @RequirePermissions('insight.read')
+  async options(@Req() req: AuroraRequest): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    return withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      const setores = await s.query<{ id: string; name: string; customer_id: string }>(
+        `SELECT l.id, l.name, l.customer_id
+           FROM aurora.locations l
+           JOIN aurora.location_types t ON t.id = l.location_type_id AND t.key = 'setor'
+          WHERE l.deleted_at IS NULL
+            AND ($1::uuid[] IS NULL OR l.customer_id = ANY($1::uuid[]))
+            AND ($2::text[] IS NULL OR EXISTS (SELECT 1 FROM unnest($2::text[]) sp(p) WHERE l.path LIKE sp.p || '%'))
+          ORDER BY l.name`,
+        [escopo.customerIds, escopo.locationPaths]
+      );
+      const categorias = await s.query<{
+        id: string;
+        name: string;
+        parent_id: string | null;
+        family_key: string | null;
+      }>(
+        `SELECT id, name, parent_id, family_key FROM aurora.asset_categories
+          WHERE archived_at IS NULL ORDER BY family_key IS NULL, name`
+      );
+      return {
+        sectors: setores,
+        work_order_types: SERVICE_REQUEST_TYPES.map((t) => ({ key: t.key, label: t.label })),
+        asset_categories: categorias,
+      };
+    });
   }
 
   /**
@@ -110,9 +155,10 @@ export class ReportsController {
     const formato = formatoDe(format);
     const geradoEm = new Date();
 
-    // O nível contratado pelo cliente é TETO (REL-13, 0085): vale para JSON, PDF e Excel.
-    await withTenant(this.db, ctx, (s) =>
-      assertNivelDeRelatorioContratado(s, ctx.membershipId, b.customer_id ?? null, b.tier)
+    // O nível contratado pelo cliente é TETO (REL-13, 0085): vale para JSON, PDF e Excel. O cliente
+    // é o escolhido, ou o do contrato, ou o do setor — escolher só o setor não pula a trava.
+    await withTenant(this.db, ctx, async (s) =>
+      assertNivelDeRelatorioContratado(s, ctx.membershipId, await clienteDoRecorte(s, b), b.tier)
     );
 
     // Expert em PDF: a casca do IMR. Só entram os itens que têm número; o resto fica "aguardando".

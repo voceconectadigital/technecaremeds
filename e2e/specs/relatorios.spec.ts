@@ -35,3 +35,45 @@ test.describe('Relatórios do Painel', () => {
     await expect(d.getByRole('region', { name: 'Prévia do relatório' })).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe('Gerador de relatório: página própria, filtros e atalho para automação (29/10/2026)', () => {
+  test('REL-03: /relatorios abre o gerador com setor, tipo de manutenção e família/tipo de equipamento', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/relatorios');
+    const d = page.getByRole('dialog');
+    await expect(d.getByRole('radiogroup', { name: 'Modelo de relatório' })).toBeVisible();
+    await expect(d.getByLabel('Setor')).toBeVisible();
+    await expect(d.getByLabel('Família / tipo de equipamento')).toBeVisible();
+    const tipo = d.getByLabel('Tipo de manutenção');
+    await expect(tipo.locator('option')).toHaveCount(8); // "Todos os tipos" + os sete
+    await tipo.selectOption('corrective');
+    await d.getByRole('button', { name: 'Ver relatório' }).click();
+    await expect(d.getByRole('region', { name: 'Prévia do relatório' })).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('REL-15: "Criar automação com estes filtros" abre a Nova automação já preenchida', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/painel');
+    await page.getByRole('button', { name: 'Gerar relatório' }).click();
+    const d = page.getByRole('dialog');
+    const atalho = d.getByRole('button', { name: 'Criar automação com estes filtros' });
+    // Só aparece para quem cria automação.
+    test.skip((await atalho.count()) === 0, 'o perfil do E2E não cria automação');
+    await d.getByLabel('Tipo de manutenção').selectOption('preventive');
+    await atalho.click();
+    const nova = page.getByRole('dialog', { name: 'Nova automação' });
+    await expect(nova).toBeVisible();
+    await expect(nova.getByRole('radio', { name: /Relatório agendado/ })).toBeChecked();
+    await expect(nova.getByRole('note', { name: 'Filtros vindos do relatório' })).toContainText(
+      'tipo de manutenção'
+    );
+    await expect(nova.getByLabel('Nome da automação')).toHaveValue(/^Relatório Basic/);
+  });
+
+  test('REL-14: o Painel mostra o cartão da avaliação das OS', async ({ comoCoordenadorA: page }) => {
+    await page.goto('/painel');
+    await expect(page.getByText('Avaliação das OS')).toBeVisible({ timeout: 15_000 });
+  });
+});

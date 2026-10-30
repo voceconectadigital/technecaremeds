@@ -18,6 +18,17 @@ const CONSULTA_OFICIAL = 'https://consultas.anvisa.gov.br/';
 
 export function CartaoAnvisa({ ativo }: { ativo: AssetDetail }) {
   const [verificando, setVerificando] = useState(false);
+  // "Não se aplica" (ATV-11 · 0089): dito, para não parecer cadastro esquecido.
+  if (!ativo.anvisa_registration && ativo.anvisa_not_applicable) {
+    return (
+      <Card>
+        <CardHeader title="Registro ANVISA" />
+        <p className="p-4 text-sm text-muted">
+          Não se aplica: este equipamento não tem registro ANVISA aplicável.
+        </p>
+      </Card>
+    );
+  }
   if (!ativo.anvisa_registration) return null;
   const status = ativo.anvisa_status ?? null;
 

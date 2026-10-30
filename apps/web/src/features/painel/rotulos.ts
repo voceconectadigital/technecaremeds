@@ -146,3 +146,29 @@ export function intervaloDe(p: string, agora: Date = new Date()): { from: string
   const ini = inicioDoDiaLocal(somarDias(hoje, 1 - def.dias));
   return { from: ini.toISOString(), to: fim.toISOString(), dias: def.dias };
 }
+
+/* -------------------------------------------------------------------------- */
+/* avaliação das OS (REL-14)                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O cartão "Avaliação das OS" do Painel: média de 1 a 5 (uma nota por OS, assinada pelo
+ * solicitante), quantas avaliações e o período. Sem avaliação, o valor é nulo — nunca zero.
+ */
+export function cartaoDaAvaliacao(
+  r: { average: number | null; count: number } | undefined,
+  periodo: { from: string; to: string } | undefined
+): { valor: string | null; dica: string; vazio: string } {
+  const quando = periodo
+    ? `${dataCurta(periodo.from)} a ${dataCurta(new Date(new Date(periodo.to).getTime() - 1).toISOString())}`
+    : 'no período';
+  const media = r?.average ?? null;
+  return {
+    valor:
+      media === null
+        ? null
+        : media.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }),
+    dica: `${r?.count ?? 0} ${r?.count === 1 ? 'avaliação' : 'avaliações'} · ${quando}`,
+    vazio: `Nenhuma OS avaliada · ${quando}`,
+  };
+}

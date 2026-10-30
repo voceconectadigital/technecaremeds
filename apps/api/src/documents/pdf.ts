@@ -41,6 +41,11 @@ export interface LinhaPdf {
   cartoes?: CartaoPdf[];
   /** Começa uma página nova antes desta linha. */
   quebraDePagina?: boolean;
+  /**
+   * Fica na mesma página que o bloco seguinte (a legenda "Gráfico 02: …" e o gráfico dela): se
+   * os dois não cabem no que sobra da página, a quebra vem ANTES desta linha — e não entre elas.
+   */
+  comOProximo?: boolean;
 }
 
 /**
@@ -304,7 +309,9 @@ export function desenharGrafico(
   let lo = Math.min(...pontos);
   let hi = Math.max(...pontos);
   if (hi - lo < 1e-9) {
-    lo -= 1;
+    // Série constante: um ponto de folga para cada lado — sem descer de zero quando nada é
+    // negativo (a série toda zero vai de 0 a 1, e não de −1 a 1).
+    lo = lo >= 0 ? Math.max(0, lo - 1) : lo - 1;
     hi += 1;
   } else {
     const folga = (hi - lo) * 0.15;
@@ -363,6 +370,9 @@ export function desenharGrafico(
   return ops;
 }
 
+/** Fator de largura média da Helvetica-Bold (o cabeçalho da tabela é em negrito). */
+const LARGURA_NEGRITO = 0.68;
+
 /** Desenha uma linha da tabela; devolve os operadores. */
 function linhaDeTabela(
   t: TabelaPdf,
@@ -381,7 +391,7 @@ function linhaDeTabela(
   larguras.forEach((w, i) => {
     ops.push(`q 0.6 G 0.4 w ${num(x)} ${num(yTopo - altura)} ${num(w)} ${num(altura)} re S Q`);
     const col = t.colunas[i]!;
-    quebrar(celulas[i] ?? '', tam, w - 6).forEach((parte, k) => {
+    quebrar(celulas[i] ?? '', tam, w - 6, cabecalho ? LARGURA_NEGRITO : 0.56).forEach((parte, k) => {
       const ty = yTopo - 3 - tam - k * tam * 1.25;
       const tx = col.alinhar === 'c' ? x + (w - larguraDe(parte, tam)) / 2 : x + 3;
       ops.push(escrever(cabecalho ? 'F2' : 'F1', tam, Math.max(x + 1, tx), ty, parte));
@@ -406,8 +416,16 @@ export function gerarPdf(linhas: readonly LinhaPdf[], opcoes: OpcoesPdf): Buffer
 
   const larguraUtil = LARGURA - 2 * MARGEM;
 
-  for (const l of linhas) {
+  for (const [indice, l] of linhas.entries()) {
     if (l.quebraDePagina && atual.length > 0) novaPagina();
+    const proximo = linhas[indice + 1];
+    if (l.comOProximo && proximo?.grafico && !l.grafico) {
+      // A legenda e o gráfico dela andam juntos: quebra antes da legenda se os dois não cabem.
+      const tamanhoDaLegenda = l.tamanho ?? (l.titulo ? 12 : 10);
+      const precisa =
+        (l.espacoAntes ?? 0) + tamanhoDaLegenda * 1.35 * 2 + (proximo.grafico.altura ?? 150) + 6;
+      if (y - precisa < fundo && atual.length > 0) novaPagina();
+    }
     if (l.grafico) {
       const alt = l.grafico.altura ?? 150;
       if (y - alt < fundo) novaPagina();
@@ -420,16 +438,24 @@ export function gerarPdf(linhas: readonly LinhaPdf[], opcoes: OpcoesPdf): Buffer
       const tam = t.tamanho ?? 8;
       const soma = t.colunas.reduce((a, c) => a + c.peso, 0);
       const larguras = t.colunas.map((c) => (c.peso / soma) * larguraUtil);
-      const alturaDe = (celulas: string[]) =>
-        Math.max(...celulas.map((c, i) => quebrar(c, tam, larguras[i]! - 6).length), 1) * tam * 1.25 + 6;
+      const alturaDe = (celulas: string[], cabecalho = false) =>
+        Math.max(
+          ...celulas.map(
+            (c, i) => quebrar(c, tam, larguras[i]! - 6, cabecalho ? LARGURA_NEGRITO : 0.56).length
+          ),
+          1
+        ) *
+          tam *
+          1.25 +
+        6;
       const cab = t.colunas.map((c) => c.titulo);
       const desenhaCab = () => {
-        const h = alturaDe(cab);
+        const h = alturaDe(cab, true);
         atual.push(...linhaDeTabela(t, cab, larguras, y, h, true));
         y -= h;
       };
       y -= l.espacoAntes ?? 4;
-      if (y - alturaDe(cab) - alturaDe(t.linhas[0] ?? []) < fundo) novaPagina();
+      if (y - alturaDe(cab, true) - alturaDe(t.linhas[0] ?? []) < fundo) novaPagina();
       desenhaCab();
       for (const celulas of t.linhas) {
         const h = alturaDe(celulas);

@@ -214,8 +214,8 @@ describe('P0.4 — modo de uso e recursos habilitados', () => {
       // ordem canônica, não a de quem enviou
       enabled_features: ['assets', 'work_orders', 'portal'],
       features_customized: true,
-      // PF-41: a exigência do parecer nasce desligada.
-      require_operational_result: false,
+      // OS-16 (29/10/2026): a exigência do parecer nasce LIGADA (antes, PF-41, nascia desligada).
+      require_operational_result: true,
     });
   });
 
@@ -254,7 +254,9 @@ describe('P0.4 — modo de uso e recursos habilitados', () => {
       .set(auth(A.email))
       .send({ enabled_features: null });
     expect(reset.body.features_customized).toBe(false);
-    expect(reset.body.enabled_features).toEqual([...ORGANIZATION_FEATURES]);
+    // A organização A está no modo hospital (teste acima): o padrão DO MODO é tudo menos
+    // orçamento (OS-03 · CLI-07, 29/10/2026). Antes o padrão era tudo, em qualquer modo.
+    expect(reset.body.enabled_features).toEqual(ORGANIZATION_FEATURES.filter((f) => f !== 'quotes'));
   });
 
   it('o técnico não muda a configuração da organização (403 nomeando a permissão)', async () => {

@@ -8,13 +8,22 @@
  * código para a mesma pergunta e divergiria no primeiro cliente que crescer.
  */
 import { Body, Controller, Get, Inject, Param, Patch, Post, Req } from '@nestjs/common';
-import { withTenant, createCustomer, updateCustomer, type Database, type TenantSession } from '@aurora/db';
+import {
+  withTenant,
+  createCustomer,
+  createLocation,
+  updateCustomer,
+  type Database,
+  type TenantSession,
+} from '@aurora/db';
 import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
   isValidCustomerSubtype,
+  isSelectableCustomerSubtype,
+  DEFAULT_EAS_SECTORS,
   contractTermStatus,
   localDay,
 } from '@aurora/domain';
@@ -131,6 +140,32 @@ function conferirVigencia(inicio: string | null | undefined, fim: string | null 
   }
 }
 
+/**
+ * CLI-03: os setores padrão do EAS (`DEFAULT_EAS_SECTORS`), criados sob uma unidade com o nome do
+ * cliente — o setor não fica na raiz da árvore (a escada de tipos o põe sob unidade). São locais
+ * comuns: renomeiam-se, recebem equipamento, e o cliente segue criando os seus.
+ *
+ * Organização sem os tipos "Unidade"/"Setor" (catálogo editado) não recebe nada: devolve 0, e a
+ * resposta diz isso em vez de inventar um tipo de local.
+ */
+async function criarSetoresPadrao(
+  s: TenantSession,
+  customerId: string,
+  nomeDaUnidade: string
+): Promise<number> {
+  const tipos = await s.query<{ key: string; id: string }>(
+    `SELECT key, id FROM aurora.location_types WHERE key IN ('unidade', 'setor') AND deleted_at IS NULL`
+  );
+  const unidade = tipos.find((t) => t.key === 'unidade')?.id;
+  const setor = tipos.find((t) => t.key === 'setor')?.id;
+  if (!unidade || !setor) return 0;
+  const raiz = await createLocation(s, { customerId, locationTypeId: unidade, name: nomeDaUnidade });
+  for (const nome of DEFAULT_EAS_SECTORS) {
+    await createLocation(s, { customerId, parentId: raiz, locationTypeId: setor, name: nome });
+  }
+  return DEFAULT_EAS_SECTORS.length;
+}
+
 async function lerCliente(s: TenantSession, id: string): Promise<Customer | undefined> {
   const [row] = await s.query<Customer>(`${SELECT_CUSTOMER} WHERE c.id = $1 AND c.deleted_at IS NULL`, [id]);
   return row ? comSituacaoDoContrato(row) : undefined;
@@ -174,12 +209,30 @@ export class CustomersController {
    */
   @Post('customers')
   @RequirePermissions('customer.create')
-  async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<Customer> {
+  async create(
+    @Req() req: AuroraRequest,
+    @Body() body: unknown
+  ): Promise<Customer & { default_sectors_created: number }> {
+    const ctx = req.auroraContext!;
     const b = parseWith(customersCreate.body, body);
-    conferirSubtipo(b.kind ?? 'eas', b.subtype);
+    const kind = b.kind ?? 'eas';
+    conferirSubtipo(kind, b.subtype);
+    // CLI-02: "Outro EAS"/"Outra empresa" não se escolhem mais num cadastro NOVO.
+    if (!isSelectableCustomerSubtype(kind, b.subtype)) {
+      throw new ValidationError('este segmento não é mais oferecido: escolha um dos segmentos da lista', {
+        field: 'subtype',
+      });
+    }
     conferirVigencia(b.contract_starts_on, b.contract_ends_on);
+    // CLI-03: setores padrão para EAS. A opção vem MARCADA no formulário; pela API ela é pedida
+    // explicitamente (integração e importação seguem criando cliente sem locais). Quem não cria
+    // local não os cria.
+    const criarSetores = kind === 'eas' && b.create_default_sectors === true;
+    if (criarSetores && !ctx.permissions.has('location.create')) {
+      throw new ForbiddenError('criar os setores padrão exige a permissão location.create');
+    }
     try {
-      return await withTenant(this.db, req.auroraContext!, async (s) => {
+      return await withTenant(this.db, ctx, async (s) => {
         const id = await createCustomer(s, {
           name: b.name,
           tradeName: ouNulo(b.trade_name),
@@ -192,7 +245,8 @@ export class CustomersController {
           contractStartsOn: b.contract_starts_on ?? null,
           contractEndsOn: b.contract_ends_on ?? null,
         });
-        return (await lerCliente(s, id))!;
+        const criados = criarSetores ? await criarSetoresPadrao(s, id, b.trade_name || b.name) : 0;
+        return { ...(await lerCliente(s, id))!, default_sectors_created: criados };
       });
     } catch (err) {
       throw conflitoLegivel(err);
@@ -227,6 +281,13 @@ export class CustomersController {
         const subtype =
           b.subtype !== undefined ? b.subtype || null : b.kind && b.kind !== atual.kind ? null : undefined;
         conferirSubtipo(kind, subtype);
+        // CLI-02: o cliente antigo com "Outro EAS"/"Outra empresa" continua editável com ele; passar
+        // um cliente PARA esse segmento, não.
+        if (subtype !== undefined && !isSelectableCustomerSubtype(kind, subtype, atual.subtype ?? null)) {
+          throw new ValidationError('este segmento não é mais oferecido: escolha um dos segmentos da lista', {
+            field: 'subtype',
+          });
+        }
         // A vigência é conferida com o que FICA: mandar só o fim confere contra o início gravado.
         conferirVigencia(
           b.contract_starts_on !== undefined ? b.contract_starts_on : atual.contract_starts_on,

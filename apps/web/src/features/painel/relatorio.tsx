@@ -20,9 +20,15 @@
  * (REL-01: "Relatório Basic/Advanced/Expert"; o Advanced segue o modelo do cliente,
  * o Basic o mesmo padrão visual — REL-08). A aba "Patrimonial" (REL-11) fica em
  * `relatorio-patrimonial.tsx`.
+ *
+ * Filtros (REL-03, 29/10/2026): cliente, SETOR (escolhido aqui, não só herdado do Painel), TIPO DE
+ * MANUTENÇÃO das OS, família/tipo de equipamento, tipo de plano, período e indicadores — tudo
+ * conferido de novo no servidor contra o escopo de quem pede. O mesmo diálogo abre do Painel e da
+ * página própria `/relatorios`. "Criar automação com estes filtros" (REL-15) leva o recorte para a
+ * Nova automação de relatório agendado.
  */
 import { useMemo, useState } from 'react';
-import { FileDown, FileSpreadsheet, FileText } from 'lucide-react';
+import { CalendarClock, FileDown, FileSpreadsheet, FileText } from 'lucide-react';
 import { Button, Dialog, Field, Input, Select, StatusChip, Tabs, cn, useToast } from '@aurora/ui';
 import {
   assetsFormOptions,
@@ -30,10 +36,13 @@ import {
   customersList,
   reportsCatalog,
   reportsGenerate,
+  reportsOptions,
 } from '@aurora/contracts';
 import { ApiError, useApi, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { baixarRelatorio } from './baixar';
 import { intervaloDoPainel, type FiltrosDoPainel } from './dados';
+import { DialogoNovaAutomacao } from '../automacoes/nova';
+import { automacaoDoRelatorio, type RelatorioAgendadoInicial } from '../automacoes/do-relatorio';
 import { PainelPatrimonial } from './relatorio-patrimonial';
 import { PERIODOS, type Periodo } from './rotulos';
 
@@ -148,19 +157,73 @@ export function MetaDaSecao({ s }: { s: Pick<Secao, 'target' | 'target_evaluatio
   );
 }
 
-export function BotaoGerarRelatorio({ f }: { f: FiltrosDoPainel }) {
-  const [aberto, setAberto] = useState(false);
+/** O recorte com que o diálogo abre (o do Painel, ou nenhum na página `/relatorios`). */
+export type RecorteInicial = Pick<FiltrosDoPainel, 'periodo' | 'de' | 'ate' | 'cliente' | 'setor'>;
+
+export function BotaoGerarRelatorio({
+  f,
+  abertoNoInicio = false,
+}: {
+  f: RecorteInicial;
+  abertoNoInicio?: boolean;
+}) {
+  const [aberto, setAberto] = useState(abertoNoInicio);
+  // REL-15: o relatório fecha e a Nova automação abre já preenchida.
+  const [automacao, setAutomacao] = useState<RelatorioAgendadoInicial | null>(null);
   return (
     <>
       <Button icon={<FileText className="size-4" />} onClick={() => setAberto(true)}>
         Gerar relatório
       </Button>
-      {aberto && <DialogoRelatorio f={f} onFechar={() => setAberto(false)} />}
+      {aberto && (
+        <DialogoRelatorio
+          f={f}
+          onFechar={() => setAberto(false)}
+          onCriarAutomacao={(inicial) => {
+            setAberto(false);
+            setAutomacao(inicial);
+          }}
+        />
+      )}
+      {automacao && <DialogoNovaAutomacao inicial={automacao} onFechar={() => setAutomacao(null)} />}
     </>
   );
 }
 
-function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () => void }) {
+/** Reserva enquanto as opções do servidor não chegam: os sete tipos de `request-types`. */
+const TIPOS_DE_MANUTENCAO_PADRAO = [
+  { key: 'corrective', label: 'Corretiva' },
+  { key: 'preventive', label: 'Preventiva' },
+  { key: 'technical_instruction', label: 'Instrução Técnica' },
+  { key: 'training', label: 'Treinamento' },
+  { key: 'calibration', label: 'Calibração' },
+  { key: 'electrical_safety', label: 'Teste de Segurança Elétrica' },
+  { key: 'qualification', label: 'Qualificação' },
+] as const;
+
+export type Categoria = { id: string; name: string; parent_id: string | null; family_key: string | null };
+
+/** Famílias com os tipos delas, e as categorias soltas (sem família) no fim. */
+export function gruposDeCategoria(cats: readonly Categoria[]): {
+  familias: { familia: Categoria; tipos: Categoria[] }[];
+  soltas: Categoria[];
+} {
+  const familias = cats
+    .filter((c) => c.family_key)
+    .map((familia) => ({ familia, tipos: cats.filter((c) => c.parent_id === familia.id) }));
+  const comFamilia = new Set(familias.flatMap((g) => [g.familia.id, ...g.tipos.map((t) => t.id)]));
+  return { familias, soltas: cats.filter((c) => !comFamilia.has(c.id)) };
+}
+
+function DialogoRelatorio({
+  f,
+  onFechar,
+  onCriarAutomacao,
+}: {
+  f: RecorteInicial;
+  onFechar: () => void;
+  onCriarAutomacao: (inicial: RelatorioAgendadoInicial) => void;
+}) {
   const toast = useToast();
   const api = useApi();
   const { can } = usePermissions();
@@ -172,9 +235,13 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
   const [de, setDe] = useState(f.de);
   const [ate, setAte] = useState(f.ate);
   const [cliente, setCliente] = useState(f.cliente);
+  // O setor do Painel vem como ponto de partida; aqui ele se escolhe (REL-03).
+  const [setor, setSetor] = useState(f.setor);
   const [contrato, setContrato] = useState('');
   const [tipoPlano, setTipoPlano] = useState('');
+  const [tipoManutencao, setTipoManutencao] = useState('');
   const [categoria, setCategoria] = useState('');
+  const podeAutomatizar = can('automation.create');
   // Cabeçalho e assinaturas do PDF Basic e Advanced; não são dados do sistema.
   const [centroDeCusto, setCentroDeCusto] = useState('');
   const [cidade, setCidade] = useState('');
@@ -186,9 +253,27 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
   const { data: catalogo } = useApiQuery(reportsCatalog) as {
     data: { indicators: Indicador[]; layout_note: string } | undefined;
   };
+  const { data: opcoesDoGerador } = useApiQuery(reportsOptions) as {
+    data:
+      | {
+          sectors: { id: string; name: string; customer_id: string }[];
+          work_order_types: { key: string; label: string }[];
+          asset_categories: Categoria[];
+        }
+      | undefined;
+  };
+  // As categorias do formulário de equipamento ficam de reserva enquanto as opções carregam.
   const { data: opcoes } = useApiQuery(assetsFormOptions) as {
     data: { categories: { id: string; name: string; family_key?: string | null }[] } | undefined;
   };
+  const setores = (opcoesDoGerador?.sectors ?? []).filter((x) => !cliente || x.customer_id === cliente);
+  const tiposDeManutencao = opcoesDoGerador?.work_order_types ?? TIPOS_DE_MANUTENCAO_PADRAO;
+  const grupos = gruposDeCategoria(
+    opcoesDoGerador?.asset_categories ??
+      (opcoes?.categories ?? [])
+        .filter((c) => !c.family_key)
+        .map((c) => ({ id: c.id, name: c.name, parent_id: null, family_key: null }))
+  );
   const { data: clientes } = useApiQuery(customersList) as {
     data: { items: { id: string; name: string }[] } | undefined;
   };
@@ -211,7 +296,6 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
   // ACTIVE entra sozinho; PROVISIONAL só se a pessoa marcar.
   const escolhidos = marcados ?? selecionaveis.filter((i) => i.state === 'ACTIVE').map((i) => i.key);
   const intervalo = intervaloDoPainel({ periodo, de, ate });
-  const setorValido = cliente === f.cliente && f.setor !== '';
 
   function corpo() {
     if (intervalo.problema !== null) return null;
@@ -222,8 +306,9 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
       to: intervalo.to,
       ...(cliente ? { customer_id: cliente } : {}),
       ...(contrato ? { contract_id: contrato } : {}),
-      ...(setorValido ? { sector_id: f.setor } : {}),
+      ...(setor ? { sector_id: setor } : {}),
       ...(tipoPlano ? { plan_kind: tipoPlano as 'preventive' } : {}),
+      ...(tipoManutencao ? { work_order_type: tipoManutencao as 'corrective' } : {}),
       ...(categoria ? { asset_category_id: categoria } : {}),
       ...(tier !== 'expert' ? cabecalhoDoPdf() : {}),
     };
@@ -255,6 +340,13 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
 
   const semNada = escolhidos.filter((k) => selecionaveis.some((i) => i.key === k)).length === 0;
 
+  function criarAutomacao() {
+    const b = corpo();
+    if (!b) return;
+    const nomeDoCliente = (clientes?.items ?? []).find((c) => c.id === cliente)?.name;
+    onCriarAutomacao(automacaoDoRelatorio(b, nomeDoCliente));
+  }
+
   return (
     <Dialog
       open
@@ -272,6 +364,15 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
         ) : (
           <>
             <Button onClick={onFechar}>Fechar</Button>
+            {podeAutomatizar && (
+              <Button
+                icon={<CalendarClock className="size-4" />}
+                disabled={Boolean(intervalo.problema) || semNada}
+                onClick={criarAutomacao}
+              >
+                Criar automação com estes filtros
+              </Button>
+            )}
             <Button
               icon={<FileDown className="size-4" />}
               loading={baixando === 'pdf'}
@@ -392,12 +493,24 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
                   onChange={(e) => {
                     setCliente(e.target.value);
                     setContrato('');
+                    // Setor é sempre DE um cliente.
+                    setSetor('');
                   }}
                 >
                   <option value="">Todos os clientes</option>
                   {(clientes?.items ?? []).map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Setor" hint="Recorta OS, SLA, avaliações e planos pela área do setor">
+                <Select value={setor} onChange={(e) => setSetor(e.target.value)}>
+                  <option value="">Todos os setores</option>
+                  {setores.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
                     </option>
                   ))}
                 </Select>
@@ -473,7 +586,17 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
             )}
           </fieldset>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Tipo de manutenção" hint="Das ordens de serviço">
+              <Select value={tipoManutencao} onChange={(e) => setTipoManutencao(e.target.value)}>
+                <option value="">Todos os tipos</option>
+                {tiposDeManutencao.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field label="Tipo de plano (conformidades)">
               <Select value={tipoPlano} onChange={(e) => setTipoPlano(e.target.value)}>
                 {TIPOS_DE_PLANO.map(([v, r]) => (
@@ -483,16 +606,24 @@ function DialogoRelatorio({ f, onFechar }: { f: FiltrosDoPainel; onFechar: () =>
                 ))}
               </Select>
             </Field>
-            <Field label="Categoria de equipamento">
+            <Field label="Família / tipo de equipamento">
               <Select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-                <option value="">Todas</option>
-                {(opcoes?.categories ?? [])
-                  .filter((c) => !c.family_key)
-                  .map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
+                <option value="">Todos</option>
+                {grupos.familias.map((g) => (
+                  <optgroup key={g.familia.id} label={g.familia.name}>
+                    <option value={g.familia.id}>{g.familia.name} (família inteira)</option>
+                    {g.tipos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                {grupos.soltas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
               </Select>
             </Field>
           </div>

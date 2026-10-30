@@ -15,6 +15,7 @@ import {
   dayOf,
 } from '@aurora/domain';
 import type { AssetReport } from '@aurora/db';
+import { MARCA_DO_PRODUTO } from '@aurora/config';
 import type { CartaoPdf, LinhaPdf } from '../documents/pdf';
 import type { AbaXlsx, CelulaXlsx } from '../documents/xlsx';
 
@@ -139,7 +140,10 @@ export function montarPatrimonial(d: DadosPatrimonial): { linhas: LinhaPdf[]; ro
     { texto: 'Relatório Patrimonial', titulo: true, tamanho: 18, espacoAntes: 2 },
     { texto: 'Inventário de equipamentos por situação, com depreciação em linha reta', tamanho: 10 },
     { texto: `${local} · Situação: ${situacao}`, negrito: true, espacoAntes: 8 },
-    { texto: `Emitido em ${emissao}. Fonte: cadastro de equipamentos do sistema Aurora.`, tamanho: 8 },
+    {
+      texto: `Emitido em ${emissao}. Fonte: cadastro de equipamentos do sistema ${MARCA_DO_PRODUTO.produto}.`,
+      tamanho: 8,
+    },
     { texto: 'Resumo', titulo: true, espacoAntes: 14 },
     { texto: '', cartoes, espacoAntes: 4 },
     { texto: ASSET_REPORT_SITUATION_NOTE, tamanho: 7 },
@@ -163,13 +167,15 @@ export function montarPatrimonial(d: DadosPatrimonial): { linhas: LinhaPdf[]; ro
         tamanho: 8,
       });
     }
+    // Cabeçalho em negrito: a palavra mais longa de cada título cabe na coluna (inspeção dos PDFs,
+    // 29/10/2026 — "Depreciado" com peso 0.9 estourava a largura).
     const colunas = [
-      { titulo: 'Equipamento', peso: 2.6 },
-      { titulo: 'Cliente / setor', peso: 2 },
+      { titulo: 'Equipamento', peso: 2.2 },
+      { titulo: 'Cliente / setor', peso: 1.9 },
       { titulo: 'Situação', peso: 1.4 },
-      { titulo: 'Aquisição', peso: 1, alinhar: 'c' as const },
+      { titulo: 'Aquisição', peso: 1.2, alinhar: 'c' as const },
       { titulo: 'Vida útil', peso: 0.8, alinhar: 'c' as const },
-      { titulo: 'Depreciado', peso: 0.9, alinhar: 'c' as const },
+      { titulo: 'Depreciado', peso: 1.3, alinhar: 'c' as const },
       ...(r.financials_visible
         ? [
             { titulo: 'Valor de aquisição', peso: 1.3, alinhar: 'c' as const },

@@ -19,7 +19,7 @@
  */
 import { NotFoundError, type Period } from '@aurora/domain';
 import type { TenantSession } from './client';
-import { scopeParams, scopeSql, type MetricFilters } from './metrics';
+import { categoriaSql, scopeParams, scopeSql, type MetricFilters } from './metrics';
 
 export interface MembershipScope {
   /** Nulo: sem restrição de cliente. */
@@ -153,12 +153,14 @@ export async function workOrderSeries(
     filters.locationPath ?? null,
     ...scopeParams(filters),
     filters.assetCategoryId ?? null,
+    filters.workOrderTypeKey ?? null,
   ];
   const filtro = `
       AND ($4::uuid IS NULL OR f.customer_id = $4)
       AND ($5::text IS NULL OR f.location_path LIKE $5 || '%')
       AND ${scopeSql('f.customer_id', 'f.location_path', 6)}
-      AND ($8::uuid IS NULL OR f.asset_category_id = $8)`;
+      AND ${categoriaSql('f.asset_category_id', 8)}
+      AND ($9::text IS NULL OR f.work_order_type_key = $9)`;
   const rows = await session.query<{
     inicio: Date;
     fim: Date;
@@ -228,13 +230,15 @@ export async function openWorkOrdersSnapshot(
         AND ($1::uuid IS NULL OR f.customer_id = $1)
         AND ($2::text IS NULL OR f.location_path LIKE $2 || '%')
         AND ${scopeSql('f.customer_id', 'f.location_path', 3)}
-        AND ($5::uuid IS NULL OR f.asset_category_id = $5)
+        AND ${categoriaSql('f.asset_category_id', 5)}
+        AND ($6::text IS NULL OR f.work_order_type_key = $6)
       GROUP BY 1, 2`,
     [
       filters.customerId ?? null,
       filters.locationPath ?? null,
       ...scopeParams(filters),
       filters.assetCategoryId ?? null,
+      filters.workOrderTypeKey ?? null,
     ]
   );
   const byStatus: Record<string, number> = {};
@@ -272,7 +276,7 @@ export async function parkSnapshot(session: TenantSession, filters: MetricFilter
         AND ($1::uuid IS NULL OR a.customer_id = $1)
         AND ($2::text IS NULL OR a.location_path LIKE $2 || '%')
         AND ${scopeSql('a.customer_id', 'a.location_path', 3)}
-        AND ($5::uuid IS NULL OR a.asset_category_id = $5)`;
+        AND ${categoriaSql('a.asset_category_id', 5)}`;
   const porStatus = await session.query<{ status: string; total: string }>(
     `SELECT a.status::text AS status, count(*)::text AS total
        FROM aurora.assets a WHERE ${filtro} GROUP BY 1`,

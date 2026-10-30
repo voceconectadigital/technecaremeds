@@ -17,23 +17,28 @@ export const TIPOS_DE_CLIENTE: readonly { valor: TipoDeCliente; rotulo: string; 
   },
 ];
 
-export const SUBTIPOS: Record<TipoDeCliente, readonly { valor: string; rotulo: string }[]> = {
-  eas: [
-    { valor: 'hospital', rotulo: 'Hospital' },
-    { valor: 'clinica', rotulo: 'Clínica' },
-    { valor: 'consultorio', rotulo: 'Consultório' },
-    { valor: 'laboratorio', rotulo: 'Laboratório' },
-    { valor: 'clinica_imagem', rotulo: 'Clínica de imagem' },
-    { valor: 'home_care', rotulo: 'Home care' },
-    { valor: 'outro_eas', rotulo: 'Outro EAS' },
-  ],
-  corporate: [
-    { valor: 'engenharia_clinica', rotulo: 'Engenharia clínica' },
-    { valor: 'assistencia_tecnica', rotulo: 'Assistência técnica' },
-    { valor: 'prestadora_servico', rotulo: 'Prestadora de serviço' },
-    { valor: 'outro_corporativo', rotulo: 'Outra empresa' },
-  ],
-};
+/**
+ * `legado`: "Outro EAS" e "Outra empresa" saíram das opções (CLI-02). Seguem aqui para o RÓTULO do
+ * cliente antigo que os tem — e só aparecem no seletor quando já são o subtipo do cliente editado.
+ */
+export const SUBTIPOS: Record<TipoDeCliente, readonly { valor: string; rotulo: string; legado?: boolean }[]> =
+  {
+    eas: [
+      { valor: 'hospital', rotulo: 'Hospital' },
+      { valor: 'clinica', rotulo: 'Clínica' },
+      { valor: 'consultorio', rotulo: 'Consultório' },
+      { valor: 'laboratorio', rotulo: 'Laboratório' },
+      { valor: 'clinica_imagem', rotulo: 'Clínica de imagem' },
+      { valor: 'home_care', rotulo: 'Home care' },
+      { valor: 'outro_eas', rotulo: 'Outro EAS', legado: true },
+    ],
+    corporate: [
+      { valor: 'engenharia_clinica', rotulo: 'Engenharia clínica' },
+      { valor: 'assistencia_tecnica', rotulo: 'Assistência técnica' },
+      { valor: 'prestadora_servico', rotulo: 'Prestadora de serviço' },
+      { valor: 'outro_corporativo', rotulo: 'Outra empresa', legado: true },
+    ],
+  };
 
 /** "EAS · Hospital", "Empresa corporativa · Assistência técnica", ou null. */
 export function rotuloDaClassificacao(c: { kind?: string | null; subtype?: string | null }): string | null {
@@ -52,6 +57,7 @@ export function CamposDeClassificacao({
   onSubtipo,
   erroSubtipo,
   bloquearTipo = false,
+  subtipoOriginal = null,
 }: {
   tipo: TipoDeCliente;
   subtipo: string;
@@ -59,6 +65,8 @@ export function CamposDeClassificacao({
   onSubtipo: (s: string) => void;
   erroSubtipo?: string | null;
   bloquearTipo?: boolean;
+  /** O subtipo gravado do cliente em edição: um subtipo antigo (legado) só aparece se for ele. */
+  subtipoOriginal?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -96,11 +104,13 @@ export function CamposDeClassificacao({
       <Field label="Subtipo" error={erroSubtipo ?? null}>
         <Select value={subtipo} onChange={(e) => onSubtipo(e.target.value)}>
           <option value="">Não informar</option>
-          {SUBTIPOS[tipo].map((s) => (
-            <option key={s.valor} value={s.valor}>
-              {s.rotulo}
-            </option>
-          ))}
+          {SUBTIPOS[tipo]
+            .filter((s) => !s.legado || s.valor === subtipoOriginal)
+            .map((s) => (
+              <option key={s.valor} value={s.valor}>
+                {s.rotulo}
+              </option>
+            ))}
         </Select>
       </Field>
     </div>

@@ -10,10 +10,12 @@
  *   · cliente fora do escopo           → 404 (não confirmar que existe);
  *   · equipamento de outro cliente     → 422 no campo `asset_id`;
  *   · equipamento fora dos setores     → 422 no campo `asset_id`;
- *   · local fora do escopo/de outro    → 422 no campo `location_id`.
+ *   · local fora do escopo/de outro    → 422 no campo `location_id`;
+ *   · equipamento fora do setor escolhido → 422 no campo `asset_id` (SOL-01:
+ *     cliente → setor → equipamento; o setor contém o local do equipamento).
  *
- * Com equipamento e sem local, o local passa a ser o do equipamento — a
- * solicitação nasce no setor certo sem pedir duas vezes a mesma coisa.
+ * Com equipamento, o local passa a ser o do equipamento — a solicitação nasce
+ * no setor (ou na sala dentro dele) certo sem pedir duas vezes a mesma coisa.
  */
 import { NotFoundError, ValidationError } from '@aurora/domain';
 import type { TenantSession } from '@aurora/db';
@@ -32,13 +34,24 @@ export async function conferirAlvoDaSolicitacao(
   let locationId = alvo.locationId;
 
   if (alvo.assetId) {
-    const [ativo] = await s.query<{ customer_id: string; location_id: string | null; acessivel: boolean }>(
+    const [ativo] = await s.query<{
+      customer_id: string;
+      location_id: string | null;
+      acessivel: boolean;
+      no_local: boolean;
+    }>(
       `SELECT a.customer_id, a.location_id,
               (a.location_id IS NULL
-               OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($1))) AS acessivel
+               OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($1))) AS acessivel,
+              -- SOL-01: o local escolhido (o SETOR) contém o equipamento — o próprio local dele ou
+              -- um ancestral, pelo caminho materializado.
+              ($3::uuid IS NULL
+               OR a.location_id = $3
+               OR a.location_path LIKE (SELECT l.path || '%' FROM aurora.locations l
+                                         WHERE l.id = $3 AND l.deleted_at IS NULL)) AS no_local
          FROM aurora.assets a
         WHERE a.id = $2 AND a.deleted_at IS NULL`,
-      [membershipId, alvo.assetId]
+      [membershipId, alvo.assetId, locationId]
     );
     if (!ativo || ativo.customer_id !== alvo.customerId) {
       throw new ValidationError('o equipamento não é deste cliente', { field: 'asset_id' });
@@ -48,24 +61,37 @@ export async function conferirAlvoDaSolicitacao(
         field: 'asset_id',
       });
     }
-    if (locationId && ativo.location_id && locationId !== ativo.location_id) {
-      throw new ValidationError('o local informado não é o do equipamento', { field: 'location_id' });
+    // O setor escolhido: primeiro escopo e cliente, depois se o equipamento está nele. A
+    // solicitação nasce no local exato do equipamento, que está dentro do setor.
+    if (locationId) {
+      await conferirLocal(s, membershipId, alvo.customerId, locationId);
+      if (!ativo.no_local) {
+        throw new ValidationError('o equipamento não está no setor escolhido', { field: 'asset_id' });
+      }
     }
-    locationId = locationId ?? ativo.location_id;
+    locationId = ativo.location_id ?? locationId;
   }
 
-  if (locationId) {
-    const [local] = await s.query<{ customer_id: string; acessivel: boolean }>(
-      `SELECT l.customer_id,
-              l.id IN (SELECT location_id FROM aurora.accessible_location_ids($1)) AS acessivel
-         FROM aurora.locations l
-        WHERE l.id = $2 AND l.deleted_at IS NULL`,
-      [membershipId, locationId]
-    );
-    if (!local || !local.acessivel || local.customer_id !== alvo.customerId) {
-      throw new ValidationError('local fora do seu escopo ou de outro cliente', { field: 'location_id' });
-    }
-  }
+  if (locationId) await conferirLocal(s, membershipId, alvo.customerId, locationId);
 
   return { locationId };
+}
+
+/** O local existe, é do cliente e está no escopo de quem abre. */
+async function conferirLocal(
+  s: TenantSession,
+  membershipId: string,
+  customerId: string,
+  locationId: string
+): Promise<void> {
+  const [local] = await s.query<{ customer_id: string; acessivel: boolean }>(
+    `SELECT l.customer_id,
+            l.id IN (SELECT location_id FROM aurora.accessible_location_ids($1)) AS acessivel
+       FROM aurora.locations l
+      WHERE l.id = $2 AND l.deleted_at IS NULL`,
+    [membershipId, locationId]
+  );
+  if (!local || !local.acessivel || local.customer_id !== customerId) {
+    throw new ValidationError('local fora do seu escopo ou de outro cliente', { field: 'location_id' });
+  }
 }

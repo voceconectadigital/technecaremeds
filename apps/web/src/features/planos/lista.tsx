@@ -15,11 +15,35 @@
  * antecedência de geração. A tela distingue "ainda não" de "nunca vai" — a
  * primeira é normal, a segunda é um plano desligado que ninguém percebeu.
  */
+import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Repeat } from 'lucide-react';
-import { Card, CardHeader, EmptyState, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
-import { cycleCompliance, planDetail, plansList, type PlanRow, type PlanTask } from '@aurora/contracts';
-import { useApiQuery } from '@aurora/app-kit';
+import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Power, PowerOff, Repeat } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Dialog,
+  EmptyState,
+  Field,
+  Skeleton,
+  SkeletonList,
+  StatusChip,
+  Textarea,
+  cn,
+  useToast,
+} from '@aurora/ui';
+import {
+  cycleCompliance,
+  planDetail,
+  plansActivate,
+  plansBoard,
+  plansDeactivate,
+  plansList,
+  plansSchedule,
+  type PlanRow,
+  type PlanTask,
+} from '@aurora/contracts';
+import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
@@ -123,7 +147,17 @@ export function PlanoPage() {
   const { id } = useParams({ strict: false }) as { id: string };
 
   const { data, isLoading, isError, error } = useApiQuery(planDetail, { params: { id } }) as {
-    data: { plan: PlanRow & { created_at: string }; tasks: PlanTask[] } | undefined;
+    data:
+      | {
+          plan: PlanRow & {
+            created_at: string;
+            active_changed_at?: string | null;
+            active_changed_by_name?: string | null;
+            active_change_reason?: string | null;
+          };
+          tasks: PlanTask[];
+        }
+      | undefined;
     isLoading: boolean;
     isError: boolean;
     error: unknown;
@@ -163,7 +197,20 @@ export function PlanoPage() {
                 Inclui atrasados
               </StatusChip>
             )}
+            <span className="ml-auto">
+              <Can permission="maintenance_plan.update">
+                <AtivacaoDoPlano planId={data.plan.id} ativo={data.plan.is_active} nome={data.plan.name} />
+              </Can>
+            </span>
             {data.plan.description && <p className="w-full text-sm text-muted">{data.plan.description}</p>}
+            {data.plan.active_changed_at && (
+              <p className="w-full text-xs text-subtle" data-testid="ultima-ativacao">
+                {data.plan.is_active ? 'Ativado' : 'Desligado'}{' '}
+                {formatarDataRelativa(data.plan.active_changed_at)}
+                {data.plan.active_changed_by_name ? ` por ${data.plan.active_changed_by_name}` : ''}
+                {data.plan.active_change_reason ? ` — ${data.plan.active_change_reason}` : ''}
+              </p>
+            )}
           </div>
         </Card>
 
@@ -185,12 +232,85 @@ export function PlanoPage() {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Ativar / desligar o plano (PLN-01). O motivo é opcional e fica na auditoria. Desligar não
+ * apaga nada: o que já foi gerado continua; o que muda é o futuro (nenhum ciclo novo).
+ */
+function AtivacaoDoPlano({ planId, ativo, nome }: { planId: string; ativo: boolean; nome: string }) {
+  const toast = useToast();
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const opcoes = {
+    invalidates: [planDetail, plansList, plansBoard, plansSchedule],
+    onSuccess: () => {
+      setAberto(false);
+      setMotivo('');
+      toast.success(ativo ? 'Plano desligado' : 'Plano ativado');
+    },
+    onError: (e: ApiError) => toast.error('Não foi possível mudar o plano', e.problem.message),
+  };
+  const desligar = useApiMutation(plansDeactivate, opcoes);
+  const ligar = useApiMutation(plansActivate, opcoes);
+  const mutacao = ativo ? desligar : ligar;
+  return (
+    <>
+      <Button
+        size="sm"
+        icon={ativo ? <PowerOff className="size-4" /> : <Power className="size-4" />}
+        onClick={() => setAberto(true)}
+      >
+        {ativo ? 'Desligar plano' : 'Ativar plano'}
+      </Button>
+      <Dialog
+        open={aberto}
+        onOpenChange={setAberto}
+        size="sm"
+        title={ativo ? `Desligar "${nome}"?` : `Ativar "${nome}"?`}
+        description={
+          ativo
+            ? 'Nenhum ciclo novo e nenhuma OS futura. O que já foi gerado continua como está.'
+            : 'A varredura volta a abrir os ciclos deste plano na antecedência configurada.'
+        }
+        footer={
+          <>
+            <Button onClick={() => setAberto(false)}>Cancelar</Button>
+            <Button
+              variant="primary"
+              loading={mutacao.isPending}
+              onClick={() =>
+                mutacao.mutate({
+                  params: { id: planId },
+                  body: motivo.trim() ? { reason: motivo.trim() } : {},
+                })
+              }
+            >
+              {ativo ? 'Desligar' : 'Ativar'}
+            </Button>
+          </>
+        }
+      >
+        <Field label="Motivo (opcional)" hint="Fica registrado na auditoria do plano.">
+          <Textarea value={motivo} maxLength={500} onChange={(e) => setMotivo(e.target.value)} rows={3} />
+        </Field>
+      </Dialog>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+
 function Tarefa({ tarefa }: { tarefa: PlanTask }) {
   return (
     <Card>
       <CardHeader
         title={tarefa.name}
-        description={`${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}`}
+        description={
+          `${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}` +
+          // OS-15: os procedimentos adicionais vão na mesma OS, cada um com o seu checklist.
+          ((tarefa.extra_checklist_template_keys?.length ?? 0) > 0
+            ? ` · ${(tarefa.checklist_template_key ? 1 : 0) + tarefa.extra_checklist_template_keys!.length} procedimentos na mesma OS`
+            : '')
+        }
         actions={
           tarefa.open_cycle_id ? (
             <span className="flex items-center gap-1.5 text-sm text-muted">

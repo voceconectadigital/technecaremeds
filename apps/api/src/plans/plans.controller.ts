@@ -22,7 +22,20 @@
  * que depende de alguém abrir a tela — e o valor inteiro do plano é
  * justamente não depender disso.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
+import type { Response } from 'express';
 import {
   withTenant,
   generateCycle,
@@ -36,19 +49,31 @@ import {
   planBoard,
   executePlanItem,
   planSchedule,
+  planEligibleItems,
+  planComplianceReport,
+  setPlanActive,
   PLAN_KINDS,
   type MembershipScope,
   type TenantSession,
   type Database,
 } from '@aurora/db';
 import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
-import { plansBoard, plansCreate, plansSchedule } from '@aurora/contracts';
+import {
+  plansActivate,
+  plansBoard,
+  plansComplianceReport,
+  plansCreate,
+  plansSchedule,
+  setoresDaConsulta,
+} from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
 import { optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
 import { escopoRestrito } from '../common/scope-sql';
 import type { AuroraRequest } from '../common/context.middleware';
+import { XLSX_CONTENT_TYPE, gerarXlsx } from '../documents/xlsx';
+import { abasDaConformidade } from './conformidade-planilha';
 
 /** O período do painel/cronograma: datas ISO, no máximo dois anos. */
 function periodo(q: { from: string; to: string }): { from: Date; to: Date } {
@@ -180,10 +205,58 @@ export class PlansController {
       await assertCustomerInScope(s, escopo, q.customer);
       return planBoard(
         s,
-        { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null, kind: q.kind ?? null },
+        {
+          ...p,
+          customerId: q.customer ?? null,
+          sectorIds: setoresDaConsulta(q.sector),
+          kind: q.kind ?? null,
+        },
         escopo
       );
     });
+  }
+
+  /**
+   * Relatório de conformidade (REL-12): o quadro ranqueado pela TAXA — por
+   * plano, cliente e setor —, com a definição do numerador e do denominador.
+   * JSON por padrão; `?format=xlsx` devolve a planilha (gerador próprio, sem
+   * dependência). Rota de LEITURA: POST só porque os filtros vão no corpo.
+   */
+  @Post('compliance-report')
+  @HttpCode(200)
+  @RequirePermissions('maintenance_plan.read')
+  @PermissionsCheckedInHandler('rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado')
+  async complianceReport(
+    @Req() req: AuroraRequest,
+    @Res({ passthrough: true }) res: Response,
+    @Body() body: unknown,
+    @Query('format') format?: string
+  ): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const b = parseWith(plansComplianceReport.body, body ?? {});
+    const p = periodo(b);
+    if (format !== undefined && format !== 'json' && format !== 'xlsx') {
+      throw new ValidationError('formato deve ser json ou xlsx', { field: 'format' });
+    }
+    const relatorio = await withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      await assertCustomerInScope(s, escopo, b.customer_id);
+      return planComplianceReport(
+        s,
+        { ...p, customerId: b.customer_id ?? null, sectorIds: b.sector_ids ?? [], kind: b.kind ?? null },
+        escopo
+      );
+    });
+    const resposta = {
+      ...relatorio,
+      period: { from: p.from.toISOString(), to: p.to.toISOString() },
+    };
+    if (format !== 'xlsx') return resposta;
+    res.status(200);
+    res.setHeader('content-type', XLSX_CONTENT_TYPE);
+    res.setHeader('content-disposition', 'attachment; filename="conformidade-dos-planos.xlsx"');
+    res.setHeader('cache-control', 'no-store');
+    return new StreamableFile(gerarXlsx(abasDaConformidade(resposta)));
   }
 
   /** Cronograma: atividades reais e as previstas pela frequência, com cliente, setor e equipamento. */
@@ -198,7 +271,12 @@ export class PlansController {
       await assertCustomerInScope(s, escopo, q.customer);
       return planSchedule(
         s,
-        { ...p, customerId: q.customer ?? null, sectorId: q.sector ?? null, kind: q.kind ?? null },
+        {
+          ...p,
+          customerId: q.customer ?? null,
+          sectorIds: setoresDaConsulta(q.sector),
+          kind: q.kind ?? null,
+        },
         escopo
       );
     });
@@ -232,6 +310,7 @@ export class PlansController {
           assetIds: b.asset_ids,
           kind: b.kind,
           checklistTemplateKey: b.checklist_template_key ?? null,
+          extraChecklistTemplateKeys: b.extra_checklist_template_keys ?? [],
           frequencyUnit: b.frequency_unit,
           frequencyInterval: b.frequency_interval,
           anchorDate: anchor,
@@ -258,9 +337,11 @@ export class PlansController {
       const [plano] = await s.query<Record<string, unknown>>(
         `SELECT p.id, p.name, p.description, p.customer_id, c.name AS customer_name,
                 p.team_id, p.is_active, p.auto_generate, p.include_late_assets,
-                p.anchor_date::text AS anchor_date, p.created_at, p.updated_at
+                p.anchor_date::text AS anchor_date, p.created_at, p.updated_at,
+                p.active_changed_at, quem.name AS active_changed_by_name, p.active_change_reason
            FROM aurora.maintenance_plans p
            JOIN aurora.customers c ON c.id = p.customer_id
+           LEFT JOIN aurora.users quem ON quem.id = p.active_changed_by
           WHERE p.id = $1 AND p.archived_at IS NULL`,
         [planId]
       );
@@ -269,7 +350,7 @@ export class PlansController {
       const tarefas = await s.query(
         `SELECT t.id, t.name, t.target_kind::text AS target_kind,
                 t.target_asset_id, t.target_category_id, t.target_location_id,
-                t.work_order_type_id, t.checklist_template_key,
+                t.work_order_type_id, t.checklist_template_key, t.extra_checklist_template_keys,
                 t.filter_asset_model_id, t.filter_manufacturer_id, t.filter_criticality_id,
                 t.trigger::text AS trigger,
                 t.frequency_unit::text AS frequency_unit, t.frequency_interval,
@@ -305,6 +386,59 @@ export class PlansController {
 
       return { plan: plano, tasks: tarefas };
     });
+  }
+
+  /**
+   * Ativar / inativar (PLN-01). Só quem pode EDITAR plano; o plano precisa
+   * estar no escopo (fora dele é 404). Nada do que já foi gerado muda — o
+   * efeito é sobre o futuro: inativo, nenhum ciclo novo e nenhuma OS futura.
+   */
+  @Post(':id/activate')
+  @RequirePermissions('maintenance_plan.update')
+  async activate(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ is_active: boolean; changed: boolean }> {
+    return this.mudarAtivacao(req, id, body, true);
+  }
+
+  @Post(':id/deactivate')
+  @RequirePermissions('maintenance_plan.update')
+  async deactivate(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ is_active: boolean; changed: boolean }> {
+    return this.mudarAtivacao(req, id, body, false);
+  }
+
+  private async mudarAtivacao(
+    req: AuroraRequest,
+    id: string,
+    body: unknown,
+    ativo: boolean
+  ): Promise<{ is_active: boolean; changed: boolean }> {
+    const ctx = req.auroraContext!;
+    const planId = uuidParam(id, 'id');
+    const b = parseWith(plansActivate.body, body ?? {});
+    const r = await withTenant(this.db, ctx, async (s) => {
+      await planoNoEscopo(s, await membershipScope(s, ctx.membershipId), planId);
+      return setPlanActive(s, planId, ativo, b.reason ?? null);
+    });
+    return { is_active: r.isActive, changed: r.changed };
+  }
+
+  /** ▶ Play (PLN-09): os equipamentos do plano com atividade em aberto. */
+  @Get(':id/eligible-items')
+  @RequirePermissions('maintenance_plan.read')
+  async eligibleItems(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const planId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, async (s) =>
+      planEligibleItems(s, planId, await membershipScope(s, ctx.membershipId))
+    );
+    return { items };
   }
 
   /**

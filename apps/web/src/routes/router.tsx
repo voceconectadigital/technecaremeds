@@ -163,6 +163,9 @@ const MetasPage = preguicosa(() =>
 const TarefasPage = preguicosa(() =>
   import('../features/automacoes/tarefas').then((m) => ({ default: m.TarefasPage }))
 );
+const RelatoriosPage = preguicosa(() =>
+  import('../features/painel/pagina-relatorios').then((m) => ({ default: m.RelatoriosPage }))
+);
 const RelatorioAgendadoPage = preguicosa(() =>
   import('../features/automacoes/tarefas').then((m) => ({ default: m.RelatorioAgendadoPage }))
 );
@@ -345,6 +348,8 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/configuracoes/negocios', NegociosPage),
   rotaProtegida('/configuracoes/metas', MetasPage),
   rotaProtegida('/tarefas', TarefasPage),
+  // O gerador de relatório na página própria (REL-03): o mesmo diálogo do Painel.
+  rotaProtegida('/relatorios', RelatoriosPage),
   createRoute({
     getParentRoute: () => raiz,
     path: '/relatorios/agendados/$id',

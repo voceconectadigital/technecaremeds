@@ -152,7 +152,10 @@ async function os(opts: {
 
     if (opts.concluir) {
       await transitionWorkOrder(s, w.id, 'in_progress');
-      await transitionWorkOrder(s, w.id, 'completed', { resolution: 'trocado o filtro e testado' });
+      await transitionWorkOrder(s, w.id, 'completed', {
+        operationalResult: 'released',
+        resolution: 'trocado o filtro e testado',
+      });
     }
 
     return w.id;
@@ -294,7 +297,10 @@ describe('backlog', () => {
 
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, id, 'in_progress');
-      await transitionWorkOrder(s, id, 'completed', { resolution: 'resolvido em campo' });
+      await transitionWorkOrder(s, id, 'completed', {
+        resolution: 'resolvido em campo',
+        operationalResult: 'released',
+      });
     });
 
     const depois = await withTenant(t.db, ctx, (s) => backlog(s));
@@ -369,7 +375,10 @@ describe('onde o fluxo trava', () => {
     const id = await os({});
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, id, 'in_progress');
-      await transitionWorkOrder(s, id, 'completed', { resolution: 'concluída para medir o tempo' });
+      await transitionWorkOrder(s, id, 'completed', {
+        operationalResult: 'released',
+        resolution: 'concluída para medir o tempo',
+      });
     });
 
     const r = await withTenant(t.db, ctx, (s) => timeByStatus(s, PERIODO));

@@ -117,11 +117,11 @@ export const ORGANIZATION_FEATURES = [
 
 const OrganizationConfigurationShape = {
   usage_mode: z.enum(ORGANIZATION_USAGE_MODES),
-  /** A lista EFETIVA: quando nunca configurada, vem com todos os módulos. */
+  /** A lista EFETIVA: nunca configurada, vem com os módulos do modo (hospital: sem `quotes`). */
   enabled_features: z.array(z.enum(ORGANIZATION_FEATURES)),
   /** `false` enquanto ninguém escolheu — tudo habilitado por padrão. */
   features_customized: z.boolean(),
-  /** Concluir a OS exige o parecer LIBERADO/PARADO (PF-41). `false` por padrão. */
+  /** Concluir a OS de equipamento exige o parecer LIBERADO/PARADO (PF-41, OS-16). `true` por padrão. */
   require_operational_result: z.boolean(),
 };
 export const OrganizationConfiguration = z.object(OrganizationConfigurationShape);
@@ -132,7 +132,7 @@ export const organizationsUpdateConfiguration = defineOperation({
   path: '/organizations/current/configuration',
   summary: 'Muda o modo de uso e os recursos habilitados da organização do contexto',
   description:
-    '`enabled_features: null` volta ao padrão (tudo habilitado). Lista vazia é recusada. ' +
+    '`enabled_features: null` volta ao padrão do modo (tudo, menos `quotes` no modo hospital). Lista vazia é recusada. ' +
     'Recurso habilitado não é permissão: o RBAC continua decidindo quem pode o quê.',
   permissions: ['organization.update'],
   body: z

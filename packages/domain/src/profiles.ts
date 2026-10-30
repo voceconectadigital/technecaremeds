@@ -152,6 +152,143 @@ export function isValidRegistrationNumber(raw: string): boolean {
   return /^[A-Z0-9][A-Z0-9./-]{1,23}$/.test(normalizeRegistrationNumber(raw));
 }
 
+/**
+ * O conselho EXIGIDO pela profissão (USR-04 · reunião 16/10/2026): "conselhos profissionais
+ * exigidos apenas conforme profissão, não todos simultaneamente".
+ *
+ * Só as profissões da lista de sugestões (mais a fisioterapia, citada pelo cliente) têm conselho
+ * obrigatório, e cada uma exige UM tipo de registro, dos que o cadastro já conhece:
+ *
+ *   Médico(a) → CRM · Enfermeiro(a), Técnico(a)/Auxiliar de enfermagem → COREN ·
+ *   Engenheiro(a) → CREA · Técnico(a) → CFT (o registro é no CRT da região, sob o CFT) ·
+ *   Fisioterapeuta → CREFITO.
+ *
+ * Profissão fora disso (Comprador, Gerente, Diretor, Empresário, texto livre) não exige nada. A
+ * comparação é pelo texto normalizado — sem acento, sem "(a)", sem diferença de caixa.
+ */
+const CONSELHO_POR_PROFISSAO: ReadonlyMap<string, string> = new Map([
+  ['medico', 'CRM'],
+  ['medica', 'CRM'],
+  ['enfermeiro', 'COREN'],
+  ['enfermeira', 'COREN'],
+  ['tecnico de enfermagem', 'COREN'],
+  ['tecnica de enfermagem', 'COREN'],
+  ['auxiliar de enfermagem', 'COREN'],
+  ['engenheiro', 'CREA'],
+  ['engenheira', 'CREA'],
+  ['tecnico', 'CFT'],
+  ['tecnica', 'CFT'],
+  ['fisioterapeuta', 'CREFITO'],
+]);
+
+function normalizarProfissao(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\((a|o|as|os)\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** O tipo de registro que a profissão exige, ou `null` quando ela não exige conselho. */
+export function requiredRegistrationKind(jobTitle: string | null | undefined): string | null {
+  if (!jobTitle) return null;
+  return CONSELHO_POR_PROFISSAO.get(normalizarProfissao(jobTitle)) ?? null;
+}
+
+/**
+ * Confere a profissão contra os registros. Devolve a mensagem do que falta, ou `null` quando está
+ * em ordem. Só o conselho da profissão é exigido — os demais registros são livres.
+ */
+export function missingRegistrationForProfession(
+  jobTitle: string | null | undefined,
+  registrations: readonly { kind: string }[]
+): string | null {
+  const exigido = requiredRegistrationKind(jobTitle);
+  if (!exigido) return null;
+  if (registrations.some((r) => r.kind.trim().toUpperCase() === exigido)) return null;
+  return `a profissão "${jobTitle}" exige o registro no ${exigido}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Telefone (Brasil)                                                          */
+/* -------------------------------------------------------------------------- */
+
+/** DDDs em uso no Brasil (plano de numeração da Anatel). */
+const DDDS = new Set([
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46,
+  47, 48, 49, 51, 53, 54, 55, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 82, 83, 84, 85,
+  86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 98, 99,
+]);
+
+/**
+ * Telefone brasileiro COM DDD: fixo (DDD + 8 dígitos começando de 2 a 5) ou celular (DDD + 9 +
+ * 8 dígitos). Aceita o que se digita — "+55 (31) 99999-0000", "31 3333-0000", "5531999990000" — e
+ * devolve só os dígitos nacionais (DDD + número), ou `null` quando não é um telefone válido.
+ */
+export function normalizeBrazilianPhone(raw: string): string | null {
+  let d = raw.replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  if (!DDDS.has(Number(d.slice(0, 2)))) return null;
+  const numero = d.slice(2);
+  if (numero.length === 9 && numero[0] !== '9') return null;
+  if (numero.length === 8 && !/^[2-5]/.test(numero)) return null;
+  return d;
+}
+
+export function isValidBrazilianPhone(raw: string): boolean {
+  return normalizeBrazilianPhone(raw) !== null;
+}
+
+/** `(31) 99999-0000` (celular) ou `(31) 3333-0000` (fixo). */
+export function formatBrazilianPhone(raw: string): string {
+  const d = normalizeBrazilianPhone(raw);
+  if (!d) return raw;
+  const n = d.slice(2);
+  return `(${d.slice(0, 2)}) ${n.slice(0, n.length - 4)}-${n.slice(-4)}`;
+}
+
+/* -------------------------------------------------------------------------- */
+/* CNPJ                                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** Sem pontuação, em maiúsculas (o CNPJ alfanumérico tem letras nas 12 primeiras posições). */
+export function normalizeCnpj(raw: string): string {
+  return raw.replace(/[\s./-]/g, '').toUpperCase();
+}
+
+/**
+ * CNPJ válido pelos dígitos verificadores (módulo 11, pesos 5..2,9..2 e 6..2,9..2). Aceita o
+ * formato numérico e o ALFANUMÉRICO da Receita (12 posições de 0-9/A-Z + 2 dígitos verificadores,
+ * cada caractere valendo o código ASCII − 48 — para os dígitos, o próprio número).
+ */
+export function isValidCnpj(raw: string): boolean {
+  const c = normalizeCnpj(raw);
+  if (!/^[0-9A-Z]{12}[0-9]{2}$/.test(c)) return false;
+  if (/^(\d)\1{13}$/.test(c)) return false;
+  const valor = (ch: string) => ch.charCodeAt(0) - 48;
+  const dv = (base: string): number => {
+    const pesos =
+      base.length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const soma = [...base].reduce((acc, ch, i) => acc + valor(ch) * pesos[i]!, 0);
+    const resto = soma % 11;
+    return resto < 2 ? 0 : 11 - resto;
+  };
+  const d1 = dv(c.slice(0, 12));
+  const d2 = dv(c.slice(0, 12) + String(d1));
+  return d1 === Number(c[12]) && d2 === Number(c[13]);
+}
+
+/** `12.345.678/0001-95`. */
+export function formatCnpj(raw: string): string {
+  const c = normalizeCnpj(raw);
+  return c.length === 14
+    ? `${c.slice(0, 2)}.${c.slice(2, 5)}.${c.slice(5, 8)}/${c.slice(8, 12)}-${c.slice(12)}`
+    : raw;
+}
+
 /* -------------------------------------------------------------------------- */
 /* CPF                                                                        */
 /* -------------------------------------------------------------------------- */

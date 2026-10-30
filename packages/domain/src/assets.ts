@@ -145,7 +145,29 @@ export const ANVISA_STATUS_LABELS: Record<AnvisaStatus, string> = {
  * `null` quando faltam data de aquisição válida ou vida útil: sem esses dois não há
  * o que depreciar, e "0 % depreciado" seria afirmar que o bem é novo.
  */
+export const DEPRECIATION_METHOD = 'straight_line' as const;
+export type DepreciationMethod = typeof DEPRECIATION_METHOD;
+
+/**
+ * A metodologia, explícita (ATV-10): quem lê o número vê COMO ele foi feito — método, data-base,
+ * vida útil e residual. Não há escolha de outro método: linha reta é o "cálculo comum" pedido, e
+ * nenhuma norma contábil é inventada aqui.
+ */
+export interface DepreciationMethodology {
+  method: DepreciationMethod;
+  /** Data-base: a data de aquisição (AAAA-MM-DD). */
+  baseDate: string;
+  usefulLifeYears: number;
+  /** Data em que o bem fica totalmente depreciado (data-base + vida útil). */
+  endDate: string;
+  /** Valor residual considerado (0 quando não informado). `null` sem valor de compra. */
+  residualValue: number | null;
+  /** Compra − residual: o que se distribui ao longo da vida útil. `null` sem valor de compra. */
+  depreciableBase: number | null;
+}
+
 export interface Depreciation {
+  methodology: DepreciationMethodology;
   /** Anos desde a aquisição, limitado à vida útil. */
   elapsedYears: number;
   /** Anos que restam (nunca negativo). */
@@ -181,7 +203,20 @@ export function straightLineDepreciation(input: {
   const baseDepreciavel = compra === null ? null : Math.max(0, compra - residual);
   const arred = (n: number) => Math.round(n * 100) / 100;
 
+  // Fim da vida útil: a data-base somada dos anos inteiros (29/02 cai em 01/03 em ano comum).
+  const fim = new Date(
+    Date.UTC(inicio.getUTCFullYear() + usefulLifeYears, inicio.getUTCMonth(), inicio.getUTCDate())
+  );
+
   return {
+    methodology: {
+      method: DEPRECIATION_METHOD,
+      baseDate: inicio.toISOString().slice(0, 10),
+      usefulLifeYears,
+      endDate: fim.toISOString().slice(0, 10),
+      residualValue: compra === null ? null : arred(Math.min(residual, compra)),
+      depreciableBase: baseDepreciavel === null ? null : arred(baseDepreciavel),
+    },
     elapsedYears: Math.round(anos * 100) / 100,
     remainingYears: Math.round((usefulLifeYears - anos) * 100) / 100,
     percentDepreciated: Math.round(percentual * 10) / 10,
@@ -193,6 +228,42 @@ export function straightLineDepreciation(input: {
         ? null
         : arred(compra - (baseDepreciavel * percentual) / 100),
   };
+}
+
+/**
+ * Valor residual coerente com o valor de compra (ATV-10): não negativo e não maior que a compra —
+ * residual acima da compra daria depreciação negativa, e o cálculo a esconderia (base 0).
+ * `null`/ausente vale 0. Sem valor de compra conhecido não há com o que comparar.
+ */
+export function assertResidualValue(
+  purchaseValue: number | null | undefined,
+  residualValue: number | null | undefined
+): void {
+  if (residualValue === null || residualValue === undefined) return;
+  if (!Number.isFinite(residualValue) || residualValue < 0) {
+    throw new ValidationError('o valor residual não pode ser negativo', { field: 'residual_value' });
+  }
+  if (purchaseValue !== null && purchaseValue !== undefined && residualValue > purchaseValue) {
+    throw new ValidationError('o valor residual não pode ser maior que o valor de compra', {
+      field: 'residual_value',
+    });
+  }
+}
+
+/**
+ * Registro ANVISA × "não se aplica" (ATV-11): um OU outro. Número e "não se aplica" juntos se
+ * contradizem; o banco tem a mesma regra (`assets_anvisa_na_exclusive`, 0089).
+ */
+export function assertAnvisaConsistency(
+  registration: string | null | undefined,
+  notApplicable: boolean | null | undefined
+): void {
+  if (notApplicable && registration && registration.trim() !== '') {
+    throw new ValidationError(
+      'registro ANVISA e "não se aplica" não andam juntos: informe o número ou marque que não se aplica',
+      { field: 'anvisa_not_applicable' }
+    );
+  }
 }
 
 /**

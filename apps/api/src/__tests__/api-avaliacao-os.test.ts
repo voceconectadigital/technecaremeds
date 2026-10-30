@@ -29,6 +29,7 @@ import {
   provisionOrganizationBaseline,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
+import { insightControlPanel } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
 
 const ORG = newId();
@@ -278,5 +279,32 @@ describe('avaliar e assinar', () => {
       source: 'portal',
     });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
+  });
+});
+
+describe('Painel: a avaliação das OS consolidada (REL-14)', () => {
+  const painel = (from: string, to: string) =>
+    http.get('/v1/insights/control-panel').query({ from, to }).set(auth(GESTORA));
+
+  it('o cartão traz média, quantidade e período — a nota dada (5), contada uma vez só', async () => {
+    const de = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const ate = new Date(Date.now() + 86_400_000).toISOString();
+    const r = await painel(de, ate);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(insightControlPanel.response.safeParse(r.body).success).toBe(true);
+    const k = r.body.kpis.work_order_rating;
+    // A segunda tentativa (409) não virou segunda nota: uma avaliação por OS.
+    expect(k.data).toMatchObject({ average: 5, count: 1 });
+    expect(k.data.distribution).toMatchObject({ '5': 1, '1': 0 });
+    expect(k.period).toEqual({ from: de, to: ate });
+    expect(k.metric).toBe('work_order_rating');
+  });
+
+  it('sem avaliação no período, a média é NULA (não zero)', async () => {
+    const r = await painel(
+      new Date(Date.now() - 90 * 86_400_000).toISOString(),
+      new Date(Date.now() - 60 * 86_400_000).toISOString()
+    );
+    expect(r.body.kpis.work_order_rating.data).toMatchObject({ average: null, count: 0 });
   });
 });

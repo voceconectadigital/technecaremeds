@@ -19,7 +19,8 @@
  * frase. No IMR, o item sem definição do cliente sai "Aguardando definição", e desconto, glosa e
  * faturamento NÃO são calculados: a regra do IMR (faixas, pesos, valor do contrato) não existe.
  */
-import { NO_TARGET_LABEL, addDaysToDay, dayOf, findIndicator } from '@aurora/domain';
+import { MARCA_DO_PRODUTO } from '@aurora/config';
+import { NO_TARGET_LABEL, addDaysToDay, dayOf, findIndicator, formulaInfo } from '@aurora/domain';
 import type { PendingIndicator, ReportSection, ReportSeries } from '@aurora/db';
 import type { AssinaturaPdf, CartaoPdf, LinhaPdf } from '../documents/pdf';
 
@@ -247,7 +248,7 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
       `O presente instrumento tem como objetivo reportar as atividades executadas pela empresa ${d.organizacao} ` +
       `${d.cliente ? `nas dependências de ${d.cliente}` : 'nas dependências dos clientes atendidos'}, conforme ` +
       `diretrizes e exigências do contrato de prestação de serviço no período do mês vigente. A fonte dos dados ` +
-      `mensurados é o sistema de gestão de Engenharia Clínica Aurora.`,
+      `mensurados é o sistema de gestão de Engenharia Clínica ${MARCA_DO_PRODUTO.produto}.`,
     espacoAntes: 4,
   });
   if (d.secoes.some((s) => s.state === 'PROVISIONAL')) {
@@ -307,6 +308,7 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
     linhas.push(...grafico);
   });
 
+  linhas.push(...notaDasFormulas(d.secoes));
   linhas.push({ texto: 'Atenciosamente,', espacoAntes: 16 });
   linhas.push({
     texto: '',
@@ -343,6 +345,8 @@ function graficoDaSecao(
   return [
     {
       texto: `Gráfico ${doisDigitos(numeroDaFigura)}: ${sigla}`,
+      // A legenda não fica sozinha no pé da página: vai junto com o gráfico.
+      comOProximo: true,
       negrito: true,
       tamanho: 8,
       recuo: 6,
@@ -360,6 +364,35 @@ function graficoDaSecao(
         sufixo: SUFIXO_GRAFICO[familia],
         altura: 140,
       },
+    },
+  ];
+}
+
+/**
+ * A versão da fórmula de cada indicador do relatório, com a data e a fonte da definição
+ * (REL-07). Relatórios antigos (seção sem versão) usam a do catálogo de hoje.
+ */
+export function notaDasFormulas(secoes: readonly ReportSection[]): LinhaPdf[] {
+  if (secoes.length === 0) return [];
+  const itens = secoes.map((sec) => {
+    const doCatalogo = findIndicator(sec.key);
+    const fi = doCatalogo ? formulaInfo(doCatalogo) : null;
+    const versao = sec.formula_version ?? fi?.version ?? '—';
+    const dia = sec.formula_defined_on ?? fi?.definedOn ?? null;
+    return {
+      texto: `${SIGLAS[sec.key] ?? sec.label}: ${versao}${dia ? ` (${dia.split('-').reverse().join('/')})` : ''}`,
+      fonte: sec.formula_source ?? fi?.source ?? null,
+    };
+  });
+  const fontes = [...new Set(itens.map((i) => i.fonte).filter((f): f is string => !!f))];
+  return [
+    { texto: 'Versão das fórmulas', negrito: true, tamanho: 8, espacoAntes: 12 },
+    { texto: itens.map((i) => i.texto).join('; ') + '.', tamanho: 7 },
+    ...(fontes.length > 0 ? [{ texto: `Fonte das definições: ${fontes.join('; ')}.`, tamanho: 7 }] : []),
+    {
+      texto:
+        '"v1-provisoria": o cálculo existe, mas a definição ainda depende de confirmação do cliente; o número pode mudar.',
+      tamanho: 7,
     },
   ];
 }
@@ -452,7 +485,10 @@ export function montarBasic(d: DadosBasic): { linhas: LinhaPdf[]; rodape: string
       espacoAntes: 8,
     },
     ...(cabecalho.length > 0 ? [{ texto: cabecalho.join(' · '), tamanho: 9 }] : []),
-    { texto: `Emitido em ${emissao}. Fonte: sistema de gestão de Engenharia Clínica Aurora.`, tamanho: 8 },
+    {
+      texto: `Emitido em ${emissao}. Fonte: sistema de gestão de Engenharia Clínica ${MARCA_DO_PRODUTO.produto}.`,
+      tamanho: 8,
+    },
 
     { texto: 'Resumo do período', titulo: true, espacoAntes: 14 },
     {
@@ -541,6 +577,7 @@ export function montarBasic(d: DadosBasic): { linhas: LinhaPdf[]; rodape: string
     }
   }
 
+  linhas.push(...notaDasFormulas(d.secoes));
   linhas.push({ texto: 'Atenciosamente,', espacoAntes: 16 });
   linhas.push({
     texto: '',
@@ -686,5 +723,6 @@ export function montarImr(d: DadosImr): { linhas: LinhaPdf[]; rodape: string } {
       linhas.push({ texto: p.motivo, tamanho: 8, recuo: 10 });
     }
   }
+  linhas.push(...notaDasFormulas(d.secoes));
   return { linhas, rodape: `Relatório Expert (IMR) — ${local}${competencia ? ` — ${competencia}` : ''}` };
 }

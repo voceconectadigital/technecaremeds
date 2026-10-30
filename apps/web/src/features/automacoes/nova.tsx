@@ -21,6 +21,7 @@ import {
   type Member,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery } from '@aurora/app-kit';
+import { parametrosDoRecorte, type NivelDoRelatorio, type RelatorioAgendadoInicial } from './do-relatorio';
 
 type Modelo = 'scheduled_report' | 'reminder' | 'parts_alert' | 'task' | '5w2h' | 'pdca';
 type Periodo = 'daily' | 'weekly' | 'monthly';
@@ -66,20 +67,44 @@ export function BotaoNovaAutomacao() {
   );
 }
 
-function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
+/**
+ * `inicial`: a automação nasce do diálogo de relatório ("Criar automação com estes filtros",
+ * REL-15) — modelo de relatório agendado, com nível, indicadores, cliente, setor e filtros.
+ */
+export function DialogoNovaAutomacao({
+  onFechar,
+  inicial,
+}: {
+  onFechar: () => void;
+  inicial?: RelatorioAgendadoInicial;
+}) {
   const toast = useToast();
   const [modelo, setModelo] = useState<Modelo>('scheduled_report');
-  const [nome, setNome] = useState('');
+  const [nome, setNome] = useState(inicial?.nome ?? '');
   const [periodo, setPeriodo] = useState<Periodo>('weekly');
   const [hora, setHora] = useState('08:00');
   const [diaSemana, setDiaSemana] = useState(1);
   const [diaMes, setDiaMes] = useState(1);
   const [destinatarios, setDestinatarios] = useState<string[]>([]);
-  const [tier, setTier] = useState('basic');
+  const [tier, setTier] = useState<NivelDoRelatorio>(inicial?.tier ?? 'basic');
   const [dias, setDias] = useState('30');
   // "Últimos N dias" (o de sempre) ou o MÊS CIVIL anterior (PF-52).
   const [janela, setJanela] = useState<'dias' | 'mes_anterior'>('dias');
-  const [cliente, setCliente] = useState('');
+  const [cliente, setCliente] = useState(inicial?.cliente ?? '');
+  // Recorte que veio do relatório e não tem campo próprio aqui: vai junto, e a tela o mostra.
+  const [recorte, setRecorte] = useState(() => ({
+    indicadores: inicial?.indicadores ?? [],
+    setor: inicial?.setor ?? '',
+    tipoDePlano: inicial?.tipoDePlano ?? '',
+    categoria: inicial?.categoria ?? '',
+    tipoDeManutencao: inicial?.tipoDeManutencao ?? '',
+  }));
+  const temRecorte =
+    recorte.indicadores.length > 0 ||
+    recorte.setor !== '' ||
+    recorte.tipoDePlano !== '' ||
+    recorte.categoria !== '' ||
+    recorte.tipoDeManutencao !== '';
   const [titulo, setTitulo] = useState('');
   const [mensagem, setMensagem] = useState('');
   const [responsavel, setResponsavel] = useState('');
@@ -109,9 +134,8 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         kind: 'send_report',
         params: {
           recipients: destinatarios,
-          tier,
+          ...parametrosDoRecorte({ tier, cliente, ...recorte }),
           ...(janela === 'mes_anterior' ? { periodo: 'mes_anterior' } : { periodDays: Number(dias) }),
-          ...(cliente ? { customerId: cliente } : {}),
         },
       };
     }
@@ -267,7 +291,14 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
         {modelo === 'scheduled_report' && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Modelo de relatório">
-              <Select value={tier} onChange={(e) => setTier(e.target.value)}>
+              <Select
+                value={tier}
+                onChange={(e) => {
+                  setTier(e.target.value as NivelDoRelatorio);
+                  // Os indicadores escolhidos eram do outro modelo.
+                  setRecorte((r) => ({ ...r, indicadores: [] }));
+                }}
+              >
                 <option value="basic">Basic</option>
                 <option value="advanced">Advanced</option>
                 <option value="expert">Expert</option>
@@ -298,7 +329,14 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
               </Field>
             )}
             <Field label="Cliente">
-              <Select value={cliente} onChange={(e) => setCliente(e.target.value)}>
+              <Select
+                value={cliente}
+                onChange={(e) => {
+                  setCliente(e.target.value);
+                  // Setor é sempre DE um cliente.
+                  setRecorte((r) => ({ ...r, setor: '' }));
+                }}
+              >
                 <option value="">Todos os do destinatário</option>
                 {(clientes?.items ?? []).map((c) => (
                   <option key={c.id} value={c.id}>
@@ -307,6 +345,37 @@ function DialogoNovaAutomacao({ onFechar }: { onFechar: () => void }) {
                 ))}
               </Select>
             </Field>
+          </div>
+        )}
+
+        {modelo === 'scheduled_report' && temRecorte && (
+          <div
+            role="note"
+            aria-label="Filtros vindos do relatório"
+            className="flex flex-wrap items-center gap-2 rounded-control bg-accent-soft px-3 py-2 text-xs text-text"
+          >
+            <span>
+              Filtros vindos do relatório:
+              {recorte.indicadores.length > 0 && ` ${recorte.indicadores.length} indicador(es);`}
+              {recorte.setor && ' setor;'}
+              {recorte.tipoDeManutencao && ' tipo de manutenção;'}
+              {recorte.tipoDePlano && ' tipo de plano;'}
+              {recorte.categoria && ' família/tipo de equipamento;'} o período é o da automação.
+            </span>
+            <Button
+              size="sm"
+              onClick={() =>
+                setRecorte({
+                  indicadores: [],
+                  setor: '',
+                  tipoDePlano: '',
+                  categoria: '',
+                  tipoDeManutencao: '',
+                })
+              }
+            >
+              Limpar filtros
+            </Button>
           </div>
         )}
 

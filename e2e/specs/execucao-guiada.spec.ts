@@ -96,8 +96,12 @@ async function percorrerAssistente(page: Page): Promise<void> {
   await expect(page.getByRole('radiogroup', { name: 'Origem da peça' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Avançar' }).click(); // anexos
+  // OS-12 (29/10/2026): o passo pergunta antes; "Sim" abre fotos e documento/manual.
+  await expect(page.getByRole('radiogroup', { name: 'Há anexos para esta OS?' })).toBeVisible();
+  await page.getByLabel('Sim, anexar').check();
   await expect(page.getByRole('heading', { name: 'Foto ANTES' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Foto DEPOIS' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Documento ou manual' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Avançar' }).click(); // parecer
   await page.getByRole('radio', { name: /LIBERADO/ }).check();

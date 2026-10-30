@@ -44,6 +44,7 @@ import { routeEvent, deliverAutomationNotice } from './notifications';
 import { organizationTimezone } from './indicator-targets';
 import { transitionWorkOrder, createWorkOrder } from './work-orders';
 import { buildReport } from './relatorios';
+import { clienteDoRecorte, excessoDeNivel, tetoDoRelatorioAgendado } from './nivel-de-relatorio';
 
 /* -------------------------------------------------------------------------- */
 /* cadastro                                                                    */
@@ -93,6 +94,7 @@ export async function createRule(session: TenantSession, input: RuleInput): Prom
   }
   if (errosDeGatilho.length > 0) throw new ValidationError(errosDeGatilho.join('; '));
   await conferirPessoasDasAcoes(session, input.actions);
+  await conferirNivelDosRelatorios(session, input.actions);
 
   const id = newId();
   await session.query(
@@ -163,6 +165,35 @@ async function conferirPessoasDasAcoes(session: TenantSession, actions: RuleInpu
             field: 'recipients',
           });
         }
+      }
+    }
+  }
+}
+
+/**
+ * O nível contratado também é teto do relatório AGENDADO (REL-13 / AUT-05, 29/10/2026): a regra
+ * que mandaria um Advanced a quem só contratou o Basic é recusada ao salvar, com a frase do
+ * contrato — e não descoberta no dia 1º, quando o relatório não sai.
+ */
+async function conferirNivelDosRelatorios(
+  session: TenantSession,
+  actions: RuleInput['actions']
+): Promise<void> {
+  for (const [i, a] of actions.entries()) {
+    if (a.kind !== 'send_report') continue;
+    const p = a.params as Record<string, unknown>;
+    const tier = String(p.tier) as ReportTier;
+    const cliente = await clienteDoRecorte(session, {
+      customer_id: typeof p.customerId === 'string' ? p.customerId : null,
+      sector_id: typeof p.sectorId === 'string' ? p.sectorId : null,
+    });
+    for (const destinatario of [...new Set(p.recipients as string[])]) {
+      const excesso = excessoDeNivel(await tetoDoRelatorioAgendado(session, destinatario, cliente), tier);
+      if (excesso) {
+        throw new ValidationError(
+          `actions[${i}]: ${excesso}${cliente ? '' : ' (um dos destinatários só alcança esse cliente)'}`,
+          { field: 'tier' }
+        );
       }
     }
   }
@@ -319,25 +350,45 @@ export interface RuleExecution {
  * resultado tem de ser previsível. Sem ordenação, a mesma sequência de eventos
  * produziria estados diferentes conforme o plano de consulta do banco.
  */
-export async function runAutomations(session: TenantSession, event: IncomingEvent): Promise<RuleExecution[]> {
+export async function runAutomations(
+  session: TenantSession,
+  event: IncomingEvent,
+  /** Só esta regra — o destino do outbox roda cada regra na sua transação (AUT-07). */
+  opcoes: { onlyRuleId?: string } = {}
+): Promise<RuleExecution[]> {
   const regras = await session.query<RuleRow>(
     `SELECT id, name, state::text AS state, trigger_event, conditions,
             rate_max, rate_window_minutes, simulated_at
        FROM aurora.automation_rules
       WHERE state = 'active' AND trigger_kind = 'event' AND trigger_event = $1
+        AND ($2::uuid IS NULL OR id = $2)
       ORDER BY priority, name`,
-    [event.type]
+    [event.type, opcoes.onlyRuleId ?? null]
   );
 
   const execucoes: RuleExecution[] = [];
   for (const regra of regras) {
-    execucoes.push(await runOne(session, regra, event));
+    const r = await runOne(session, regra, event);
+    if (r) execucoes.push(r);
   }
   return execucoes;
 }
 
-async function runOne(session: TenantSession, regra: RuleRow, event: IncomingEvent): Promise<RuleExecution> {
+async function runOne(
+  session: TenantSession,
+  regra: RuleRow,
+  event: IncomingEvent
+): Promise<RuleExecution | null> {
   const inicio = Date.now();
+  // Uma execução por (regra, evento) — índice único da 0088. A segunda entrega do mesmo evento
+  // (o outbox é "ao menos uma vez") não age nem avisa de novo (AUT-07).
+  if (event.id) {
+    const [ja] = await session.query<{ x: number }>(
+      `SELECT 1 AS x FROM aurora.rule_runs WHERE rule_id = $1 AND event_id = $2 LIMIT 1`,
+      [regra.id, event.id]
+    );
+    if (ja) return null;
+  }
   const fatos = { ...event.payload, payload: event.payload, aggregateId: event.aggregateId };
 
   const recursao = canReact(regra.id, event);
@@ -425,6 +476,69 @@ async function runOne(session: TenantSession, regra: RuleRow, event: IncomingEve
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* do outbox às automações (AUT-07, 29/10/2026)                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O `request_id` da transação em que UMA regra roda por causa de um evento. Tudo o que a ação
+ * dela emitir (a transição que a regra fez, por exemplo) sai com esse `request_id` no outbox — é
+ * assim que o próximo evento sabe que foi causado por automação, por qual regra e em que
+ * profundidade, sem que cada operação de OS precise carregar a causa.
+ */
+export function automationRequestId(ruleId: string, depth: number): string {
+  return `automacao:${ruleId}:${depth}`;
+}
+
+const REQUEST_ID_DE_AUTOMACAO = /^automacao:([0-9a-f-]{36}):(\d+)$/i;
+
+/** As regras ATIVAS de evento que escutam este tipo — o destino roda uma transação por regra. */
+export async function eventRuleIds(session: TenantSession, type: string): Promise<string[]> {
+  const r = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.automation_rules
+      WHERE state = 'active' AND trigger_kind = 'event' AND trigger_event = $1
+      ORDER BY priority, name`,
+    [type]
+  );
+  return r.map((x) => x.id);
+}
+
+/**
+ * O evento do outbox como entrada do motor: payload, agregado e a CAUSA — a gravada no evento ou a
+ * deduzida do `request_id` da transação de automação que o emitiu. Nulo se o evento não é desta
+ * organização (a RLS esconde).
+ */
+export async function automationEventFromOutbox(
+  session: TenantSession,
+  eventId: string
+): Promise<IncomingEvent | null> {
+  const [e] = await session.query<{
+    id: string;
+    type: string;
+    aggregate_type: string;
+    aggregate_id: string;
+    payload: Record<string, unknown>;
+    request_id: string | null;
+    caused_by_rule_id: string | null;
+    causation_depth: number;
+  }>(
+    `SELECT id, type, aggregate_type, aggregate_id, payload, request_id, caused_by_rule_id, causation_depth
+       FROM aurora.domain_events WHERE id = $1`,
+    [eventId]
+  );
+  if (!e) return null;
+  const m = REQUEST_ID_DE_AUTOMACAO.exec(e.request_id ?? '');
+  return {
+    id: e.id,
+    type: e.type,
+    aggregateType: e.aggregate_type,
+    aggregateId: e.aggregate_id,
+    payload: e.payload ?? {},
+    causedByRuleId: e.caused_by_rule_id ?? m?.[1] ?? null,
+    causationDepth: Math.max(Number(e.causation_depth ?? 0), m ? Number(m[2]) : 0),
+  };
+}
+
 async function logRun(
   session: TenantSession,
   regra: RuleRow,
@@ -439,7 +553,8 @@ async function logRun(
     `INSERT INTO aurora.rule_runs
        (id, organization_id, rule_id, event_id, event_type, aggregate_id, outcome,
         facts, actions_run, error, duration_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::aurora.run_outcome, $8::jsonb, $9::jsonb, $10, $11)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7::aurora.run_outcome, $8::jsonb, $9::jsonb, $10, $11)
+     ON CONFLICT (rule_id, event_id) WHERE event_id IS NOT NULL DO NOTHING`,
     [
       newId(),
       session.context.organizationId,
@@ -846,13 +961,26 @@ async function enviarRelatorio(
     ...(typeof p.sectorId === 'string' ? { sector_id: p.sectorId } : {}),
     ...(typeof p.planKind === 'string' ? { plan_kind: p.planKind } : {}),
     ...(typeof p.assetCategoryId === 'string' ? { asset_category_id: p.assetCategoryId } : {}),
+    ...(typeof p.workOrderType === 'string' ? { work_order_type: p.workOrderType } : {}),
   };
+  // O cliente de que o relatório trata, para a trava do nível contratado (REL-13 / AUT-05).
+  const cliente = await clienteDoRecorte(session, {
+    customer_id: entrada.customer_id ?? null,
+    sector_id: entrada.sector_id ?? null,
+  });
   let gerados = 0;
   let suprimidos = 0;
   const pulados: string[] = [];
   for (const membershipId of await destinatariosAtivos(session, p.recipients)) {
     if (!(await temPermissao(session, membershipId, 'insight.read'))) {
       pulados.push('sem permissão de indicadores');
+      continue;
+    }
+    // O contrato pode ter mudado DEPOIS de a regra ser salva: o relatório acima do nível não sai.
+    // Ninguém é avisado de novo a cada passada — fica no log da automação, uma linha por passada.
+    const excesso = excessoDeNivel(await tetoDoRelatorioAgendado(session, membershipId, cliente), tier);
+    if (excesso) {
+      pulados.push(`nível acima do contratado (${excesso})`);
       continue;
     }
     // Cada destinatário recebe o relatório no SEU recorte: quem só vê o

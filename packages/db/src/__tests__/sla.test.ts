@@ -269,7 +269,10 @@ describe('os três relógios', () => {
     const os = await novaOs();
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, os.id, 'in_progress');
-      await transitionWorkOrder(s, os.id, 'completed', { resolution: 'Trocada a placa e testado' });
+      await transitionWorkOrder(s, os.id, 'completed', {
+        operationalResult: 'released',
+        resolution: 'Trocada a placa e testado',
+      });
     });
     const relogios = await withTenant(t.db, ctx, (s) => slaStatus(s, 'work_order', os.id));
     expect(relogios.find((r) => r.kind === 'resolution')!.state).toBe('met');
@@ -407,7 +410,10 @@ describe('reabrir cria relógio novo — é assim que reincidência se mede', ()
     const os = await novaOs();
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, os.id, 'in_progress');
-      await transitionWorkOrder(s, os.id, 'completed', { resolution: 'Ajuste executado' });
+      await transitionWorkOrder(s, os.id, 'completed', {
+        operationalResult: 'released',
+        resolution: 'Ajuste executado',
+      });
       await transitionWorkOrder(s, os.id, 'validated');
       await transitionWorkOrder(s, os.id, 'closed');
       await transitionWorkOrder(s, os.id, 'in_progress', { reopenReason: 'o problema voltou em dois dias' });
@@ -516,6 +522,7 @@ describe('varredura de aviso e violação', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, carimbado!.document_id, 'in_progress');
       await transitionWorkOrder(s, carimbado!.document_id, 'completed', {
+        operationalResult: 'released',
         resolution: 'Resolvido, porém fora do prazo',
       });
     });

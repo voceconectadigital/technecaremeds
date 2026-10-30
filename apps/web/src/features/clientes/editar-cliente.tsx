@@ -102,6 +102,7 @@ export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer;
           onSubtipo={setSubtipo}
           erroSubtipo={erroDe('subtype') ?? erroDe('kind')}
           bloquearTipo={cliente.is_internal}
+          subtipoOriginal={cliente.subtype ?? null}
         />
         <CamposDoContrato
           relatorio={relatorio}

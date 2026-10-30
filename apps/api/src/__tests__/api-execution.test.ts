@@ -257,11 +257,13 @@ describe('o técnico faz o trabalho inteiro pela API', () => {
       expect(r.status, purpose).toBe(201);
     }
 
-    const conclusao = await http
-      .post(`/v1/work-orders/${os}/transitions`)
-      .set(auth(EMAIL_TEC))
-      .send({ to: 'completed', resolution: 'Preventiva executada conforme procedimento' });
-    expect(conclusao.status).toBe(201);
+    // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
+    const conclusao = await http.post(`/v1/work-orders/${os}/transitions`).set(auth(EMAIL_TEC)).send({
+      to: 'completed',
+      resolution: 'Preventiva executada conforme procedimento',
+      operational_result: 'released',
+    });
+    expect(conclusao.status, JSON.stringify(conclusao.body)).toBe(201);
     expect(conclusao.body.category).toBe('review');
   });
 });

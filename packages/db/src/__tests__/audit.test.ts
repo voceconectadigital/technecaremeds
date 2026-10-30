@@ -68,7 +68,10 @@ beforeAll(async () => {
     os = w.id;
 
     await transitionWorkOrder(s, os, 'in_progress');
-    await transitionWorkOrder(s, os, 'completed', { resolution: 'trocado o filtro e testado' });
+    await transitionWorkOrder(s, os, 'completed', {
+      operationalResult: 'released',
+      resolution: 'trocado o filtro e testado',
+    });
   });
 }, 120_000);
 

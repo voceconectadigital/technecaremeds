@@ -107,6 +107,43 @@ const PROFISSOES = [
 const TIPOS_DE_REGISTRO = ['CRM', 'COREN', 'CREA', 'CFT', 'CREFITO', 'OAB', 'OUTRO'] as const;
 type TipoDeRegistro = (typeof TIPOS_DE_REGISTRO)[number];
 
+/**
+ * O conselho que a profissão exige (USR-04) — espelho de `requiredRegistrationKind`
+ * (packages/domain/src/profiles.ts); quem decide é o servidor, aqui é só o aviso no campo.
+ */
+const CONSELHO_DA_PROFISSAO: Record<string, TipoDeRegistro> = {
+  medico: 'CRM',
+  medica: 'CRM',
+  enfermeiro: 'COREN',
+  enfermeira: 'COREN',
+  'tecnico de enfermagem': 'COREN',
+  'tecnica de enfermagem': 'COREN',
+  'auxiliar de enfermagem': 'COREN',
+  engenheiro: 'CREA',
+  engenheira: 'CREA',
+  tecnico: 'CFT',
+  tecnica: 'CFT',
+  fisioterapeuta: 'CREFITO',
+};
+
+function conselhoDaProfissao(profissao: string): TipoDeRegistro | null {
+  const chave = profissao
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\((a|o|as|os)\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return CONSELHO_DA_PROFISSAO[chave] ?? null;
+}
+
+function dicaDaProfissao(profissao: string): string {
+  const conselho = conselhoDaProfissao(profissao);
+  return conselho
+    ? `Esta profissão exige o registro no ${conselho}. Não concede permissão.`
+    : 'Não concede permissão.';
+}
+
 const SITUACAO: Record<string, { rotulo: string; tom: 'good' | 'warn' | 'bad' | 'neutral' }> = {
   active: { rotulo: 'Ativo', tom: 'good' },
   invited: { rotulo: 'Convidado', tom: 'neutral' },
@@ -373,6 +410,7 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
   const [telefone, setTelefone] = useState('');
   const [profissao, setProfissao] = useState('');
   const [empresa, setEmpresa] = useState('');
+  const [cnpj, setCnpj] = useState('');
   const [registros, setRegistros] = useState<Registro[]>([]);
   const [clienteId, setClienteId] = useState('');
   const [setores, setSetores] = useState<string[]>([]);
@@ -391,6 +429,7 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
     setTelefone('');
     setProfissao('');
     setEmpresa('');
+    setCnpj('');
     setRegistros([]);
     setClienteId('');
     setSetores([]);
@@ -406,6 +445,7 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
       phone: telefone || null,
       job_title: profissao || null,
       company_name: empresa || null,
+      company_tax_id: cnpj.trim() || null,
       registrations: registros
         .filter((r) => r.number.trim())
         .map((r) => ({ kind: r.kind, number: r.number, region: r.region || null })),
@@ -508,7 +548,7 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
               placeholder="000.000.000-00"
             />
           </Field>
-          <Field label="Telefone" error={campoComErro('phone')}>
+          <Field label="Telefone" error={campoComErro('phone')} hint="Com DDD — fixo ou celular.">
             <Input
               type="tel"
               value={telefone}
@@ -516,11 +556,18 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
               placeholder="(31) 90000-0000"
             />
           </Field>
-          <Field label="Profissão / função" error={campoComErro('job_title')} hint="Não concede permissão.">
+          <Field
+            label="Profissão / função"
+            error={campoComErro('job_title')}
+            hint={dicaDaProfissao(profissao)}
+          >
             <Input list="profissoes" value={profissao} onChange={(e) => setProfissao(e.target.value)} />
           </Field>
           <Field label="Empresa / organização" error={campoComErro('company_name')}>
             <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} />
+          </Field>
+          <Field label="CNPJ da empresa" error={campoComErro('company_tax_id')} hint="Opcional.">
+            <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" />
           </Field>
         </div>
         <datalist id="profissoes">
@@ -533,6 +580,7 @@ function DialogoAdicionar({ open, onOpenChange }: { open: boolean; onOpenChange:
           registros={registros}
           onChange={setRegistros}
           erro={campoComErro('registrations')}
+          tipoSugerido={conselhoDaProfissao(profissao)}
         />
 
         <EscolhaDeEscopo
@@ -644,10 +692,13 @@ function EditorDeRegistros({
   registros,
   onChange,
   erro,
+  tipoSugerido = null,
 }: {
   registros: Registro[];
   onChange: (r: Registro[]) => void;
   erro: string | null;
+  /** O conselho que a profissão exige: o registro novo já nasce com ele. */
+  tipoSugerido?: TipoDeRegistro | null;
 }) {
   return (
     <fieldset>
@@ -706,7 +757,7 @@ function EditorDeRegistros({
         className="mt-2"
         size="sm"
         icon={<Plus className="size-4" />}
-        onClick={() => onChange([...registros, { kind: 'CRM', number: '', region: '' }])}
+        onClick={() => onChange([...registros, { kind: tipoSugerido ?? 'CRM', number: '', region: '' }])}
       >
         Adicionar registro
       </Button>
@@ -751,6 +802,7 @@ function FormularioCadastro({ dados, onFechar }: { dados: MemberDetail; onFechar
   const [telefone, setTelefone] = useState(dados.phone ?? '');
   const [profissao, setProfissao] = useState(dados.job_title ?? '');
   const [empresa, setEmpresa] = useState(dados.company_name ?? '');
+  const [cnpj, setCnpj] = useState(dados.company_tax_id ?? '');
   const [registros, setRegistros] = useState<Registro[]>(
     dados.registrations.map((r) => ({
       kind: r.kind as TipoDeRegistro,
@@ -779,14 +831,25 @@ function FormularioCadastro({ dados, onFechar }: { dados: MemberDetail; onFechar
         <Field label="CPF" error={erro?.campo === 'cpf' ? erro.mensagem : null}>
           <Input inputMode="numeric" value={cpf} onChange={(e) => setCpf(e.target.value)} />
         </Field>
-        <Field label="Telefone" error={erro?.campo === 'phone' ? erro.mensagem : null}>
+        <Field
+          label="Telefone"
+          error={erro?.campo === 'phone' ? erro.mensagem : null}
+          hint="Com DDD — fixo ou celular."
+        >
           <Input type="tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
         </Field>
-        <Field label="Profissão / função" hint="Não concede permissão.">
+        <Field label="Profissão / função" hint={dicaDaProfissao(profissao)}>
           <Input list="profissoes-edicao" value={profissao} onChange={(e) => setProfissao(e.target.value)} />
         </Field>
         <Field label="Empresa / organização">
           <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} />
+        </Field>
+        <Field
+          label="CNPJ da empresa"
+          error={erro?.campo === 'company_tax_id' ? erro.mensagem : null}
+          hint="Opcional."
+        >
+          <Input value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="00.000.000/0000-00" />
         </Field>
       </div>
       <datalist id="profissoes-edicao">
@@ -798,6 +861,7 @@ function FormularioCadastro({ dados, onFechar }: { dados: MemberDetail; onFechar
         registros={registros}
         onChange={setRegistros}
         erro={erro?.campo === 'registrations' ? erro.mensagem : null}
+        tipoSugerido={conselhoDaProfissao(profissao)}
       />
       {erro && !erro.campo && (
         <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
@@ -818,6 +882,7 @@ function FormularioCadastro({ dados, onFechar }: { dados: MemberDetail; onFechar
                   phone: telefone || null,
                   job_title: profissao || null,
                   company_name: empresa || null,
+                  company_tax_id: cnpj.trim() || null,
                   registrations: registros
                     .filter((r) => r.number.trim())
                     .map((r) => ({ kind: r.kind, number: r.number, region: r.region || null })),

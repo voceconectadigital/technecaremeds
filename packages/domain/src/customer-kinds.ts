@@ -44,6 +44,28 @@ export function isValidCustomerSubtype(kind: string, subtype: string | null | un
   return Boolean(lista?.some((s) => s.key === subtype));
 }
 
+/**
+ * "Outro EAS" e "Outra empresa" SAÍRAM das opções (CLI-02 · WhatsApp 19/10/2026: eliminar o
+ * "Outro" redundante). Continuam na lista acima porque há cadastro antigo com eles: o cliente
+ * antigo segue exibido com o rótulo e editável — só não se ESCOLHE mais esse segmento.
+ */
+export const LEGACY_CUSTOMER_SUBTYPES: readonly string[] = Object.freeze(['outro_eas', 'outro_corporativo']);
+
+/**
+ * O subtipo pode ser GRAVADO? Válido para a classificação e, se for um dos antigos, só quando já
+ * era o do cliente (`current`) — editar o cadastro antigo não obriga a reclassificá-lo; cadastrar
+ * um novo com ele, sim, é recusado.
+ */
+export function isSelectableCustomerSubtype(
+  kind: string,
+  subtype: string | null | undefined,
+  current: string | null = null
+): boolean {
+  if (!isValidCustomerSubtype(kind, subtype)) return false;
+  if (subtype && LEGACY_CUSTOMER_SUBTYPES.includes(subtype)) return subtype === current;
+  return true;
+}
+
 export function customerSubtypeLabel(subtype: string | null | undefined): string | null {
   if (!subtype) return null;
   for (const k of CUSTOMER_KINDS) {
@@ -54,16 +76,23 @@ export function customerSubtypeLabel(subtype: string | null | undefined): string
 }
 
 /**
+ * Os setores PADRÃO de um EAS (CLI-03 · reunião 16/10/2026): pronto atendimento, bloco
+ * cirúrgico, UTI e enfermaria. Criados junto com o cliente EAS quando quem cadastra deixa
+ * marcado "Criar setores padrão" — são locais comuns do cliente, renomeáveis, e o cliente
+ * continua criando os seus.
+ */
+export const DEFAULT_EAS_SECTORS: readonly string[] = Object.freeze([
+  'Pronto Atendimento',
+  'Bloco Cirúrgico',
+  'UTI',
+  'Enfermaria',
+]);
+
+/**
  * Setores comuns oferecidos como atalho de NOME (não enum): o cliente digita
  * qualquer outro em "Novo setor". O setor sempre pertence a um cliente.
  */
-export const COMMON_SECTORS: readonly string[] = Object.freeze([
-  'UTI',
-  'Bloco Cirúrgico',
-  'Pronto Atendimento',
-  'Enfermaria',
-  'Imaginologia',
-]);
+export const COMMON_SECTORS: readonly string[] = Object.freeze([...DEFAULT_EAS_SECTORS, 'Imaginologia']);
 
 /* -------------------------------------------------------------------------- */
 /* vigência do contrato (CLI-06 · pedido do cliente, 19/10/2026 · 0085)        */

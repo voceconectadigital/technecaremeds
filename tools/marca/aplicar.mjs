@@ -151,7 +151,7 @@ carimbar('apps/field/ios/App/App/Info.plist', [
 
 /* --------------------------------------------------- o módulo do TypeScript */
 
-const modulo = `/**
+const moduloTela = `/**
  * Aurora — a marca, para o código que roda na tela.
  *
  * ARQUIVO GERADO por \`npm run marca\` a partir de \`marca.config.json\`.
@@ -183,8 +183,29 @@ export const MARCA = ${JSON.stringify(
 )} as const;
 `;
 
-{
-  const caminho = 'packages/app-kit/src/marca.gerada.ts';
+/*
+ * A marca para o SERVIDOR (29/10/2026): os PDFs e as planilhas que a API gera para o cliente
+ * diziam "sistema ... Aurora", o nome técnico interno. A API não importa o app-kit (é da tela),
+ * então a mesma fonte gera um módulo pequeno em `@aurora/config`.
+ */
+const moduloDoServidor = `/**
+ * Aurora — a marca, para o código do SERVIDOR (PDFs e planilhas que vão ao cliente).
+ *
+ * ARQUIVO GERADO por \`npm run marca\` a partir de \`marca.config.json\`.
+ * Não edite à mão: a próxima geração desfaz.
+ */
+
+export const MARCA_DO_PRODUTO = ${JSON.stringify(
+  { produto: marca.produto, descricao: marca.descricao },
+  null,
+  2
+)} as const;
+`;
+
+for (const [caminho, modulo] of [
+  ['packages/app-kit/src/marca.gerada.ts', moduloTela],
+  ['packages/config/src/marca.gerada.ts', moduloDoServidor],
+]) {
   const arquivo = join(RAIZ, caminho);
   let antes = '';
   try {

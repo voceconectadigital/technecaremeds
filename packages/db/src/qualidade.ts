@@ -25,6 +25,8 @@ export interface QualityRecordInput {
   title: string;
   customerId?: string | null;
   assetId?: string | null;
+  /** QUA-04 · 0089: a versão do procedimento/checklist a que o certificado se refere (opcional). */
+  procedureTemplateId?: string | null;
   personName?: string | null;
   certificateNumber?: string | null;
   issuer?: string | null;
@@ -41,6 +43,9 @@ export interface QualityRecordRow {
   customer_name: string | null;
   asset_id: string | null;
   asset_name: string | null;
+  procedure_template_id: string | null;
+  procedure_title: string | null;
+  procedure_version: number | null;
   person_name: string | null;
   certificate_number: string | null;
   issuer: string | null;
@@ -98,12 +103,30 @@ export async function createQualityRecord(
     customerId = a.customer_id;
   }
 
+  // O procedimento (QUA-04): uma versão que existe nesta organização — a RLS esconde a de outra,
+  // e o "não existe" é o mesmo nos dois casos. Rascunho não serve: certificado não se refere a
+  // procedimento que ainda pode mudar.
+  if (input.procedureTemplateId) {
+    const [t] = await session.query<{ status: string }>(
+      `SELECT status::text AS status FROM aurora.checklist_templates WHERE id = $1`,
+      [input.procedureTemplateId]
+    );
+    if (!t) {
+      throw new ValidationError('procedimento não encontrado', { field: 'procedure_template_id' });
+    }
+    if (t.status === 'draft') {
+      throw new ValidationError('o procedimento ainda é rascunho: publique-o antes de referenciá-lo', {
+        field: 'procedure_template_id',
+      });
+    }
+  }
+
   const id = newId();
   await session.query(
     `INSERT INTO aurora.quality_records
        (id, organization_id, kind, title, customer_id, asset_id, person_name, certificate_number,
-        issuer, issued_at, valid_until, note, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13)`,
+        issuer, issued_at, valid_until, note, created_by, procedure_template_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::date, $11::date, $12, $13, $14)`,
     [
       id,
       session.context.organizationId,
@@ -118,6 +141,7 @@ export async function createQualityRecord(
       input.validUntil || null,
       input.note?.trim() || null,
       session.context.actorId,
+      input.procedureTemplateId ?? null,
     ]
   );
   return id;
@@ -146,12 +170,14 @@ export async function listQualityRecords(
   return session.query<QualityRecordRow>(
     `SELECT * FROM (
        SELECT q.id, q.kind, q.title, q.customer_id, c.name AS customer_name, q.asset_id, a.name AS asset_name,
+              q.procedure_template_id, ct.title AS procedure_title, ct.version AS procedure_version,
               q.person_name, q.certificate_number, q.issuer, q.issued_at::text AS issued_at,
               q.valid_until::text AS valid_until, q.note, ${STATUS_SQL} AS status,
               q.file_name, q.file_size, q.created_at
          FROM aurora.quality_records q
          LEFT JOIN aurora.customers c ON c.id = q.customer_id
          LEFT JOIN aurora.assets a ON a.id = q.asset_id
+         LEFT JOIN aurora.checklist_templates ct ON ct.id = q.procedure_template_id
         WHERE q.deleted_at IS NULL
           AND ($1::text IS NULL OR q.kind = $1)
           AND ($2::uuid IS NULL OR q.customer_id = $2)

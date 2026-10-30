@@ -85,6 +85,10 @@ export function abasDoRelatorio(d: DadosPlanilha): AbaXlsx[] {
       { titulo: 'Base (amostras)', largura: 14 },
       { titulo: 'Como é calculado', largura: 60 },
       { titulo: 'Observação', largura: 80 },
+      // REL-07: a versão da fórmula com que o número saiu, a data e a fonte da definição.
+      { titulo: 'Versão da fórmula', largura: 16 },
+      { titulo: 'Definição em', largura: 12 },
+      { titulo: 'Fonte da definição', largura: 60 },
     ],
     linhas: [
       ...d.secoes.map((s): CelulaXlsx[] => [
@@ -104,6 +108,9 @@ export function abasDoRelatorio(d: DadosPlanilha): AbaXlsx[] {
         s.samples === null ? null : { numero: s.samples, formato: 'inteiro' },
         s.definition,
         s.state === 'PROVISIONAL' ? s.note : null,
+        s.formula_version,
+        s.formula_defined_on ? { dia: s.formula_defined_on } : null,
+        s.formula_source,
       ]),
       ...d.pendentes.map((p): CelulaXlsx[] => [
         p.key,
@@ -118,6 +125,9 @@ export function abasDoRelatorio(d: DadosPlanilha): AbaXlsx[] {
         null,
         null,
         p.note,
+        p.formula_version,
+        null,
+        'Aguardando definição do cliente',
       ]),
     ],
   };
@@ -163,6 +173,8 @@ export function abasDoRelatorio(d: DadosPlanilha): AbaXlsx[] {
       ['Contrato', f.contract ?? '—'],
       ['Setor', f.sector ?? '—'],
       ['Tipo de plano', f.plan_kind ? (TIPO_DE_PLANO[f.plan_kind] ?? f.plan_kind) : 'Todos'],
+      ['Tipo de manutenção', f.work_order_type_label ?? 'Todos'],
+      ['Família / tipo de equipamento', f.asset_category ?? 'Todos'],
       ['Dia de referência da meta', f.target_day ? { dia: f.target_day } : null],
       ['Fuso horário', d.fuso],
       ['Prestadora', d.organizacao],

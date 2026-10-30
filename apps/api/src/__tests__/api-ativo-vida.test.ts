@@ -81,7 +81,11 @@ beforeAll(async () => {
       assetId: antigo,
     });
     await transitionWorkOrder(s, os.id, 'in_progress');
-    await transitionWorkOrder(s, os.id, 'completed', { resolution: 'Sensor de fluxo substituído e testado' });
+    // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
+    await transitionWorkOrder(s, os.id, 'completed', {
+      resolution: 'Sensor de fluxo substituído e testado',
+      operationalResult: 'released',
+    });
 
     const tiposDoc = await provisionDocumentTypes(s);
     const d = await createDocument(s, {

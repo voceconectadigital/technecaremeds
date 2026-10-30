@@ -88,10 +88,14 @@ export interface EquipamentoInicial {
   tracker_kind?: string | null;
   tracker_tag?: string | null;
   anvisa_registration?: string | null;
+  /** "Não se aplica" ao registro ANVISA (ATV-11 · 0089). */
+  anvisa_not_applicable?: boolean;
   acquired_at?: string | null;
   useful_life_years?: number | null;
   /** Só chegam do servidor para quem tem `asset.read_financials`. */
   purchase_value?: string | null;
+  /** Valor residual da depreciação (ATV-10): opcional, padrão 0. */
+  residual_value?: string | null;
   acquisition_invoice?: string | null;
   /** SLA do equipamento (0085). Ausente = habilitado, herdando a política. */
   sla_enabled?: boolean;
@@ -213,6 +217,8 @@ export function DialogoEquipamento({
   const [rastreadorTipo, setRastreadorTipo] = useState(inicial?.tracker_kind ?? '');
   const [rastreadorId, setRastreadorId] = useState(inicial?.tracker_tag ?? '');
   const [anvisa, setAnvisa] = useState(inicial?.anvisa_registration ?? '');
+  const [anvisaNaoSeAplica, setAnvisaNaoSeAplica] = useState(inicial?.anvisa_not_applicable ?? false);
+  const [valorResidual, setValorResidual] = useState(inicial?.residual_value ?? '');
   const [adquiridoEm, setAdquiridoEm] = useState(inicial?.acquired_at?.slice(0, 10) ?? '');
   const [vidaUtil, setVidaUtil] = useState(
     inicial?.useful_life_years ? String(inicial.useful_life_years) : ''
@@ -244,9 +250,11 @@ export function DialogoEquipamento({
     setRastreadorTipo(inicial?.tracker_kind ?? '');
     setRastreadorId(inicial?.tracker_tag ?? '');
     setAnvisa(inicial?.anvisa_registration ?? '');
+    setAnvisaNaoSeAplica(inicial?.anvisa_not_applicable ?? false);
     setAdquiridoEm(inicial?.acquired_at?.slice(0, 10) ?? '');
     setVidaUtil(inicial?.useful_life_years ? String(inicial.useful_life_years) : '');
     setValorBem(inicial?.purchase_value ?? '');
+    setValorResidual(inicial?.residual_value ?? '');
     setNotaFiscal(inicial?.acquisition_invoice ?? '');
     setSlaHabilitado(inicial?.sla_enabled ?? true);
     setPoliticaSla(inicial?.sla_policy_id ?? '');
@@ -392,6 +400,18 @@ export function DialogoEquipamento({
       return falhar('useful_life_years', 'A vida útil é um número inteiro de anos, de 1 a 100.');
     if (podeVerFinanceiro && Number.isNaN(valorEmReais(valorBem)))
       return falhar('purchase_value', 'Valor inválido. Use números, por exemplo 1.500,00.');
+    if (podeVerFinanceiro && Number.isNaN(valorEmReais(valorResidual)))
+      return falhar('residual_value', 'Valor residual inválido. Use números, por exemplo 500,00.');
+    if (
+      podeVerFinanceiro &&
+      (valorEmReais(valorResidual) ?? 0) > (valorEmReais(valorBem) ?? Number.POSITIVE_INFINITY)
+    )
+      return falhar('residual_value', 'O valor residual não pode ser maior que o valor do bem.');
+    if (anvisaNaoSeAplica && anvisa.trim())
+      return falhar(
+        'anvisa_not_applicable',
+        'Informe o número do registro ANVISA ou marque que não se aplica — não os dois.'
+      );
     if (Boolean(rastreadorTipo) !== Boolean(rastreadorId.trim()))
       return falhar('tracker_tag', 'Informe o tipo e o identificador do chip juntos (ou nenhum).');
     if (mudouDeSetor && motivo.trim().length < 5)
@@ -425,7 +445,8 @@ export function DialogoEquipamento({
       asset_number: patrimonio.trim() || null,
       tracker_kind: (rastreadorTipo || null) as (typeof TIPOS_DE_RASTREADOR)[number]['valor'] | null,
       tracker_tag: rastreadorId.trim() || null,
-      anvisa_registration: anvisa.trim() || null,
+      anvisa_registration: anvisaNaoSeAplica ? null : anvisa.trim() || null,
+      anvisa_not_applicable: anvisaNaoSeAplica,
       acquired_at: adquiridoEm || null,
       useful_life_years: vidaUtil.trim() ? Number(vidaUtil) : null,
       sla_enabled: slaHabilitado,
@@ -433,7 +454,11 @@ export function DialogoEquipamento({
       ...(slaHabilitado ? { sla_policy_id: politicaSla || null } : {}),
       // Valor e nota fiscal são dado financeiro: só vão quem tem permissão (a API recusa o resto).
       ...(podeVerFinanceiro
-        ? { purchase_value: valorEmReais(valorBem), acquisition_invoice: notaFiscal.trim() || null }
+        ? {
+            purchase_value: valorEmReais(valorBem),
+            residual_value: valorEmReais(valorResidual),
+            acquisition_invoice: notaFiscal.trim() || null,
+          }
         : {}),
     };
     try {
@@ -488,6 +513,9 @@ export function DialogoEquipamento({
     'photo',
     'useful_life_years',
     'purchase_value',
+    'residual_value',
+    'anvisa_registration',
+    'anvisa_not_applicable',
     'sla_policy_id',
   ];
   const salvando = criar.isPending || editar.isPending || enviarFoto.isPending || transferir.isPending;
@@ -725,7 +753,11 @@ export function DialogoEquipamento({
               ))}
             </Select>
           </Field>
-          <Field label="Tag (obrigatória)" error={erroDe('tag')}>
+          <Field
+            label="Tag (obrigatória)"
+            error={erroDe('tag')}
+            hint="Única na organização. Pode ser trocada por outra, mas não apagada."
+          >
             <Input
               value={tag}
               onChange={(e) => setTag(e.target.value)}
@@ -820,8 +852,30 @@ export function DialogoEquipamento({
           <legend className="px-1 text-xs font-semibold tracking-wide text-muted uppercase">
             Aquisição e registro
           </legend>
-          <Field label="Registro ANVISA" error={erroDe('anvisa_registration')}>
-            <Input value={anvisa} onChange={(e) => setAnvisa(e.target.value)} placeholder="Opcional" />
+          <Field
+            label="Registro ANVISA"
+            error={erroDe('anvisa_registration') ?? erroDe('anvisa_not_applicable')}
+            hint="Pesquisável na lista de equipamentos."
+          >
+            <div className="flex flex-col gap-2">
+              <Input
+                value={anvisa}
+                onChange={(e) => setAnvisa(e.target.value)}
+                placeholder={anvisaNaoSeAplica ? 'Não se aplica' : 'Opcional'}
+                disabled={anvisaNaoSeAplica}
+              />
+              <label className="flex items-center gap-2 text-sm text-text">
+                <input
+                  type="checkbox"
+                  checked={anvisaNaoSeAplica}
+                  onChange={(e) => {
+                    setAnvisaNaoSeAplica(e.target.checked);
+                    if (e.target.checked) setAnvisa('');
+                  }}
+                />
+                Não se aplica (sem registro ANVISA aplicável)
+              </label>
+            </div>
           </Field>
           <Field label="Data de aquisição" error={erroDe('acquired_at')}>
             <Input type="date" value={adquiridoEm} onChange={(e) => setAdquiridoEm(e.target.value)} />
@@ -846,6 +900,18 @@ export function DialogoEquipamento({
                   value={valorBem}
                   onChange={(e) => setValorBem(e.target.value)}
                   placeholder="Ex.: 25.000,00"
+                />
+              </Field>
+              <Field
+                label="Valor residual (R$)"
+                error={erroDe('residual_value')}
+                hint="Opcional; vazio vale 0. A depreciação distribui (valor do bem − residual) pela durabilidade."
+              >
+                <Input
+                  inputMode="decimal"
+                  value={valorResidual}
+                  onChange={(e) => setValorResidual(e.target.value)}
+                  placeholder="0,00"
                 />
               </Field>
               <Field label="Nota fiscal de aquisição">

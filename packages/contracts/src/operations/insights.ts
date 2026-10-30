@@ -276,6 +276,16 @@ const INDICATOR_STATE_KEYS = ['ACTIVE', 'PROVISIONAL', 'PENDING_DEFINITION'] as 
 const TARGET_DIRECTION_KEYS = ['HIGHER_IS_BETTER', 'LOWER_IS_BETTER', 'INFORMATIONAL'] as const;
 const INDICATOR_UNIT_KEYS = ['count', 'minutes', 'hours', 'percent', 'score', 'none'] as const;
 const LEGACY_STATUS = z.enum(['available', 'awaiting_official_model', 'awaiting_definition']);
+/** Os sete tipos de manutenção da OS (`request-types` do domínio) — filtro do gerador (REL-03). */
+export const WORK_ORDER_TYPE_KEYS = [
+  'corrective',
+  'preventive',
+  'technical_instruction',
+  'training',
+  'calibration',
+  'electrical_safety',
+  'qualification',
+] as const;
 
 const ReportIndicator = z.object({
   /** Código estável. */
@@ -293,6 +303,12 @@ const ReportIndicator = z.object({
   note: z.string().optional(),
   /** Derivada de `state`; mantida por compatibilidade. */
   status: LEGACY_STATUS,
+  /** Versão da fórmula (REL-07): `v1`, `v1-provisoria` ou `pendente` (sem fórmula). */
+  formula_version: z.string(),
+  /** Quando a definição em uso entrou no catálogo; nulo para pendente. */
+  formula_defined_on: z.string().nullable(),
+  /** De onde veio a definição em uso (ou o que falta). */
+  formula_source: z.string(),
 });
 
 export const reportsCatalog = defineOperation({
@@ -350,7 +366,10 @@ export const reportsGenerate = defineOperation({
       contract_id: Uuid.optional(),
       sector_id: Uuid.optional(),
       plan_kind: z.enum(['preventive', 'calibration', 'electrical_safety', 'qualification']).optional(),
+      /** Categoria do equipamento: uma FAMÍLIA inclui os tipos dela. */
       asset_category_id: Uuid.optional(),
+      /** Tipo de manutenção da OS (REL-03): recorta OS, SLA e avaliações; conformidade de outro tipo sai. */
+      work_order_type: z.enum(WORK_ORDER_TYPE_KEYS).optional(),
       /** Só para o PDF Basic e Advanced: campos do cabeçalho e das assinaturas. */
       cost_center: z.string().trim().max(60).optional(),
       city: z.string().trim().max(60).optional(),
@@ -381,6 +400,10 @@ export const reportsGenerate = defineOperation({
         target: SectionTarget.nullable(),
         target_evaluation: z.enum(['met', 'not_met', 'no_value', 'no_target', 'informational']),
         target_label: z.string().nullable(),
+        /** Versão da fórmula com que o número saiu (REL-07). */
+        formula_version: z.string(),
+        formula_defined_on: z.string().nullable(),
+        formula_source: z.string(),
       })
     ),
     pending: z.array(
@@ -389,11 +412,34 @@ export const reportsGenerate = defineOperation({
         label: z.string(),
         state: z.enum(INDICATOR_STATE_KEYS),
         note: z.string().nullable(),
+        formula_version: z.string(),
       })
     ),
   }),
   status: 201,
   errors: ['not_found', 'validation_failed'],
+});
+
+/* --- opções do gerador (REL-03) ------------------------------------------ */
+
+export const reportsOptions = defineOperation({
+  operationId: 'reports.options',
+  method: 'GET',
+  path: '/reports/options',
+  summary:
+    'Opções dos filtros do gerador de relatório: setores, tipos de manutenção, famílias e tipos de equipamento',
+  description:
+    'Os setores vêm recortados pelo escopo do vínculo (o mesmo do Painel): a pessoa só escolhe setor que ' +
+    'pode ver, e o servidor confere de novo ao gerar. Tipos de manutenção são os sete da OS. Famílias e ' +
+    'tipos de equipamento: a família inclui os tipos dela no recorte.',
+  permissions: ['insight.read'],
+  response: z.object({
+    sectors: z.array(z.object({ id: Uuid, name: z.string(), customer_id: Uuid })),
+    work_order_types: z.array(z.object({ key: z.enum(WORK_ORDER_TYPE_KEYS), label: z.string() })),
+    asset_categories: z.array(
+      z.object({ id: Uuid, name: z.string(), parent_id: Uuid.nullable(), family_key: z.string().nullable() })
+    ),
+  }),
 });
 
 /* --- relatório patrimonial (REL-11) ------------------------------------- */

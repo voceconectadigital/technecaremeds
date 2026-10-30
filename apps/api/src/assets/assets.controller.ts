@@ -45,6 +45,7 @@ import {
   importAssets,
   curationQueue,
   assetTimeline,
+  assetLifeRecord,
   mttr,
   mtbf,
   createObsolescenceReport,
@@ -72,6 +73,8 @@ import {
   isUnderWarranty,
   assetAgeYears,
   straightLineDepreciation,
+  assertResidualValue,
+  assertAnvisaConsistency,
   isQrToken,
   newId,
   validateAssetPhoto,
@@ -188,9 +191,10 @@ async function conferirClienteESetor(
  */
 function conferirPermissaoFinanceira(
   ctx: { permissions: ReadonlySet<string> },
-  b: { purchase_value?: unknown; acquisition_invoice?: unknown }
+  b: { purchase_value?: unknown; acquisition_invoice?: unknown; residual_value?: unknown }
 ): void {
-  const mexeEmFinanceiro = b.purchase_value !== undefined || b.acquisition_invoice !== undefined;
+  const mexeEmFinanceiro =
+    b.purchase_value !== undefined || b.acquisition_invoice !== undefined || b.residual_value !== undefined;
   if (mexeEmFinanceiro && !ctx.permissions.has('asset.read_financials')) {
     throw new ForbiddenError('valor do bem e nota fiscal exigem a permissão asset.read_financials');
   }
@@ -211,10 +215,23 @@ function conferirRastreador(
   return { kind: k, tag: t };
 }
 
-function rastreadorDuplicado(e: unknown): never {
+/**
+ * As recusas de identificação, na língua do formulário: chip repetido, tag repetida na
+ * organização (índice `assets_org_tag_uq`, 0089) e tag apagada (gatilho `assets_tag_guard`).
+ */
+function erroDeIdentificacao(e: unknown): never {
   const msg = e instanceof Error ? e.message : String(e);
-  if (msg.includes('assets_tracker_tag_uq')) {
+  const regra = (e as { details?: { constraint?: unknown } } | null)?.details?.constraint;
+  if (msg.includes('assets_tracker_tag_uq') || regra === 'assets_tracker_tag_uq') {
     throw new ConflictError('este chip/etiqueta de localização já está vinculado a outro equipamento');
+  }
+  if (msg.includes('assets_org_tag_uq') || regra === 'assets_org_tag_uq') {
+    throw new ConflictError('esta tag já está em uso por outro equipamento da organização', { field: 'tag' });
+  }
+  if (msg.includes('tag do equipamento não pode ser apagada')) {
+    throw new ValidationError('a tag do equipamento não pode ser apagada: troque-a por outra válida', {
+      field: 'tag',
+    });
   }
   throw e;
 }
@@ -247,7 +264,9 @@ export class AssetsController {
     @Query('manufacturer') manufacturer?: string,
     @Query('criticality') criticality?: string,
     @Query('tracker') tracker?: string,
-    @Query('qr') qr?: string
+    @Query('qr') qr?: string,
+    @Query('q') q?: string,
+    @Query('anvisa') anvisa?: string
   ): Promise<{ items: unknown[]; asset_label: string }> {
     const ctx = req.auroraContext!;
     if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
@@ -255,6 +274,13 @@ export class AssetsController {
     const locationId = location === undefined ? null : uuidParam(location, 'location');
     const customerId = customer === undefined ? null : uuidParam(customer, 'customer');
     const max = Math.min(Number.parseInt(limit ?? '100', 10) || 100, 500);
+    if (anvisa !== undefined && !['registered', 'not_applicable', 'pending'].includes(anvisa)) {
+      throw new ValidationError('filtro de ANVISA inválido', { field: 'anvisa' });
+    }
+    // Busca por texto: "contém", sem diferenciar maiúsculas. Os curingas do LIKE digitados pela
+    // pessoa valem como texto, não como curinga.
+    const termo = typeof q === 'string' && q.trim() !== '' ? q.trim().slice(0, 120) : null;
+    const padrao = termo ? `%${termo.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
 
     return withTenant(this.db, ctx, async (s) => {
       const [org] = await s.query<{ asset_label: string }>(
@@ -270,7 +296,8 @@ export class AssetsController {
                 f.name AS manufacturer_name,
                 fam.family_key, fam.name AS family_name,
                 a.criticality_id, cr.name AS criticality_name,
-                a.tracker_kind, a.tracker_tag
+                a.tracker_kind, a.tracker_tag,
+                a.anvisa_registration, a.anvisa_not_applicable
            FROM aurora.assets a
            JOIN aurora.asset_categories c ON c.id = a.asset_category_id
            LEFT JOIN aurora.asset_categories fam
@@ -299,6 +326,15 @@ export class AssetsController {
                  OR ($11 = 'no' AND a.tracker_tag IS NULL))
             -- Etiqueta lida pela câmera (/q/:token): o token e SÓ ele, dentro do escopo de quem lê.
             AND ($12::text IS NULL OR a.qr_token = $12)
+            -- Busca (ATV-11): nome, tag, série, patrimônio e registro ANVISA.
+            AND ($13::text IS NULL
+                 OR a.name ILIKE $13 OR a.tag ILIKE $13 OR a.serial_number ILIKE $13
+                 OR a.asset_number ILIKE $13 OR a.anvisa_registration ILIKE $13)
+            AND ($14::text IS NULL
+                 OR ($14 = 'registered' AND coalesce(btrim(a.anvisa_registration), '') <> '')
+                 OR ($14 = 'not_applicable' AND a.anvisa_not_applicable)
+                 OR ($14 = 'pending' AND NOT a.anvisa_not_applicable
+                     AND coalesce(btrim(a.anvisa_registration), '') = ''))
           ORDER BY a.name
           LIMIT $4`,
         [
@@ -314,6 +350,8 @@ export class AssetsController {
           criticality === undefined ? null : uuidParam(criticality, 'criticality'),
           tracker === 'yes' || tracker === 'no' ? tracker : null,
           qr ? (isQrToken(qr) ? qr : 'etiqueta-invalida') : null,
+          padrao,
+          anvisa ?? null,
         ]
       );
       return { items, asset_label: org?.asset_label ?? 'Ativo' };
@@ -379,7 +417,7 @@ export class AssetsController {
                 a.location_id, a.location_path, a.parent_asset_id,
                 a.criticality_id, a.operational_risk, a.default_priority, a.risk_class,
                 a.anvisa_registration, a.anvisa_status, a.anvisa_note, a.anvisa_checked_at,
-                a.inmetro_ordinance,
+                a.anvisa_not_applicable, a.inmetro_ordinance,
                 a.requires_calibration, a.requires_electrical_test,
                 a.manufactured_at, a.acquired_at, a.installed_at, a.warranty_until,
                 a.useful_life_years, a.decommissioned_at, a.decommission_reason,
@@ -499,6 +537,8 @@ export class AssetsController {
     const b = parseWith(assetsCreate.body, body);
     const rastreador = conferirRastreador(b.tracker_kind, b.tracker_tag);
     conferirPermissaoFinanceira(ctx, b);
+    assertAnvisaConsistency(b.anvisa_registration, b.anvisa_not_applicable);
+    assertResidualValue(b.purchase_value, b.residual_value);
     const foto = fotoDoCorpo(b.photo);
     let chaveGravada: string | null = null;
     try {
@@ -537,6 +577,9 @@ export class AssetsController {
     rastreador: { kind: string; tag: string } | null
   ): Promise<string> {
     const novo = await createAsset(s, {
+      // Registro ANVISA × "não se aplica" e o residual (0089): conferidos antes, em `create`.
+      anvisaNotApplicable: b.anvisa_not_applicable ?? false,
+      residualValue: b.residual_value ?? null,
       name: requiredText(b.name, 'name'),
       customerId: b.customer_id,
       assetCategoryId: b.asset_category_id,
@@ -551,7 +594,7 @@ export class AssetsController {
       anvisaRegistration: b.anvisa_registration || null,
       usefulLifeYears: b.useful_life_years ?? null,
       acquisitionInvoice: b.acquisition_invoice || null,
-    });
+    }).catch(erroDeIdentificacao);
     if (rastreador) {
       await s
         .query(`UPDATE aurora.assets SET tracker_kind = $2, tracker_tag = $3 WHERE id = $1`, [
@@ -559,7 +602,7 @@ export class AssetsController {
           rastreador.kind,
           rastreador.tag,
         ])
-        .catch(rastreadorDuplicado);
+        .catch(erroDeIdentificacao);
     }
     if (b.sla_enabled !== undefined || b.sla_policy_id !== undefined) {
       await s.query(
@@ -687,9 +730,11 @@ export class AssetsController {
       tracker_kind: 'tracker_kind',
       tracker_tag: 'tracker_tag',
       anvisa_registration: 'anvisa_registration',
+      anvisa_not_applicable: 'anvisa_not_applicable',
       acquired_at: 'acquired_at',
       useful_life_years: 'useful_life_years',
       purchase_value: 'purchase_value',
+      residual_value: 'residual_value',
       acquisition_invoice: 'acquisition_invoice',
       sla_enabled: 'sla_enabled',
       sla_policy_id: 'sla_policy_id',
@@ -710,15 +755,42 @@ export class AssetsController {
     if (sets.length === 0) throw new ValidationError('nada para alterar', { field: 'body' });
 
     await withTenant(this.db, ctx, async (s) => {
-      const [visivel] = await s.query<{ ok: boolean }>(
-        `SELECT true AS ok FROM aurora.assets a
+      const [atual] = await s.query<{
+        tag: string | null;
+        anvisa_registration: string | null;
+        anvisa_not_applicable: boolean;
+        purchase_value: string | null;
+        residual_value: string | null;
+      }>(
+        `SELECT a.tag, a.anvisa_registration, a.anvisa_not_applicable,
+                a.purchase_value::text AS purchase_value, a.residual_value::text AS residual_value
+           FROM aurora.assets a
           WHERE a.id = $1 AND a.deleted_at IS NULL
             AND a.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
             AND (a.location_id IS NULL
                  OR a.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))`,
         [assetId, membershipId]
       );
-      if (!visivel) throw new NotFoundError('Ativo', assetId);
+      if (!atual) throw new NotFoundError('Ativo', assetId);
+
+      // ATV-04: quem já tem tag só a TROCA por outra válida — apagar é recusado (o banco também
+      // recusa, no gatilho da 0089). O parque antigo sem tag segue editável sem ela.
+      if (b.tag !== undefined && (b.tag === null || b.tag.trim() === '') && (atual.tag ?? '').trim() !== '') {
+        throw new ValidationError('a tag do equipamento não pode ser apagada: troque-a por outra válida', {
+          field: 'tag',
+        });
+      }
+      // As regras valem para o estado que FICA: o que veio no corpo, e o que já estava gravado.
+      const numero = (v: string | null) => (v === null ? null : Number(v));
+      assertAnvisaConsistency(
+        b.anvisa_registration !== undefined ? b.anvisa_registration : atual.anvisa_registration,
+        b.anvisa_not_applicable !== undefined ? b.anvisa_not_applicable : atual.anvisa_not_applicable
+      );
+      assertResidualValue(
+        b.purchase_value !== undefined ? b.purchase_value : numero(atual.purchase_value),
+        b.residual_value !== undefined ? b.residual_value : numero(atual.residual_value)
+      );
+
       await conferirPoliticaDeSla(s, b.sla_policy_id);
       valores.push(ctx.actorId);
       await s
@@ -727,7 +799,7 @@ export class AssetsController {
           WHERE id = $1`,
           valores
         )
-        .catch(rastreadorDuplicado);
+        .catch(erroDeIdentificacao);
     });
     return { ok: true };
   }
@@ -920,6 +992,32 @@ export class AssetsController {
       })
     );
     return { items };
+  }
+
+  /**
+   * Ficha de vida (ATV-13): planos que cobrem o equipamento, procedimentos executados nele e o
+   * histórico de alteração de campos. Escopo do equipamento conferido aqui (404 fora dele); cada
+   * seção tem a sua permissão e vem `null` sem ela.
+   */
+  @Get(':id/life-record')
+  @RequirePermissions('asset.read')
+  async lifeRecord(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    if (!ctx.membershipId) throw new ForbiddenError('esta rota exige um vínculo com a organização');
+    const membershipId = ctx.membershipId;
+    const assetId = uuidParam(id, 'id');
+    const pode = (k: string) => ctx.permissions.has(k);
+    return withTenant(this.db, ctx, async (s) => {
+      await exigirAtivoVisivel(s, assetId, membershipId);
+      return assetLifeRecord(s, assetId, {
+        canReadPlans: pode('maintenance_plan.read'),
+        canReadWorkOrders: pode('work_order.read'),
+        // O histórico de campos é trilha de auditoria: quem lê a trilha, ou quem edita o cadastro.
+        canReadFieldHistory: pode('audit.read') || pode('asset.update'),
+        canReadFinancials: pode('asset.read_financials'),
+        canReadInternalNotes: pode('asset.read_internal_notes'),
+      });
+    });
   }
 
   @Post(':id/decommission')

@@ -14,6 +14,7 @@ import { createTestDatabase, seedMember, type TestDatabase } from '@aurora/db/te
 import {
   withTenant,
   assignRole,
+  createAsset,
   createCustomer,
   createWorkOrder,
   createTeam,
@@ -34,11 +35,15 @@ const TEC_FORA = 'tec.fora@campo-a.test';
 const minutos = (n: number) => n * 60 * 1000;
 const haMinutos = (n: number) => new Date(Date.now() - minutos(n)).toISOString();
 
-async function novaOs(titulo: string, opts: { responsavel?: string; equipe?: string } = {}): Promise<string> {
+async function novaOs(
+  titulo: string,
+  opts: { responsavel?: string; equipe?: string; ativo?: string } = {}
+): Promise<string> {
   return withTenant(t.db, ctxSistema(A.org), async (s) => {
     const { id } = await createWorkOrder(s, {
       customerId: A.cliente,
       locationId: A.setor,
+      assetId: opts.ativo ?? null,
       workOrderTypeId: A.natureza,
       title: titulo,
       assigneeMembershipId: opts.responsavel ?? null,
@@ -437,11 +442,26 @@ describe('PF-84 · os bytes do anexo: quem envia e o que é enviado', () => {
 
 /* ------------------------------------------------------------------------ */
 
-describe('PF-41 · parecer obrigatório na conclusão, por organização (desligado por padrão)', () => {
-  it('desligado: conclui sem parecer, como sempre', async () => {
+// OS-16 (auditoria de 29/10/2026): a exigência passou a nascer LIGADA e vale para a OS de
+// EQUIPAMENTO — "para todas as OS indicar Liberado para uso ou Equipamento parado". Antes nascia
+// desligada e valia para qualquer OS; por isso estes testes mudaram de premissa e ganharam um ativo.
+describe('PF-41 · OS-16 · parecer obrigatório na conclusão da OS de equipamento (ligado por padrão)', () => {
+  let ativo = '';
+  beforeAll(async () => {
+    ativo = await withTenant(t.db, ctxSistema(A.org), (s) =>
+      createAsset(s, {
+        name: 'Ventilador PF-41',
+        customerId: A.cliente,
+        assetCategoryId: A.categoria,
+        locationId: A.setor,
+      })
+    );
+  });
+
+  it('ligado por padrão; a OS SEM equipamento conclui sem parecer, como sempre', async () => {
     const atual = await http.get('/v1/organizations/current').set(auth(A.email));
-    expect(atual.body.require_operational_result).toBe(false);
-    const os = await novaOs('Sem parecer, sem exigência', { responsavel: tecA.mem });
+    expect(atual.body.require_operational_result).toBe(true);
+    const os = await novaOs('Sem equipamento, sem parecer', { responsavel: tecA.mem });
     await mover(tecA.email, os, { to: 'in_progress' });
     const r = await mover(tecA.email, os, { to: 'completed', resolution: 'Troca do sensor.' });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
@@ -462,7 +482,7 @@ describe('PF-41 · parecer obrigatório na conclusão, por organização (deslig
       .send({ require_operational_result: false });
     expect(tecnico.status).toBe(403);
 
-    const os = await novaOs('Com exigência', { responsavel: tecA.mem });
+    const os = await novaOs('Com exigência', { responsavel: tecA.mem, ativo });
     await mover(tecA.email, os, { to: 'in_progress' });
     const sem = await mover(tecA.email, os, { to: 'completed', resolution: 'Troca do sensor.' });
     expect(sem.status).toBe(422);
@@ -482,7 +502,7 @@ describe('PF-41 · parecer obrigatório na conclusão, por organização (deslig
       .set(auth(A.email))
       .send({ require_operational_result: false });
     expect(desliga.body.require_operational_result).toBe(false);
-    const outra = await novaOs('Depois de desligar', { responsavel: tecA.mem });
+    const outra = await novaOs('Depois de desligar', { responsavel: tecA.mem, ativo });
     await mover(tecA.email, outra, { to: 'in_progress' });
     expect((await mover(tecA.email, outra, { to: 'completed', resolution: 'ok' })).status).toBe(201);
   });
@@ -503,7 +523,7 @@ describe('PF-41 · parecer obrigatório na conclusão, por organização (deslig
     await http
       .patch('/v1/organizations/current/configuration')
       .set(auth(A.email))
-      .send({ require_operational_result: false })
+      .send({ require_operational_result: true })
       .expect(200);
   });
 });

@@ -24,6 +24,7 @@ import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { reserve, releaseReservations, consume } from './inventory';
 import { transitionWorkOrder } from './work-orders';
+import { assertFeatureEnabled } from './organization-config';
 
 /* -------------------------------------------------------------------------- */
 /* preço                                                                       */
@@ -99,6 +100,11 @@ export interface QuoteInput {
  * acordo errado é o que define o preço.
  */
 export async function createQuote(session: TenantSession, input: QuoteInput): Promise<string> {
+  // Orçamento é recurso da organização (OS-03 · ORC-01 · CLI-07): o hospital que
+  // opera o próprio estabelecimento não orça, salvo se ligar o recurso. Recusado
+  // aqui, vale para toda porta de criação (tela, API, OS, oportunidade). Revisar
+  // um orçamento que já existe continua possível — o histórico não fica órfão.
+  await assertFeatureEnabled(session, 'quotes', 'orçamentos');
   const id = newId();
   const ano = new Date().getUTCFullYear();
   const [seq] = await session.query<{ next_number: string }>(

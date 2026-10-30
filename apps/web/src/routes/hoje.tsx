@@ -66,13 +66,11 @@ import {
 import {
   customersList,
   inventoryBalances,
-  quotesList,
   requestsQueue,
   scheduleBuckets,
   workOrdersBoard,
   type AgendaBucketItem,
   type BoardColumn,
-  type QuoteRow,
   type ServiceRequestRow,
   type StockBalance,
 } from '@aurora/contracts';
@@ -80,6 +78,7 @@ import { useApiQuery, usePermissions, useSessionQuery } from '@aurora/app-kit';
 import { AppShell } from '../shell/app-shell';
 import { FluxoDaOperacao } from './hoje-fluxo';
 import { PendenciasDeAvaliacao } from '../features/ordens/avaliacao';
+import { LinkDaEspera, ListaDeEspera, useContadoresDeEspera } from './hoje-espera';
 
 /**
  * Consulta que FALHOU não se apresenta como "nada pendente" (pente-fino
@@ -128,6 +127,8 @@ export function HojePage() {
         {can('work_order.read') && <FluxoDaOperacao cliente={cliente} />}
 
         {can('work_order.read') && <PendenciasDeEspera cliente={cliente} />}
+
+        {can('work_order.read') && <ListaDeEspera cliente={cliente} />}
 
         <div className="grid gap-5 lg:grid-cols-3">
           {can('service_request.read') && <BlocoTriagem className="lg:col-span-1" cliente={cliente} />}
@@ -290,44 +291,41 @@ function PainelDoTurno({ cliente }: { cliente: string }) {
  * está com alguém" — e a pergunta de quem abriu o chamado é de quem é a vez.
  */
 function PendenciasDeEspera({ cliente }: { cliente: string }) {
-  const { can } = usePermissions();
-  const { data: quadro } = useApiQuery(workOrdersBoard, { query: doCliente(cliente) }) as {
-    data: { columns: BoardColumn[] } | undefined;
-  };
-  const { data: orcamentos } = useApiQuery(
-    quotesList,
-    { query: cliente ? { customerId: cliente } : {} },
-    { enabled: can('quote.read') }
-  ) as { data: { items: QuoteRow[] } | undefined };
-
-  const aguardandoPeca = (quadro?.columns ?? []).reduce(
-    (soma, coluna) =>
-      soma + (coluna.by_wait_reason ?? []).filter((m) => m.key === 'parts').reduce((s, m) => s + m.total, 0),
-    0
-  );
-  const aguardandoAprovacao = (orcamentos?.items ?? []).filter(
-    (q) => q.status === 'sent' || q.status === 'viewed'
-  ).length;
+  /*
+   * ORC-05: o número e a lista saem da MESMA consulta (`today.waiting`). O cartão abre a lista
+   * filtrada aqui mesmo (`?espera=…`), com recorte por cliente, setor e responsável.
+   */
+  const contagem = useContadoresDeEspera(cliente);
+  const aguardandoPeca = contagem?.parts ?? 0;
+  const aguardandoOrcamento = contagem?.quote ?? 0;
 
   return (
     <MetricGrid columns={2}>
-      {can('quote.read') && (
-        <Metric
-          label="Orçamentos aguardando aprovação"
-          value={orcamentos ? aguardandoAprovacao : '—'}
-          hint={aguardandoAprovacao === 0 ? 'Nenhum orçamento esperando resposta' : 'A decisão é do cliente'}
-          icon={<FileCheck2 className="size-4" />}
-          tone={aguardandoAprovacao > 0 ? 'warn' : 'good'}
-          action={<AtalhoDeCartao to="/orcamentos">Ver orçamentos</AtalhoDeCartao>}
-        />
-      )}
+      <Metric
+        label="Orçamentos aguardando aprovação"
+        value={contagem ? aguardandoOrcamento : '—'}
+        hint={aguardandoOrcamento === 0 ? 'Nenhum orçamento esperando resposta' : 'A decisão é do cliente'}
+        icon={<FileCheck2 className="size-4" />}
+        tone={aguardandoOrcamento > 0 ? 'warn' : 'good'}
+        action={
+          <LinkDaEspera espera="orcamento">
+            Ver orçamentos aguardando
+            <ArrowRight aria-hidden="true" className="size-3.5" />
+          </LinkDaEspera>
+        }
+      />
       <Metric
         label="Equipamentos aguardando peças"
-        value={quadro ? aguardandoPeca : '—'}
+        value={contagem ? aguardandoPeca : '—'}
         hint={aguardandoPeca === 0 ? 'Nenhuma ordem esperando peça' : 'Ordens paradas por falta de peça'}
         icon={<PackageSearch className="size-4" />}
         tone={aguardandoPeca > 0 ? 'warn' : 'good'}
-        action={<AtalhoDeCartao to="/ordens">Ver as ordens</AtalhoDeCartao>}
+        action={
+          <LinkDaEspera espera="pecas">
+            Ver as ordens aguardando peça
+            <ArrowRight aria-hidden="true" className="size-3.5" />
+          </LinkDaEspera>
+        }
       />
     </MetricGrid>
   );

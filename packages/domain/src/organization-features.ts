@@ -13,10 +13,10 @@
  * O QUE ESTE MÓDULO NÃO DECIDE
  *
  * Qual módulo cada modo usa POR PADRÃO é decisão do cliente (auditoria de gap,
- * VAL-C de P0.4) e não foi tomada. Por isso o padrão é o mais conservador
- * possível: TODOS os módulos habilitados, em qualquer modo. Inventar que
- * "hospital não usa estoque" desligaria uma tela de alguém sem que ninguém
- * tenha decidido isso.
+ * VAL-C de P0.4). Até aqui só uma foi tomada — hospital não usa orçamento (ver
+ * `FEATURES_OFF_BY_DEFAULT`). Fora isso, o padrão é o mais conservador
+ * possível: TODOS os módulos habilitados. Inventar que "hospital não usa
+ * estoque" desligaria uma tela de alguém sem que ninguém tenha decidido isso.
  *
  * Também não é autorização. Recurso habilitado diz o que a organização USA;
  * quem pode o quê continua sendo o RBAC. Desligar um recurso esconde o
@@ -67,14 +67,38 @@ export const ORGANIZATION_FEATURES = [
 export type OrganizationFeature = (typeof ORGANIZATION_FEATURES)[number];
 
 /**
+ * O que um modo NÃO usa enquanto ninguém configurou a lista.
+ *
+ * Uma única decisão tomada até aqui (auditoria de 29/10/2026, OS-03 · ORC-01 ·
+ * CLI-07, sobre a reunião de 16/10): orçamento é coisa de PRESTADORA. O hospital
+ * que opera o próprio estabelecimento não orça para si mesmo — então, no modo
+ * `hospital`, o recurso `quotes` nasce desligado e as etapas "Aguardando
+ * aprovação do orçamento"/"Orçamento aprovado" e o botão "Gerar orçamento"
+ * somem. Ligar de volta é escolher a lista (`enabled_features` com `quotes`).
+ *
+ * Os demais modos continuam com tudo: para eles ninguém decidiu nada.
+ */
+export const FEATURES_OFF_BY_DEFAULT: Readonly<
+  Partial<Record<OrganizationUsageMode, readonly OrganizationFeature[]>>
+> = Object.freeze({ hospital: ['quotes'] as const });
+
+/**
  * A lista efetiva.
  *
  * `null` no banco quer dizer "nunca configurado" — e nunca configurado é tudo
- * habilitado. Guardar a lista inteira desde o início faria todo módulo novo
- * nascer DESLIGADO para quem já existia, sem que ninguém tivesse escolhido isso.
+ * habilitado, menos o que o modo declaradamente não usa
+ * (`FEATURES_OFF_BY_DEFAULT`). Guardar a lista inteira desde o início faria todo
+ * módulo novo nascer DESLIGADO para quem já existia, sem que ninguém tivesse
+ * escolhido isso.
  */
-export function effectiveFeatures(stored: readonly string[] | null | undefined): OrganizationFeature[] {
-  if (stored === null || stored === undefined) return [...ORGANIZATION_FEATURES];
+export function effectiveFeatures(
+  stored: readonly string[] | null | undefined,
+  mode?: OrganizationUsageMode | string | null
+): OrganizationFeature[] {
+  if (stored === null || stored === undefined) {
+    const fora = (mode ? FEATURES_OFF_BY_DEFAULT[mode as OrganizationUsageMode] : undefined) ?? [];
+    return ORGANIZATION_FEATURES.filter((f) => !fora.includes(f));
+  }
   return ORGANIZATION_FEATURES.filter((f) => stored.includes(f));
 }
 

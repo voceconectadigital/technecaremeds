@@ -35,6 +35,7 @@ export * from './operations/roles';
 export * from './operations/inventory';
 export * from './operations/commercial';
 export * from './operations/plans';
+export * from './operations/hoje';
 export * from './operations/insights';
 export * from './operations/notifications';
 export * from './operations/documents';

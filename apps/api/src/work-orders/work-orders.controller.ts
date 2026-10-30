@@ -25,6 +25,7 @@ import {
   listAttachments,
   listParts,
   slaStatus,
+  organizationUsesFeature,
   type Database,
 } from '@aurora/db';
 import {
@@ -148,7 +149,8 @@ export class WorkOrdersController {
     @Query('category') category?: string,
     @Query('assignee') assignee?: string,
     @Query('asset') asset?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
+    @Query('status') status?: string
   ): Promise<{ items: unknown[] }> {
     const ctx = req.auroraContext!;
     const max = Math.min(Number.parseInt(limit ?? '100', 10) || 100, 500);
@@ -171,6 +173,16 @@ export class WorkOrdersController {
       }
       params.push(category as StatusCategory);
       condicoes.push(`w.status_category = $${params.length}::aurora.status_category`);
+    }
+    if (status !== undefined) {
+      // A SITUAÇÃO pela chave (OS-01): a visão "Negados" da lista é `status=denied`.
+      // "Negada" divide a categoria `cancelled` com "Cancelada", e a categoria
+      // sozinha misturaria as duas. Só o VALOR vai como parâmetro.
+      if (!/^[a-z][a-z0-9_]{0,63}$/.test(status)) {
+        throw new ValidationError('status inválido', { field: 'status' });
+      }
+      params.push(status);
+      condicoes.push(`st.key = $${params.length}`);
     }
     if (assignee !== undefined) {
       params.push(uuidParam(assignee, 'assignee'));
@@ -341,6 +353,9 @@ export class WorkOrdersController {
 
       return {
         ...row,
+        // A organização usa orçamento? (OS-03 · ORC-01 · CLI-07) — decide se a
+        // ficha mostra "Gerar orçamento" e as etapas de aprovação do orçamento.
+        uses_quotes: await organizationUsesFeature(s, 'quotes'),
         history: await workOrderHistory(s, woId),
         // O SLA vem na ficha porque é o que decide a ordem do dia de quem
         // atende. Numa consulta à parte, a informação chegaria depois da
@@ -431,6 +446,10 @@ export class WorkOrdersController {
         scheduledStart: typeof body.scheduled_start === 'string' ? new Date(body.scheduled_start) : null,
         scheduledEnd: typeof body.scheduled_end === 'string' ? new Date(body.scheduled_end) : null,
         expectedVersion: typeof body.version === 'number' ? body.version : undefined,
+        operationalResult:
+          body.operational_result === undefined || body.operational_result === null
+            ? undefined
+            : String(body.operational_result),
       })
     );
   }
