@@ -24,6 +24,29 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Rodada 29/10/2026 (branch `feat/rodada-2026-10-29`, PR #42) — auditoria dos 177 itens + pedidos do WhatsApp de 19 e 23/10:**
+> **Migration mais recente:** `0085_cadastro_cliente_e_ativo.sql` (0084 e 0085 novas, **não aplicadas em banco remoto**; nada publicado).
+> Status por item: `docs/auditoria/technecare-status-requisitos.json`; relatório: `docs/auditoria/RELATORIO_FINAL_AUDITORIA_ANDERSON_2026-10-29.md`;
+> ampliações (uso interno, sem valores): `docs/auditoria/AMPLIACOES_ESCOPO_ANDERSON.md`.
+> · **Store do dono (0084):** `inventory_items.store_audience` ('all' | 'selected') + `store_item_customers`; o filtro de público
+>   vale no servidor em `storeItems(session, membershipId)`, `createStoreOrder` e `requestStoreQuote` (`assertStoreItemsForCustomer`).
+>   Gestão: `GET /store/catalog`, `PUT /store/items/:id/audience` (`inventory.update`); tela `features/store/gerenciar.tsx` (aba
+>   "Gerenciar catálogo", só com `inventory.update`). Pedido ganhou `separated` (Pedido feito → Aprovado → Separado → Em trânsito →
+>   Entregue; "Separado" é opcional).
+> · **OS:** prazos de SLA em etiquetas (`Sla` em `ordens/ficha.tsx`, `onsite` = "Chegada ao local"); "Local" usa
+>   `location_name_snapshot` (o `location_path_snapshot` é cadeia de UUIDs, não é para tela).
+> · **Relatórios:** Basic no padrão do Advanced; `?format=xlsx` (`apps/api/src/documents/xlsx.ts`, ZIP+CRC32 próprios, sem
+>   dependência); patrimonial `POST /reports/assets` (`packages/db/src/relatorio-patrimonial.ts`, valores só com
+>   `asset.read_financials`); `REPORT_LAYOUT_STATUS = 'layouts_defined'`; **nível contratado do cliente é teto**
+>   (`packages/db/src/nivel-de-relatorio.ts`, 403 com explicação; agendados ainda não passam pela trava).
+> · **Cadastros (0085):** `customers.report_tier`, `contract_starts_on/ends_on`; ativo com foto obrigatória na criação (base64 no
+>   `POST /assets`, mesma transação; `PUT/GET /assets/:id/photo`, até 8 MB), nome do equipamento vindo do catálogo (campo
+>   "Tipo" fora da tela), `assets.sla_enabled` (desligado → `resolve_sla_policy` devolve nulo, sem relógio).
+> · **Ferramentas:** subtítulo "Soluções novas de mercado, consulte disponibilidade.", textos comerciais, Eficiência Energética;
+>   a marca na barra lateral é link para "/" (recarrega).
+> · **Pendências que não são código:** fórmulas do cliente (P-01…P-16), provedor de e-mail, primeiro acesso do usuário adicionado,
+>   ANVISA automática, IA, V2 da qualidade, domínio/VPS, e o que a seta da foto do quadro de OS (29/10) quer dizer.
+
 > **Rodada de pendências 17/10/2026 (branch `fix/pendencias-pente-fino-2026-10-17`) — o que muda sobre o bloco abaixo:**
 > **Migration mais recente:** `0077_bloqueio_progressivo_de_senha.sql` · **78 migrations** (0074–0077 novas, **não
 > aplicadas em banco remoto**). Relatório: `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md`.

@@ -51,6 +51,14 @@ como "set/2026" quando não informado.
 > | NS-015 QR | PARCIAL | PARCIAL | vincular etiqueta existente; imagem de QR continua fora |
 > | NS-016 Check-in/out | NOVA | IMPLEMENTADA | check-in/out com posição ou justificativa na OS; mapa: BLOQUEADO — INFRA |
 
+
+> **Revisão de 29/10/2026 (auditoria total + WhatsApp de 19 a 29/10).** Os 177 itens da reunião de
+> 16/10 e do WhatsApp foram auditados um a um; o status por item está em
+> `docs/auditoria/technecare-status-requisitos.json`, o relatório em
+> `docs/auditoria/RELATORIO_FINAL_AUDITORIA_ANDERSON_2026-10-29.md`. Os pedidos do WhatsApp que ainda
+> faltavam (Store do dono, passo "Separado", barra Onsite, Basic, Excel, patrimonial, Expert sem FHEMIG,
+> nível e vigência no cliente, foto e SLA do ativo, "Tipo" fora da tela, Ferramentas e a marca) viraram
+> **NS-023**, IMPLEMENTADA na branch `feat/rodada-2026-10-29` (PR #42), sem publicação.
 ---
 
 ## Status permitidos
@@ -117,9 +125,10 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026 |
 | NS-021 | Reunião 16/10/2026: demandas consolidadas | IMPLEMENTADA (por item: ROADMAP) | ALTA | Entregue 16/10/2026 |
 | NS-022 | Página pública de apresentação (cliente/investidor) | IMPLEMENTADA | ALTA | Entregue 17/10/2026 |
+| NS-023 | WhatsApp 19–29/10: Store do dono, relatórios, cadastros, vitrine | IMPLEMENTADA (sem publicação) | ALTA | Entregue 29/10/2026 (PR #42) |
 
-**Contagem:** 22 no total · JÁ EXISTE 0 · PARCIAL 11 · NOVA 1 · FUTURA FASE 1 ·
-BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 8.
+**Contagem:** 23 no total · JÁ EXISTE 0 · PARCIAL 11 · NOVA 1 · FUTURA FASE 1 ·
+BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 9.
 
 ---
 
@@ -550,3 +559,17 @@ BLOQUEADA 1 (cliente) · EM IMPLEMENTAÇÃO 0 · IMPLEMENTADA 8.
 | **Evidência de implementação** | `apps/web/src/features/apresentacao/*`, rota em `apps/web/src/routes/router.tsx`, `apps/web/src/app.tsx` · testes `apresentacao.test.tsx` (sem fetch, sem "Aurora", selos de futuro) e `e2e/specs/apresentacao.spec.ts` (deep link, recarga, sem chamada à API, sem estouro a 375 px) · capturas em `docs/relatorios/apresentacao/` · **sem migration** |
 | **Publicação** | Demonstração ligada ao GitHub (`technecaremeds.pages.dev/apresentacao`) publica a partir da `main`. O front de produção (upload direto) não foi publicado — sem autorização de deploy |
 | **Observações** | Nenhum preço, checkout, e-mail enviado, fórmula pendente, leitura de chip, mapa ou IA apresentado como existente |
+
+## NS-023 — WhatsApp de 19 a 29/10/2026: Store do dono, relatórios, cadastros e vitrine
+
+| Campo | Conteúdo |
+| --- | --- |
+| **ID** | NS-023 |
+| **Data** | 19/10, 20/10 e 23/10/2026 (WhatsApp); cobrança de 29/10 ("preciso que termine o sistema e teste") |
+| **Origem** | Anderson (Be Care) |
+| **Descrição original (resumo)** | 19/10: imprimir e avaliar/assinar OS, laudo OBC, patrimônio e depreciação, ANVISA, filtro e ficha do ativo, plano com IA, Store com compra, tag e QR, remover "Tipo", frase e textos de Ferramentas, foto do ativo, layout dos relatórios, patrimonial, Excel, Expert sem FHEMIG, Eficiência Energética, marca volta ao início, nível de relatório e duração do contrato no cliente, SLA por equipamento. 23/10: barra "onsite" desnecessária; Store sem cadastro de produto/preço/público; pedidos com aprovado, separado, em trânsito e entregue; Store só do dono da plataforma |
+| **Status** | **IMPLEMENTADA** (sem publicação) — o que ficou de 19/10 já tinha entrado nos PRs #36–#41; o resto entrou no PR #42 |
+| **O que foi entregue (PR #42)** | Store: gestão do catálogo e público por produto (0084), passo "Separado". OS: prazos em etiquetas, Local com o nome do setor. Relatórios: Basic no padrão do Advanced, Excel, patrimonial, nomes Basic/Advanced/Expert, Expert sem FHEMIG, nível do cliente como teto. Cadastros (0085): nível e vigência do contrato no cliente, foto obrigatória do ativo, "Tipo" fora da tela, SLA por equipamento. Ferramentas: frase pedida, textos comerciais, Eficiência Energética; marca leva ao início |
+| **Evidência** | Migrations `0084_store_publico_e_separacao.sql`, `0085_cadastro_cliente_e_ativo.sql` · testes `api-estoque-store`, `api-pedidos-store`, `api-relatorios`, `api-relatorio-patrimonial`, `xlsx`, `relatorio-oficial`, `api-cadastro-cliente-ativo`, `sla`, `ferramentas`, `prazos-da-os` · E2E ajustados em `estoque-store`, `ferramentas`, `relatorios`, `equipamentos-catalogo` |
+| **Não feito, de propósito** | "17+ indicadores em tempo real" no Expert (só 2 de 17 têm fórmula — falta o cliente mandar); consulta automática à ANVISA e IA (ampliação); e-mail real (sem provedor); gestão da qualidade completa (V2) |
+| **Publicação** | Nada publicado. Migrations 0084–0085 só local/CI. Publicar depende de ordem expressa, com backup antes |
