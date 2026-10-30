@@ -134,18 +134,24 @@ TEN-02 (domínio próprio por cliente) e TEN-04 (suspender, limitar e revogar ne
 |---|---|---|---|---|
 | `68ed145` (1ª passada) | verde | verde | **2 falharam** (spec da Store supôs o perfil errado) | — |
 | `080520a` | verde | **2.651/2.651** | **223 passaram**, 1 pulado | verde |
-| `b064f60` (último commit de código) | verde | em andamento | em andamento | — |
+| `e7d1b33` | verde | verde | **1 falhou, 1 instável**, 235 passaram (ver 8-A) | **reprovado** |
+| **`62eb8c3` (HEAD de código)** | **verde** | **2.846/2.846** | **237 passaram**, 1 pulado, **0 falhas, 0 instáveis** | **verde** |
 
-### 8-A. Resultado do último commit
+### 8-A. Falhas do CI em `e7d1b33` e correção (`62eb8c3`)
 
-No commit de código final (`b064f60`), o job **Estático** passou. Os jobs **PostgreSQL 16** e **Ponta a ponta** estavam rodando quando este relatório foi gravado. O commit desta documentação (mesmo código mais os documentos) dispara a rodada que vale como final; o resultado fica na PR #42.
+As duas falhas eram dos testes, não da tela. Nenhum critério foi afrouxado.
 
-Até ela terminar, as evidências do código final são:
-- a suíte local completa (2.813/2.813);
-- os builds de produção;
-- o CI completo verde em `080520a`, que não inclui a segunda passada (`db9b357` em diante).
+1. **`painel-planejamento.spec.ts:28` — falha.** O seletor `gráfico.or(texto "Sem dados no período.")` encontrou dois elementos.
+   - **Causa:** o gráfico "Evolução dos chamados" estava desenhado, e o "Sem dados no período." vinha de **outro** cartão, o "Avaliação das OS", novo nesta rodada e vazio nos dados de teste.
+   - **Correção na tela:** cada cartão de gráfico do Painel virou uma região com o nome do título. O leitor de tela passa a anunciar cada cartão.
+   - **Correção no teste:** ele confere dentro do cartão "Evolução dos chamados" que existe **exatamente um** entre o gráfico e a mensagem de vazio desse cartão ("Sem dados suficientes para este período."), e que ele está visível.
+2. **`navegacao-links.spec.ts:62` — instável** (passou só na repetição).
+   - **Causa:** no celular, os links eram lidos logo depois do `goto('/')`, antes de o shell renderizar, e vinham zero links.
+   - **Correção:** o teste espera a tela, abre a gaveta pelo botão **"Abrir menu"**, espera o menu e o primeiro link visíveis e lê só os links visíveis e acessíveis.
+   - Ele exige `/ordens` e `/ativos` entre os destinos e, para cada um, que a tela abra sem "sem acesso" e sem rolagem horizontal a 375 px.
+   - A leitura do menu no desktop ganhou a mesma espera.
 
-O E2E novo (varredura de links, folha de impressão da OS, Play de planos, parecer no app de campo) roda pela primeira vez nessa rodada final.
+Run do HEAD: `41048276925`, com Estático, PostgreSQL 16, Ponta a ponta e Gate verdes. Os E2E novos rodaram e passaram: varredura de links por perfil e no celular, folha de impressão da OS, Play de planos, parecer no app de campo e Store.
 
 ## 9. Testes desta execução
 
@@ -179,6 +185,8 @@ O E2E novo (varredura de links, folha de impressão da OS, Play de planos, parec
 | `22955c3` | Marca do servidor fora do prettier |
 | `f199c50` | E2E de varredura de links; captura da demonstração |
 | `b064f60` | Eixo dos gráficos do PDF |
+| `e7d1b33` | Relatório de conclusão, inventário e handoff |
+| `62eb8c3` | E2E do Painel com escopo no cartão; menu do celular lido depois de aberto; cartões do Painel como regiões nomeadas |
 
 Ao todo, 181 arquivos foram alterados em relação à `main`.
 - **Migrations novas:** 0084, 0085, 0087, 0088 e 0089. O número 0086 ficou sem uso, e o migrador aceita a lacuna: a suíte e o CI rodam todas.
@@ -196,9 +204,23 @@ Ao todo, 181 arquivos foram alterados em relação à `main`.
 
 ## 12. Prontidão para publicação
 
-**PRONTA COM RESSALVAS — condicionada ao CI final da PR #42 terminar verde.**
+**PRONTA COM RESSALVAS.**
 
-- **Rodada atual:** não sobrou pendência executável. Os 3 itens parciais e os 10 pendentes ou bloqueados dependem só de Anderson (fórmulas, lista de campos, indicadores do financeiro, retenção da geolocalização) ou de infraestrutura (e-mail, domínio e deploy). Nenhum deles impede a operação dos recursos autorizados.
-- **IDs pendentes:** REL-05, AUT-05, OPS-08 (parciais); REL-04, REL-06, USR-09, USR-11 (definição); USR-02, ORC-03, AUT-02, AUT-03, OPS-05, OPS-10 (dependência externa); TEN-02, TEN-04 (aprovação comercial).
-- **Se o CI final falhar:** a classificação passa a ser **NÃO PRONTA** até a correção, porque o E2E novo ainda não rodou nenhuma vez.
+- **CI completo verde no HEAD de código `62eb8c3`:**
+  - Estático passou.
+  - PostgreSQL 16: 2.846 de 2.846.
+  - Ponta a ponta: 237 passaram, 0 falhas, 0 instáveis.
+  - Gate passou.
+- **Fora do CI:** a suíte local passou com 2.813 de 2.813, e os builds de produção de web, portal, campo e demonstração geraram.
+- **Rodada atual:** não sobrou pendência executável. Os itens que faltam dependem só de Anderson (fórmulas, lista de campos, indicadores do financeiro, retenção da geolocalização), de serviço externo (e-mail, domínio) ou da sua ordem de deploy. Nenhum deles impede a operação dos recursos autorizados.
+- **IDs pendentes:**
+  - parciais: REL-05, AUT-05, OPS-08;
+  - pendentes de definição: REL-04, REL-06, USR-09, USR-11;
+  - dependência externa: USR-02, ORC-03, AUT-02, AUT-03, OPS-05, OPS-10;
+  - aprovação comercial: TEN-02, TEN-04.
+- **Bloqueios reais de produção:** os itens do §6 do checklist (`docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md`), a conferir com consultas de leitura no banco antes do deploy:
+  - duplicidade em `rule_runs`, que faria a 0088 falhar;
+  - automações por evento ativas que não devem disparar;
+  - organização em modo hospital que usa orçamento;
+  - backup verificado.
 - **Antes de publicar:** revisar as regras de automação ativas (risco 2), atualizar o app de campo (risco 1) e fazer o backup antes das migrations 0084–0089 (risco 3).

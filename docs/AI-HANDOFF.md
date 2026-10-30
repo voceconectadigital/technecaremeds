@@ -26,7 +26,9 @@
 
 > **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
 > **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
-> Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`. Status: 140 de 177 testados; parciais REL-05 e AUT-05.
+> Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`; checklist de publicação: `docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md`.
+> Status: 139 de 177 testados; parciais REL-05, AUT-05, OPS-08 (sem deploy). **CI verde completo no HEAD de código `62eb8c3`** (run 41048276925: PG16 2.846/2.846, E2E 237, Gate).
+> · Cartões de gráfico do Painel são regiões nomeadas pelo título (`Grafico` em `painel/painel.tsx`); E2E do celular abre a gaveta "Abrir menu" antes de ler os links.
 > · **Parecer da OS obrigatório por padrão** (`require_operational_result`, desligável): PARADO → ativo `under_maintenance`,
 >   LIBERADO → `active` (`packages/db/src/work-orders.ts`); o app de campo pede o parecer (`apps/field/src/telas/ordem.tsx`).
 >   Testes antigos que concluem OS de equipamento mandam `operationalResult: 'released'`.

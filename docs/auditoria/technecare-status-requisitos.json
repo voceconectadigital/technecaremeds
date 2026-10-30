@@ -2439,7 +2439,7 @@
         "https://github.com/voceconectadigital/technecaremeds/pull/42"
       ],
       "bloqueio": "deploy depende de ordem expressa",
-      "observacao": "Rastreabilidade de branch, PR, commits e CI registrada; CI verde em 080520a (PostgreSQL 16 2.651/2.651, E2E 223) e suíte local 2.813/2.813 no código final; builds de produção ok. Deploy efetivo não feito (sem autorização) — ver RELATORIO_CONCLUSAO_FINAL_ANDERSON.md §8."
+      "observacao": "Rastreabilidade de branch, PR, commits e CI registrada. CI completo verde no HEAD de código 62eb8c3 (run 41048276925): Estático, PostgreSQL 16 2.846/2.846, E2E 237 passaram (1 pulado, 0 instável), Gate. Builds de produção ok. Deploy efetivo não feito (sem autorização) — checklist em docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md."
     },
     {
       "id": "OPS-09",
