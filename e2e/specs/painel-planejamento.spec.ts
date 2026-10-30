@@ -21,10 +21,19 @@ test.describe('Painel de Controle', () => {
     for (const rotulo of ['Chamados abertos', 'Concluídos', 'Backlog', 'MTTR', 'MTBF', 'SLA cumprido']) {
       await expect(page.getByText(rotulo, { exact: true }).first()).toBeVisible();
     }
+    // Dentro do cartão do gráfico: ou o gráfico, ou a mensagem de vazio DESTE cartão. O "sem dados"
+    // de outro cartão (a avaliação das OS, por exemplo) não conta como gráfico desenhado.
+    const evolucao = page.getByRole('region', { name: 'Evolução dos chamados' });
+    await expect(evolucao).toBeVisible();
     await expect(
-      page
+      evolucao
         .getByRole('img', { name: 'Ordens abertas e concluídas por período' })
-        .or(page.getByText('Sem dados no período.').first())
+        .or(evolucao.getByText('Sem dados suficientes para este período.'))
+    ).toHaveCount(1);
+    await expect(
+      evolucao
+        .getByRole('img', { name: 'Ordens abertas e concluídas por período' })
+        .or(evolucao.getByText('Sem dados suficientes para este período.'))
     ).toBeVisible();
 
     await page.getByRole('button', { name: '90 dias' }).click();

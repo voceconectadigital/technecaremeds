@@ -769,24 +769,28 @@ function Grafico({
 }) {
   return (
     <Card className={cn('flex flex-col', className)}>
-      <div
-        className={cn(
-          'flex flex-col gap-2 px-5 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
-          protagonista && 'lg:px-6 lg:pt-6'
-        )}
-      >
-        <div className="min-w-0">
-          <h2 className={cn('font-bold tracking-tight text-text', protagonista ? 'text-xl' : 'text-lg')}>
-            {titulo}
-          </h2>
-          <p className="mt-1 text-sm text-muted">{descricao}</p>
+      {/* Região com o nome do gráfico: o leitor de tela anuncia cada cartão, e um teste ou atalho
+          acha o gráfico certo sem confundir o "sem dados" de um cartão com o de outro. */}
+      <section aria-label={titulo} className="flex flex-1 flex-col">
+        <div
+          className={cn(
+            'flex flex-col gap-2 px-5 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
+            protagonista && 'lg:px-6 lg:pt-6'
+          )}
+        >
+          <div className="min-w-0">
+            <h2 className={cn('font-bold tracking-tight text-text', protagonista ? 'text-xl' : 'text-lg')}>
+              {titulo}
+            </h2>
+            <p className="mt-1 text-sm text-muted">{descricao}</p>
+          </div>
+          {destaque && <div className="shrink-0 pt-0.5">{destaque}</div>}
         </div>
-        {destaque && <div className="shrink-0 pt-0.5">{destaque}</div>}
-      </div>
-      <div className={cn('flex-1 px-5 pb-5', protagonista && 'lg:px-6 lg:pb-6')}>
-        {children}
-        {acao && <div className="mt-2 flex justify-end">{acao}</div>}
-      </div>
+        <div className={cn('flex-1 px-5 pb-5', protagonista && 'lg:px-6 lg:pb-6')}>
+          {children}
+          {acao && <div className="mt-2 flex justify-end">{acao}</div>}
+        </div>
+      </section>
     </Card>
   );
 }

@@ -21,6 +21,8 @@ const TELA_RUIM = /Você não tem acesso a esta tela|Não encontramos este regis
 async function linksDoMenu(page: Page): Promise<string[]> {
   const menu = page.getByRole('navigation', { name: 'Navegação principal' });
   await expect(menu).toBeVisible({ timeout: 15_000 });
+  // O menu aparece antes dos itens (a lista de permissões chega depois): espera o primeiro link.
+  await expect(menu.getByRole('link').first()).toBeVisible({ timeout: 15_000 });
   const hrefs = await menu
     .locator('a[href^="/"]')
     .evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''));
@@ -54,11 +56,19 @@ test('no celular, o menu do admin também leva a telas que abrem', async ({ page
   await page.setViewportSize({ width: 375, height: 812 });
   await entrarComo(page, { email: E2E.emailCoordA, organizationId: E2E.orgA });
   await page.goto('/');
-  // No celular o menu fica recolhido: lemos os destinos do mesmo componente, aberto ou não.
-  const hrefs = await page
-    .locator('nav[aria-label="Navegação principal"] a[href^="/"]')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 15_000 });
+  // No celular a barra lateral vira gaveta: abre pelo botão, como a pessoa faz, e só então os
+  // links são lidos — e só os VISÍVEIS e acessíveis (a barra de desktop escondida não conta).
+  await page.getByRole('button', { name: 'Abrir menu' }).click();
+  const gaveta = page.getByRole('navigation', { name: 'Navegação principal' });
+  await expect(gaveta).toBeVisible();
+  await expect(gaveta.getByRole('link').first()).toBeVisible();
+  const hrefs = await gaveta
+    .getByRole('link')
     .evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''));
-  const destinos = [...new Set(hrefs.filter((h) => h && h !== '/'))];
+  const destinos = [...new Set(hrefs.filter((h) => h.startsWith('/') && h !== '/'))];
+  // O admin enxerga ao menos as telas de operação e de cadastro no menu do celular.
+  expect(destinos).toEqual(expect.arrayContaining(['/ordens', '/ativos']));
   expect(destinos.length).toBeGreaterThan(0);
   for (const href of destinos) {
     await page.goto(href);
