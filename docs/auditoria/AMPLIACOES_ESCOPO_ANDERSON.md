@@ -30,6 +30,10 @@
 | USR-11 | Quais campos exigem aprovação de engenheiro ou gestor | O controle por perfil já vale na API; falta a lista de campos |
 | OS-23 | Se a assinatura por sessão (clique do próprio solicitante, com resumo, e-mail, IP e hora) basta, ou se precisa de certificado ICP-Brasil | A assinatura por sessão está pronta; ICP-Brasil seria ampliação |
 | SIGQUALI | Nome do fabricante para o estudo | Qualiex estudado em fonte aberta (`docs/ESTUDO-QUALIEX-SIGQUALI.md`) |
+| OS-03 | Confirmar o padrão "hospital próprio = sem orçamento" | Implementado assim (dá para ligar por organização) |
+| OPS-07 | Prazo de retenção da geolocalização do check-in (o cliente é o controlador) | Sem prazo definido, não há expurgo automático |
+| ATV-04 | Corrigir tags repetidas antigas, se houver | Ficam marcadas e fora do índice único, sem perda de dado |
+| AUT-05 | Quais indicadores vão ao "financeiro" | O recorte por contrato já vale nos agendados |
 | Quadro de OS | O que a seta verde da foto de 29/10 aponta na coluna "Agendada" | A coluna rola por dentro, de propósito; mudar sem saber o pedido seria chute |
 
 ## 3. Dependem de infraestrutura
@@ -39,4 +43,4 @@
 | ORC-03, AUT-02, AUT-03, AUT-05 | Provedor de e-mail. Hoje os avisos entregam na caixa de entrada do sistema e o e-mail fica na fila, sem simular envio |
 | USR-02 | Primeiro acesso do usuário adicionado: depende do e-mail (convite com link) ou de liberar a definição de senha pela API, que hoje é negada de propósito |
 | OPS-05 | Domínio "htec.b" não existe; VPS definitiva não escolhida |
-| Publicação | Esta rodada (migrations 0084–0086 e o front) só vai para produção com ordem expressa e o backup antes |
+| Publicação | Esta rodada (migrations 0084–0089 e o front) só vai para produção com ordem expressa e o backup antes |

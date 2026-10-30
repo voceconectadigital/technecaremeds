@@ -24,6 +24,25 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
+> **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
+> Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`. Status: 140 de 177 testados; parciais REL-05 e AUT-05.
+> · **Parecer da OS obrigatório por padrão** (`require_operational_result`, desligável): PARADO → ativo `under_maintenance`,
+>   LIBERADO → `active` (`packages/db/src/work-orders.ts`); o app de campo pede o parecer (`apps/field/src/telas/ordem.tsx`).
+>   Testes antigos que concluem OS de equipamento mandam `operationalResult: 'released'`.
+> · `GET /work-orders/:id/completion` = critérios de conclusão; folha de impressão `ordens/folha-de-impressao.tsx` (`?modo=impressao`).
+> · Orçamento só com o recurso `quotes` da organização (modo hospital nasce sem); `createQuote` recusa 409.
+> · Planos: `POST /maintenance-plans/:id/activate|deactivate`, `GET …/eligible-items`, `POST …/compliance-report` (xlsx),
+>   `plan_tasks.extra_checklist_template_keys` (0087); espera filtrada `GET /today/waiting` + `routes/hoje-espera.tsx`.
+> · Relatórios: trava de nível também nos agendados (`nivel-de-relatorio.ts` + `automations.ts`); `GET /reports/options`;
+>   página `/relatorios`; `formula_version` por indicador; marca do servidor em `packages/config/src/marca.gerada.ts`
+>   (gerada por `npm run marca`, fora do prettier); eixo dos gráficos com `passoRedondo` (`documents/pdf.ts`).
+> · **Automações por evento agora rodam** (`apps/workers/src/automacoes.ts`, índice único regra×evento 0088). Antes ficavam caladas.
+> · Cadastros (0089): tag única por organização e não apagável (repetidas antigas marcadas `tag_legacy_duplicate`), ANVISA
+>   "não se aplica" e busca, `GET /assets/:id/life-record`, residual na depreciação, setor na nova solicitação, telefone e
+>   conselho por profissão (`profiles.ts`), `company_tax_id`, setores padrão no EAS, procedimento no certificado, logger
+>   com CPF/telefone/registro/coordenadas mascarados (`docs/PRIVACIDADE-LOGS-E-GEOLOCALIZACAO.md`).
+
 > **Rodada 29/10/2026 (branch `feat/rodada-2026-10-29`, PR #42) — auditoria dos 177 itens + pedidos do WhatsApp de 19 e 23/10:**
 > **Migration mais recente:** `0085_cadastro_cliente_e_ativo.sql` (0084 e 0085 novas, **não aplicadas em banco remoto**; nada publicado).
 > Status por item: `docs/auditoria/technecare-status-requisitos.json`; relatório: `docs/auditoria/RELATORIO_FINAL_AUDITORIA_ANDERSON_2026-10-29.md`;
