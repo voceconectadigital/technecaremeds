@@ -163,3 +163,16 @@ describe('versão das fórmulas no PDF (REL-07)', () => {
     expect(notaDasFormulas([])).toEqual([]);
   });
 });
+
+describe('eixo dos gráficos do PDF', () => {
+  it('passo redondo e múltiplo da casa decimal do rótulo', async () => {
+    const { passoRedondo } = await import('../documents/pdf');
+    expect(passoRedondo(0.25, 1)).toBe(1); // série toda zero, rótulo inteiro: 0, 1
+    expect(passoRedondo(1.15, 1)).toBe(2); // série até 4: 0, 2, 4, 6
+    expect(passoRedondo(1.15, 0.1)).toBe(2);
+    expect(passoRedondo(0.6, 0.1)).toBe(1);
+    expect(passoRedondo(2.2, 1)).toBe(5); // 2,5 não serve com rótulo inteiro
+    expect(passoRedondo(2.2, 0.1)).toBe(2.5);
+    expect(passoRedondo(18, 1)).toBe(20);
+  });
+});

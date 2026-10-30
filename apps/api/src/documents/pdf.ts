@@ -320,13 +320,22 @@ export function desenharGrafico(
     // Contagem e percentual não vão abaixo de zero: o eixo não pode mostrar "-3 chamados".
     if (Math.min(...pontos) >= 0 && lo < 0) lo = 0;
   }
+  // Marcas "redondas" (1, 2, 2,5, 5 × 10ⁿ), nunca menores que a casa decimal do rótulo: com
+  // marcas em 0,25 e rótulo inteiro, o eixo de uma série toda zero lia "0, 0, 1, 1, 1", e o de
+  // uma série até 4 lia "0, 1, 2, 3, 5" — o 4 sumia. O eixo se estende até a marca seguinte.
+  const passo = passoRedondo((hi - lo) / 4, 10 ** -g.casas);
+  const semNegativo = Math.min(...pontos) >= 0;
+  lo = Math.floor(lo / passo + 1e-9) * passo;
+  if (semNegativo && lo < 0) lo = 0;
+  hi = Math.max(lo + passo, Math.ceil(hi / passo - 1e-9) * passo);
   const yDe = (v: number) => py + ((v - lo) / (hi - lo)) * ph;
   const xDe = (i: number) => px + ((i + 0.5) * pw) / n;
 
-  for (let k = 0; k <= 4; k++) {
-    const v = lo + ((hi - lo) * k) / 4;
+  const marcas = Math.round((hi - lo) / passo);
+  for (let k = 0; k <= marcas; k++) {
+    const v = lo + passo * k;
     const y = yDe(v);
-    if (k > 0 && k < 4) ops.push(`q 0.9 G 0.3 w ${num(px)} ${num(y)} m ${num(px + pw)} ${num(y)} l S Q`);
+    if (k > 0 && k < marcas) ops.push(`q 0.9 G 0.3 w ${num(px)} ${num(y)} m ${num(px + pw)} ${num(y)} l S Q`);
     const rotulo = fmt(v, g.casas);
     ops.push(escrever('F1', 6, px - 3 - larguraDe(rotulo, 6), y - 2, rotulo));
   }
@@ -561,4 +570,20 @@ export function gerarPdf(linhas: readonly LinhaPdf[], opcoes: OpcoesPdf): Buffer
   }
   corpo += `trailer\n<< /Size ${objetos.length} /Root 1 0 R /Info 5 0 R >>\nstartxref\n${inicioXref}\n%%EOF\n`;
   return Buffer.from(corpo, 'latin1');
+}
+
+/**
+ * O menor passo "redondo" (1, 2, 2,5 ou 5 × 10ⁿ) que cobre `bruto`, e nunca abaixo de `minimo`
+ * (a menor diferença que o rótulo consegue mostrar com as casas decimais do gráfico).
+ */
+export function passoRedondo(bruto: number, minimo: number): number {
+  const alvo = Math.max(bruto, minimo, 1e-9);
+  const ordem = 10 ** Math.floor(Math.log10(alvo));
+  for (const m of [1, 2, 2.5, 5, 10]) {
+    const p = m * ordem;
+    // 2,5 com rótulo inteiro voltaria a mostrar "3" onde a marca é 2,5: o passo é múltiplo do mínimo.
+    const multiplo = Math.abs(p / minimo - Math.round(p / minimo)) < 1e-9;
+    if (p >= alvo - 1e-12 && p >= minimo - 1e-12 && multiplo) return p;
+  }
+  return 10 * ordem;
 }
