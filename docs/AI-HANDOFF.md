@@ -24,6 +24,12 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **PRODUÇÃO 30/10/2026: PR #42 PUBLICADA** (merge `2541c65`; API+workers impressão `f07e34c33070`; migrations 0084–0089
+> aplicadas às 13:02 UTC; fronts web `f607839c`, portal `31d73400`, campo `cbf76844`). Backup antes: `825569fa-0971-45be-972b-733ee39e93a0`
+> (restore_drill ok, 30/10 09:36). Volta: API `a852e7c`/`5a807018a66a`, fronts `02ee9e9`. Homologação com login feita no web (admin); portal, campo e conclusão real de OS ficaram de fora.
+> Relatório: `docs/auditoria/RELATORIO_DEPLOY_PRODUCAO_PR42.md`. Leitura do banco de produção: SSH `apps-us-east-01` → psql no
+> contêiner `hp-pgv-pe0b9asx-db-1` em transação READ ONLY (`docs/auditoria/consultas-pre-deploy-pr42.sql`).
+
 > **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
 > **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
 > Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`; checklist de publicação: `docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md`.
