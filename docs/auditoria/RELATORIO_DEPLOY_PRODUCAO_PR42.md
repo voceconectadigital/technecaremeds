@@ -3,8 +3,13 @@
 **Data:** 30/10/2026 · **Autorização:** expressa do responsável pelo projeto, nesta conversa.
 
 **Classificação: PUBLICAÇÃO CONCLUÍDA COM RESSALVAS.**
-- **Publicado e validado tecnicamente:** API, workers, migrations e os três frontends.
-- **Ressalva:** a homologação funcional com login (OS com parecer, Store, relatórios, cadastros, app de campo) **não foi feita**, porque a sessão do app em produção estava expirada e eu não digito senha. Ver §6.
+- **Publicado e validado:**
+  - tecnicamente: API, workers, migrations e os três frontends;
+  - com login no web, como administrador da organização: OS, planos, orçamentos, Store, relatórios PDF/Excel, cadastros e Ferramentas (§6).
+- **Ressalvas** (§6-B):
+  - portal e app de campo sem sessão, logo sem teste de sincronização;
+  - só o perfil administrador exercitado em produção;
+  - conclusão real de OS com parecer não feita, de propósito, para não gravar dado fictício.
 
 ## 1. Commit publicado e merge
 - **PR #42:** mergeada na `main` com merge commit, travada no head verificado `a26c0b6`.
@@ -74,28 +79,58 @@ A demonstração `technecaremeds.pages.dev`, publicada automaticamente da `main`
 - **Páginas públicas e telas de login:** `/apresentacao`, `/ferramentas`, portal e campo respondem 200, sem erro no console do navegador.
 - **Credenciais:** nenhuma foi lida, digitada ou exposta. A leitura do banco foi pelo socket local do contêiner, em transação somente leitura.
 
-## 6. Ressalva: homologação funcional pendente
-A sessão do app em produção estava expirada, e os testes abaixo exigem login de uma pessoa:
-- login e permissões;
-- Painel e menus;
-- OS com parecer e o estado do equipamento;
-- planos e execução guiada;
-- Store e gestão do catálogo;
-- orçamentos existentes;
-- PDF e Excel;
-- cadastros de cliente e de equipamento;
-- app de campo e sincronização.
+## 6. Homologação em produção (com login, 30/10/2026)
 
-Esses fluxos passaram no CI, com 237 testes E2E contra PostgreSQL 16, mas **não foram exercidos em produção**.
+**Sessão:** web em technecaremeds.voceconecta.com.br, usuário "Demo Anderson", administrador da organização "TéchneCare Demo", logado pelo responsável.
 
-**Para fechar:** entrar no app de produção no Chrome. Eu sigo **sem criar registros fictícios**: só leitura, e ações que não gravam (abrir telas, gerar PDF e Excel, abrir o diálogo de catálogo sem salvar). Concluir uma OS de verdade com parecer só pode ser feito numa OS real, por quem a executa; não vou gerar operação fictícia em produção.
+**Método:**
+- Tudo pela tela, sem ler nem usar o token da sessão.
+- Status de cada chamada à API lido pelo registro de recursos da própria página.
+- Nenhum registro foi gravado (ver "Dados preservados").
+
+### 6-A. O que foi verificado
+
+| Área | Resultado | Evidência |
+|---|---|---|
+| Login, menu e perfil | ok | "Bom dia, Demo"; menu completo do administrador; console sem erro |
+| Painel | ok | regiões nomeadas; cartão novo "Avaliação das OS"; nenhuma chamada com erro |
+| Lista de OS | ok | abas Todas/Abertas/Em execução/Paradas/Concluídas/**Negados**; sem erro |
+| Ficha da OS (WO-2026-0025) | ok | "Local: Imagem — Ultrassonografia", sem IDs; prazos em etiquetas ("Chegada ao local: vencido há 6 dias"), sem barra vermelha nem "onsite"; "Imprimir OS" presente; orçamento visível (a organização é prestadora) |
+| Execução guiada | ok | 8 passos, incluindo "Parecer final"; `GET /work-orders/:id/completion` → **200** (rota nova servindo). "**Concluir ordem de serviço" desabilitado**, com "Para concluir, falta: Descrição do serviço · Parecer do equipamento (LIBERADO ou PARADO)" |
+| Folha de impressão da OS | abre e chama a impressão do navegador | o título "Imprimir WO-2026-0025" foi conferido; o diálogo de impressão travou a aba automatizada (comportamento do navegador, não do sistema), então o conteúdo da folha fica coberto pelos testes do CI |
+| Planos | ok | botão "Executar plano"; "Ranking de conformidade"; sem erro |
+| Orçamentos existentes | ok | os 3 orçamentos listados |
+| Store | ok | abas Catálogo / Pedidos / **Gerenciar catálogo**; `GET /store/catalog` → 200; 14 produtos; diálogo "Novo produto" com público "Toda a rede de clientes" e "Só os clientes que eu escolher", **cancelado sem salvar** |
+| Relatórios | ok | página `/relatorios`; `GET /reports/options` → 200; abas Indicadores/Patrimonial; "Criar automação com estes filtros". **PDF**: 200, `application/pdf`, 14.478 bytes, assinatura `%PDF-1.4`. **Excel**: 200, `…spreadsheetml.sheet`, 20.801 bytes, assinatura ZIP `PK`. Os dois capturados na memória da página, sem baixar arquivo |
+| Patrimonial | ok | aba abre com as situações (ativos, em manutenção, obsoletos) e os botões de PDF/Excel |
+| Cadastro de cliente | ok | ficha mostra "Relatório incluso: não informado" e "Vigência: não informada" (campos novos, ainda vazios) |
+| Cadastro e ficha do equipamento | ok | "Ficha de vida" presente; `GET /assets/:id/life-record` → 200 (rota nova servindo) |
+| Ferramentas | ok | 9 cartões; "Soluções novas de mercado, consulte disponibilidade."; Eficiência Energética; a frase recusada não aparece; marca com link para o início |
+| Erros | nenhum | nenhuma chamada à API com status ≥ 400 nas telas visitadas; console sem erro |
+
+**Dados preservados** (banco, em transação somente leitura, depois da homologação):
+- **0 registros** de auditoria e **0 eventos** desde o deploy (13:02 UTC).
+- **Contagens iguais a antes:** 1 organização, 15 equipamentos, 3 orçamentos, 25 OS, 0 regras, 0 execuções.
+- Nenhum check-in criado na OS aberta no assistente.
+
+**Logs (60 min depois do deploy):** API e workers com 0 erros e 0 ocorrências de CPF ou senha. Os contêineres estão estáveis.
+
+### 6-B. O que ficou de fora, e por quê
+
+| Item | Motivo | Como fechar |
+|---|---|---|
+| Portal do cliente e app de campo com login; sincronização do campo | Cada um tem login próprio, e não havia sessão; eu não digito senha. O service worker novo do campo já está ativo | Entrar em `portal-…` e `campo-…`, ou testar no celular de um técnico |
+| Conclusão real de OS com parecer e efeito no estado do equipamento | Exige gravar numa OS de verdade; não gero registro fictício em produção | Na próxima OS real de equipamento: concluir com "Equipamento parado" e conferir o equipamento "em manutenção", depois "Liberado" e conferir "em operação" |
+| Permissões de outros perfis (operador, solicitante) e isolamento entre clientes em produção | Só havia a sessão de administrador; produção tem uma única organização | Coberto pelos testes de API e E2E do CI contra PostgreSQL 16 (tenants, escopo e 403/404) |
+| Conteúdo da folha de impressão em produção | O diálogo de impressão do navegador trava a aba automatizada | Coberto pelos testes de tela e E2E do CI; conferir com Ctrl+P numa OS |
 
 ## 7. Problemas e correções durante a publicação
 - **Deploy da API:** a primeira tentativa foi barrada pela checagem de segurança da sessão (deploy de produção). O responsável liberou e a segunda passou. Nada foi alterado entre as duas.
+- **Folha de impressão:** abrir a folha da OS dispara a impressão do navegador, e o diálogo travou a aba automatizada; a aba foi fechada. Não é defeito do sistema.
 - Nenhuma outra ocorrência.
 
 ## 8. Pendências remanescentes (não bloqueiam a produção)
-- **Homologação funcional com login** (§6).
+- **Fechar as ressalvas do §6-B:** portal e campo com login; conclusão real de OS com parecer; outros perfis.
 - **Depende de Anderson:**
   - fórmulas P-01…P-16 (REL-04, REL-05, REL-06, OPS-10);
   - campos que exigem aprovação (USR-09, USR-11);
