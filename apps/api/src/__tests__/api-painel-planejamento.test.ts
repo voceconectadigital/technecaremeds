@@ -426,16 +426,13 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
   });
 
   it('sem setor, o cadastro é recusado', async () => {
-    const r = await http
-      .post('/v1/assets')
-      .set(auth(GESTOR))
-      .send({
-        tag: 'TAG-5',
-        name: 'Sem setor',
-        customer_id: clienteA,
-        asset_category_id: categoria,
-        photo: FOTO_PNG,
-      });
+    const r = await http.post('/v1/assets').set(auth(GESTOR)).send({
+      tag: 'TAG-5',
+      name: 'Sem setor',
+      customer_id: clienteA,
+      asset_category_id: categoria,
+      photo: FOTO_PNG,
+    });
     expect(r.status).toBe(422);
   });
 
