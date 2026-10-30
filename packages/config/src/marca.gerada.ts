@@ -6,6 +6,6 @@
  */
 
 export const MARCA_DO_PRODUTO = {
-  produto: 'Téchne Care',
-  descricao: 'Engenharia clínica e gestão de ativos',
+  "produto": "Téchne Care",
+  "descricao": "Engenharia clínica e gestão de ativos"
 } as const;
