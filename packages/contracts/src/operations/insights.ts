@@ -303,13 +303,13 @@ export const reportsCatalog = defineOperation({
   description:
     'Fonte única da definição dos indicadores: código, unidade, categoria, modelos permitidos, situação ' +
     '(ACTIVE, PROVISIONAL, PENDING_DEFINITION) e sentido da meta. Indicador PENDING_DEFINITION aparece ' +
-    'só aqui, com o motivo: não entra em relatório e não tem número inventado. O layout final dos PDFs ' +
-    'está AGUARDANDO MODELO PDF OFICIAL.',
+    'só aqui, com o motivo: não entra em relatório e não tem número inventado. Layout dos PDFs: o ' +
+    'Advanced segue o modelo do cliente, o Basic o mesmo padrão visual, e o Expert é a casca do IMR.',
   permissions: ['insight.read'],
   response: z.object({
     tiers: z.array(z.object({ key: z.enum(REPORT_TIER_KEYS), label: z.string() })),
     indicators: z.array(ReportIndicator),
-    layout_status: z.literal('awaiting_official_model'),
+    layout_status: z.literal('layouts_defined'),
     layout_note: z.string(),
   }),
 });
@@ -328,14 +328,17 @@ export const reportsGenerate = defineOperation({
   operationId: 'reports.generate',
   method: 'POST',
   path: '/reports/generate',
-  summary: 'Gera o relatório (JSON; `?format=pdf` para o PDF) sobre os dados reais do Painel',
+  summary:
+    'Gera o relatório (JSON; `?format=pdf` para o PDF, `?format=xlsx` para a planilha) sobre os dados reais do Painel',
   description:
     'Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. ' +
     'Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); ' +
     'PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais ' +
     'específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, ' +
     '`target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. ' +
-    'Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.',
+    'Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404. ' +
+    'Em `?format=xlsx` (Excel), as abas são Indicadores, Série mensal (Basic e Advanced) e Filtros; ' +
+    'indicador pendente sai como o texto "Pendente de definição", nunca como número.',
   permissions: ['insight.read'],
   body: z
     .object({
@@ -348,7 +351,7 @@ export const reportsGenerate = defineOperation({
       sector_id: Uuid.optional(),
       plan_kind: z.enum(['preventive', 'calibration', 'electrical_safety', 'qualification']).optional(),
       asset_category_id: Uuid.optional(),
-      /** Só para o PDF Advanced: campos do cabeçalho e das assinaturas do modelo oficial. */
+      /** Só para o PDF Basic e Advanced: campos do cabeçalho e das assinaturas. */
       cost_center: z.string().trim().max(60).optional(),
       city: z.string().trim().max(60).optional(),
       signatories: z
@@ -360,7 +363,7 @@ export const reportsGenerate = defineOperation({
   response: z.object({
     tier: z.enum(REPORT_TIER_KEYS),
     generated_at: z.string(),
-    layout_status: z.literal('awaiting_official_model'),
+    layout_status: z.literal('layouts_defined'),
     filters: z.record(z.string(), z.string().nullable()),
     sections: z.array(
       z.object({
@@ -386,6 +389,97 @@ export const reportsGenerate = defineOperation({
         label: z.string(),
         state: z.enum(INDICATOR_STATE_KEYS),
         note: z.string().nullable(),
+      })
+    ),
+  }),
+  status: 201,
+  errors: ['not_found', 'validation_failed'],
+});
+
+/* --- relatório patrimonial (REL-11) ------------------------------------- */
+
+export const ASSET_REPORT_SITUATION_KEYS = ['all', 'active', 'maintenance', 'obsolete'] as const;
+const ASSET_STATUS_KEYS = [
+  'active',
+  'under_maintenance',
+  'standby',
+  'loaned',
+  'decommissioned',
+  'disposed',
+] as const;
+
+const AssetReportTotals = z.object({
+  currency: z.string(),
+  assets_with_value: z.number(),
+  purchase_value: z.number(),
+  book_value: z.number(),
+  assets_without_depreciation: z.number(),
+});
+
+export const reportsAssets = defineOperation({
+  operationId: 'reports.assets',
+  method: 'POST',
+  path: '/reports/assets',
+  summary:
+    'Relatório patrimonial: ativos, em manutenção e obsoletos, com depreciação (JSON; `?format=pdf` ou `?format=xlsx`)',
+  description:
+    'O inventário no MESMO recorte da lista de equipamentos (escopo do vínculo), filtrado por cliente e ' +
+    'situação. "Ativos" = em operação, reserva ou emprestados; "em manutenção" = situação cadastrada; ' +
+    '"obsoletos" = baixados ou descartados (com o laudo OBC quando a baixa veio dele). Valor de compra, ' +
+    'residual, NF, depreciação acumulada, valor contábil e os totais em dinheiro só saem com ' +
+    '`asset.read_financials` (a mesma regra da ficha do ativo); sem ela, são nulos e `totals` vem vazio. ' +
+    'Cliente fora do escopo → 404. A geração é leitura: nada é gravado.',
+  permissions: ['insight.read', 'asset.read'],
+  body: z
+    .object({
+      customer_id: Uuid.optional(),
+      situation: z.enum(ASSET_REPORT_SITUATION_KEYS).optional(),
+    })
+    .strict(),
+  response: z.object({
+    generated_at: z.string(),
+    filters: z.object({
+      customer: z.string().nullable(),
+      situation: z.enum(ASSET_REPORT_SITUATION_KEYS),
+    }),
+    counts: z.object({
+      active: z.number(),
+      maintenance: z.number(),
+      obsolete: z.number(),
+      total: z.number(),
+    }),
+    by_status: z.record(z.string(), z.number()),
+    financials_visible: z.boolean(),
+    totals: z.array(AssetReportTotals),
+    assets_without_value: z.number().nullable(),
+    /** Na tela, as primeiras linhas; o PDF e o Excel trazem o recorte inteiro. */
+    items_truncated: z.boolean(),
+    items: z.array(
+      z.object({
+        id: Uuid,
+        name: z.string(),
+        tag: z.string().nullable(),
+        serial_number: z.string().nullable(),
+        asset_number: z.string().nullable(),
+        customer_name: z.string(),
+        location_name: z.string().nullable(),
+        category_name: z.string(),
+        manufacturer_name: z.string().nullable(),
+        model_name: z.string().nullable(),
+        status: z.enum(ASSET_STATUS_KEYS),
+        situation: z.enum(['active', 'maintenance', 'obsolete']),
+        acquired_at: z.string().nullable(),
+        useful_life_years: z.number().nullable(),
+        decommissioned_at: z.string().nullable(),
+        decommission_reason: z.string().nullable(),
+        obsolescence_report: z.string().nullable(),
+        percent_depreciated: z.number().nullable(),
+        currency: z.string().nullable(),
+        acquisition_invoice: z.string().nullable(),
+        purchase_value: z.number().nullable(),
+        residual_value: z.number().nullable(),
+        accumulated_depreciation: z.number().nullable(),
+        book_value: z.number().nullable(),
       })
     ),
   }),

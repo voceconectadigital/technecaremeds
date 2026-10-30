@@ -238,6 +238,50 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
   return id;
 }
 
+/* -------------------------------------------------------------------------- */
+/* foto do equipamento (ATV-07 · 0085)                                         */
+/* -------------------------------------------------------------------------- */
+
+export interface AssetPhotoRecord {
+  key: string;
+  contentType: string;
+  size: number;
+  sha256: string;
+}
+
+/**
+ * Grava (ou troca) os metadados da foto. Os BYTES já foram gravados no
+ * armazenamento por quem chama — com a chave gerada pelo servidor. Devolve a
+ * chave anterior, para quem chama apagá-la DEPOIS da transação: apagar antes e
+ * ver a transação desfeita deixaria o equipamento apontando para o nada.
+ *
+ * Não confere escopo: quem chama confere que o equipamento é visível a quem envia.
+ */
+export async function setAssetPhoto(
+  session: TenantSession,
+  assetId: string,
+  foto: AssetPhotoRecord
+): Promise<{ previousKey: string | null; uploadedAt: string }> {
+  const [antes] = await session.query<{ photo_key: string | null }>(
+    `SELECT photo_key FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+    [assetId]
+  );
+  if (!antes) throw new NotFoundError('Ativo', assetId);
+  const [depois] = await session.query<{ photo_uploaded_at: Date | string }>(
+    `UPDATE aurora.assets
+        SET photo_key = $2, photo_content_type = $3, photo_size = $4, photo_sha256 = $5,
+            photo_uploaded_at = now(), updated_at = now(), updated_by = $6
+      WHERE id = $1
+      RETURNING photo_uploaded_at`,
+    [assetId, foto.key, foto.contentType, foto.size, foto.sha256, session.context.actorId]
+  );
+  const quando = depois!.photo_uploaded_at;
+  return {
+    previousKey: antes.photo_key,
+    uploadedAt: quando instanceof Date ? quando.toISOString() : String(quando),
+  };
+}
+
 /**
  * Transfere o ativo. Único caminho: o gatilho da 0015 recusa edição direta de
  * `location_id` ou `customer_id`.

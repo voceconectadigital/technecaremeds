@@ -15,6 +15,8 @@ import {
   NotFoundError,
   ValidationError,
   isValidCustomerSubtype,
+  contractTermStatus,
+  localDay,
 } from '@aurora/domain';
 import { customersCreate, customersUpdate, customersAddContact, type Customer } from '@aurora/contracts';
 import { newId } from '@aurora/domain';
@@ -40,7 +42,10 @@ interface CustomerListView {
  */
 const SELECT_CUSTOMER = `
   SELECT c.id, c.name, c.trade_name, c.code, c.tax_id, c.is_internal, c.segment, c.kind, c.subtype,
-         c.status::text AS status,
+         c.status::text AS status, c.report_tier,
+         -- Dia de calendário, em texto: "date" virando instante no driver muda de dia no fuso.
+         to_char(c.contract_starts_on, 'YYYY-MM-DD') AS contract_starts_on,
+         to_char(c.contract_ends_on, 'YYYY-MM-DD') AS contract_ends_on,
          (SELECT count(*) FROM aurora.locations l
            WHERE l.customer_id = c.id AND l.deleted_at IS NULL)::int AS location_count,
          (SELECT count(*) FROM aurora.assets a
@@ -98,9 +103,37 @@ function conflitoLegivel(err: unknown): unknown {
   return err;
 }
 
+/**
+ * A situação da vigência (CLI-06), derivada a cada leitura a partir das duas datas e do dia
+ * de hoje no fuso padrão da organização — nunca gravada, porque gravada envelheceria sozinha.
+ */
+function comSituacaoDoContrato(c: Customer): Customer {
+  return {
+    ...c,
+    contract_status: contractTermStatus(c.contract_starts_on, c.contract_ends_on, localDay(new Date())),
+  };
+}
+
+/**
+ * Vigência do contrato: início e fim JUNTOS (ou nenhum), e o fim depois do início. O banco
+ * tem as mesmas regras (0085); aqui elas chegam com o campo nomeado, para o formulário.
+ */
+function conferirVigencia(inicio: string | null | undefined, fim: string | null | undefined): void {
+  if (Boolean(inicio) !== Boolean(fim)) {
+    throw new ValidationError('informe o início e o fim da vigência do contrato juntos (ou nenhum)', {
+      field: inicio ? 'contract_ends_on' : 'contract_starts_on',
+    });
+  }
+  if (inicio && fim && fim <= inicio) {
+    throw new ValidationError('o fim da vigência precisa ser depois do início', {
+      field: 'contract_ends_on',
+    });
+  }
+}
+
 async function lerCliente(s: TenantSession, id: string): Promise<Customer | undefined> {
   const [row] = await s.query<Customer>(`${SELECT_CUSTOMER} WHERE c.id = $1 AND c.deleted_at IS NULL`, [id]);
-  return row;
+  return row ? comSituacaoDoContrato(row) : undefined;
 }
 
 @Controller()
@@ -121,7 +154,7 @@ export class CustomersController {
         [membershipId]
       );
       return {
-        items,
+        items: items.map(comSituacaoDoContrato),
         single_customer: items.length === 1 && items[0]!.is_internal === true,
       };
     });
@@ -144,6 +177,7 @@ export class CustomersController {
   async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<Customer> {
     const b = parseWith(customersCreate.body, body);
     conferirSubtipo(b.kind ?? 'eas', b.subtype);
+    conferirVigencia(b.contract_starts_on, b.contract_ends_on);
     try {
       return await withTenant(this.db, req.auroraContext!, async (s) => {
         const id = await createCustomer(s, {
@@ -154,6 +188,9 @@ export class CustomersController {
           segment: ouNulo(b.segment),
           kind: b.kind ?? 'eas',
           subtype: b.subtype ? b.subtype : null,
+          reportTier: b.report_tier ?? null,
+          contractStartsOn: b.contract_starts_on ?? null,
+          contractEndsOn: b.contract_ends_on ?? null,
         });
         return (await lerCliente(s, id))!;
       });
@@ -190,6 +227,11 @@ export class CustomersController {
         const subtype =
           b.subtype !== undefined ? b.subtype || null : b.kind && b.kind !== atual.kind ? null : undefined;
         conferirSubtipo(kind, subtype);
+        // A vigência é conferida com o que FICA: mandar só o fim confere contra o início gravado.
+        conferirVigencia(
+          b.contract_starts_on !== undefined ? b.contract_starts_on : atual.contract_starts_on,
+          b.contract_ends_on !== undefined ? b.contract_ends_on : atual.contract_ends_on
+        );
         await updateCustomer(s, customerId, {
           name: b.name,
           tradeName: b.trade_name === undefined ? undefined : ouNulo(b.trade_name),
@@ -197,6 +239,9 @@ export class CustomersController {
           taxId: b.tax_id === undefined ? undefined : ouNulo(b.tax_id),
           kind: b.kind,
           subtype,
+          reportTier: b.report_tier,
+          contractStartsOn: b.contract_starts_on,
+          contractEndsOn: b.contract_ends_on,
         });
         return (await lerCliente(s, customerId))!;
       });

@@ -18,10 +18,14 @@
  * `asset.read_internal_notes`. A tela não esconde: o campo vem nulo, e o bloco
  * inteiro deixa de existir. É a diferença entre "não está na tela" e "não
  * saiu do servidor".
+ *
+ * A FOTO DO EQUIPAMENTO (ATV-07) abre a ficha e sai na impressão: é o que faz
+ * a pessoa no setor reconhecer o aparelho sem ler a tag. Os bytes vêm de
+ * `GET /assets/:id/photo`, com o mesmo escopo da ficha.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { BadgeCheck, CalendarDays, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Camera, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
 import {
   Button,
   Card,
@@ -38,6 +42,7 @@ import {
 import {
   assetDetail,
   assetIndicators,
+  assetPhoto,
   assetsLinkQr,
   assetsList,
   workOrdersList,
@@ -83,7 +88,13 @@ export function AtivoPage() {
   return (
     <AppShell
       title={data.name}
-      subtitle={[data.family_name, data.category_name, data.manufacturer_name, data.model_name]
+      subtitle={[
+        data.family_name,
+        // O nome já é o do catálogo (ATV-08): repetir o tipo igual ao título seria ruído.
+        data.category_name !== data.name ? data.category_name : null,
+        data.manufacturer_name,
+        data.model_name,
+      ]
         .filter(Boolean)
         .join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
@@ -124,69 +135,85 @@ export function AtivoPage() {
           useful_life_years: data.useful_life_years ?? null,
           purchase_value: data.purchase_value ?? null,
           acquisition_invoice: data.acquisition_invoice ?? null,
+          sla_enabled: data.sla_enabled ?? true,
+          sla_policy_id: data.sla_policy_id,
+          tem_foto: Boolean(data.photo),
         }}
       />
       <div className="flex flex-col gap-4">
         <Card>
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusChip tone={data.status === 'active' ? 'good' : 'neutral'}>
-                {ROTULO_SITUACAO[data.status] ?? data.status}
-              </StatusChip>
-              {data.under_warranty && (
-                <StatusChip tone="info" size="sm">
-                  <BadgeCheck aria-hidden="true" className="mr-1 inline size-3" />
-                  Na garantia
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
+            <FotoDoEquipamento ativo={data} />
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusChip tone={data.status === 'active' ? 'good' : 'neutral'}>
+                  {ROTULO_SITUACAO[data.status] ?? data.status}
                 </StatusChip>
+                {data.under_warranty && (
+                  <StatusChip tone="info" size="sm">
+                    <BadgeCheck aria-hidden="true" className="mr-1 inline size-3" />
+                    Na garantia
+                  </StatusChip>
+                )}
+                {data.requires_calibration && (
+                  <StatusChip tone="warn" size="sm">
+                    Exige calibração
+                  </StatusChip>
+                )}
+                {data.requires_electrical_test && (
+                  <StatusChip tone="warn" size="sm">
+                    Exige ensaio elétrico
+                  </StatusChip>
+                )}
+                {data.risk_class && (
+                  <StatusChip tone="neutral" size="sm">
+                    <ShieldAlert aria-hidden="true" className="mr-1 inline size-3" />
+                    Classe {data.risk_class}
+                  </StatusChip>
+                )}
+              </div>
+
+              {data.decommissioned_at && (
+                <p className="rounded-control bg-surface-sunken px-3 py-2 text-sm text-muted">
+                  Baixado em {new Date(data.decommissioned_at).toLocaleDateString('pt-BR')}
+                  {data.decommission_reason ? `: ${data.decommission_reason}` : '.'}
+                </p>
               )}
-              {data.requires_calibration && (
-                <StatusChip tone="warn" size="sm">
-                  Exige calibração
-                </StatusChip>
-              )}
-              {data.requires_electrical_test && (
-                <StatusChip tone="warn" size="sm">
-                  Exige ensaio elétrico
-                </StatusChip>
-              )}
-              {data.risk_class && (
-                <StatusChip tone="neutral" size="sm">
-                  <ShieldAlert aria-hidden="true" className="mr-1 inline size-3" />
-                  Classe {data.risk_class}
-                </StatusChip>
-              )}
+
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+                <Info rotulo="Cliente / Hospital" valor={data.customer_name ?? null} />
+                <Info
+                  rotulo="Setor"
+                  valor={data.location_name}
+                  vazio="Sem setor"
+                  icone={<MapPin className="size-3.5" />}
+                />
+                <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
+                <Info rotulo="Número de série" valor={data.serial_number} />
+                <Info
+                  rotulo="Idade"
+                  valor={
+                    data.age_years === null
+                      ? null
+                      : `${data.age_years.toFixed(1)} ${data.age_years === 1 ? 'ano' : 'anos'}`
+                  }
+                  // Nula é diferente de zero: zero diria "novo", e o que se sabe
+                  // aqui é que ninguém informou nenhuma das três datas.
+                  vazio="Sem data de origem"
+                  icone={<CalendarDays className="size-3.5" />}
+                />
+                <Info
+                  rotulo="SLA"
+                  valor={
+                    data.sla_enabled === false
+                      ? 'Desabilitado'
+                      : data.sla_policy_name
+                        ? `Habilitado · ${data.sla_policy_name}`
+                        : 'Habilitado · herdado'
+                  }
+                />
+              </dl>
             </div>
-
-            {data.decommissioned_at && (
-              <p className="rounded-control bg-surface-sunken px-3 py-2 text-sm text-muted">
-                Baixado em {new Date(data.decommissioned_at).toLocaleDateString('pt-BR')}
-                {data.decommission_reason ? `: ${data.decommission_reason}` : '.'}
-              </p>
-            )}
-
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-              <Info rotulo="Cliente / Hospital" valor={data.customer_name ?? null} />
-              <Info
-                rotulo="Setor"
-                valor={data.location_name}
-                vazio="Sem setor"
-                icone={<MapPin className="size-3.5" />}
-              />
-              <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
-              <Info rotulo="Número de série" valor={data.serial_number} />
-              <Info
-                rotulo="Idade"
-                valor={
-                  data.age_years === null
-                    ? null
-                    : `${data.age_years.toFixed(1)} ${data.age_years === 1 ? 'ano' : 'anos'}`
-                }
-                // Nula é diferente de zero: zero diria "novo", e o que se sabe
-                // aqui é que ninguém informou nenhuma das três datas.
-                vazio="Sem data de origem"
-                icone={<CalendarDays className="size-3.5" />}
-              />
-            </dl>
           </div>
         </Card>
 
@@ -316,6 +343,50 @@ export function AtivoPage() {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * A foto do equipamento (ATV-07). Pedida só quando existe; o arquivo vira um
+ * endereço local (`blob:`) que a impressão também leva. Sem foto — o parque
+ * cadastrado antes da exigência —, o quadro diz isso em vez de ficar vazio.
+ */
+function FotoDoEquipamento({ ativo }: { ativo: AssetDetail }) {
+  const temFoto = Boolean(ativo.photo);
+  const { data: arquivo, isError } = useApiQuery(
+    assetPhoto,
+    { params: { id: ativo.id } },
+    { enabled: temFoto, staleTime: 5 * 60_000 }
+  ) as { data: Blob | undefined; isError: boolean };
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!arquivo) {
+      setUrl(null);
+      return;
+    }
+    const endereco = URL.createObjectURL(arquivo);
+    setUrl(endereco);
+    return () => URL.revokeObjectURL(endereco);
+  }, [arquivo]);
+
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={`Foto do equipamento ${ativo.name}`}
+        className="h-40 w-full shrink-0 rounded-card border border-border-subtle object-cover sm:w-40"
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-40 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-border-strong bg-surface-subtle text-center text-xs text-muted sm:w-40"
+      role={temFoto ? undefined : 'note'}
+    >
+      <Camera aria-hidden="true" className="size-5 text-subtle" />
+      {temFoto ? (isError ? 'Foto indisponível' : 'Carregando a foto…') : 'Sem foto cadastrada'}
+    </div>
+  );
+}
 
 /**
  * O histórico de ordens deste equipamento.

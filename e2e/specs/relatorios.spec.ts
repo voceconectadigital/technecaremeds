@@ -15,7 +15,13 @@ test.describe('Relatórios do Painel', () => {
     for (const m of ['Basic', 'Advanced', 'Expert']) {
       await expect(modelos.getByText(m, { exact: true })).toBeVisible();
     }
-    await expect(d.getByText(/AGUARDANDO MODELO PDF OFICIAL/).first()).toBeVisible();
+    // REL-08: nenhum modelo diz mais "aguardando modelo"; PDF e Excel com o nome do nível.
+    await expect(d.getByText(/AGUARDANDO MODELO PDF OFICIAL/)).toHaveCount(0);
+    await expect(d.getByRole('button', { name: 'Baixar PDF' })).toBeVisible();
+    await expect(d.getByRole('button', { name: 'Baixar Excel' })).toBeVisible();
+    // REL-16: o cartão do Expert não cita o órgão nem promete indicador que não é calculado.
+    await expect(modelos.getByText(/FHEMIG/)).toHaveCount(0);
+    await expect(modelos.getByText(/previstos, \d+ com cálculo hoje/)).toBeVisible();
 
     // Basic: o que é ACTIVE vem marcado; o PROVISIONAL vem identificado e desmarcado.
     await expect(d.getByRole('checkbox', { name: /Chamados abertos/ })).toBeChecked();

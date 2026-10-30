@@ -149,6 +149,78 @@ describe('cascata de resolução da política', () => {
     });
   });
 
+  /*
+   * ATV-15 (pedido do cliente, 19/10/2026 · 0085): o SLA de cada equipamento liga e desliga.
+   * Desligado, a cascata devolve nula — e sem política nenhum relógio abre, nem de OS nem de
+   * chamado, mesmo com política no próprio equipamento, no cliente e na organização.
+   */
+  it('SLA DESABILITADO no equipamento: OS e chamado dele não abrem relógio', async () => {
+    await withTenant(t.db, ctx, async (s) => {
+      await s.query(`UPDATE aurora.customers SET default_sla_policy_id = $1 WHERE id = $2`, [
+        politica,
+        cliente,
+      ]);
+      await s.query(`UPDATE aurora.assets SET sla_enabled = false, sla_policy_id = $1 WHERE id = $2`, [
+        politicaVip,
+        ativo,
+      ]);
+    });
+    try {
+      const [resolvida] = await withTenant(t.db, ctx, (s) =>
+        s.query<{ id: string | null }>(`SELECT aurora.resolve_sla_policy($1, $2) AS id`, [ativo, cliente])
+      );
+      expect(resolvida!.id).toBeNull();
+
+      const os = await novaOs();
+      expect(await withTenant(t.db, ctx, (s) => slaStatus(s, 'work_order', os.id))).toEqual([]);
+
+      const pedido = await withTenant(t.db, ctx, (s) =>
+        createServiceRequest(s, {
+          customerId: cliente,
+          summary: 'Chamado de equipamento sem SLA',
+          locationId: setor,
+          assetId: ativo,
+          requestedPriority: 'urgent',
+        })
+      );
+      expect(await withTenant(t.db, ctx, (s) => slaStatus(s, 'service_request', pedido.id))).toEqual([]);
+
+      // O desligamento é do EQUIPAMENTO: OS sem equipamento, do mesmo cliente, segue com relógio.
+      const semAtivo = await novaOs('urgent', { assetId: null });
+      const relogios = await withTenant(t.db, ctx, (s) => slaStatus(s, 'work_order', semAtivo.id));
+      expect(relogios.map((r) => r.kind).sort()).toEqual(['onsite', 'resolution']);
+    } finally {
+      await withTenant(t.db, ctx, async (s) => {
+        await s.query(`UPDATE aurora.assets SET sla_enabled = true, sla_policy_id = NULL WHERE id = $1`, [
+          ativo,
+        ]);
+        await s.query(`UPDATE aurora.customers SET default_sla_policy_id = NULL WHERE id = $1`, [cliente]);
+      });
+    }
+  });
+
+  it('SLA HABILITADO no equipamento: a política própria dele vale e o relógio abre', async () => {
+    await withTenant(t.db, ctx, (s) =>
+      s.query(`UPDATE aurora.assets SET sla_enabled = true, sla_policy_id = $1 WHERE id = $2`, [
+        politicaVip,
+        ativo,
+      ])
+    );
+    try {
+      const os = await novaOs();
+      expect(await withTenant(t.db, ctx, (s) => slaPolicySnapshot(s, 'work_order', os.id))).toBe(
+        'Equipamento crítico'
+      );
+      const relogios = await withTenant(t.db, ctx, (s) => slaStatus(s, 'work_order', os.id));
+      expect(relogios.map((r) => r.kind)).toEqual(['resolution']);
+      expect(relogios[0]!.state).toBe('running');
+    } finally {
+      await withTenant(t.db, ctx, (s) =>
+        s.query(`UPDATE aurora.assets SET sla_policy_id = NULL WHERE id = $1`, [ativo])
+      );
+    }
+  });
+
   it('prioridade sem alvo declarado não cria relógio — e isso é legítimo', async () => {
     const os = await novaOs('low');
     const relogios = await withTenant(t.db, ctx, (s) => slaStatus(s, 'work_order', os.id));

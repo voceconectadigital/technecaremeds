@@ -14,7 +14,8 @@
  * O QUE ELE NÃO FAZ
  *
  * Não embute fonte (usa Helvetica, uma das 14 fontes-padrão que todo leitor
- * tem), não desenha imagem, não assina digitalmente. Caractere fora do
+ * tem), não desenha imagem (gráfico, tabela e cartão de indicador são vetoriais),
+ * não assina digitalmente. Caractere fora do
  * WinAnsi (o latim do português cabe inteiro) vira "?": um PDF que troca um
  * símbolo raro por "?" é feio; um que quebra é inútil.
  */
@@ -36,6 +37,8 @@ export interface LinhaPdf {
   tabela?: TabelaPdf;
   /** Linhas de assinatura lado a lado, no lugar do texto. */
   assinaturas?: AssinaturaPdf[];
+  /** Cartões de indicador (o "painel" do relatório), três por fileira, no lugar do texto. */
+  cartoes?: CartaoPdf[];
   /** Começa uma página nova antes desta linha. */
   quebraDePagina?: boolean;
 }
@@ -76,6 +79,20 @@ export interface TabelaPdf {
 export interface AssinaturaPdf {
   nome: string;
   cargo: string;
+}
+
+/**
+ * Cartão de indicador: rótulo, valor em destaque e uma linha de situação, com a faixa lateral na
+ * cor do tom. O tom é decidido por quem monta (meta atendida, não atendida, provisório, pendente):
+ * o escritor só desenha.
+ */
+export interface CartaoPdf {
+  rotulo: string;
+  valor: string;
+  detalhe?: string;
+  tom: 'bom' | 'ruim' | 'aviso' | 'neutro';
+  /** Barra de 0 a 100 (percentual), com a marca da meta quando houver. */
+  barra?: { valor: number; meta: number | null };
 }
 
 export interface OpcoesPdf {
@@ -199,6 +216,60 @@ const fmt = (v: number, casas: number) =>
 
 const AZUL = '0.16 0.38 0.65';
 const VERMELHO = '0.80 0.18 0.18';
+const VERDE = '0.16 0.55 0.33';
+const AMBAR = '0.85 0.55 0.10';
+const CINZA = '0.60 0.62 0.66';
+const COR_DO_TOM: Record<CartaoPdf['tom'], string> = {
+  bom: VERDE,
+  ruim: VERMELHO,
+  aviso: AMBAR,
+  neutro: CINZA,
+};
+
+export const ALTURA_DO_CARTAO = 64;
+
+/** Operadores de UMA fileira de cartões que começa em yTopo. */
+export function desenharCartoes(
+  cartoes: readonly CartaoPdf[],
+  x0: number,
+  yTopo: number,
+  larg: number
+): string[] {
+  const ops: string[] = [];
+  const porFileira = 3;
+  const vao = 8;
+  const w = (larg - vao * (porFileira - 1)) / porFileira;
+  const h = ALTURA_DO_CARTAO;
+  cartoes.slice(0, porFileira).forEach((c, i) => {
+    const x = x0 + i * (w + vao);
+    const y = yTopo - h;
+    const cor = COR_DO_TOM[c.tom];
+    ops.push(`q 0.965 0.97 0.98 rg ${num(x)} ${num(y)} ${num(w)} ${num(h)} re f Q`);
+    ops.push(`q 0.85 G 0.4 w ${num(x)} ${num(y)} ${num(w)} ${num(h)} re S Q`);
+    ops.push(`q ${cor} rg ${num(x)} ${num(y)} 3 ${num(h)} re f Q`);
+    const [r1, r2] = quebrar(c.rotulo, 7, w - 14, 0.56);
+    ops.push(escrever('F1', 7, x + 9, yTopo - 11, r1 ?? ''));
+    if (r2) ops.push(escrever('F1', 7, x + 9, yTopo - 19.5, r2));
+    ops.push(escrever('F2', 15, x + 9, yTopo - 38, c.valor.slice(0, 18)));
+    if (c.detalhe) {
+      const [d1] = quebrar(c.detalhe, 6.5, w - 14, 0.56);
+      ops.push(`q ${cor} rg BT /F1 6.5 Tf ${num(x + 9)} ${num(y + 8)} Td ${literal(d1 ?? '')} Tj ET Q`);
+    }
+    if (c.barra) {
+      const bx = x + 9;
+      const bw = w - 18;
+      const by = y + 18;
+      const v = Math.max(0, Math.min(100, c.barra.valor));
+      ops.push(`q 0.88 g ${num(bx)} ${num(by)} ${num(bw)} 3.5 re f Q`);
+      ops.push(`q ${cor} rg ${num(bx)} ${num(by)} ${num((bw * v) / 100)} 3.5 re f Q`);
+      if (c.barra.meta !== null && Number.isFinite(c.barra.meta)) {
+        const mx = bx + (bw * Math.max(0, Math.min(100, c.barra.meta))) / 100;
+        ops.push(`q 0.2 G 0.8 w ${num(mx)} ${num(by - 1.5)} m ${num(mx)} ${num(by + 5)} l S Q`);
+      }
+    }
+  });
+  return ops;
+}
 
 /** Operadores de um gráfico de linha que ocupa [x0, x0+larg] × [yTopo-alt, yTopo]. */
 export function desenharGrafico(
@@ -370,6 +441,15 @@ export function gerarPdf(linhas: readonly LinhaPdf[], opcoes: OpcoesPdf): Buffer
         y -= h;
       }
       y -= 6;
+      continue;
+    }
+    if (l.cartoes) {
+      y -= l.espacoAntes ?? 4;
+      for (let i = 0; i < l.cartoes.length; i += 3) {
+        if (y - ALTURA_DO_CARTAO < fundo) novaPagina();
+        atual.push(...desenharCartoes(l.cartoes.slice(i, i + 3), MARGEM, y, larguraUtil));
+        y -= ALTURA_DO_CARTAO + 8;
+      }
       continue;
     }
     if (l.assinaturas) {

@@ -10,11 +10,21 @@
 import { defineOperation } from '../registry';
 import { z, Uuid, Timestamp } from '../primitives';
 
-export const STORE_ORDER_STATUSES = ['requested', 'confirmed', 'shipped', 'delivered', 'cancelled'] as const;
+/** "separated" (0084) é opcional: do confirmado pode-se despachar direto. */
+export const STORE_ORDER_STATUSES = [
+  'requested',
+  'confirmed',
+  'separated',
+  'shipped',
+  'delivered',
+  'cancelled',
+] as const;
 export const STORE_ORDER_STATUS_LABELS: Record<(typeof STORE_ORDER_STATUSES)[number], string> = {
   requested: 'Pedido feito',
-  confirmed: 'Confirmado',
-  shipped: 'A caminho',
+  // Os nomes do cliente (23/10): "aprovado, sendo separado, em trânsito, entregue".
+  confirmed: 'Aprovado',
+  separated: 'Separado',
+  shipped: 'Em trânsito',
   delivered: 'Entregue',
   cancelled: 'Cancelado',
 };

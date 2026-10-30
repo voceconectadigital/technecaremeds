@@ -112,3 +112,13 @@ Código: `apps/api/src/insights/relatorio-oficial.ts` (texto e montagem), `apps/
 - no ACM, "Regulares 1.743" é o mesmo número de "Realizadas" do ICRS, e com "Atrasado 1.700" não consegui reconstruir os 97,53 % (a extração do PDF é de painel, e posso estar lendo os rótulos trocados).
 
 Por isso as perguntas P-01 a P-16 continuam necessárias, e nenhum item do IMR além do 13 e do 15 foi calculado.
+
+## 6. Atualização de 29/10/2026: pedidos do WhatsApp de 19/10 (REL-01, 08, 10, 11, 16)
+
+| Pedido | O que foi feito |
+| --- | --- |
+| REL-08 — Basic com layout profissional | O PDF Basic usa o padrão visual do Advanced: cabeçalho, painel de cartões (um por indicador, com a situação da meta e barra para percentual), texto e gráfico de 12 meses por indicador, lista dos pendentes de definição (sem número) e assinaturas. A faixa "AGUARDANDO MODELO PDF OFICIAL" saiu da tela, do PDF e do relatório agendado. O modelo Basic do cliente (Lagoa Santa) continua não enviado. |
+| REL-01 — nomenclatura | Botões "Baixar PDF" / "Baixar Excel"; título e rodapé "Relatório Basic/Advanced/Expert". O aviso do Advanced diz que segue o modelo de relatório do cliente. |
+| REL-16 — cartão do Expert | Sem "FHEMIG" (nem nas notas do catálogo). O texto é contado do catálogo: "17 previstos, 2 com cálculo hoje; os que dependem das fórmulas do cliente aparecem como pendentes". "17+ em tempo real" não foi escrito porque 15 dos 17 não têm cálculo. |
+| REL-10 — Excel | `?format=xlsx` em `POST /reports/generate` (abas Indicadores, Série mensal e Filtros) e em `POST /reports/assets`. Gerador próprio (`apps/api/src/documents/xlsx.ts`), sem dependência nova. Pendente sai como o texto "Pendente de definição". |
+| REL-11 — patrimonial | `POST /reports/assets` (JSON, PDF, Excel) e a aba "Patrimonial" do diálogo. Ativos = em operação, reserva ou emprestados; em manutenção = situação cadastrada; obsoletos = baixados ou descartados (com o laudo OBC). Valores e totais só com `asset.read_financials`. |

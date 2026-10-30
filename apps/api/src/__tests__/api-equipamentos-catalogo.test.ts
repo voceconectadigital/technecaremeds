@@ -31,6 +31,8 @@ import {
 import { loadEnv } from '@aurora/config';
 import { assetsFormOptions, assetsList } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
+import { armazenamentoEmMemoria } from '../common/arquivos/memoria';
+import { FOTO_PNG } from './apoio/foto';
 
 const ORG_A = newId();
 const ORG_B = newId();
@@ -160,7 +162,7 @@ beforeAll(async () => {
     NODE_ENV: 'test',
     AURORA_LOG_LEVEL: 'fatal',
   } as NodeJS.ProcessEnv);
-  app = await createApp({ db: t.db, env });
+  app = await createApp({ db: t.db, env, arquivos: armazenamentoEmMemoria() });
   await app.init();
   http = request(app.getHttpServer());
 }, 120_000);
@@ -250,6 +252,7 @@ describe('cliente → setor → equipamento, com chip', () => {
       asset_number: 'PAT-0003',
       tracker_kind: 'gps',
       tracker_tag: 'GPS-000123',
+      photo: FOTO_PNG,
     });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     ativoUti = r.body.id;
@@ -281,6 +284,7 @@ describe('cliente → setor → equipamento, com chip', () => {
       useful_life_years: 10,
       purchase_value: 25000.5,
       acquisition_invoice: 'NF-123456',
+      photo: FOTO_PNG,
     });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     const ficha = await http.get(`/v1/assets/${r.body.id}`).set(auth(GESTORA));
@@ -351,7 +355,12 @@ describe('cliente → setor → equipamento, com chip', () => {
   });
 
   it('verificação ANVISA: registra quem/quando/o quê, exige descrição no alerta e emite o aviso; sem registro cadastrado, 409', async () => {
-    const base = { customer_id: hospital, location_id: uti, asset_category_id: tipoVentilador };
+    const base = {
+      customer_id: hospital,
+      location_id: uti,
+      asset_category_id: tipoVentilador,
+      photo: FOTO_PNG,
+    };
     const com = await http
       .post('/v1/assets')
       .set(auth(GESTORA))
@@ -415,7 +424,12 @@ describe('cliente → setor → equipamento, com chip', () => {
   });
 
   it('chip repetido → 409; chip pela metade → 422', async () => {
-    const base = { customer_id: hospital, location_id: uti, asset_category_id: tipoVentilador };
+    const base = {
+      customer_id: hospital,
+      location_id: uti,
+      asset_category_id: tipoVentilador,
+      photo: FOTO_PNG,
+    };
     const dup = await http
       .post('/v1/assets')
       .set(auth(GESTORA))

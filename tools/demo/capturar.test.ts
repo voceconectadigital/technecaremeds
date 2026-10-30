@@ -159,6 +159,7 @@ it('captura as respostas da demonstração', async () => {
     to: `${dia(0)}T23:59:59.999Z`,
   });
   await ler(C.storeItemsList);
+  await ler(C.storeCatalogList);
 
   /* -------------------------------------------------------- comercial */
   const contratos = await ler<ComId>(C.contractsList, null, {});

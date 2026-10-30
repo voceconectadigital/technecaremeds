@@ -23,8 +23,13 @@
  *     (aparece só no catálogo, com o motivo). Nada aqui é inventado: a
  *     fórmula de um indicador pendente não existe no código.
  *
- * O layout final dos PDFs continua AGUARDANDO MODELO PDF OFICIAL.
+ * LAYOUT DOS PDFs (29/10/2026): o Advanced segue o modelo "Completo" do cliente, o
+ * Basic usa o mesmo padrão visual (painel de cartões + gráficos de 12 meses; o
+ * modelo Basic do cliente não foi enviado) e o Expert é a casca do IMR. Nenhum
+ * deles sai mais com a faixa de "aguardando modelo".
  */
+import { isRetired, type AssetStatus } from './assets';
+
 export const REPORT_TIERS = ['basic', 'advanced', 'expert'] as const;
 export type ReportTier = (typeof REPORT_TIERS)[number];
 
@@ -74,8 +79,12 @@ export interface ReportIndicator {
   readonly note?: string;
 }
 
-export const REPORT_LAYOUT_STATUS = 'awaiting_official_model' as const;
-export const AGUARDANDO_MODELO = 'AGUARDANDO MODELO PDF OFICIAL';
+/**
+ * Situação do layout dos PDFs. Era `awaiting_official_model` até 29/10/2026 (REL-08), quando o
+ * Basic ganhou o padrão visual do Advanced. O valor antigo continua só como `status` legado das
+ * seções gravadas em relatórios agendados antigos.
+ */
+export const REPORT_LAYOUT_STATUS = 'layouts_defined' as const;
 
 export function legacyStatusOf(state: IndicatorState): LegacyIndicatorStatus {
   return state === 'PENDING_DEFINITION' ? 'awaiting_definition' : 'available';
@@ -87,7 +96,8 @@ const BAE: readonly ReportTier[] = ['basic', 'advanced', 'expert'];
 const BE: readonly ReportTier[] = ['basic', 'expert'];
 const E: readonly ReportTier[] = ['expert'];
 
-const IMR = 'Indicador do IMR (FHEMIG) — fórmula aguardando definição do cliente.';
+// Sem o nome do órgão: a nota aparece na tela de escolha do relatório (REL-16, 19/10/2026).
+const IMR = 'Indicador do IMR — fórmula aguardando definição do cliente.';
 
 export const REPORT_INDICATORS: readonly ReportIndicator[] = Object.freeze([
   // --- volume --------------------------------------------------------------
@@ -482,4 +492,56 @@ export function findIndicator(key: string): ReportIndicator | undefined {
 
 export function isReportTier(v: unknown): v is ReportTier {
   return typeof v === 'string' && (REPORT_TIERS as readonly string[]).includes(v);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Relatório PATRIMONIAL (REL-11, WhatsApp 19/10/2026)                         */
+/* -------------------------------------------------------------------------- */
+
+/** Rótulo pt-BR da situação cadastrada do ativo (o mesmo da lista e da ficha). */
+export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
+  active: 'Em operação',
+  under_maintenance: 'Em manutenção',
+  standby: 'Reserva',
+  loaned: 'Emprestado',
+  decommissioned: 'Baixado',
+  disposed: 'Descartado',
+};
+
+/**
+ * As três situações do relatório patrimonial ("opção de ativos, em manutenção e obsoletos"),
+ * derivadas da situação CADASTRADA do ativo — nada é inferido:
+ *
+ *   · ativos — em uso: em operação, reserva ou emprestado;
+ *   · em manutenção — a situação cadastrada "em manutenção" (não se deduz de OS aberta);
+ *   · obsoletos — fora de operação: baixado ou descartado (pelo laudo de obsolescência OBC ou
+ *     por baixa direta; o relatório mostra o número do laudo quando a baixa veio dele).
+ */
+export const ASSET_REPORT_SITUATIONS = ['all', 'active', 'maintenance', 'obsolete'] as const;
+export type AssetReportSituation = (typeof ASSET_REPORT_SITUATIONS)[number];
+
+export const ASSET_REPORT_SITUATION_STATUSES: Record<
+  Exclude<AssetReportSituation, 'all'>,
+  readonly AssetStatus[]
+> = {
+  active: ['active', 'standby', 'loaned'],
+  maintenance: ['under_maintenance'],
+  obsolete: ['decommissioned', 'disposed'],
+};
+
+export const ASSET_REPORT_SITUATION_LABELS: Record<AssetReportSituation, string> = {
+  all: 'Todos',
+  active: 'Ativos',
+  maintenance: 'Em manutenção',
+  obsolete: 'Obsoletos',
+};
+
+/** A frase que o relatório imprime para explicar a derivação. */
+export const ASSET_REPORT_SITUATION_NOTE =
+  'Ativos: em operação, reserva ou emprestados. Em manutenção: situação cadastrada "em manutenção". ' +
+  'Obsoletos: fora de operação (baixados ou descartados), com o laudo OBC quando a baixa veio dele.';
+
+export function assetReportSituationOf(status: AssetStatus): Exclude<AssetReportSituation, 'all'> {
+  if (status === 'under_maintenance') return 'maintenance';
+  return isRetired(status) ? 'obsolete' : 'active';
 }

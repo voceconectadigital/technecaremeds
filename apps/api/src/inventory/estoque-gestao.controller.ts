@@ -20,6 +20,8 @@ import {
   abcCurve,
   stockPeriodReport,
   storeItems,
+  listStoreCatalog,
+  setStoreItemAudience,
   requestStoreQuote,
   type Database,
 } from '@aurora/db';
@@ -32,6 +34,7 @@ import {
   inventoryPeriodReport,
   inventoryReceipts,
   inventoryWarehousesCreate,
+  storeItemAudience,
   storeRequestQuote,
 } from '@aurora/contracts';
 import { RequirePermissions } from '../common/permissions.guard';
@@ -200,13 +203,32 @@ export class EstoqueGestaoController {
   @Get('store/items')
   @RequirePermissions('store.read')
   async store(@Req() req: AuroraRequest) {
-    const itens = await withTenant(this.db, req.auroraContext!, (s) => storeItems(s));
+    const ctx = req.auroraContext!;
+    // Filtrado pelo público de cada item (0084): o cliente fora da seleção não vê o item reservado.
+    const itens = await withTenant(this.db, ctx, (s) => storeItems(s, ctx.membershipId ?? null));
     return {
       items: itens.map(({ image_key, ...resto }) => ({
         ...resto,
         image_url: image_key ? `/${image_key.replace(/^\/+/, '')}` : null,
       })),
     };
+  }
+
+  /** A gestão do catálogo: o dono da Store vê tudo, publicado ou não, com o público de cada item. */
+  @Get('store/catalog')
+  @RequirePermissions('inventory.update')
+  async catalog(@Req() req: AuroraRequest) {
+    return { items: await withTenant(this.db, req.auroraContext!, (s) => listStoreCatalog(s)) };
+  }
+
+  @Put('store/items/:id/audience')
+  @RequirePermissions('inventory.update')
+  async audience(@Req() req: AuroraRequest, @Param('id') id: string, @Body() body: unknown) {
+    const b = parseWith(storeItemAudience.body, body);
+    await withTenant(this.db, req.auroraContext!, (s) =>
+      setStoreItemAudience(s, uuidParam(id, 'id'), { audience: b.audience, customerIds: b.customer_ids })
+    );
+    return { ok: true as const };
   }
 
   @Post('store/requests')

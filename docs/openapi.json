@@ -1118,6 +1118,271 @@
         ]
       }
     },
+    "/v1/assets/{id}/photo": {
+      "get": {
+        "operationId": "assets.photo",
+        "summary": "A foto do equipamento (os bytes da imagem)",
+        "description": "Mesma autorização e mesmo escopo da ficha: equipamento fora do escopo (ou de outra organização) responde 404, igual a equipamento sem foto. Servida com `nosniff`.",
+        "tags": [
+          "Assets"
+        ],
+        "x-aurora-permissions": [
+          "asset.read"
+        ],
+        "x-aurora-source": "apps/api/src/assets/assets.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "assets.photoUpload",
+        "summary": "Envia (ou troca) a foto do equipamento",
+        "description": "Para o parque cadastrado antes da foto obrigatória e para trocar a foto. PNG, JPEG ou WebP até 8 MB, conferidos pelos bytes; a foto anterior sai do armazenamento.",
+        "tags": [
+          "Assets"
+        ],
+        "x-aurora-permissions": [
+          "asset.update"
+        ],
+        "x-aurora-source": "apps/api/src/assets/assets.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "photo": {
+                    "type": "object",
+                    "properties": {
+                      "content_type": {
+                        "type": "string",
+                        "enum": [
+                          "image/png",
+                          "image/jpeg",
+                          "image/webp"
+                        ]
+                      },
+                      "data_base64": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 11184816,
+                        "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+                      }
+                    },
+                    "required": [
+                      "content_type",
+                      "data_base64"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "photo"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "photo": {
+                      "type": "object",
+                      "properties": {
+                        "content_type": {
+                          "type": "string",
+                          "enum": [
+                            "image/png",
+                            "image/jpeg",
+                            "image/webp"
+                          ]
+                        },
+                        "size": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "sha256": {
+                          "type": "string"
+                        },
+                        "uploaded_at": {
+                          "description": "Instante em ISO 8601 com fuso horário",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "content_type",
+                        "size",
+                        "sha256",
+                        "uploaded_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "photo"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/assets/{id}/qr": {
       "post": {
         "operationId": "assets.linkQr",
@@ -2153,6 +2418,57 @@
                         }
                       ]
                     },
+                    "sla_enabled": {
+                      "type": "boolean"
+                    },
+                    "sla_policy_name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "photo": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "content_type": {
+                              "type": "string",
+                              "enum": [
+                                "image/png",
+                                "image/jpeg",
+                                "image/webp"
+                              ]
+                            },
+                            "size": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "uploaded_at": {
+                              "description": "Instante em ISO 8601 com fuso horário",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "content_type",
+                            "size",
+                            "sha256",
+                            "uploaded_at"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "specs": {
                       "type": "object",
                       "propertyNames": {
@@ -2733,6 +3049,22 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "sla_enabled": {
+                    "type": "boolean"
+                  },
+                  "sla_policy_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -3034,6 +3366,31 @@
                           "id",
                           "name",
                           "score"
+                        ]
+                      }
+                    },
+                    "sla_policies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "is_default": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "is_default"
                         ]
                       }
                     }
@@ -3778,6 +4135,22 @@
                       }
                     ]
                   },
+                  "sla_enabled": {
+                    "type": "boolean"
+                  },
+                  "sla_policy_id": {
+                    "anyOf": [
+                      {
+                        "description": "Identificador UUID",
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "customer_id": {
                     "description": "Identificador UUID",
                     "type": "string",
@@ -3789,6 +4162,30 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "photo": {
+                    "type": "object",
+                    "properties": {
+                      "content_type": {
+                        "type": "string",
+                        "enum": [
+                          "image/png",
+                          "image/jpeg",
+                          "image/webp"
+                        ]
+                      },
+                      "data_base64": {
+                        "type": "string",
+                        "minLength": 8,
+                        "maxLength": 11184816,
+                        "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+                      }
+                    },
+                    "required": [
+                      "content_type",
+                      "data_base64"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -3796,7 +4193,8 @@
                   "asset_category_id",
                   "tag",
                   "customer_id",
-                  "location_id"
+                  "location_id",
+                  "photo"
                 ]
               }
             }
@@ -10518,6 +10916,51 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "report_tier": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "basic",
+                                "advanced",
+                                "expert"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "contract_starts_on": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "contract_ends_on": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "contract_status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "expiring",
+                            "expired",
+                            "not_started",
+                            "not_informed"
+                          ]
                         }
                       },
                       "required": [
@@ -10702,7 +11145,7 @@
       "patch": {
         "operationId": "customers.update",
         "summary": "Edita o cadastro de um cliente",
-        "description": "Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa) e subtipo. Só o que vier no corpo muda. Cliente fora do escopo responde 404. O subtipo precisa ser da lista do tipo escolhido.",
+        "description": "Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa), subtipo, relatório incluso no contrato e vigência do contrato. Só o que vier no corpo muda; `null` limpa. Cliente fora do escopo responde 404. O subtipo precisa ser da lista do tipo escolhido. A vigência tem início e fim juntos (ou nenhum), e o fim vem depois do início.",
         "tags": [
           "Customers"
         ],
@@ -10760,6 +11203,43 @@
                       {
                         "type": "string",
                         "maxLength": 40
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "report_tier": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "basic",
+                          "advanced",
+                          "expert"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contract_starts_on": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contract_ends_on": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                       },
                       {
                         "type": "null"
@@ -10863,6 +11343,51 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "report_tier": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "basic",
+                            "advanced",
+                            "expert"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_starts_on": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_ends_on": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "expiring",
+                        "expired",
+                        "not_started",
+                        "not_informed"
+                      ]
                     }
                   },
                   "required": [
@@ -11058,6 +11583,51 @@
                             "type": "integer",
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
+                          },
+                          "report_tier": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "basic",
+                                  "advanced",
+                                  "expert"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "contract_starts_on": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "contract_ends_on": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "contract_status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "expiring",
+                              "expired",
+                              "not_started",
+                              "not_informed"
+                            ]
                           }
                         },
                         "required": [
@@ -11191,6 +11761,43 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "report_tier": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "basic",
+                          "advanced",
+                          "expert"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contract_starts_on": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "contract_ends_on": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -11292,6 +11899,51 @@
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
+                    },
+                    "report_tier": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "basic",
+                            "advanced",
+                            "expert"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_starts_on": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_ends_on": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "contract_status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "expiring",
+                        "expired",
+                        "not_started",
+                        "not_informed"
+                      ]
                     }
                   },
                   "required": [
@@ -42058,11 +42710,495 @@
         ]
       }
     },
+    "/v1/reports/assets": {
+      "post": {
+        "operationId": "reports.assets",
+        "summary": "Relatório patrimonial: ativos, em manutenção e obsoletos, com depreciação (JSON; `?format=pdf` ou `?format=xlsx`)",
+        "description": "O inventário no MESMO recorte da lista de equipamentos (escopo do vínculo), filtrado por cliente e situação. \"Ativos\" = em operação, reserva ou emprestados; \"em manutenção\" = situação cadastrada; \"obsoletos\" = baixados ou descartados (com o laudo OBC quando a baixa veio dele). Valor de compra, residual, NF, depreciação acumulada, valor contábil e os totais em dinheiro só saem com `asset.read_financials` (a mesma regra da ficha do ativo); sem ela, são nulos e `totals` vem vazio. Cliente fora do escopo → 404. A geração é leitura: nada é gravado.",
+        "tags": [
+          "Reports"
+        ],
+        "x-aurora-permissions": [
+          "insight.read",
+          "asset.read"
+        ],
+        "x-aurora-source": "apps/api/src/insights/reports.controller.ts",
+        "x-aurora-permission-note": "rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado. Valores financeiros só com asset.read_financials",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "customer_id": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "situation": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "active",
+                      "maintenance",
+                      "obsolete"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "generated_at": {
+                      "type": "string"
+                    },
+                    "filters": {
+                      "type": "object",
+                      "properties": {
+                        "customer": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "situation": {
+                          "type": "string",
+                          "enum": [
+                            "all",
+                            "active",
+                            "maintenance",
+                            "obsolete"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "customer",
+                        "situation"
+                      ]
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "active": {
+                          "type": "number"
+                        },
+                        "maintenance": {
+                          "type": "number"
+                        },
+                        "obsolete": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "active",
+                        "maintenance",
+                        "obsolete",
+                        "total"
+                      ]
+                    },
+                    "by_status": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "number"
+                      }
+                    },
+                    "financials_visible": {
+                      "type": "boolean"
+                    },
+                    "totals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "currency": {
+                            "type": "string"
+                          },
+                          "assets_with_value": {
+                            "type": "number"
+                          },
+                          "purchase_value": {
+                            "type": "number"
+                          },
+                          "book_value": {
+                            "type": "number"
+                          },
+                          "assets_without_depreciation": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "currency",
+                          "assets_with_value",
+                          "purchase_value",
+                          "book_value",
+                          "assets_without_depreciation"
+                        ]
+                      }
+                    },
+                    "assets_without_value": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "items_truncated": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "tag": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "serial_number": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "asset_number": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "customer_name": {
+                            "type": "string"
+                          },
+                          "location_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "category_name": {
+                            "type": "string"
+                          },
+                          "manufacturer_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "model_name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "under_maintenance",
+                              "standby",
+                              "loaned",
+                              "decommissioned",
+                              "disposed"
+                            ]
+                          },
+                          "situation": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "maintenance",
+                              "obsolete"
+                            ]
+                          },
+                          "acquired_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "useful_life_years": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "decommissioned_at": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "decommission_reason": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "obsolescence_report": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "percent_depreciated": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "currency": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "acquisition_invoice": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "purchase_value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "residual_value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "accumulated_depreciation": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "book_value": {
+                            "anyOf": [
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "tag",
+                          "serial_number",
+                          "asset_number",
+                          "customer_name",
+                          "location_name",
+                          "category_name",
+                          "manufacturer_name",
+                          "model_name",
+                          "status",
+                          "situation",
+                          "acquired_at",
+                          "useful_life_years",
+                          "decommissioned_at",
+                          "decommission_reason",
+                          "obsolescence_report",
+                          "percent_depreciated",
+                          "currency",
+                          "acquisition_invoice",
+                          "purchase_value",
+                          "residual_value",
+                          "accumulated_depreciation",
+                          "book_value"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "generated_at",
+                    "filters",
+                    "counts",
+                    "by_status",
+                    "financials_visible",
+                    "totals",
+                    "assets_without_value",
+                    "items_truncated",
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/reports/catalog": {
       "get": {
         "operationId": "reports.catalog",
         "summary": "Catálogo central de indicadores e os modelos Basic, Advanced e Expert",
-        "description": "Fonte única da definição dos indicadores: código, unidade, categoria, modelos permitidos, situação (ACTIVE, PROVISIONAL, PENDING_DEFINITION) e sentido da meta. Indicador PENDING_DEFINITION aparece só aqui, com o motivo: não entra em relatório e não tem número inventado. O layout final dos PDFs está AGUARDANDO MODELO PDF OFICIAL.",
+        "description": "Fonte única da definição dos indicadores: código, unidade, categoria, modelos permitidos, situação (ACTIVE, PROVISIONAL, PENDING_DEFINITION) e sentido da meta. Indicador PENDING_DEFINITION aparece só aqui, com o motivo: não entra em relatório e não tem número inventado. Layout dos PDFs: o Advanced segue o modelo do cliente, o Basic o mesmo padrão visual, e o Expert é a casca do IMR.",
         "tags": [
           "Reports"
         ],
@@ -42203,7 +43339,7 @@
                     },
                     "layout_status": {
                       "type": "string",
-                      "const": "awaiting_official_model"
+                      "const": "layouts_defined"
                     },
                     "layout_note": {
                       "type": "string"
@@ -42270,8 +43406,8 @@
     "/v1/reports/generate": {
       "post": {
         "operationId": "reports.generate",
-        "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF) sobre os dados reais do Painel",
-        "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, `target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404.",
+        "summary": "Gera o relatório (JSON; `?format=pdf` para o PDF, `?format=xlsx` para a planilha) sobre os dados reais do Painel",
+        "description": "Mesmas funções de indicador do Painel, com o filtro escopado pelo vínculo. Período até 400 dias. Sem `indicators`, entram só os ACTIVE; PROVISIONAL só pedido explicitamente (sai marcado); PENDING_DEFINITION nunca entra (422) e é listado em `pending`. A meta de cada indicador é a mais específica em vigor (contrato → cliente → organização) no último dia do período; sem meta, `target_label` = SEM META CONFIGURADA. `contract_id` escolhe a meta do contrato. Indicadores fora do modelo escolhido → 422. Cliente fora do escopo → 404. Em `?format=xlsx` (Excel), as abas são Indicadores, Série mensal (Basic e Advanced) e Filtros; indicador pendente sai como o texto \"Pendente de definição\", nunca como número.",
         "tags": [
           "Reports"
         ],
@@ -42407,7 +43543,7 @@
                     },
                     "layout_status": {
                       "type": "string",
-                      "const": "awaiting_official_model"
+                      "const": "layouts_defined"
                     },
                     "filters": {
                       "type": "object",
@@ -45378,6 +46514,7 @@
                       "enum": [
                         "requested",
                         "confirmed",
+                        "separated",
                         "shipped",
                         "delivered",
                         "cancelled"
@@ -45653,6 +46790,7 @@
                     "enum": [
                       "requested",
                       "confirmed",
+                      "separated",
                       "shipped",
                       "delivered",
                       "cancelled"
@@ -45689,6 +46827,7 @@
                       "enum": [
                         "requested",
                         "confirmed",
+                        "separated",
                         "shipped",
                         "delivered",
                         "cancelled"
@@ -45836,6 +46975,7 @@
                       "enum": [
                         "requested",
                         "confirmed",
+                        "separated",
                         "shipped",
                         "delivered",
                         "cancelled"
@@ -46120,6 +47260,7 @@
               "enum": [
                 "requested",
                 "confirmed",
+                "separated",
                 "shipped",
                 "delivered",
                 "cancelled"
@@ -46185,6 +47326,7 @@
                             "enum": [
                               "requested",
                               "confirmed",
+                              "separated",
                               "shipped",
                               "delivered",
                               "cancelled"
@@ -46429,6 +47571,307 @@
                   "required": [
                     "id",
                     "number"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/store/catalog": {
+      "get": {
+        "operationId": "store.catalog",
+        "summary": "Gestão da Store: todos os itens, publicados ou não, com o público de cada um",
+        "description": "Só para o dono da Store (quem edita o catálogo). O cliente vê `/store/items`, já filtrado pelo público.",
+        "tags": [
+          "EstoqueGestao"
+        ],
+        "x-aurora-permissions": [
+          "inventory.update"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/estoque-gestao.controller.ts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Identificador UUID",
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                          },
+                          "sku": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "unit": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "list_price_cents": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "store_published": {
+                            "type": "boolean"
+                          },
+                          "store_summary": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "store_audience": {
+                            "type": "string",
+                            "enum": [
+                              "all",
+                              "selected"
+                            ]
+                          },
+                          "customer_ids": {
+                            "type": "array",
+                            "items": {
+                              "description": "Identificador UUID",
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sku",
+                          "name",
+                          "unit",
+                          "category",
+                          "list_price_cents",
+                          "store_published",
+                          "store_summary",
+                          "store_audience",
+                          "customer_ids"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sem credencial, ou credencial que não resolve um vínculo ativo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entrada inválida; `details.field` aponta o campo",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Falha não prevista; `request_id` localiza a linha do log",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/store/items/{id}/audience": {
+      "put": {
+        "operationId": "store.setAudience",
+        "summary": "Define para quem o item aparece na Store: toda a rede ou clientes escolhidos",
+        "description": "Troca a seleção inteira. \"selected\" sem cliente é recusado — para tirar o item da Store, despublique-o.",
+        "tags": [
+          "EstoqueGestao"
+        ],
+        "x-aurora-permissions": [
+          "inventory.update"
+        ],
+        "x-aurora-source": "apps/api/src/inventory/estoque-gestao.controller.ts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "audience": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "selected"
+                    ]
+                  },
+                  "customer_ids": {
+                    "default": [],
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  }
+                },
+                "required": [
+                  "audience"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
                   ]
                 }
               }

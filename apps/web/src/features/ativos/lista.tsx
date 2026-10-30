@@ -234,8 +234,13 @@ export function AtivosPage() {
                   </option>
                 ))}
               </Select>
-              <Select value={tipo} aria-label="Tipo do equipamento" onChange={(e) => setTipo(e.target.value)}>
-                <option value="">Todos os tipos</option>
+              {/* O nome do equipamento é o do catálogo (ATV-08): filtrar pelo nome é filtrar pelo tipo. */}
+              <Select
+                value={tipo}
+                aria-label="Nome do equipamento (catálogo)"
+                onChange={(e) => setTipo(e.target.value)}
+              >
+                <option value="">Todos os nomes</option>
                 {tipos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

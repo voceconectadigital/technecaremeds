@@ -343,8 +343,13 @@ describe('a nota fiscal', () => {
     });
   });
 
-  it('despacha e entrega: a data de entrega fica gravada; pedido entregue não volta', async () => {
+  it('separa, despacha e entrega: a data de entrega fica gravada; pedido entregue não volta', async () => {
     const url = `/v1/store-orders/${pedido}/status`;
+    // O cliente não move o pedido da prestadora (0084: "separado" é passo da prestadora).
+    expect((await http.post(url).set(auth(CLIENTE)).send({ status: 'separated' })).status).toBe(403);
+    expect((await http.post(url).set(auth(PRESTADORA)).send({ status: 'separated' })).status).toBe(200);
+    // Separado não volta para aprovado.
+    expect((await http.post(url).set(auth(PRESTADORA)).send({ status: 'confirmed' })).status).toBe(409);
     expect(
       (
         await http
@@ -362,6 +367,7 @@ describe('a nota fiscal', () => {
       'confirmed',
       'confirmed',
       'confirmed',
+      'separated',
       'shipped',
       'delivered',
     ]);

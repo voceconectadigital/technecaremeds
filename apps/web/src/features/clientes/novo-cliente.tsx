@@ -27,6 +27,7 @@ import {
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { CamposDeClassificacao, type TipoDeCliente } from './classificacao';
+import { CamposDoContrato, problemaDaVigencia } from './contrato';
 
 /**
  * Segmentos sugeridos.
@@ -81,6 +82,9 @@ export function DialogoNovoCliente({
   const [codigo, setCodigo] = useState('');
   const [tipo, setTipo] = useState<TipoDeCliente>('eas');
   const [subtipo, setSubtipo] = useState('');
+  const [relatorio, setRelatorio] = useState('');
+  const [inicioContrato, setInicioContrato] = useState('');
+  const [fimContrato, setFimContrato] = useState('');
   const [erro, setErro] = useState<Erro | null>(null);
 
   /** Preenchido depois de salvar: o diálogo passa a oferecer a unidade. */
@@ -115,6 +119,9 @@ export function DialogoNovoCliente({
     setCodigo('');
     setTipo('eas');
     setSubtipo('');
+    setRelatorio('');
+    setInicioContrato('');
+    setFimContrato('');
     setErro(null);
     setCriado(null);
     setUnidade('');
@@ -132,6 +139,11 @@ export function DialogoNovoCliente({
       setErro({ campo: 'name', mensagem: 'Informe o nome do cliente — o hospital, a clínica ou a rede.' });
       return;
     }
+    const vigencia = problemaDaVigencia(inicioContrato, fimContrato);
+    if (vigencia) {
+      setErro(vigencia);
+      return;
+    }
     criar.mutate(
       {
         body: {
@@ -142,6 +154,9 @@ export function DialogoNovoCliente({
           code: codigo.trim() || undefined,
           kind: tipo,
           subtype: subtipo || null,
+          report_tier: (relatorio || null) as 'basic' | 'advanced' | 'expert' | null,
+          contract_starts_on: inicioContrato || null,
+          contract_ends_on: fimContrato || null,
         },
       },
       {
@@ -185,7 +200,18 @@ export function DialogoNovoCliente({
 
   const erroDe = (campo: string) => (erro?.campo === campo ? erro.mensagem : null);
   const erroSolto =
-    erro && !['name', 'trade_name', 'tax_id', 'code', 'subtype', 'unidade'].includes(erro.campo ?? '');
+    erro &&
+    ![
+      'name',
+      'trade_name',
+      'tax_id',
+      'code',
+      'subtype',
+      'unidade',
+      'report_tier',
+      'contract_starts_on',
+      'contract_ends_on',
+    ].includes(erro.campo ?? '');
 
   if (criado) {
     return (
@@ -318,6 +344,16 @@ export function DialogoNovoCliente({
           onTipo={setTipo}
           onSubtipo={setSubtipo}
           erroSubtipo={erroDe('subtype')}
+        />
+
+        <CamposDoContrato
+          relatorio={relatorio}
+          inicio={inicioContrato}
+          fim={fimContrato}
+          onRelatorio={setRelatorio}
+          onInicio={setInicioContrato}
+          onFim={setFimContrato}
+          erroDe={erroDe}
         />
 
         {erroSolto && (

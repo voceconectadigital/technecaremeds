@@ -27,6 +27,45 @@ export const ASSET_OWNERSHIPS = ['owned', 'leased', 'loaned', 'rented', 'service
 export type AssetOwnership = (typeof ASSET_OWNERSHIPS)[number];
 
 /* -------------------------------------------------------------------------- */
+/* foto do equipamento (ATV-07 · pedido do cliente, 19/10/2026 · 0085)         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Tipos e teto da foto. Duplicados de `@aurora/domain` (`ASSET_PHOTO_CONTENT_TYPES`,
+ * `MAX_ASSET_PHOTO_BYTES`) de propósito: este pacote não depende de nenhum outro.
+ */
+export const ASSET_PHOTO_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const MAX_ASSET_PHOTO_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A foto como ela viaja: o arquivo em base64, dentro do JSON.
+ *
+ * Dentro do JSON, e não por rota de corpo cru, porque no CADASTRO o equipamento e a foto
+ * nascem na mesma transação — não existe janela em que o ativo novo exista sem foto. O tipo
+ * declarado é conferido contra os BYTES no servidor; o nome do arquivo não é guardado.
+ */
+export const AssetPhotoInput = z
+  .object({
+    content_type: z.enum(ASSET_PHOTO_CONTENT_TYPES),
+    data_base64: z
+      .string()
+      .min(8)
+      .max(Math.ceil(MAX_ASSET_PHOTO_BYTES / 3) * 4 + 4, 'a foto passa de 8 MB')
+      .regex(/^[A-Za-z0-9+/]+={0,2}$/, 'a foto precisa vir em base64, sem o prefixo data:'),
+  })
+  .strict();
+export type AssetPhotoInput = z.infer<typeof AssetPhotoInput>;
+
+/** O que a ficha sabe da foto. Os bytes vêm de `GET /assets/:id/photo`. */
+export const AssetPhotoMeta = z.object({
+  content_type: z.enum(ASSET_PHOTO_CONTENT_TYPES),
+  size: z.number().int(),
+  sha256: z.string(),
+  uploaded_at: Timestamp,
+});
+export type AssetPhotoMeta = z.infer<typeof AssetPhotoMeta>;
+
+/* -------------------------------------------------------------------------- */
 /* Lista                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -178,6 +217,15 @@ export const AssetDetail = z.object({
 
   owner_supplier_id: Uuid.nullable(),
   sla_policy_id: Uuid.nullable(),
+  /**
+   * SLA deste equipamento (ATV-15 · 0085). Desabilitado: OS e chamados dele não abrem relógio.
+   * Habilitado sem política própria: vale a cascata (contrato → cliente → organização).
+   * Opcionais: respostas capturadas antes da 0085 (demo) não os têm.
+   */
+  sla_enabled: z.boolean().optional(),
+  sla_policy_name: z.string().nullable().optional(),
+  /** Foto do equipamento (ATV-07 · 0085). Nula no parque cadastrado antes da exigência. */
+  photo: AssetPhotoMeta.nullable().optional(),
 
   /**
    * As especificações RESOLVIDAS: as do modelo, com as do ativo por cima.
@@ -387,6 +435,8 @@ export const assetsFormOptions = defineOperation({
       })
     ),
     criticalities: z.array(z.object({ id: Uuid, name: z.string(), score: z.number() })),
+    /** Políticas de SLA vigentes, para o SLA do equipamento (0085). Opcional: capturas antigas. */
+    sla_policies: z.array(z.object({ id: Uuid, name: z.string(), is_default: z.boolean() })).optional(),
   }),
 });
 
@@ -413,6 +463,12 @@ const CamposDoEquipamento = {
   /** Valor do bem e nº da NF: só quem tem `asset.read_financials` pode informar. */
   purchase_value: z.number().min(0).max(1_000_000_000_000).nullable().optional(),
   acquisition_invoice: z.string().trim().max(60).nullable().optional(),
+  /**
+   * SLA do equipamento (ATV-15): liga/desliga e, ligado, a política própria (nula = herda a
+   * do contrato, do cliente ou da organização). Desligado, a política fica guardada e é ignorada.
+   */
+  sla_enabled: z.boolean().optional(),
+  sla_policy_id: Uuid.nullable().optional(),
 };
 
 export const assetsCreate = defineOperation({
@@ -432,6 +488,9 @@ export const assetsCreate = defineOperation({
     tag: z.string().trim().min(1, 'a tag é obrigatória').max(80),
     customer_id: Uuid,
     location_id: Uuid,
+    // Foto obrigatória no cadastro (ATV-07, 19/10/2026), no mesmo corpo: o equipamento e a
+    // foto nascem juntos. O parque antigo, a importação e a semeadura seguem válidos sem foto.
+    photo: AssetPhotoInput,
   }),
   response: z.object({ id: Uuid }),
   errors: ['not_found', 'validation_failed', 'conflict'],
@@ -450,6 +509,36 @@ export const assetsUpdate = defineOperation({
   body: z.object(CamposDoEquipamento).partial().strict(),
   response: z.object({ ok: z.literal(true) }),
   errors: ['not_found', 'validation_failed', 'conflict'],
+});
+
+export const assetPhoto = defineOperation({
+  operationId: 'assets.photo',
+  method: 'GET',
+  path: '/assets/:id/photo',
+  summary: 'A foto do equipamento (os bytes da imagem)',
+  description:
+    'Mesma autorização e mesmo escopo da ficha: equipamento fora do escopo (ou de outra ' +
+    'organização) responde 404, igual a equipamento sem foto. Servida com `nosniff`.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  response: z.string().describe('Imagem PNG, JPEG ou WebP'),
+  produces: 'image/*',
+  errors: ['not_found'],
+});
+
+export const assetPhotoUpload = defineOperation({
+  operationId: 'assets.photoUpload',
+  method: 'PUT',
+  path: '/assets/:id/photo',
+  summary: 'Envia (ou troca) a foto do equipamento',
+  description:
+    'Para o parque cadastrado antes da foto obrigatória e para trocar a foto. PNG, JPEG ou WebP ' +
+    'até 8 MB, conferidos pelos bytes; a foto anterior sai do armazenamento.',
+  permissions: ['asset.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ photo: AssetPhotoInput }).strict(),
+  response: z.object({ photo: AssetPhotoMeta }),
+  errors: ['not_found', 'validation_failed'],
 });
 
 export const assetIndicators = defineOperation({

@@ -25,4 +25,14 @@ test.describe('Estoque e Store', () => {
     await expect(page.getByText('Nenhum pedido ainda')).toBeVisible();
     expect(page.url()).toContain('aba=pedidos');
   });
+
+  test('a gestão do catálogo é só de quem edita o catálogo: o coordenador não vê a aba', async ({
+    comoCoordenadorA: page,
+  }) => {
+    // 23/10/2026: "a Store é uma funcionalidade somente do adm da plataforma". O coordenador compra e
+    // acompanha; cadastrar produto, preço e público fica com quem tem inventory.update.
+    await page.goto('/store?aba=gerenciar');
+    await expect(page.getByRole('tab', { name: 'Catálogo' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Gerenciar catálogo' })).toHaveCount(0);
+  });
 });

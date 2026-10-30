@@ -53,7 +53,6 @@ import {
   Dialog,
   EmptyState,
   Field,
-  Progress,
   Select,
   Skeleton,
   SkeletonList,
@@ -326,7 +325,7 @@ function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
             vazio="Sem data"
           />
           <Info rotulo="Equipamento" valor={os.asset_name_snapshot} vazio="Sem equipamento" />
-          <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+          <Info rotulo="Local" valor={os.location_name_snapshot} />
         </dl>
       </div>
     </Card>
@@ -334,43 +333,38 @@ function FaixaDeDecisao({ os }: { os: WorkOrderDetail }) {
 }
 
 /**
- * Os relógios de prazo.
+ * Os prazos do contrato (SLA), numa linha.
  *
- * A barra mostra o percentual consumido em tempo ÚTIL, e não em relógio de
- * parede: um chamado aberto sexta às 17h com prazo de 4 horas vence terça de
- * manhã. Mostrar o tempo corrido faria a barra encher no fim de semana e a
- * coordenação correr atrás de um prazo que não estava correndo.
+ * ERAM barras de progresso grandes, uma por relógio. O cliente (23/10) achou
+ * a barra vermelha "onsite" ruído: numa preventiva programada para a semana
+ * seguinte, os relógios já estouraram e a barra cheia gritava mais do que a
+ * informação vale. O dado é o mesmo — percentual em tempo ÚTIL, data de
+ * vencimento, estouro —, só que em etiquetas com o nome em português; quem
+ * quer o detalhe passa o mouse.
  */
-function Sla({ relogios }: { relogios: SlaClock[] | null }) {
+export function Sla({ relogios }: { relogios: SlaClock[] | null }) {
   const ativos = (relogios ?? []).filter((r) => r.state !== 'cancelled');
   if (ativos.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="prazos-sla">
+      <span className="text-subtle">Prazos do contrato</span>
       {ativos.map((r) => {
+        const rotulo = ROTULO_SLA[r.kind] ?? r.kind;
         const estourou = r.breached_at !== null;
-        const perto = !estourou && r.consumed_pct >= 80;
+        const cumpriu = !estourou && r.state === 'met';
+        const perto = !estourou && !cumpriu && r.consumed_pct >= 80;
+        const texto = estourou
+          ? `vencido ${formatarDataRelativa(r.breached_at!)}`
+          : cumpriu
+            ? 'cumprido'
+            : `vence ${new Date(r.due_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`;
         return (
-          <div key={r.id} className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs text-subtle">{ROTULO_SLA[r.kind] ?? r.kind}</span>
-            <Progress
-              value={Math.min(r.consumed_pct, 100)}
-              tone={estourou ? 'bad' : perto ? 'warn' : 'good'}
-              label={`${ROTULO_SLA[r.kind] ?? r.kind}: ${r.consumed_pct}% do prazo`}
-              className="flex-1"
-            />
-            <span
-              className={
-                'w-44 shrink-0 text-right text-xs tabular-nums ' +
-                (estourou ? 'text-bad-text' : perto ? 'text-warn-text' : 'text-muted')
-              }
-              data-numeric
-            >
-              {estourou
-                ? `estourou ${formatarDataRelativa(r.breached_at!)}`
-                : `vence ${new Date(r.due_at).toLocaleString('pt-BR')}`}
-            </span>
-          </div>
+          <span key={r.id} title={`${rotulo}: ${r.consumed_pct}% do prazo em horário útil`}>
+            <StatusChip tone={estourou ? 'bad' : perto ? 'warn' : cumpriu ? 'good' : 'neutral'} size="sm">
+              {rotulo}: {texto}
+            </StatusChip>
+          </span>
         );
       })}
     </div>
@@ -379,6 +373,7 @@ function Sla({ relogios }: { relogios: SlaClock[] | null }) {
 
 const ROTULO_SLA: Record<string, string> = {
   response: 'Atendimento',
+  onsite: 'Chegada ao local',
   resolution: 'Solução',
   first_response: 'Primeira resposta',
 };

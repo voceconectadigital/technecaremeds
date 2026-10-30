@@ -4,6 +4,25 @@
 import { defineOperation } from '../registry';
 import { z, Uuid, NonEmpty } from '../primitives';
 
+/**
+ * Modelo de relatório incluso no contrato do cliente (CLI-05 · 0085) e a situação da vigência
+ * (CLI-06). Duplicados de `@aurora/domain` (`REPORT_TIERS`, `CONTRACT_TERM_STATUSES`) de
+ * propósito: este pacote não depende de nenhum outro.
+ */
+export const CUSTOMER_REPORT_TIERS = ['basic', 'advanced', 'expert'] as const;
+export type CustomerReportTier = (typeof CUSTOMER_REPORT_TIERS)[number];
+export const CUSTOMER_CONTRACT_STATUSES = [
+  'active',
+  'expiring',
+  'expired',
+  'not_started',
+  'not_informed',
+] as const;
+export type CustomerContractStatus = (typeof CUSTOMER_CONTRACT_STATUSES)[number];
+
+/** Dia de calendário AAAA-MM-DD. */
+const Dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'use AAAA-MM-DD');
+
 export const Customer = z.object({
   id: Uuid,
   name: NonEmpty,
@@ -28,6 +47,19 @@ export const Customer = z.object({
    * ao cliente na lista, e não uma porta para os ativos.
    */
   asset_count: z.number().int(),
+  /**
+   * Relatório incluso no contrato (CLI-05): basic, advanced ou expert; nulo = não informado.
+   * Só o dado — a trava do relatório pelo modelo contratado não mora aqui.
+   */
+  report_tier: z.enum(CUSTOMER_REPORT_TIERS).nullable().optional(),
+  /** Vigência do contrato (CLI-06): início e fim (AAAA-MM-DD), juntos ou nenhum. */
+  contract_starts_on: z.string().nullable().optional(),
+  contract_ends_on: z.string().nullable().optional(),
+  /**
+   * Situação DERIVADA no servidor a cada leitura (nunca gravada): vigente, vence em até 30 dias,
+   * vencido, a iniciar ou não informado. Opcionais: respostas capturadas antes da 0085 (demo).
+   */
+  contract_status: z.enum(CUSTOMER_CONTRACT_STATUSES).optional(),
 });
 export type Customer = z.infer<typeof Customer>;
 
@@ -84,6 +116,9 @@ export const customersCreate = defineOperation({
       segment: TextoOpcional(60),
       kind: z.enum(['eas', 'corporate']).optional(),
       subtype: z.string().trim().max(40).nullable().optional(),
+      report_tier: z.enum(CUSTOMER_REPORT_TIERS).nullable().optional(),
+      contract_starts_on: Dia.nullable().optional(),
+      contract_ends_on: Dia.nullable().optional(),
     })
     .strict(),
   response: Customer,
@@ -96,9 +131,10 @@ export const customersUpdate = defineOperation({
   path: '/customers/:id',
   summary: 'Edita o cadastro de um cliente',
   description:
-    'Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa) e subtipo. ' +
-    'Só o que vier no corpo muda. Cliente fora do escopo responde 404. O subtipo precisa ser da ' +
-    'lista do tipo escolhido.',
+    'Nome, nome fantasia, código, documento, classificação (EAS × empresa corporativa), subtipo, ' +
+    'relatório incluso no contrato e vigência do contrato. Só o que vier no corpo muda; `null` ' +
+    'limpa. Cliente fora do escopo responde 404. O subtipo precisa ser da lista do tipo escolhido. ' +
+    'A vigência tem início e fim juntos (ou nenhum), e o fim vem depois do início.',
   permissions: ['customer.update'],
   params: z.object({ id: Uuid }),
   body: z
@@ -109,6 +145,9 @@ export const customersUpdate = defineOperation({
       tax_id: Documento,
       kind: z.enum(['eas', 'corporate']).optional(),
       subtype: z.string().trim().max(40).nullable().optional(),
+      report_tier: z.enum(CUSTOMER_REPORT_TIERS).nullable().optional(),
+      contract_starts_on: Dia.nullable().optional(),
+      contract_ends_on: Dia.nullable().optional(),
     })
     .strict(),
   response: Customer,

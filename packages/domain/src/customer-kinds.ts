@@ -64,3 +64,52 @@ export const COMMON_SECTORS: readonly string[] = Object.freeze([
   'Enfermaria',
   'Imaginologia',
 ]);
+
+/* -------------------------------------------------------------------------- */
+/* vigência do contrato (CLI-06 · pedido do cliente, 19/10/2026 · 0085)        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A situação da vigência, DERIVADA das duas datas e do dia de hoje — nunca
+ * gravada: gravada, envelheceria sozinha e mentiria no dia seguinte.
+ *
+ *   · not_informed — sem datas no cadastro;
+ *   · not_started  — o início ainda não chegou;
+ *   · expired      — o fim já passou;
+ *   · expiring     — vigente, e o fim cai nos próximos 30 dias (inclusive);
+ *   · active       — vigente, com mais de 30 dias pela frente.
+ *
+ * O último dia da vigência ainda é vigente: "até 31/12" inclui o dia 31.
+ */
+export const CONTRACT_TERM_STATUSES = [
+  'active',
+  'expiring',
+  'expired',
+  'not_started',
+  'not_informed',
+] as const;
+export type ContractTermStatus = (typeof CONTRACT_TERM_STATUSES)[number];
+
+/** Quantos dias antes do fim a vigência passa a "vence em breve". */
+export const CONTRACT_EXPIRING_DAYS = 30;
+
+/** Dias de calendário entre dois AAAA-MM-DD (b − a). */
+function diasEntre(a: string, b: string): number {
+  const ms = (d: string) =>
+    Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  return Math.round((ms(b) - ms(a)) / 86_400_000);
+}
+
+/** `hoje` é o dia de calendário (AAAA-MM-DD) no fuso da organização — ver `localDay`. */
+export function contractTermStatus(
+  startsOn: string | null | undefined,
+  endsOn: string | null | undefined,
+  hoje: string
+): ContractTermStatus {
+  if (!startsOn || !endsOn) return 'not_informed';
+  const inicio = startsOn.slice(0, 10);
+  const fim = endsOn.slice(0, 10);
+  if (fim < hoje) return 'expired';
+  if (inicio > hoje) return 'not_started';
+  return diasEntre(hoje, fim) <= CONTRACT_EXPIRING_DAYS ? 'expiring' : 'active';
+}

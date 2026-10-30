@@ -50,6 +50,8 @@ import {
   assetsFormOptions,
 } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
+import { armazenamentoEmMemoria } from '../common/arquivos/memoria';
+import { FOTO_PNG } from './apoio/foto';
 
 const ORG = newId();
 const OUTRA = newId();
@@ -257,7 +259,7 @@ beforeAll(async () => {
     NODE_ENV: 'test',
     AURORA_LOG_LEVEL: 'fatal',
   } as NodeJS.ProcessEnv);
-  app = await createApp({ db: t.db, env });
+  app = await createApp({ db: t.db, env, arquivos: armazenamentoEmMemoria() });
   await app.init();
   http = request(app.getHttpServer());
 }, 120_000);
@@ -414,6 +416,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
       customer_id: clienteA,
       location_id: setorA,
       asset_category_id: categoria,
+      photo: FOTO_PNG,
       tag: 'DEF-01',
     });
     expect(r.status).toBe(201);
@@ -426,7 +429,13 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
     const r = await http
       .post('/v1/assets')
       .set(auth(GESTOR))
-      .send({ tag: 'TAG-5', name: 'Sem setor', customer_id: clienteA, asset_category_id: categoria });
+      .send({
+        tag: 'TAG-5',
+        name: 'Sem setor',
+        customer_id: clienteA,
+        asset_category_id: categoria,
+        photo: FOTO_PNG,
+      });
     expect(r.status).toBe(422);
   });
 
@@ -437,6 +446,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
       customer_id: clienteA,
       location_id: setorB,
       asset_category_id: categoria,
+      photo: FOTO_PNG,
     });
     expect(r.status).toBe(422);
     expect(r.body.field ?? r.body.details?.field).toBe('location_id');
@@ -449,6 +459,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
       customer_id: clienteA,
       location_id: setorDaVizinha,
       asset_category_id: categoria,
+      photo: FOTO_PNG,
     });
     expect(r.status).toBe(422);
   });
@@ -460,6 +471,7 @@ describe('Setores e Cliente → Setor → Equipamento', () => {
       customer_id: clienteA,
       location_id: unidadeA,
       asset_category_id: categoria,
+      photo: FOTO_PNG,
     });
     expect(r.status).toBe(422);
   });

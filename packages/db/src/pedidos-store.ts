@@ -6,7 +6,9 @@
  * uma plataforma simples de venda para o que precisarem pontualmente ou urgentemente de peças e
  * acessórios." Este módulo é o PEDIDO e o seu acompanhamento — não há pagamento nem checkout.
  *
- * O CICLO:  requested → confirmed → shipped → delivered   (ou cancelled, enquanto não saiu)
+ * O CICLO:  requested → confirmed → [separated] → shipped → delivered   (ou cancelled, enquanto não saiu)
+ *   · "separated" (0084, conversa de 23/10: "aprovado, sendo separado, em trânsito, entregue") é
+ *     opcional: quem não separa à parte despacha direto do confirmado;
  *   · o CLIENTE faz o pedido e pode cancelá-lo enquanto estiver "requested";
  *   · a PRESTADORA confirma (com a previsão de entrega), despacha, entrega e anexa a nota fiscal.
  * Cada passo grava um evento na linha do tempo do pedido.
@@ -16,15 +18,24 @@
  */
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, newId } from '@aurora/domain';
 import type { TenantSession } from './client';
+import { assertStoreItemsForCustomer } from './estoque-gestao';
 
-export const STORE_ORDER_STATUSES = ['requested', 'confirmed', 'shipped', 'delivered', 'cancelled'] as const;
+export const STORE_ORDER_STATUSES = [
+  'requested',
+  'confirmed',
+  'separated',
+  'shipped',
+  'delivered',
+  'cancelled',
+] as const;
 export type StoreOrderStatus = (typeof STORE_ORDER_STATUSES)[number];
 
 /** O que cada situação aceita a seguir. "cancelled" só antes de sair. */
 export const STORE_ORDER_TRANSITIONS: Readonly<Record<StoreOrderStatus, readonly StoreOrderStatus[]>> =
   Object.freeze({
     requested: ['confirmed', 'cancelled'],
-    confirmed: ['shipped', 'cancelled'],
+    confirmed: ['separated', 'shipped', 'cancelled'],
+    separated: ['shipped', 'cancelled'],
     shipped: ['delivered'],
     delivered: [],
     cancelled: [],
@@ -131,6 +142,8 @@ export async function createStoreOrder(
     // Item fora da Store (ou arquivado) não se pede — e a resposta não diz qual, para não vazar o catálogo interno.
     throw new NotFoundError('item da Store', 'um ou mais itens');
   }
+  // E o item precisa estar no público do cliente do pedido (0084): "selecionados" não vaza para os outros.
+  await assertStoreItemsForCustomer(session, [...somados.keys()], input.customerId);
 
   let total = 0n;
   let semPreco = false;
@@ -247,7 +260,7 @@ const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Muda a situação. Quem GERENCIA (a prestadora) leva o pedido adiante; o CLIENTE só cancela o seu,
- * e só enquanto "requested". Postar a MESMA situação ("confirmed" ou "shipped") atualiza a previsão
+ * e só enquanto "requested". Postar a MESMA situação ("confirmed", "separated" ou "shipped") atualiza a previsão
  * de entrega sem mudar o passo.
  */
 export async function changeStoreOrderStatus(
@@ -275,7 +288,9 @@ export async function changeStoreOrderStatus(
   );
   if (!o) throw new NotFoundError('Pedido', orderId);
 
-  const atualizaPrevisao = input.status === o.status && (o.status === 'confirmed' || o.status === 'shipped');
+  const atualizaPrevisao =
+    input.status === o.status &&
+    (o.status === 'confirmed' || o.status === 'separated' || o.status === 'shipped');
   if (!atualizaPrevisao && !STORE_ORDER_TRANSITIONS[o.status].includes(input.status)) {
     throw new ConflictError(`um pedido "${o.status}" não pode ir para "${input.status}"`);
   }

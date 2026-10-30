@@ -1,9 +1,14 @@
 /**
- * Aurora — o layout dos PDFs oficiais do cliente (22/10/2026).
+ * Aurora — o layout dos PDFs dos relatórios (22/10/2026; Basic em 29/10/2026).
  *
- *   · COMPLETO (Advanced): modelo do Complexo Hospitalar Samuel Libânio — cabeçalho, texto de
- *     abertura, uma seção por indicador (texto + gráfico de 12 meses com a linha da meta) e
- *     assinaturas;
+ *   · ADVANCED: segue o modelo "Completo" do cliente (Complexo Hospitalar Samuel Libânio) —
+ *     cabeçalho, texto de abertura, uma seção por indicador (texto + gráfico de 12 meses com a
+ *     linha da meta) e assinaturas;
+ *   · BASIC (REL-08, WhatsApp 19/10/2026: "layout sugestivo, clean, bonito, inovador com
+ *     gráficos/dashboards"): o MESMO padrão visual do Advanced, aberto por um painel de cartões
+ *     (um por indicador, com a situação da meta) e fechado pela lista do que está pendente de
+ *     definição. O modelo Basic do cliente (Lagoa Santa) não foi enviado; quando vier, ajusta-se
+ *     o texto, não os números;
  *   · EXPERT: a casca do IMR do HJXXIII — as 16 linhas, as colunas de resultado, meta,
  *     desconto e glosa, e os totais.
  *
@@ -15,8 +20,8 @@
  * faturamento NÃO são calculados: a regra do IMR (faixas, pesos, valor do contrato) não existe.
  */
 import { NO_TARGET_LABEL, addDaysToDay, dayOf, findIndicator } from '@aurora/domain';
-import type { ReportSection, ReportSeries } from '@aurora/db';
-import type { AssinaturaPdf, LinhaPdf } from '../documents/pdf';
+import type { PendingIndicator, ReportSection, ReportSeries } from '@aurora/db';
+import type { AssinaturaPdf, CartaoPdf, LinhaPdf } from '../documents/pdf';
 
 const MESES = [
   'janeiro',
@@ -128,6 +133,16 @@ function fraseDoValor(sec: ReportSection, texto: string): string {
       return `O índice de regularidade dos planos de manutenção programada da área técnica foi de ${texto}.`;
     case 'opened_vs_closed':
       return `A totalização do número de chamados abertos versus encerrados da área técnica foi de ${texto}.`;
+    case 'work_orders_opened':
+      return `Ordens de serviço abertas no período: ${texto}.`;
+    case 'work_orders_completed':
+      return `Ordens de serviço concluídas no período (canceladas não contam): ${texto}.`;
+    case 'compliance_calibration':
+      return `O índice de conformidade dos planos de calibração foi de ${texto}.`;
+    case 'compliance_electrical_safety':
+      return `O índice de conformidade dos planos de teste de segurança elétrica (TSE) foi de ${texto}.`;
+    case 'compliance_qualification':
+      return `O índice de conformidade dos planos de qualificação foi de ${texto}.`;
     default:
       return `${sec.label}: ${texto}.`;
   }
@@ -287,41 +302,9 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
       linhas.push({ texto: 'Unidade: meses de 30 dias (a confirmar com o cliente).', recuo: 6, tamanho: 8 });
     }
 
-    const pontos = d.serie?.series[sec.key];
-    const semSerie = d.serie?.unavailable[sec.key];
-    if (semSerie) {
-      // Sem série mensal não há o que desenhar: uma nota basta, e não um quadro vazio.
-      linhas.push({ texto: `Sem gráfico mensal: ${semSerie}`, recuo: 6, tamanho: 8, espacoAntes: 2 });
-    } else if (pontos) {
-      figura += 1;
-      linhas.push({
-        texto: `Gráfico ${doisDigitos(figura)}: ${sigla}`,
-        negrito: true,
-        tamanho: 8,
-        recuo: 6,
-        espacoAntes: 4,
-      });
-      const rotulos = (pontos ?? d.serie!.months.map((m) => ({ month: m }))).map((p) => {
-        const [ano, mes] = p.month.split('-');
-        return `${MESES_CURTOS[Number(mes) - 1]}/${ano!.slice(2)}`;
-      });
-      linhas.push({
-        texto: '',
-        grafico: {
-          rotulos,
-          valores: (pontos ?? []).map((p) =>
-            p.value === null ? null : paraExibicao(familia, sec.unit, p.value)
-          ),
-          metas: (pontos ?? []).map((p) =>
-            p.target === null ? null : paraExibicao(familia, p.target_unit ?? sec.unit, p.target)
-          ),
-          casas: CASAS[familia],
-          sufixo: SUFIXO_GRAFICO[familia],
-          altura: 140,
-          semSerie,
-        },
-      });
-    }
+    const grafico = graficoDaSecao(sec, d.serie, familia, figura + 1, sigla);
+    if (grafico.some((l) => l.grafico)) figura += 1;
+    linhas.push(...grafico);
   });
 
   linhas.push({ texto: 'Atenciosamente,', espacoAntes: 16 });
@@ -331,8 +314,239 @@ export function montarCompleto(d: DadosCompleto): { linhas: LinhaPdf[]; rodape: 
   });
   return {
     linhas,
-    rodape: `Relatório Completo (Advanced) — ${local}${competencia ? ` — ${competencia}` : ''}`,
+    rodape: `Relatório Advanced — ${local}${competencia ? ` — ${competencia}` : ''}`,
   };
+}
+
+/**
+ * O gráfico de 12 meses de uma seção (com a linha da meta), ou a nota de por que não há série.
+ * Nada quando a série não foi pedida. Comum ao Advanced e ao Basic.
+ */
+function graficoDaSecao(
+  sec: ReportSection,
+  serie: ReportSeries | null,
+  familia: Familia,
+  numeroDaFigura: number,
+  sigla: string
+): LinhaPdf[] {
+  const pontos = serie?.series[sec.key];
+  const semSerie = serie?.unavailable[sec.key];
+  if (semSerie) {
+    // Sem série mensal não há o que desenhar: uma nota basta, e não um quadro vazio.
+    return [{ texto: `Sem gráfico mensal: ${semSerie}`, recuo: 6, tamanho: 8, espacoAntes: 2 }];
+  }
+  if (!pontos) return [];
+  const rotulos = pontos.map((p) => {
+    const [ano, mes] = p.month.split('-');
+    return `${MESES_CURTOS[Number(mes) - 1]}/${ano!.slice(2)}`;
+  });
+  return [
+    {
+      texto: `Gráfico ${doisDigitos(numeroDaFigura)}: ${sigla}`,
+      negrito: true,
+      tamanho: 8,
+      recuo: 6,
+      espacoAntes: 4,
+    },
+    {
+      texto: '',
+      grafico: {
+        rotulos,
+        valores: pontos.map((p) => (p.value === null ? null : paraExibicao(familia, sec.unit, p.value))),
+        metas: pontos.map((p) =>
+          p.target === null ? null : paraExibicao(familia, p.target_unit ?? sec.unit, p.target)
+        ),
+        casas: CASAS[familia],
+        sufixo: SUFIXO_GRAFICO[familia],
+        altura: 140,
+      },
+    },
+  ];
+}
+
+// --- Basic ----------------------------------------------------------------------------------
+
+/** O texto de um indicador pendente, como sai em tela, PDF e Excel. */
+export const PENDENTE_DE_DEFINICAO = 'Pendente de definição';
+
+export interface DadosBasic extends DadosCompleto {
+  /** Indicadores do modelo que aguardam definição: listados, nunca com número. */
+  pendentes: PendingIndicator[];
+}
+
+/** Cartão do painel para uma seção calculada. O tom diz a situação; o número vem do relatório. */
+export function cartaoDaSecao(sec: ReportSection): CartaoPdf {
+  const familia = familiaDe(sec.key, sec.unit);
+  const provisorio = sec.state === 'PROVISIONAL';
+  const rotulo = `${sec.label}${provisorio ? ' (provisório)' : ''}`;
+  if (sec.value === null) {
+    return {
+      rotulo,
+      valor: '—',
+      detalhe: sec.unit === 'none' ? 'Detalhamento na tela do sistema' : 'Sem dados suficientes no período',
+      tom: provisorio ? 'aviso' : 'neutro',
+    };
+  }
+  const valor = textoDoValor(familia, paraExibicao(familia, sec.unit, sec.value));
+  let meta: string | null = null;
+  if (sec.target) {
+    const sinal = sec.target.direction === 'HIGHER_IS_BETTER' ? '≥' : '≤';
+    meta = `Meta ${sinal} ${textoDoValor(familia, paraExibicao(familia, sec.target.unit, sec.target.value))}`;
+  }
+  const situacao =
+    sec.target_evaluation === 'met'
+      ? `${meta} · atendida`
+      : sec.target_evaluation === 'not_met'
+        ? `${meta} · não atendida`
+        : sec.direction === 'INFORMATIONAL'
+          ? 'Informativo'
+          : 'Sem meta configurada';
+  const tom: CartaoPdf['tom'] = provisorio
+    ? 'aviso'
+    : sec.target_evaluation === 'met'
+      ? 'bom'
+      : sec.target_evaluation === 'not_met'
+        ? 'ruim'
+        : 'neutro';
+  return {
+    rotulo,
+    valor,
+    detalhe: provisorio ? `Provisório · ${situacao}` : situacao,
+    tom,
+    ...(familia === 'percent'
+      ? {
+          barra: {
+            valor: sec.value,
+            meta: sec.target && sec.target.unit === 'percent' ? sec.target.value : null,
+          },
+        }
+      : {}),
+  };
+}
+
+export function montarBasic(d: DadosBasic): { linhas: LinhaPdf[]; rodape: string } {
+  const comp = competenciaDe(d.de, d.ate, d.fuso);
+  const competencia = comp ? `${MESES[comp.mes - 1]!.toUpperCase()} / ${comp.ano}` : null;
+  const periodo = `${dataCurta(d.de, d.fuso)} a ${dataCurta(new Date(new Date(d.ate).getTime() - 1).toISOString(), d.fuso)}`;
+  const local = d.cliente ?? 'Clientes do escopo do relatório';
+  const emissao = `${d.cidade ? `${d.cidade}, ` : ''}${dataExtensa(d.geradoEm, d.fuso)}`;
+
+  const atendidas = d.secoes.filter((s) => s.target_evaluation === 'met').length;
+  const abaixo = d.secoes.filter((s) => s.target_evaluation === 'not_met').length;
+  const semMeta = d.secoes.filter((s) => s.target_evaluation === 'no_target').length;
+  const provisorios = d.secoes.filter((s) => s.state === 'PROVISIONAL').length;
+
+  const cabecalho = [
+    d.centroDeCusto ? `Centro de Custo: ${d.centroDeCusto}` : null,
+    d.contrato ? `Contrato: ${d.contrato}` : null,
+    d.setor ? `Setor: ${d.setor}` : null,
+  ].filter((x): x is string => !!x);
+
+  const linhas: LinhaPdf[] = [
+    { texto: d.organizacao.toUpperCase(), tamanho: 8, negrito: true },
+    { texto: 'Relatório Basic', titulo: true, tamanho: 18, espacoAntes: 2 },
+    { texto: 'Indicadores de manutenção do parque tecnológico', tamanho: 10 },
+    {
+      texto: `${local} · ${competencia ? `Competência ${competencia}` : `Período ${periodo}`}`,
+      negrito: true,
+      espacoAntes: 8,
+    },
+    ...(cabecalho.length > 0 ? [{ texto: cabecalho.join(' · '), tamanho: 9 }] : []),
+    { texto: `Emitido em ${emissao}. Fonte: sistema de gestão de Engenharia Clínica Aurora.`, tamanho: 8 },
+
+    { texto: 'Resumo do período', titulo: true, espacoAntes: 14 },
+    {
+      texto:
+        `${d.secoes.length} indicador(es) calculado(s): ${atendidas} com a meta atendida, ${abaixo} abaixo da meta, ` +
+        `${semMeta} sem meta configurada` +
+        `${provisorios > 0 ? `; ${provisorios} provisório(s)` : ''}` +
+        `${d.pendentes.length > 0 ? `. ${d.pendentes.length} pendente(s) de definição, sem número.` : '.'}`,
+      tamanho: 8,
+    },
+    {
+      texto: '',
+      cartoes: [
+        ...d.secoes.map(cartaoDaSecao),
+        ...d.pendentes.map((p): CartaoPdf => ({
+          rotulo: p.label,
+          valor: '—',
+          detalhe: PENDENTE_DE_DEFINICAO,
+          tom: 'neutro',
+        })),
+      ],
+      espacoAntes: 6,
+    },
+    {
+      texto:
+        'Legenda: verde, meta atendida · vermelho, abaixo da meta · âmbar, indicador provisório (definição ' +
+        'em validação com o cliente; o número pode mudar) · cinza, sem meta, sem dados ou pendente de definição.',
+      tamanho: 7,
+    },
+  ];
+
+  let figura = 0;
+  d.secoes.forEach((sec, i) => {
+    const familia = familiaDe(sec.key, sec.unit);
+    linhas.push({
+      texto: `${i + 1}. ${sec.label.toUpperCase()}${sec.state === 'PROVISIONAL' ? ' (PROVISÓRIO)' : ''}`,
+      titulo: true,
+      espacoAntes: 14,
+    });
+    if (sec.value === null) {
+      linhas.push({
+        texto: ['Sem dados suficientes no período.', fraseDaMeta(sec, familia)].filter(Boolean).join(' '),
+        recuo: 6,
+      });
+    } else {
+      linhas.push({
+        texto: [
+          fraseDoValor(sec, textoDoValor(familia, paraExibicao(familia, sec.unit, sec.value))),
+          fraseDaMeta(sec, familia),
+          comp ? fraseDaVariacao(sec, d.serie, familia) : null,
+        ]
+          .filter((x): x is string => !!x)
+          .join(' '),
+        recuo: 6,
+      });
+    }
+    if (sec.definition) linhas.push({ texto: `Como é calculado: ${sec.definition}.`, recuo: 6, tamanho: 8 });
+    if (sec.samples !== null) linhas.push({ texto: `Base: ${sec.samples}.`, recuo: 6, tamanho: 8 });
+    if (sec.state === 'PROVISIONAL' && sec.note) linhas.push({ texto: sec.note, recuo: 6, tamanho: 8 });
+    if (sec.key === 'mtbf' && sec.value !== null) {
+      linhas.push({ texto: 'Unidade: meses de 30 dias (a confirmar com o cliente).', recuo: 6, tamanho: 8 });
+    }
+    if (sec.value !== null) {
+      const grafico = graficoDaSecao(sec, d.serie, familia, figura + 1, SIGLAS[sec.key] ?? sec.label);
+      if (grafico.some((l) => l.grafico)) figura += 1;
+      linhas.push(...grafico);
+    }
+  });
+
+  if (d.pendentes.length > 0) {
+    linhas.push({ texto: 'Indicadores pendentes de definição', titulo: true, espacoAntes: 16 });
+    linhas.push({
+      texto:
+        'Fazem parte do modelo Basic, mas a fórmula ou o dado ainda dependem do cliente. Nenhum número foi ' +
+        'estimado para eles.',
+      tamanho: 8,
+    });
+    for (const p of d.pendentes) {
+      linhas.push({
+        texto: `${p.label} — ${PENDENTE_DE_DEFINICAO}`,
+        negrito: true,
+        tamanho: 8,
+        espacoAntes: 4,
+      });
+      if (p.note) linhas.push({ texto: p.note, tamanho: 8, recuo: 10 });
+    }
+  }
+
+  linhas.push({ texto: 'Atenciosamente,', espacoAntes: 16 });
+  linhas.push({
+    texto: '',
+    assinaturas: d.assinaturas && d.assinaturas.length > 0 ? d.assinaturas : ASSINATURAS_PADRAO,
+  });
+  return { linhas, rodape: `Relatório Basic — ${local}${competencia ? ` — ${competencia}` : ''}` };
 }
 
 // --- Expert (IMR) ---------------------------------------------------------------------------
@@ -424,10 +638,7 @@ export function montarImr(d: DadosImr): { linhas: LinhaPdf[]; rodape: string } {
       pendentes.push({
         item: it.item,
         nome: it.nome,
-        motivo: (ind?.note ?? 'Aguardando definição do cliente.').replace(
-          /^Indicador do IMR \(FHEMIG\) — /,
-          ''
-        ),
+        motivo: (ind?.note ?? 'Aguardando definição do cliente.').replace(/^Indicador do IMR — /, ''),
       });
     }
     return [String(it.item), it.nome, resultado, meta, '—', '—'];

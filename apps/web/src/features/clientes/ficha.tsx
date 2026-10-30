@@ -47,6 +47,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { rotuloDoSegmento } from './novo-cliente';
 import { rotuloDaClassificacao } from './classificacao';
+import { ROTULO_DO_RELATORIO, SeloDoContrato, periodoDoContrato } from './contrato';
 import { DialogoEditarCliente } from './editar-cliente';
 import { DialogoEquipamento } from '../ativos/formulario';
 import { ROTULO_STATUS_ATIVO, TOM_STATUS_ATIVO } from '../painel/rotulos';
@@ -151,6 +152,23 @@ export function ClientePage() {
             { label: 'Sem setor', value: semSetor.length, tone: semSetor.length > 0 ? 'warn' : undefined },
           ]}
         />
+
+        {/* Contrato no cadastro (CLI-05/06): o relatório incluso e a vigência, com a situação calculada. */}
+        <Card>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
+            <span className="font-semibold text-text">Contrato</span>
+            <span className="text-muted">
+              Relatório incluso:{' '}
+              <span className="text-text">
+                {c.report_tier ? ROTULO_DO_RELATORIO[c.report_tier] : 'não informado'}
+              </span>
+            </span>
+            <span className="text-muted" data-numeric>
+              Vigência: <span className="text-text">{periodoDoContrato(c) ?? 'não informada'}</span>
+            </span>
+            <SeloDoContrato cliente={c} size="md" />
+          </div>
+        </Card>
 
         <Card>
           <CardHeader

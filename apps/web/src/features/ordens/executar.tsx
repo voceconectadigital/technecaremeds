@@ -261,7 +261,7 @@ function PassoResumo({ os }: { os: WorkOrderDetail }) {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
           <Info rotulo="Cliente" valor={os.customer_name} />
           <Info rotulo="Equipamento" valor={os.asset_name_snapshot} />
-          <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+          <Info rotulo="Local" valor={os.location_name_snapshot} />
           <Info rotulo="Natureza" valor={os.work_order_type_label} />
           <Info rotulo="Situação" valor={os.status_label} />
           <Info rotulo="Solicitação" valor={os.service_request_number} />
@@ -722,7 +722,7 @@ function PassoPreencherOS({ id, os }: { id: string; os: WorkOrderDetail }) {
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
             <Info rotulo="Cliente" valor={os.customer_name} />
             <Info rotulo="Equipamento" valor={os.asset_name_snapshot} />
-            <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+            <Info rotulo="Local" valor={os.location_name_snapshot} />
             <Info
               rotulo="Check-in"
               valor={checkin ? new Date(checkin.occurred_at).toLocaleString('pt-BR') : null}
