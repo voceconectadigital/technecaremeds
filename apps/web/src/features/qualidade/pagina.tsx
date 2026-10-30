@@ -26,6 +26,7 @@ import {
 } from '@aurora/ui';
 import {
   assetsList,
+  checklistTemplatesList,
   customersList,
   qualityCreate,
   qualityDelete,
@@ -40,6 +41,7 @@ import {
   useApi,
   useApiMutation,
   useApiQuery,
+  usePermissions,
   useUrlState,
 } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
@@ -228,7 +230,10 @@ function CartaoDoCertificado({ registro: r }: { registro: QualityRecordRow }) {
     }
   }
 
-  const sobre = [r.asset_name, r.customer_name, r.person_name].filter(Boolean).join(' · ');
+  const procedimento = r.procedure_title
+    ? `Procedimento: ${r.procedure_title}${r.procedure_version ? ` (v${r.procedure_version})` : ''}`
+    : null;
+  const sobre = [r.asset_name, r.customer_name, r.person_name, procedimento].filter(Boolean).join(' · ');
   return (
     <Card>
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
@@ -307,6 +312,7 @@ function DialogoNovoCertificado({
   const [titulo, setTitulo] = useState('');
   const [cliente, setCliente] = useState('');
   const [ativo, setAtivo] = useState('');
+  const [procedimento, setProcedimento] = useState('');
   const [pessoa, setPessoa] = useState('');
   const [numero, setNumero] = useState('');
   const [emissor, setEmissor] = useState('');
@@ -325,6 +331,16 @@ function DialogoNovoCertificado({
     { query: { customer: cliente || undefined, limit: 500 } },
     { enabled: Boolean(cliente) }
   ) as { data: { items: { id: string; name: string; tag: string | null }[] } | undefined };
+  // QUA-04: o procedimento/checklist a que o certificado se refere — só os publicados (a versão vale).
+  const { can } = usePermissions();
+  const { data: procedimentos } = useApiQuery(
+    checklistTemplatesList,
+    { query: {} },
+    { enabled: can('procedure.read'), staleTime: 5 * 60_000 }
+  ) as {
+    data: { items: { id: string; title: string; version: number; status: string }[] } | undefined;
+  };
+  const publicados = (procedimentos?.items ?? []).filter((p) => p.status === 'published');
 
   const criar = useApiMutation(qualityCreate, {
     invalidates: [qualityList],
@@ -346,6 +362,7 @@ function DialogoNovoCertificado({
           title: titulo.trim(),
           customer_id: cliente || null,
           asset_id: !treinamento && ativo ? ativo : null,
+          procedure_template_id: procedimento || null,
           person_name: treinamento ? pessoa.trim() : null,
           certificate_number: numero.trim() || null,
           issuer: emissor.trim() || null,
@@ -437,6 +454,21 @@ function DialogoNovoCertificado({
               </Select>
             </Field>
           </>
+        )}
+        {publicados.length > 0 && (
+          <Field
+            label="Procedimento"
+            hint="Opcional: o procedimento/checklist (versão publicada) a que se refere."
+          >
+            <Select value={procedimento} onChange={(e) => setProcedimento(e.target.value)}>
+              <option value="">Nenhum</option>
+              {publicados.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title} (v{p.version})
+                </option>
+              ))}
+            </Select>
+          </Field>
         )}
         <Field label="Número do certificado">
           <Input value={numero} onChange={(e) => setNumero(e.target.value)} maxLength={80} />

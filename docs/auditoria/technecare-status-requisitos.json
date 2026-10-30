@@ -1,0 +1,2862 @@
+{
+  "projeto": "Téchne Care",
+  "data_auditoria": "2026-10-29",
+  "branch": "feat/rodada-2026-10-29",
+  "base": "main a852e7c (PR #41)",
+  "metodo": "Leitura do código e dos testes por módulo, conferida item a item; correções desta rodada com testes novos. Nenhum item foi aprovado só por existir código. A aceitação do cliente (uso real) não foi feita: \"IMPLEMENTADO_COM_TESTE\" quer dizer código + teste automatizado que cobre o critério, rodando verde nesta rodada ou no CI do PR.",
+  "legenda": {
+    "IMPLEMENTADO_COM_TESTE": "código e teste automatizado que cobre o critério de aceite",
+    "IMPLEMENTADO_SEM_TESTE": "código existe, mas nenhum teste automatizado confere o critério",
+    "PARCIAL": "parte do critério atendida; a observação diz o que falta",
+    "NAO_IMPLEMENTADO": "não existe no código",
+    "PENDENTE_DEFINICAO": "depende de regra, fórmula ou decisão do cliente",
+    "BLOQUEADO_DEPENDENCIA": "depende de serviço externo (e-mail, DNS, hardware) ou de dado que não chegou",
+    "EXIGE_APROVACAO_COMERCIAL": "ampliação de escopo; ver docs/auditoria/AMPLIACOES_ESCOPO_ANDERSON.md",
+    "NAO_IMPLEMENTAR_V2": "encaminhado para a versão 2 por decisão de 20/10/2026",
+    "EVOLUCAO_FUTURA": "fora desta fase: hardware, IA ou integração ainda não contratados",
+    "DECISAO_REGISTRADA": "decisão comercial registrada, sem código a fazer"
+  },
+  "totais": {
+    "geral": 177,
+    "por_status": {
+      "IMPLEMENTADO_COM_TESTE": 139,
+      "BLOQUEADO_DEPENDENCIA": 6,
+      "PENDENTE_DEFINICAO": 4,
+      "PARCIAL": 3,
+      "EXIGE_APROVACAO_COMERCIAL": 2,
+      "DECISAO_REGISTRADA": 2,
+      "EVOLUCAO_FUTURA": 8,
+      "NAO_IMPLEMENTAR_V2": 13
+    },
+    "por_fase": {
+      "ATUAL": {
+        "IMPLEMENTADO_COM_TESTE": 118,
+        "BLOQUEADO_DEPENDENCIA": 4,
+        "PENDENTE_DEFINICAO": 4,
+        "PARCIAL": 2
+      },
+      "ATUAL_VITRINE": {
+        "IMPLEMENTADO_COM_TESTE": 11
+      },
+      "OPERACIONAL_VALIDAR": {
+        "IMPLEMENTADO_COM_TESTE": 8,
+        "BLOQUEADO_DEPENDENCIA": 2,
+        "PARCIAL": 1
+      },
+      "AVALIAR_ESCOPO": {
+        "IMPLEMENTADO_COM_TESTE": 2,
+        "EXIGE_APROVACAO_COMERCIAL": 2
+      },
+      "DECISAO_COMERCIAL": {
+        "DECISAO_REGISTRADA": 2
+      },
+      "EVOLUCAO_FUTURA": {
+        "EVOLUCAO_FUTURA": 8
+      },
+      "V2": {
+        "NAO_IMPLEMENTAR_V2": 13
+      }
+    }
+  },
+  "itens": [
+    {
+      "id": "USR-01",
+      "titulo": "Menu dedicado Usuários no sistema",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Cadastro e listagem acessíveis no menu, sem depender só de Configurações.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/shell/navigation.ts:137",
+        "teste: e2e/specs/usuarios.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Usuários tem item próprio no menu (grupo Cadastros)."
+    },
+    {
+      "id": "USR-02",
+      "titulo": "Substituir rótulo Convidar por Adicionar usuário sem quebrar convites",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Fluxo permite adicionar/convidar, aceitar convite e concluir cadastro sem vazamento de dados.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/configuracoes/membros.tsx",
+        "teste: apps/api/src/__tests__/api-members.test.ts"
+      ],
+      "bloqueio": "provedor de e-mail ou decisão de liberar a definição de senha pela API",
+      "observacao": "O rótulo é \"Adicionar usuário\" e o cadastro funciona, mas o usuário adicionado não consegue entrar sozinho: não há convite por e-mail nem definição de senha pela API (negada de propósito, 0045). A senha inicial sai por admin:criar."
+    },
+    {
+      "id": "USR-03",
+      "titulo": "Três perfis funcionais Operador, Solicitante e Gestor",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Apenas estes três aparecem no cadastro comum; privilégios internos de superadmin permanecem protegidos, distintos de profissão.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/profiles.ts:25",
+        "teste: apps/api/src/__tests__/pente-fino-acesso.test.ts",
+        "teste: e2e/specs/usuarios.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Só Operador, Solicitante e Gestor no formulário; owner/admin recusados com 403; profissão não dá permissão."
+    },
+    {
+      "id": "USR-04",
+      "titulo": "Dados de identidade e contato no cadastro de pessoas",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Nome, CPF, e-mail, telefone e informações pertinentes validados; conselhos profissionais exigidos apenas conforme profissão, não todos simultaneamente.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/profiles.ts",
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts",
+        "teste: packages/domain/src/__tests__/cadastros-rodada-1029.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Telefone brasileiro com DDD validado; conselho exigido conforme a profissão (CRM, COREN, CREA, CFT, CREFITO), não todos."
+    },
+    {
+      "id": "USR-05",
+      "titulo": "Profissão e vínculo com pessoa jurídica",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Profissão e registro correspondente, empresa/CNPJ quando aplicável; usuário não opera sem vínculo autorizado a organização.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "CNPJ da empresa (opcional) validado pelos dígitos, junto do nome da empresa; vínculo à organização obrigatório já existia."
+    },
+    {
+      "id": "USR-06",
+      "titulo": "Vínculo com cliente, hospital, unidade e setor(es)",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Usuário vê e atua somente em organizações/setores autorizados; múltiplos setores suportados conforme permissão.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/common/scope.guard.ts",
+        "teste: apps/api/src/__tests__/api-usuarios-perfis.test.ts",
+        "teste: e2e/specs/usuarios.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Escopo cliente → setores aplicado no servidor; fora dele, 404."
+    },
+    {
+      "id": "USR-07",
+      "titulo": "Bloquear, suspender e reativar contas",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Ação auditável, permissões restritas, tokens/sessões efetivamente invalidados conforme política e sem perda de histórico.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/platform/members.controller.ts:148",
+        "teste: apps/api/src/__tests__/api-usuarios-perfis.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Ativo/suspenso/bloqueado com motivo; acesso recusado já na requisição seguinte (o vínculo nega; o token em si não é revogado)."
+    },
+    {
+      "id": "USR-08",
+      "titulo": "Solicitante restrito à abertura e acompanhamento",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Não pode assumir triagem nem editar cadastro de clientes, ativos, estoque, planos e checklists por acesso direto ou API.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/permissions.ts",
+        "teste: apps/api/src/__tests__/api-usuarios-perfis.test.ts",
+        "teste: apps/api/src/__tests__/api-solicitacoes-fluxo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Solicitante recebe 403 ao criar cliente, ativo, plano ou checklist e não faz triagem pela API."
+    },
+    {
+      "id": "USR-09",
+      "titulo": "Operador com permissões técnicas diferenciadas",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Alimenta dados autorizados; criação/alteração de campos gerenciais exige regra/aprovação adequada.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "PENDENTE_DEFINICAO",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": "Anderson: lista de campos que exigem aprovação",
+      "observacao": "Testado: o servidor recusa (403) ao Operador 13 alterações de cadastro gerencial. O fluxo de aprovação de campos depende de o cliente dizer quais campos."
+    },
+    {
+      "id": "USR-10",
+      "titulo": "Gestor com permissões administrativas e gerenciais",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Pode acessar painéis, estoque, orçamento e aprovações em seu escopo, sem acessar dados de outro tenant.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/permissions.ts",
+        "teste: apps/api/src/__tests__/api-usuarios-perfis.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Gestor com estoque, orçamento, aprovações e usuários no escopo, sem escalar a admin."
+    },
+    {
+      "id": "USR-11",
+      "titulo": "Hierarquia para alterar campos e aprovações gerenciais",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Implementar controle efetivo por API e UI para técnicos, engenheiros e gestores; não apenas ocultar botões.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "PENDENTE_DEFINICAO",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/common/permissions.guard.ts",
+        "teste: apps/api/src/__tests__/pente-fino-acesso.test.ts"
+      ],
+      "bloqueio": "lista de campos com aprovação (cliente)",
+      "observacao": "O RBAC vale na API (não só esconde botões), mas falta o cliente dizer quais campos exigem aprovação de engenheiro ou gestor."
+    },
+    {
+      "id": "USR-12",
+      "titulo": "Visão Hoje filtrável e coerente com perfil",
+      "versao": "ATUAL",
+      "modulo": "Usuarios, perfis e segregacao",
+      "criterio_de_aceite": "Administrador autorizado pode selecionar clientes; usuários de cliente enxergam só sua organização ou setor.",
+      "fonte": "Reunião 16/10 00:03–00:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/routes/hoje.tsx",
+        "teste: e2e/specs/hoje-pendencias.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Seletor de cliente na tela Hoje; escopo restrito recebe só o seu setor."
+    },
+    {
+      "id": "CLI-01",
+      "titulo": "Cadastro EAS versus Empresa corporativa",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Tipo de organização distingue estabelecimento assistencial de saúde de empresa de engenharia clínica/assistência técnica.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/customer-kinds.ts",
+        "teste: apps/api/src/__tests__/api-clientes-classificacao.test.ts",
+        "teste: e2e/specs/clientes.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "EAS × empresa corporativa com subtipos validados na API."
+    },
+    {
+      "id": "CLI-02",
+      "titulo": "Segmentos enxutos e padronizados",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Consultório, clínica, hospital, laboratório, clínica de imagem, home care e empresa corporativa; eliminar Outro redundante conforme requisitos.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/customer-kinds.ts",
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "\"Outro EAS\"/\"Outra empresa\" recusados em cadastro novo; cliente antigo segue exibido e editável."
+    },
+    {
+      "id": "CLI-03",
+      "titulo": "Catálogo de setores por organização",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Padrões de pronto atendimento, bloco cirúrgico, UTI e enfermaria, mantendo inclusão de novos setores.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/clientes/novo-cliente.tsx",
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "\"Criar setores padrão\" (marcado para EAS na tela) cria unidade + Pronto Atendimento, Bloco Cirúrgico, UTI e Enfermaria; setores novos continuam livres."
+    },
+    {
+      "id": "CLI-04",
+      "titulo": "Vínculo cliente-setor-equipes-ativos",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Setores relacionam ativos e usuários sem exigir duplicidade cadastral; filtros respeitam vínculos.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/assets/assets.controller.ts",
+        "teste: apps/api/src/__tests__/api-assets.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Ativo e usuário ligados ao mesmo setor do cliente, sem cadastro duplicado."
+    },
+    {
+      "id": "CLI-05",
+      "titulo": "Faixa contratual de relatório Basic, Advanced, Expert",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Cadastro do cliente tem escolha entre os três níveis e a permissão controla nível de relatórios entregue.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "campo report_tier + trava",
+      "evidencias": [
+        "packages/db/migrations/0085_cadastro_cliente_e_ativo.sql",
+        "apps/web/src/features/clientes/contrato.tsx",
+        "teste: apps/api/src/__tests__/api-cadastro-cliente-ativo.test.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: o cadastro do cliente tem o relatório incluso no contrato (Basic, Advanced, Expert), visível na ficha e na lista; o servidor usa esse nível como teto na geração de relatório (REL-13)."
+    },
+    {
+      "id": "CLI-06",
+      "titulo": "Duração do contrato do cliente",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Registrar vigência, datas e estado do contrato de forma validada, sem assumir modelo financeiro não definido.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "campos novos",
+      "evidencias": [
+        "packages/db/migrations/0085_cadastro_cliente_e_ativo.sql",
+        "teste: apps/api/src/__tests__/api-cadastro-cliente-ativo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: início e fim da vigência no cadastro do cliente (juntos ou nenhum, fim depois do início, validado na tela, na API e no banco), com situação calculada: a iniciar, vigente, vence em 30 dias, vencido, não informado. Sem modelo financeiro."
+    },
+    {
+      "id": "CLI-07",
+      "titulo": "Diferenciar cliente de serviço e cliente usuário da plataforma",
+      "versao": "ATUAL",
+      "modulo": "Clientes, contratos e organizacoes",
+      "criterio_de_aceite": "Empresa prestadora pode administrar hospitais vinculados; EAS pode operar seu próprio estabelecimento sem visão externa.",
+      "fonte": "Reunião 16/10 00:17–00:30 e 01:05–01:08; WhatsApp 19/10 15:59–16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/organization-features.ts",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts",
+        "teste: apps/api/src/__tests__/api-fundacoes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "O modo de uso passou a mudar comportamento: prestadora usa orçamento; hospital próprio não, salvo se ligar. Isolamento entre tenants já testado."
+    },
+    {
+      "id": "ATV-01",
+      "titulo": "Nomes normalizados de equipamentos",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Catálogo de nomes controlados e reutilizáveis, sem variações livres que prejudiquem indicadores.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "nome = catálogo",
+      "evidencias": [
+        "apps/web/src/features/ativos/formulario.tsx",
+        "teste: apps/api/src/__tests__/api-equipamentos-catalogo.test.ts",
+        "teste: e2e/specs/equipamentos-catalogo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "O nome do equipamento passou a ser escolhido do catálogo da família (nome fora do catálogo não salva); quem gerencia catálogos cadastra nome novo ali mesmo. Ativos antigos com nome livre continuam editáveis."
+    },
+    {
+      "id": "ATV-02",
+      "titulo": "Cinco famílias de equipamento",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Suporte à vida, diagnóstico, terapia, tratamento e equipamentos de apoio, com filtros por família.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/asset-families.ts",
+        "teste: apps/api/src/__tests__/api-equipamentos-catalogo.test.ts",
+        "teste: e2e/specs/equipamentos-catalogo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cinco famílias, com filtro no servidor e na URL."
+    },
+    {
+      "id": "ATV-03",
+      "titulo": "Modelo, criticidade e identificação técnica",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Modelo cadastrável, criticidade, número de série e patrimônio com validação e vinculação ao setor e cliente.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ativos/formulario.tsx",
+        "teste: apps/api/src/__tests__/api-equipamentos-catalogo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Modelo, criticidade, série e patrimônio com cliente e setor conferidos no servidor."
+    },
+    {
+      "id": "ATV-04",
+      "titulo": "Tag obrigatória e identificação única",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Impedir salvar ativo sem tag válida e respeitar unicidade por domínio pertinente.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/migrations/0089_identificacao_ativo_pessoa_e_qualidade.sql",
+        "teste: apps/api/src/__tests__/api-ativos-identificacao-vida.test.ts"
+      ],
+      "bloqueio": "tags repetidas antigas devem ser corrigidas por quem conhece o parque",
+      "observacao": "Tag única por organização (sem acento/pontuação/espaço) e não apagável na edição (API 422 + gatilho). Tags repetidas antigas não foram renomeadas: ficam marcadas (tag_legacy_duplicate) e fora do índice até serem trocadas."
+    },
+    {
+      "id": "ATV-05",
+      "titulo": "QR Code vinculado à tag do ativo",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Associar QR Code existente e permitir imprimir/ler/visualizar; geração nova somente após confirmar comportamento desejado no sistema.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/assets/qr.controller.ts",
+        "teste: apps/web/src/__tests__/qr.test.ts",
+        "teste: e2e/specs/ativos-ficha-vida.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Vincular etiqueta existente (409 se em uso), imprimir e ler pela câmera em /q/:token."
+    },
+    {
+      "id": "ATV-06",
+      "titulo": "Campo opcional de chip geolocalizador",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Registrar identificador/vínculo de tag de localização; não sugerir rastreamento real sem hardware.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0063_familia_e_identificacao_do_equipamento.sql",
+        "teste: apps/api/src/__tests__/api-equipamentos-catalogo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Chip opcional e único; só cadastro e vínculo, sem hardware."
+    },
+    {
+      "id": "ATV-07",
+      "titulo": "Foto obrigatória no cadastro do ativo",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Upload/validação de arquivo com vínculo correto ao equipamento e controle de acesso.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "foto do ativo",
+      "evidencias": [
+        "packages/db/migrations/0085_cadastro_cliente_e_ativo.sql",
+        "apps/api/src/assets/assets.controller.ts",
+        "teste: apps/api/src/__tests__/api-cadastro-cliente-ativo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: foto obrigatória ao criar o ativo, no mesmo pedido e na mesma transação (PNG/JPEG/WebP conferidos pelos bytes, SHA-256, até 8 MB); trocar foto e baixar com o mesmo escopo da ficha (fora do escopo/outra organização: 404). Ativos antigos sem foto seguem válidos."
+    },
+    {
+      "id": "ATV-08",
+      "titulo": "Remover campo Tipo redundante",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Remover somente o campo explicitamente considerado redundante na mensagem de 19/10; preservar tipo de serviço e família de ativo.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "Tipo removido da tela",
+      "evidencias": [
+        "apps/web/src/features/ativos/formulario.tsx",
+        "teste: e2e/specs/equipamentos-catalogo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: o campo \"Tipo do equipamento\" saiu da tela; o tipo é gravado por baixo a partir do nome escolhido no catálogo. Famílias, tipo da OS e tipos de relatório preservados."
+    },
+    {
+      "id": "ATV-09",
+      "titulo": "Dados patrimoniais de aquisição",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Registrar valor de aquisição, número da nota fiscal, data de aquisição e vida útil estimada.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0078_ativo_nota_fiscal.sql",
+        "teste: apps/api/src/__tests__/api-equipamentos-catalogo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Valor, NF (só com permissão financeira), data de aquisição e vida útil."
+    },
+    {
+      "id": "ATV-10",
+      "titulo": "Depreciação temporal calculada e visualizada",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Calcular e mostrar cronologia/barra e valor residual com metodologia configurada e auditada; não inventar norma contábil.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/assets.ts",
+        "teste: packages/domain/src/__tests__/cadastros-rodada-1029.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Linha reta (sem norma inventada) com metodologia explícita: método, data-base, vida útil, fim da vida útil, valor residual (cadastro, padrão 0) e base depreciável, calculados no servidor."
+    },
+    {
+      "id": "ATV-11",
+      "titulo": "Número do registro ANVISA",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Campo pesquisável para registro, com consistência e tratamento de equipamentos sem registro aplicável.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-ativos-identificacao-vida.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "ANVISA pesquisável (?q= e ?anvisa= na lista) e \"Não se aplica\" (recusado junto com número, na API e no banco)."
+    },
+    {
+      "id": "ATV-12",
+      "titulo": "Filtro de ativos por cliente e situação",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Buscar por ativo/cliente/setor e estado, sempre respeitando escopo e tenant.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-ativos-identificacao-vida.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Testes de ?customer= e ?status= com vínculo restrito e outra organização."
+    },
+    {
+      "id": "ATV-13",
+      "titulo": "Ficha de vida detalhada do equipamento",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Histórico de OS, planos, procedimentos, indicadores, mudanças, fotos e informações patrimoniais associados ao ativo.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/api/src/assets/assets.controller.ts",
+        "teste: apps/api/src/__tests__/api-ativos-identificacao-vida.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Ficha de vida com planos que cobrem o ativo, procedimentos executados com vereditos e histórico de alterações de campo (auditoria), cada parte com a sua permissão."
+    },
+    {
+      "id": "ATV-14",
+      "titulo": "Imprimir/exportar ficha de vida e detalhes pertinentes",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Visualização e impressão legível e fiel aos dados e permissões.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/shell/botao-imprimir.tsx",
+        "teste: e2e/specs/ativos-ficha-vida.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Imprimir com folha de estilo própria; o teste confere o botão e a ocultação do bloco financeiro, não o papel."
+    },
+    {
+      "id": "ATV-15",
+      "titulo": "SLA por equipamento com chave habilitar/desabilitar",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Configurar SLA individual e seu estado, com efeitos testáveis em medições e alertas sem confundir com contrato.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "sla_enabled + política no formulário",
+      "evidencias": [
+        "packages/db/migrations/0085_cadastro_cliente_e_ativo.sql",
+        "teste: packages/db/src/__tests__/sla.test.ts",
+        "teste: apps/api/src/__tests__/api-cadastro-cliente-ativo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: chave \"SLA deste equipamento habilitado\" e escolha da política no cadastro; desligado, nenhuma OS nem chamado do equipamento abre relógio (função do banco resolve_sla_policy)."
+    },
+    {
+      "id": "ATV-16",
+      "titulo": "Estado operacional ativo, em manutenção ou obsoleto",
+      "versao": "ATUAL",
+      "modulo": "Ativos, patrimonio e cadastro",
+      "criterio_de_aceite": "Estado refletido em ficha, filtros, painéis e relatórios sem perder histórico.",
+      "fonte": "Reunião 16/10 01:08–01:11; WhatsApp 19/10 12:18–12:52 e 16:02.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/work-orders.ts",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts",
+        "teste: apps/api/src/__tests__/api-relatorio-patrimonial.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "O parecer da OS (PARADO/LIBERADO) leva o ativo a \"em manutenção\" e de volta a \"em operação\", com histórico; obsoleto via laudo validado; estado nos filtros, na ficha e no relatório patrimonial."
+    },
+    {
+      "id": "SOL-01",
+      "titulo": "Equipamentos filtrados automaticamente após cliente",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Ao selecionar cliente aparecem somente ativos do cliente; seleção de setor reduz ainda mais conforme perfil.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/solicitacoes/nova.tsx",
+        "apps/api/src/common/alvo-da-solicitacao.ts",
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Seletor de setor na nova solicitação reduz os equipamentos; o servidor confere setor no escopo, do cliente, e equipamento dentro dele."
+    },
+    {
+      "id": "SOL-02",
+      "titulo": "Remover campo Sintoma redundante",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Formulário, API e exibição não exigem Sintoma; preservar descrição do ocorrido, detalhes e urgência.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: e2e/specs/solicitacoes-fluxo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Sintoma saiu do formulário e é opcional na API; dado antigo segue visível."
+    },
+    {
+      "id": "SOL-03",
+      "titulo": "Tipos de manutenção estritamente definidos",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Corretiva, Preventiva, Instrução Técnica, Treinamento, Calibração, Teste de Segurança Elétrica e Qualificação.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/request-types.ts",
+        "teste: apps/api/src/__tests__/api-solicitacoes-fluxo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Os sete tipos em lista fechada; outro valor dá 422."
+    },
+    {
+      "id": "SOL-04",
+      "titulo": "Perfis solicitantes sem comandos de triagem",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Solicitante só abre, acompanha e avalia conforme suas permissões; triagem/aceitação/negação só por autorizado.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-service-requests.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Solicitante não tria; cada transição exige permissão no servidor."
+    },
+    {
+      "id": "SOL-05",
+      "titulo": "Triagem e vínculo de chamado à OS",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Aceitar chamado cria OS vinculada; negar exige motivo e registro, com estados rastreáveis.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-work-orders.test.ts",
+        "teste: apps/api/src/__tests__/api-service-requests.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Aceitar gera OS vinculada; recusar exige motivo; histórico por estado."
+    },
+    {
+      "id": "SOL-06",
+      "titulo": "Solicitações de movimentação controladas",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Não oferecer solicitação irrestrita via texto livre; política específica para movimentar equipamentos por pessoas autorizadas, se implementada.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-assets.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Movimentação não é solicitação livre; é transferência com permissão e motivo."
+    },
+    {
+      "id": "SOL-07",
+      "titulo": "Proteção contra acesso cruzado na API",
+      "versao": "ATUAL",
+      "modulo": "Solicitacoes e triagem",
+      "criterio_de_aceite": "Tentar IDs de outro cliente/setor não retorna equipamentos, solicitações ou alterações indevidas.",
+      "fonte": "Reunião 16/10 00:22, 00:30–00:39.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/pente-fino-acesso.test.ts",
+        "teste: apps/api/src/__tests__/api-solicitacoes-fluxo.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "IDs de outro setor, cliente ou organização dão 404/422."
+    },
+    {
+      "id": "OS-01",
+      "titulo": "Substituir visão Rascunho por Negados na lista",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Não confundir label com migração de estados; preservar históricos de rascunho legado e separar chamados negados de OS.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/lista.tsx",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Aba \"Negados\" na Lista de OS (filtro ?status=denied na API), separada das demais abas; nenhum estado migrado."
+    },
+    {
+      "id": "OS-02",
+      "titulo": "Estado da OS com transições consistentes",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Aberta, agendada, em análise, em execução, pausada, aguardando peça e concluída; transições válidas e auditáveis.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/work-orders.ts",
+        "teste: packages/domain/src/__tests__/work-orders.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Estados e grafo de transições validados no servidor e auditados."
+    },
+    {
+      "id": "OS-03",
+      "titulo": "Colunas condicionais de orçamento para empresas",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Aguardando aprovação de orçamento e orçamento aprovado habilitados somente quando aplicável.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/organization-features.ts",
+        "apps/web/src/features/ordens/ficha.tsx",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts",
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx"
+      ],
+      "bloqueio": "confirmar com o cliente o padrão \"hospital próprio = sem orçamento\"",
+      "observacao": "Etapas de aprovação de orçamento, motivos de espera de orçamento e o botão \"Gerar orçamento\" só aparecem quando a organização usa orçamento (recurso quotes); modo hospital nasce sem orçamento."
+    },
+    {
+      "id": "OS-04",
+      "titulo": "Wizard de execução por etapas",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Resumo com confirmação, check-in, execução/preenchimento da OS, anexos opcionais e histórico/conclusão com navegação coerente.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ordens/executar.tsx",
+        "teste: e2e/specs/execucao-guiada.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Assistente em oito passos; o E2E vai do check-in à revisão."
+    },
+    {
+      "id": "OS-05",
+      "titulo": "Check-in com data e hora do sistema",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Início registra horário confiável, operador e evento auditável, sem depender de campo de horas manual isolado.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/execucao-guiada.ts",
+        "teste: apps/api/src/__tests__/api-execucao-guiada.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Check-in com hora do servidor, operador e evento (aceita hora do aparelho numa janela de 48 h / 5 min, para o modo offline)."
+    },
+    {
+      "id": "OS-06",
+      "titulo": "Geolocalização no check-in com consentimento/permissão",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Registrar coordenadas verificáveis quando autorizadas, sinalizar negação/falha sem inventar posição, obedecendo LGPD e HTTPS.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ordens/executar.tsx",
+        "teste: apps/api/src/__tests__/api-execucao-guiada.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Posição só com permissão; negação ou falha vira registro manual com justificativa, sem posição inventada."
+    },
+    {
+      "id": "OS-07",
+      "titulo": "Preencher OS em seção editável própria",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Entre execução e anexos, exibir dados de cliente/equipamento, defeito alegado e check-in preenchidos automaticamente.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/executar.tsx",
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Teste de tela prova que o passo \"Preencher OS\" mostra cliente, equipamento, local (nome), check-in e defeito alegado."
+    },
+    {
+      "id": "OS-08",
+      "titulo": "Descrição de serviço e observações livres",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Persistência, validações, histórico de edição e permissões por perfil testadas.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Descrição e observações persistem (limite 5000), ficam na trilha de auditoria com texto anterior e autor, e respeitam perfil (solicitante/auditor 403, operador de outro setor 404)."
+    },
+    {
+      "id": "OS-09",
+      "titulo": "Peças consumidas do estoque da organização correta",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Escolher estoque hospitalar/prestadora quando autorizado e movimentar a peça apenas vinculada a OS.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/inventory.ts",
+        "teste: packages/db/src/__tests__/pente-fino-estoque.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Baixa sempre vinculada à OS; servidor recusa almoxarifado de outro cliente."
+    },
+    {
+      "id": "OS-10",
+      "titulo": "Peças fornecidas pelo cliente",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Opção separada para registrar peça livremente sem debitar estoque interno.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/execucao-guiada.ts",
+        "teste: apps/api/src/__tests__/api-execucao-guiada.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Peça do cliente em tabela própria, sem passar pelo estoque."
+    },
+    {
+      "id": "OS-11",
+      "titulo": "Fotos de antes e depois do serviço",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Upload e visualização em OS com permissões e vínculo de data/profissional.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-execution.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Fotos antes/depois com autor e data."
+    },
+    {
+      "id": "OS-12",
+      "titulo": "Anexos técnicos opcionais",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Documentos, fotos e manuais anexáveis; perguntar se há anexos e permitir seguir sem anexo.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/executar.tsx",
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx",
+        "teste: e2e/specs/execucao-guiada.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Passo Anexos pergunta \"Há anexos para esta OS?\"; \"Não\" segue sem anexo; \"Sim\" aceita fotos antes/depois e documento/manual (PDF/imagem)."
+    },
+    {
+      "id": "OS-13",
+      "titulo": "Remover aba Conversa e preservar Histórico",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Não apagar histórico; registrar ações e mudanças relevantes em trilha auditável.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ordens/ficha.tsx",
+        "teste: e2e/specs/execucao-guiada.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "A aba Conversa saiu da OS e o Histórico ficou; comentários antigos continuam gravados."
+    },
+    {
+      "id": "OS-14",
+      "titulo": "Executar procedimento e checklist dentro da OS",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "OS gerada de plano carrega formulário correto e salva respostas por ativo e por tipo de procedimento.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/maintenance-plans.ts",
+        "teste: apps/api/src/__tests__/api-planos-executar.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "OS do plano nasce com a versão publicada do checklist; respostas por OS e ativo."
+    },
+    {
+      "id": "OS-15",
+      "titulo": "Suportar mais de um procedimento no mesmo plano/OS",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Se projeto prever combinação, carregar todos checklists associados sem misturar respostas nem perder rastreabilidade.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/migrations/0087_planos_ativacao_e_procedimentos.sql",
+        "teste: packages/db/src/__tests__/planos-procedimentos.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Vários procedimentos na mesma tarefa/OS (extra_checklist_template_keys): um checklist por procedimento, e o banco recusa misturar respostas; disponível na criação orientada."
+    },
+    {
+      "id": "OS-16",
+      "titulo": "Parecer técnico obrigatório na conclusão",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Para todas as OS indicar Liberado para uso ou Equipamento parado, com efeitos coerentes no estado do ativo.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/work-orders.ts",
+        "apps/field/src/telas/ordem.tsx",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts",
+        "teste: e2e/specs/campo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Parecer LIBERADO/PARADO obrigatório por padrão na conclusão de toda OS de equipamento (a organização pode desligar); PARADO → ativo \"em manutenção\", LIBERADO → volta \"em operação\"; baixado/descartado nunca é tocado; auditoria + evento asset.status_changed. O app de campo pede o parecer antes de concluir."
+    },
+    {
+      "id": "OS-17",
+      "titulo": "Conclusão guiada com feedback visível",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Ação Concluir/Troféu apenas após critérios obrigatórios; estados e histórico atualizados corretamente.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/executar.tsx",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts",
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "GET /work-orders/:id/completion devolve a mesma lista que o servidor usa para recusar; o botão Concluir só habilita sem pendência, mostra o que falta e em que passo, e confirma na tela."
+    },
+    {
+      "id": "OS-18",
+      "titulo": "Retirar Save draft indevido de procedimentos/checklists",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Remover ação de salvar rascunho nos formulários indicados sem destruir rascunhos antigos nem estados válidos de OS.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Teste prova que não há \"Salvar rascunho\" nos formulários de procedimento/checklist do assistente."
+    },
+    {
+      "id": "OS-19",
+      "titulo": "Revisar jargão Onsite e barra vermelha de execução",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Confirmar propósito; se irrelevante ou quebrado remover/reprojetar sem alterar lógica de estados.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "barras → etiquetas; \"onsite\" traduzido",
+      "evidencias": [
+        "apps/web/src/features/ordens/ficha.tsx",
+        "teste: apps/web/src/__tests__/prazos-da-os.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 23/10: as barras vermelhas \"onsite\"/\"Solução\" viraram etiquetas compactas com nome em português (\"Chegada ao local\", \"Solução\"), vencido/cumprido/vence em; a lógica de SLA não mudou."
+    },
+    {
+      "id": "OS-20",
+      "titulo": "Imprimir ordem de serviço completa",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Impressão PDF ou CSS print com dados técnicos, check-in, checklist, parecer, anexos e aprovação conforme existência real.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/folha-de-impressao.tsx",
+        "teste: apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx",
+        "teste: e2e/specs/os-auditoria-29-10.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Folha única de impressão da OS (?modo=impressao): dados técnicos, check-in, checklist com respostas, serviço, parecer, peças, anexos, avaliação e assinaturas, cada seção só quando há dado."
+    },
+    {
+      "id": "OS-21",
+      "titulo": "Pendências de avaliação/assinatura ao solicitante",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Ao entrar, mostrar OS elegíveis pendentes; avaliar antes da assinatura, visível somente aos responsáveis.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/avaliacao-os.ts",
+        "teste: apps/api/src/__tests__/api-avaliacao-os.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pendências de avaliar/assinar só para quem pediu; travam chamado novo (desligável)."
+    },
+    {
+      "id": "OS-22",
+      "titulo": "Avaliação da OS e indicador de satisfação",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Capturar nota/critério com trilha de autoria e criar indicador coerente sem inventar dados.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0080_avaliacao_de_os.sql",
+        "teste: packages/db/src/__tests__/avaliacao-os.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Nota 1 a 5, única por OS, com autor; indicador nulo sem dado."
+    },
+    {
+      "id": "OS-23",
+      "titulo": "Assinatura posterior à avaliação com prova de consentimento",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Não forjar assinatura automática; exigir mecanismo legítimo de concordância/assinatura rastreável e alinhado à regra de negócio.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/avaliacao-os.ts",
+        "teste: packages/db/src/__tests__/avaliacao-os.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Assinatura pelo clique explícito do próprio solicitante, com resumo SHA-256, e-mail, IP e hora; nunca automática. ICP-Brasil não existe (decisão do cliente)."
+    },
+    {
+      "id": "OS-24",
+      "titulo": "Laudo de obsolescência com numeração independente",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Processo/documento distinto com prefixo OBC e sequenciamento seguro, referência ao ativo, justificativa técnica, fotos e assinatura adequada.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/obsolescencia.ts",
+        "teste: packages/db/src/__tests__/obsolescencia.test.ts",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Laudo OBC com série própria, justificativa, foto obrigatória e, ao validar, assinatura de sessão de quem valida (SHA-256, e-mail, IP, hora), exibida no laudo e na impressão. Sem ICP-Brasil (decisão do cliente)."
+    },
+    {
+      "id": "OS-25",
+      "titulo": "Desativação de ativo após laudo validado",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Estado do ativo muda para obsoleto/inativo apenas com autorização e evidência, bloqueando operações inválidas sem apagar histórico.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/work-orders.ts",
+        "teste: packages/db/src/__tests__/obsolescencia.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Só a validação do laudo descomissiona o ativo, sem apagar histórico."
+    },
+    {
+      "id": "OS-26",
+      "titulo": "Revisar impressão nos demais contextos necessários",
+      "versao": "ATUAL",
+      "modulo": "Ordens de servico e execucao",
+      "criterio_de_aceite": "Disponibilizar impressão em OS, laudos, ficha de vida, relatórios e orçamentos quando aplicável; sem botões sem efeito.",
+      "fonte": "Reunião 16/10 00:32–01:01; WhatsApp 19/10 12:08–12:18; WhatsApp 23/10 11:55.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/ordens/folha-de-impressao.tsx",
+        "teste: e2e/specs/os-auditoria-29-10.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "\"Imprimir OS\"/\"Imprimir laudo\" abrem a folha completa; relatórios saem em PDF e Excel; a ficha de vida e as telas mantêm o Imprimir com folha de estilo; o Imprimir genérico que levava só a aba aberta saiu da OS."
+    },
+    {
+      "id": "ORC-01",
+      "titulo": "Gerar orçamento a partir de OS autorizada",
+      "versao": "ATUAL",
+      "modulo": "Orcamentos e compras tecnicas",
+      "criterio_de_aceite": "Ação restrita a usuários e tipo de empresa aplicável; guarda vínculo com a OS.",
+      "fonte": "Reunião 16/10 00:40–00:44; WhatsApp 23/10 12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/quotes.ts",
+        "teste: apps/api/src/__tests__/api-os-auditoria-29-10.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Gerar orçamento só com quote.create E com o recurso de orçamento ligado na organização; a API recusa (409) em qualquer porta de criação quando desligado; vínculo com a OS mantido."
+    },
+    {
+      "id": "ORC-02",
+      "titulo": "Compor orçamento com serviço e peças",
+      "versao": "ATUAL",
+      "modulo": "Orcamentos e compras tecnicas",
+      "criterio_de_aceite": "Hora técnica livre, quantidade, preços unitários e peças com totais corretos e rastreáveis.",
+      "fonte": "Reunião 16/10 00:40–00:44; WhatsApp 23/10 12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/quotes.ts",
+        "teste: apps/api/src/__tests__/pente-fino-orcamento.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Hora técnica e peças com totais em centavos."
+    },
+    {
+      "id": "ORC-03",
+      "titulo": "Enviar proposta ao solicitante/gestor correto",
+      "versao": "ATUAL",
+      "modulo": "Orcamentos e compras tecnicas",
+      "criterio_de_aceite": "Fluxo de envio/entrega seguro; sem simular e-mail enviado quando integração não existir.",
+      "fonte": "Reunião 16/10 00:40–00:44; WhatsApp 23/10 12:01.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/portal/src/telas/decisoes.tsx",
+        "teste: apps/api/src/__tests__/api-portal-decisoes.test.ts"
+      ],
+      "bloqueio": "provedor de e-mail",
+      "observacao": "\"Enviar\" põe o orçamento no portal (Decisões) do gestor do cliente; o e-mail fica na fila, sem simular envio."
+    },
+    {
+      "id": "ORC-04",
+      "titulo": "Aprovar ou negar orçamento com auditoria",
+      "versao": "ATUAL",
+      "modulo": "Orcamentos e compras tecnicas",
+      "criterio_de_aceite": "Permissões, data/hora, autor e estado consistente sem liberar execução prematuramente.",
+      "fonte": "Reunião 16/10 00:40–00:44; WhatsApp 23/10 12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/quotes.ts",
+        "teste: apps/api/src/__tests__/api-orcamento-da-os.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Aprovar/reprovar com autor, IP e motivo; só aprovar devolve a OS à execução."
+    },
+    {
+      "id": "ORC-05",
+      "titulo": "Visões aguardando orçamento e aguardando peças",
+      "versao": "ATUAL",
+      "modulo": "Orcamentos e compras tecnicas",
+      "criterio_de_aceite": "Listagens e contadores por responsável, cliente, setor e perfil, com links para OS/peças corretos.",
+      "fonte": "Reunião 16/10 00:40–00:44; WhatsApp 23/10 12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/api/src/hoje/espera.controller.ts",
+        "apps/web/src/routes/hoje-espera.tsx",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts",
+        "teste: e2e/specs/hoje-pendencias.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Os contadores da tela Hoje levam a listas filtradas (aguardando peças / orçamento) com recorte por cliente, setor e responsável no escopo, e link para cada OS ou orçamento."
+    },
+    {
+      "id": "PLN-01",
+      "titulo": "Ativar/inativar plano preservando histórico",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Mudança por responsável autorizado, plano inativo não gera indevidas futuras OS.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/api/src/plans/plans.controller.ts",
+        "packages/db/migrations/0087_planos_ativacao_e_procedimentos.sql",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Ativar/desligar plano por rota com motivo (maintenance_plan.update), auditado; inativo não abre ciclo nem entra na projeção; reativação testada (0087)."
+    },
+    {
+      "id": "PLN-02",
+      "titulo": "Contagem correta de planos ativos",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Métrica de planos ativos distinta de programações e execuções no período.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/plan-board.ts",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "\"Planos ativos\" conta planos (não programações) e passou a respeitar setor, tipo e categoria, além do cliente."
+    },
+    {
+      "id": "PLN-03",
+      "titulo": "Semântica correta de programados, realizados, pendentes e vencidos",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Cálculo leva em conta janela e tolerância, sem definir vencido antes do prazo final.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: packages/domain/src/__tests__/planos-conformidade.test.ts",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Fronteira de vencido testada: um dia antes e no instante exato do vencimento + tolerância é pendente; um dia depois é vencido."
+    },
+    {
+      "id": "PLN-04",
+      "titulo": "Filtros combináveis tipo, cliente, setor e período",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Aplicar múltiplos filtros simultaneamente, limitando opções ao escopo de acesso.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cliente + vários setores + tipo combinados no quadro e no cronograma, com teste."
+    },
+    {
+      "id": "PLN-05",
+      "titulo": "Seleção de procedimentos/checklists existentes ao criar plano",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Formulário permite reutilizar procedimentos cadastrados e relacioná-los corretamente ao tipo/equipamento.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/planos/novo-plano.tsx",
+        "teste: apps/api/src/__tests__/api-painel-planejamento.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Procedimentos publicados do tipo escolhido; servidor recusa outro tipo."
+    },
+    {
+      "id": "PLN-06",
+      "titulo": "Planejamento e recorrência com geração opcional de OS",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Respeitar intervalo, data inicial, antecedência, tolerância e opção de gerar OS automaticamente.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/maintenance-plans.ts",
+        "teste: packages/db/src/__tests__/maintenance-plans.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Intervalo, âncora, antecedência e tolerância testados; a geração automática de OS não tem teste próprio."
+    },
+    {
+      "id": "PLN-07",
+      "titulo": "Preservar campos de checklist já aprovados",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Texto, sim/não, conforme/não conforme, numérico, nominal com unidade/tolerância, múltipla escolha, observação, data e foto.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/checklists.ts",
+        "teste: packages/domain/src/__tests__/checklists.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Tipos de campo do checklist testados."
+    },
+    {
+      "id": "PLN-08",
+      "titulo": "Retirar opção redundante Aceite de checklist",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Revisar uso real: eliminar campo/etapa redundante indicado, preservando concordâncias juridicamente necessárias em outros fluxos.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/planos/procedimentos.tsx",
+        "teste: apps/web/src/__tests__/planos-conformidade.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Teste de componente: \"Aceite\" não aparece nos filtros nem no seletor de tipo; procedimento antigo desse tipo ainda abre."
+    },
+    {
+      "id": "PLN-09",
+      "titulo": "Botão Play grande para executar plano",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Inicia wizard selecionando cliente, plano e ativo elegível, concluindo na OS correspondente.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/planos/play.tsx",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts",
+        "teste: e2e/specs/planos-play.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Botão grande \"Executar plano\" com assistente cliente → plano → equipamento elegível, terminando na OS do assistente de execução."
+    },
+    {
+      "id": "PLN-10",
+      "titulo": "Gráfico de conformidade por plano",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Percentual calculado com numerador e denominador corretos, por equipamentos ou execuções do período.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/planos/conformidade.tsx",
+        "teste: apps/web/src/__tests__/planos-conformidade.test.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Taxa por plano (\"50% · 1 de 2\") com o denominador explicado; sem denominador, nula (não zero)."
+    },
+    {
+      "id": "PLN-11",
+      "titulo": "Conformidade com múltiplos filtros",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Relatório/gráfico por cliente, unidade, setores e tipos sem vazamento de outros tenants.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/plan-board.ts",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Vários setores ao mesmo tempo no quadro e no cronograma; setor fora do escopo ou de outra organização dá 404."
+    },
+    {
+      "id": "PLN-12",
+      "titulo": "Vinculação coerente OS-checklist-histórico",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Execução preserva versões de procedimentos e respostas, inclusive após edição do plano original.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: packages/db/src/__tests__/planos-procedimentos.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Teste: OS gerada na v1 mantém a v1 e a resposta depois da revisão; o ciclo seguinte nasce com a v2."
+    },
+    {
+      "id": "PLN-13",
+      "titulo": "Garantir offline de campo já contratado",
+      "versao": "ATUAL",
+      "modulo": "Planos, procedimentos e cronogramas",
+      "criterio_de_aceite": "Verificar tarefas, sincronização e conflitos de coleta em campo na PWA existente; não criar aplicativo nativo novo nesta rodada.",
+      "fonte": "Reunião 16/10 00:45–01:05.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/field/src/fila.ts",
+        "teste: apps/field/src/__tests__/fila.test.ts",
+        "teste: e2e/specs/campo.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Fila offline, sincronização e conflitos do app de campo com testes extensos (adaptadores próprios, não Dexie)."
+    },
+    {
+      "id": "REL-01",
+      "titulo": "Nomenclatura final Basic, Advanced e Expert",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Evitar uso de Completo como nível final; não confundir níveis de relatório com tipos de contrato Básico/Completo/Expert.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "nomes",
+      "evidencias": [
+        "apps/web/src/features/painel/relatorio.tsx",
+        "apps/api/src/insights/reports.controller.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Botões \"Baixar PDF\"/\"Baixar Excel\"; títulos \"Relatório Basic/Advanced/Expert\"; \"Completo\" não é mais nome de nível."
+    },
+    {
+      "id": "REL-02",
+      "titulo": "Painel com ação Gerar relatório",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Usuário autorizado seleciona indicadores e aplica filtros, em vez de botões decorativos.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/painel/relatorio.tsx",
+        "teste: e2e/specs/relatorios.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Botão \"Gerar relatório\" no Painel com modelo, período, cliente e indicadores."
+    },
+    {
+      "id": "REL-03",
+      "titulo": "Aba própria de geração multifiltro",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Filtrar cliente, setor, tipo de manutenção, família/tipo de ativo, período e indicadores escolhidos.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/painel/pagina-relatorios.tsx",
+        "packages/db/src/relatorios.ts",
+        "teste: apps/api/src/__tests__/api-relatorios-filtros-agendados.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Gerador com setor no próprio diálogo, os sete tipos de manutenção e família de equipamento, conferidos no escopo; página própria /relatorios."
+    },
+    {
+      "id": "REL-04",
+      "titulo": "Modelo Basic com métricas base",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Disponibilidade, MTBF, MTTR, chamados abertos/fechados, conformidade de preventivas, calibrações, TSE e qualificações.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "PENDENTE_DEFINICAO",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/report-tiers.ts",
+        "teste: packages/domain/src/__tests__/report-catalog.test.ts"
+      ],
+      "bloqueio": "fórmulas do cliente",
+      "observacao": "Métricas calculadas; MTTR, MTBF, conformidade de preventivas e disponibilidade marcados como provisórios até as fórmulas do cliente (P-01…P-12)."
+    },
+    {
+      "id": "REL-05",
+      "titulo": "Modelo Advanced com métricas adicionais",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "SLA, evolução de chamados, backlog, obsolescência e situação de OS, se fórmulas homologadas.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "PARCIAL",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/report-tiers.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": "Anderson: definição P-16 (obsolescência)",
+      "observacao": "SLA, evolução, backlog e OS por situação ativos e testados; o indicador de obsolescência depende da definição P-16."
+    },
+    {
+      "id": "REL-06",
+      "titulo": "Modelo Expert avançado e restrito",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Incluir indicadores comprovados (ex.: saída/retorno, treinamento, avaliação) e suportar 17+ somente se houver 17 fórmulas válidas.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "PENDENTE_DEFINICAO",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/domain/src/report-tiers.ts",
+        "teste: packages/domain/src/__tests__/report-catalog.test.ts"
+      ],
+      "bloqueio": "fórmulas do cliente (P-01…P-16)",
+      "observacao": "Catálogo do Expert com 17 indicadores previstos, só 2 calculados; os outros dependem das fórmulas do cliente."
+    },
+    {
+      "id": "REL-07",
+      "titulo": "Fórmulas de indicadores devem ter fonte e versionamento",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Quando definições estiverem ausentes/provisórias, marcar PENDENTE_DEFINICAO e não fabricar números ou regras.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/domain/src/report-tiers.ts",
+        "teste: apps/api/src/__tests__/relatorio-pdf-legibilidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cada indicador tem versão da fórmula (v1, v1-provisoria, pendente), data e fonte, no JSON, no PDF e no Excel; nenhuma fórmula criada."
+    },
+    {
+      "id": "REL-08",
+      "titulo": "Remover placeholder aguardando PDF oficial",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Criar layout de relatório profissional sugerido com gráficos coerentes e somente métricas reais.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "layout Basic",
+      "evidencias": [
+        "apps/api/src/insights/relatorio-oficial.ts",
+        "teste: apps/api/src/__tests__/relatorio-oficial.test.ts",
+        "teste: e2e/specs/relatorios.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: o Basic ganhou o padrão visual do Advanced (cartões com cor pela meta, gráfico de 12 meses, assinaturas); indicadores pendentes aparecem com o motivo, sem número; \"AGUARDANDO MODELO PDF OFICIAL\" saiu da tela, do PDF e do agendado. Conferido por teste, não visualmente."
+    },
+    {
+      "id": "REL-09",
+      "titulo": "Exportar PDF/visualizar/imprimir relatórios",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Produzir saída legível com filtros, metadados, permissões e dados reais, sem quebrar em múltiplas páginas.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/insights/reports.controller.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "PDF com período, cliente, setor e data de geração; permissão e escopo no servidor."
+    },
+    {
+      "id": "REL-10",
+      "titulo": "Exportar relatórios em Excel",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": ".xlsx contém dados válidos, datas/números tipados, cabeçalhos e filtros coerentes; respeitar autorização.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "Excel",
+      "evidencias": [
+        "apps/api/src/documents/xlsx.ts",
+        "apps/api/src/insights/relatorio-planilha.ts",
+        "teste: apps/api/src/__tests__/xlsx.test.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: ?format=xlsx com a mesma permissão e escopo do JSON/PDF; abas Indicadores, Série mensal e Filtros; números e datas tipados; pendente sai como texto. Validado lendo o ZIP; não aberto no Excel."
+    },
+    {
+      "id": "REL-11",
+      "titulo": "Relatório patrimonial",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Permitir filtrar ativos, em manutenção e obsoletos, por organização e período, com valores disponíveis.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "relatório novo",
+      "evidencias": [
+        "apps/api/src/insights/relatorio-patrimonial.ts",
+        "packages/db/src/relatorio-patrimonial.ts",
+        "teste: apps/api/src/__tests__/api-relatorio-patrimonial.test.ts",
+        "teste: packages/db/src/__tests__/relatorio-patrimonial.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: relatório patrimonial (todos, ativos, em manutenção, obsoletos — pela situação cadastrada do ativo; obsoleto traz o laudo OBC), por cliente no escopo, em tela, PDF e Excel; valores, NF e totais só com permissão financeira."
+    },
+    {
+      "id": "REL-12",
+      "titulo": "Relatório de conformidade de planos",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Exibir calculado realizado/previsto e ranking/plano/cliente/sector com definição do denominador.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/api/src/plans/conformidade-planilha.ts",
+        "teste: apps/api/src/__tests__/api-planos-conformidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Relatório de conformidade de planos com ranking pela taxa (empate: maior denominador) por plano, cliente e setor, aba \"Definição\" e Excel."
+    },
+    {
+      "id": "REL-13",
+      "titulo": "Relatórios direcionados por nível contratual",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "O cliente vê apenas categorias contratadas; autorização garantida no backend.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/src/nivel-de-relatorio.ts",
+        "packages/db/src/automations.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts",
+        "teste: apps/api/src/__tests__/api-relatorios-filtros-agendados.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Nível contratado como teto na geração manual (também ao escolher só setor ou contrato) e nos relatórios agendados: recusa ao criar (422) e, se o contrato mudar, a execução registra o motivo no log sem enviar."
+    },
+    {
+      "id": "REL-14",
+      "titulo": "Indicador da avaliação das OS",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Painel consolida avaliações reais de OS, em escala documentada e sem duplicidade.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/painel/painel.tsx",
+        "teste: apps/api/src/__tests__/api-avaliacao-os.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cartão \"Avaliação das OS\" no Painel: média, quantidade e período; uma por OS; vazio sem avaliação."
+    },
+    {
+      "id": "REL-15",
+      "titulo": "Atalho de relatórios para criar automação",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Um relatório com filtros persistíveis pode alimentar uma automação quando o motor estiver implementado.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/web/src/features/automacoes/do-relatorio.ts",
+        "teste: apps/web/src/__tests__/relatorio-para-automacao.test.ts",
+        "teste: apps/api/src/__tests__/api-relatorios-filtros-agendados.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "\"Criar automação com estes filtros\" abre a Nova automação preenchida; a execução respeita os filtros."
+    },
+    {
+      "id": "REL-16",
+      "titulo": "Retirar referência específica à FEMIG no Expert",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Substituir chamada comercial por 17+ indicadores em tempo real somente se factual; senão sinalizar pendência e evitar propaganda falsa.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto honesto",
+      "evidencias": [
+        "apps/web/src/features/painel/relatorio.tsx",
+        "packages/domain/src/report-tiers.ts",
+        "teste: apps/api/src/__tests__/api-relatorios.test.ts"
+      ],
+      "bloqueio": "\"17+ em tempo real\" depende das fórmulas do cliente",
+      "observacao": "Pedido de 19/10: \"FHEMIG\" saiu do cartão do Expert e das notas do catálogo. Não escrevemos \"17+ indicadores em tempo real\" porque só 2 dos 17 têm cálculo hoje; o cartão diz \"17 previstos, 2 com cálculo hoje\"."
+    },
+    {
+      "id": "REL-17",
+      "titulo": "Revisar falhas conhecidas de cálculo e relatórios",
+      "versao": "ATUAL",
+      "modulo": "Relatorios, indicadores e exportacoes",
+      "criterio_de_aceite": "Localizar divergências de fórmula/report, testar com fixtures determinísticas e documentar indicadores não homologados.",
+      "fonte": "Reunião 16/10 00:11–00:17 e 01:12–01:15; WhatsApp 19/10 12:56–12:59 e 15:59; WhatsApp 22/10 08:11.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "docs/AUDITORIA-INDICADORES-BASIC-ADVANCED-EXPERT.md",
+        "teste: packages/db/src/__tests__/pente-fino-indicadores.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Divergências PF-50…PF-56 com testes de dados fixos; indicadores não homologados documentados."
+    },
+    {
+      "id": "AUT-01",
+      "titulo": "Criar automação com tipo, filtros, destino e agendamento",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "UI e backend seguros, validação de destinatários, permissões e estado de ativo/inativo.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/automacoes/nova.tsx",
+        "teste: apps/api/src/__tests__/api-automacoes-agendadas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Tipo, destinatários, agenda, simulação e ativo/pausado; e-mail fica na fila."
+    },
+    {
+      "id": "AUT-02",
+      "titulo": "Relatório agendado de conformidade preventiva",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Disparo conforme frequência selecionada e registro de sucesso/erro sem spam.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-automacoes-agendadas.test.ts"
+      ],
+      "bloqueio": "provedor de e-mail",
+      "observacao": "Disparo idempotente com log e entrega na caixa interna; e-mail sem provedor."
+    },
+    {
+      "id": "AUT-03",
+      "titulo": "Relatório agendado de OS abertas/fechadas",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Filtro, intervalo, destinatário e correção da contagem auditados.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-automacoes-agendadas.test.ts"
+      ],
+      "bloqueio": "provedor de e-mail",
+      "observacao": "Relatório agendado com OS abertas/concluídas no recorte de cada destinatário; e-mail sem provedor."
+    },
+    {
+      "id": "AUT-04",
+      "titulo": "Aviso de OS aguardando peças ao setor de compras",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Disparo por transição de estado, deduplicação e identificação do responsável, sem vazamento de cliente.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: packages/db/src/__tests__/automations.test.ts",
+        "teste: e2e/specs/automacoes-agendadas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Aviso na transição para \"aguardando peça\", com número da OS e sem duplicar; entrega interna."
+    },
+    {
+      "id": "AUT-05",
+      "titulo": "Envio de indicadores de qualidade ao financeiro",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Restringir dados e métricas ao contrato e ao destinatário autorizado.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "PARCIAL",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-relatorios-filtros-agendados.test.ts"
+      ],
+      "bloqueio": "Anderson: lista de indicadores do financeiro; infraestrutura: provedor de e-mail",
+      "observacao": "O recorte por contrato e por destinatário vale nos agendados (trava de nível). Não existe modelo \"financeiro\": falta o cliente dizer quais indicadores vão ao financeiro; e-mail sem provedor."
+    },
+    {
+      "id": "AUT-06",
+      "titulo": "Automação de lembretes e atividades com responsáveis",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Regras e prazos definidos, execução idempotente e histórico de disparos.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-automacoes-agendadas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Lembrete e tarefa com responsável e prazo, idempotentes, com histórico."
+    },
+    {
+      "id": "AUT-07",
+      "titulo": "Gatilhos de movimentação em Kanban",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Eventos condicionados a mudanças reais, sem loops nem duplicação de notificações.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/workers/src/automacoes.ts",
+        "packages/db/migrations/0088_automacao_por_evento_uma_vez.sql",
+        "teste: apps/api/src/__tests__/api-automacao-kanban.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Achado: os eventos de OS não chegavam às automações (o publicador só registrava em log). O worker agora entrega o evento às regras; mover no quadro = transição → a automação roda uma vez (índice único, 0088), sem loop."
+    },
+    {
+      "id": "AUT-08",
+      "titulo": "Ações do tipo 5W2H, PDCA e gestão de tarefas",
+      "versao": "ATUAL",
+      "modulo": "Automacoes, alertas e tarefas",
+      "criterio_de_aceite": "Auditar alcance da fase e implementar só o especificado/aprovado nesta rodada; não confundir com sistema ONA completo da V2.",
+      "fonte": "Reunião 16/10 00:11–00:16 e 01:12–01:15.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/automacoes/tarefas.tsx",
+        "teste: e2e/specs/automacoes-agendadas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "5W2H e PDCA como tarefas, sem motor ONA."
+    },
+    {
+      "id": "STO-01",
+      "titulo": "Separar estoque interno de Store global",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Cliente tem estoque isolado; Store central é catálogo comercial somente do administrador da plataforma.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "aba Gerenciar catálogo só com inventory.update",
+      "evidencias": [
+        "packages/db/migrations/0066_estoque_e_store.sql",
+        "apps/web/src/features/store/store.tsx",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts",
+        "teste: e2e/specs/estoque-store.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Estoque interno por dono (organização ou cliente) e a Store separada; nesta rodada a gestão da Store ficou só com quem edita o catálogo (o cliente só compra e acompanha)."
+    },
+    {
+      "id": "STO-02",
+      "titulo": "Menu e navegação distinguem Estoque e Store",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Não renomear todo estoque interno para Store: interfaces distintas segundo perfil.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/shell/navigation.ts",
+        "teste: e2e/specs/estoque-store.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Estoque e Store são itens próprios do menu; a Store nunca mostra saldo."
+    },
+    {
+      "id": "STO-03",
+      "titulo": "Cadastro administrativo de produtos/preços para Store",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Dono central cria e edita itens, imagens/preços quando disponíveis, disponibilidade e status.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "tela nova + GET /store/catalog",
+      "evidencias": [
+        "apps/web/src/features/store/gerenciar.tsx",
+        "apps/api/src/inventory/estoque-gestao.controller.ts",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 23/10: aba \"Gerenciar catálogo\" na Store para cadastrar e editar produto, preço, descrição, categoria e publicação."
+    },
+    {
+      "id": "STO-04",
+      "titulo": "Visibilidade por cliente ou toda a rede",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Administrador define público de cada produto; clientes fora da seleção não podem consultar APIs de catálogo restrito.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "migration 0084 + PUT /store/items/:id/audience",
+      "evidencias": [
+        "packages/db/migrations/0084_store_publico_e_separacao.sql",
+        "packages/db/src/estoque-gestao.ts",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 23/10: cada produto vale para toda a rede ou só para clientes escolhidos; o filtro vale no servidor (catálogo, pedido e proposta) e o cliente fora da seleção não vê nem pede o item."
+    },
+    {
+      "id": "STO-05",
+      "titulo": "Cliente consulta e solicita compra no Store",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Cliente somente vê/compra itens permitidos, sem editar catálogo e sem obrigar gateway de pagamento não especificado.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/store/store.tsx",
+        "teste: apps/api/src/__tests__/api-pedidos-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cliente vê só os itens permitidos, monta pedido e acompanha; sem pagamento."
+    },
+    {
+      "id": "STO-06",
+      "titulo": "Registro de pedidos e andamento",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Histórico acompanha aprovado, separado, em trânsito e entregue, para cliente e gestor da Store.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "passo \"Separado\" e nomes do cliente",
+      "evidencias": [
+        "packages/db/src/pedidos-store.ts",
+        "apps/web/src/features/store/pedidos.tsx",
+        "teste: apps/api/src/__tests__/api-pedidos-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 23/10: o pedido passa por Pedido feito → Aprovado → Separado → Em trânsito → Entregue, com linha do tempo e faixa de andamento visíveis ao cliente e à prestadora."
+    },
+    {
+      "id": "STO-07",
+      "titulo": "Anexar nota fiscal/documentos e data de entrega ao pedido",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Upload/visualização com permissões adequadas e eventos de entrega rastreáveis.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/store/store-orders.controller.ts",
+        "teste: apps/api/src/__tests__/api-pedidos-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "NF (PDF/imagem) anexada pela prestadora e baixada pelo cliente do pedido; outro cliente não alcança."
+    },
+    {
+      "id": "STO-08",
+      "titulo": "Entrada e saída de estoque interno por OS",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Entrada regular e consumo obrigatório vinculado à OS; prevenção de estoque negativo e conflitos.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/inventory.ts",
+        "teste: packages/db/src/__tests__/pente-fino-estoque.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Entrada regular e saída só pela OS, sem estoque negativo."
+    },
+    {
+      "id": "STO-09",
+      "titulo": "Estoque mínimo, máximo e valor financeiro",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Indicadores consistentes por empresa ou hospital com controle de acesso.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/inventory/estoque-gestao.controller.ts",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Mínimo, máximo e valor por almoxarifado com permissão de custo."
+    },
+    {
+      "id": "STO-10",
+      "titulo": "Curva ABC e relatórios de estoque",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Cálculo por dia, mês, semestre e ano, taxa de utilização e dados monetários reais.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/src/estoque-gestao.ts",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Curva ABC e relatório de período (mês, semestre, ano ou personalizado)."
+    },
+    {
+      "id": "STO-11",
+      "titulo": "Peças do estoque usadas em orçamento ou contrato com peças inclusas",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Registrar se despesa é cobrança do cliente ou consumo previsto, sem perda da rastreabilidade da OS.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0074_orcamento_e_peca_lancada.sql",
+        "teste: apps/api/src/__tests__/pente-fino-orcamento.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Peça lançada em campo abate a reserva do orçamento, sem perder o vínculo com a OS."
+    },
+    {
+      "id": "STO-12",
+      "titulo": "Store central não deve surgir como editor nas instâncias clientes",
+      "versao": "ATUAL",
+      "modulo": "Estoque interno e loja Store",
+      "criterio_de_aceite": "Só portal central pode cadastrar itens/pedidos globais; clientes mantêm somente gestão de seu estoque.",
+      "fonte": "Reunião 16/10 00:17–00:22; WhatsApp 19/10 12:34; WhatsApp 23/10 11:59–12:01.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "testes de 403 na gestão e no \"separado\"",
+      "evidencias": [
+        "apps/web/src/features/store/store.tsx",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts",
+        "teste: apps/api/src/__tests__/api-pedidos-store.test.ts",
+        "teste: e2e/specs/estoque-store.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 23/10: cadastrar produto, preço e público e mover pedidos só com permissão da prestadora; o cliente recebe 403 na gestão."
+    },
+    {
+      "id": "QUA-01",
+      "titulo": "Criar ou preservar tópico Qualidade no menu",
+      "versao": "ATUAL",
+      "modulo": "Qualidade — minimo desta rodada",
+      "criterio_de_aceite": "Área identificável sem implementar motor ONA completo nem prometer conformidade regulatória.",
+      "fonte": "WhatsApp 20/10 09:03–09:08.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/qualidade/pagina.tsx",
+        "teste: e2e/specs/qualidade.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Menu Qualidade com quatro abas, sem prometer conformidade."
+    },
+    {
+      "id": "QUA-02",
+      "titulo": "Espaço para certificados de calibração",
+      "versao": "ATUAL",
+      "modulo": "Qualidade — minimo desta rodada",
+      "criterio_de_aceite": "Cadastrar/visualizar certificado com documento, ativo/cliente e acesso, conforme estrutura existente.",
+      "fonte": "WhatsApp 20/10 09:03–09:08.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0082_registros_de_qualidade.sql",
+        "teste: apps/api/src/__tests__/api-qualidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Certificado de calibração com arquivo, ativo/cliente e validade calculada."
+    },
+    {
+      "id": "QUA-03",
+      "titulo": "Espaço para registros de Teste de Segurança Elétrica",
+      "versao": "ATUAL",
+      "modulo": "Qualidade — minimo desta rodada",
+      "criterio_de_aceite": "Guardar documentos e histórico vinculados ao ativo/OS com controle de acesso.",
+      "fonte": "WhatsApp 20/10 09:03–09:08.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-qualidade.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Registro de TSE ligado ao ativo ou cliente, com acesso controlado (sem vínculo direto com a OS)."
+    },
+    {
+      "id": "QUA-04",
+      "titulo": "Espaço para certificados de qualificação",
+      "versao": "ATUAL",
+      "modulo": "Qualidade — minimo desta rodada",
+      "criterio_de_aceite": "Guardar evidências e referência ao procedimento/ativo.",
+      "fonte": "WhatsApp 20/10 09:03–09:08.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "packages/db/migrations/0089_identificacao_ativo_pessoa_e_qualidade.sql",
+        "teste: apps/api/src/__tests__/api-cadastros-pessoas-clientes.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Certificado de qualificação com referência opcional à versão publicada do procedimento."
+    },
+    {
+      "id": "QUA-05",
+      "titulo": "Espaço para certificados ou registros de treinamento",
+      "versao": "ATUAL",
+      "modulo": "Qualidade — minimo desta rodada",
+      "criterio_de_aceite": "Anexar documentos e registrar datas/responsáveis quando disponível, sem inventar indicador de treinamento.",
+      "fonte": "WhatsApp 20/10 09:03–09:08.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-qualidade.test.ts",
+        "teste: e2e/specs/qualidade.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Treinamento com pessoa, datas e arquivo; nenhum indicador inventado."
+    },
+    {
+      "id": "FER-01",
+      "titulo": "Menu Ferramentas com catálogo comercial ilustrativo",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Disponibilizar telas bonitas para apresentar soluções futuras sem sugerir monitoramento operacional.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts",
+        "teste: e2e/specs/ferramentas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Vitrine com nove ferramentas, sem chamada de API e sem dado."
+    },
+    {
+      "id": "FER-02",
+      "titulo": "Ferramenta futura de temperatura e umidade",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Página comercial com benefícios e consulta de disponibilidade, não dashboards com sensores fictícios.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto comercial",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Cartão comercial com chamada, benefícios e \"Consulte disponibilidade\"; sem sensor fictício."
+    },
+    {
+      "id": "FER-03",
+      "titulo": "Ferramenta futura de geolocalização de equipamentos",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Vitrine sobre rastreabilidade e mapas, sem mostrar posição real inexistente.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto comercial",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Geolocalização de equipamentos com mapa por setor e histórico como proposta, sem posição real."
+    },
+    {
+      "id": "FER-04",
+      "titulo": "Ferramenta futura de gases medicinais",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Texto e ícones comerciais sem alegar leituras/alertas de integração ainda não operacional.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto comercial",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Gases medicinais como FUTURO, sem leitura nem alerta."
+    },
+    {
+      "id": "FER-05",
+      "titulo": "Ferramenta futura de CME",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Explicar rastreabilidade por gravação/etiquetas e fluxos previstos, sem assumir operação real.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto comercial",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "CME com gravação a laser/etiquetas e o ciclo completo (recepção a distribuição) como proposta."
+    },
+    {
+      "id": "FER-06",
+      "titulo": "Ferramenta futura de simuladores e analisadores",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Vitrine de analisadores elétricos, multiparamétricos, respiratórios e gases, sem criar drivers nem hardware.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "texto comercial",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Simuladores e analisadores: segurança elétrica, multiparamétricos, ventiladores/gases, desfibriladores e bombas."
+    },
+    {
+      "id": "FER-07",
+      "titulo": "Incluir Eficiência Energética na vitrine",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Descrever medição futura por grande ativo, setor e estabelecimento, sem exibir consumos não medidos.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "cartão novo",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts",
+        "teste: e2e/specs/ferramentas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: cartão Eficiência Energética (equipamento de grande consumo, setor e estabelecimento), sem consumo medido."
+    },
+    {
+      "id": "FER-08",
+      "titulo": "Substituir texto recusado por frase comercial solicitada",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Trocar 'Nenhuma destas ferramentas mostra dado ainda...' por 'Soluções novas de mercado, consulte disponibilidade', mantendo honestidade sobre disponibilidade.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "frase trocada",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts",
+        "teste: e2e/specs/ferramentas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: a frase recusada saiu e o subtítulo é \"Soluções novas de mercado, consulte disponibilidade.\""
+    },
+    {
+      "id": "FER-09",
+      "titulo": "Melhorar os textos comerciais de cada ferramenta",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Copy profissional, diferenciado, verificável e livre de promessas falsas de IA/hardware operacional.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "copy nova",
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: textos comerciais por ferramenta; o jargão interno (N1–N4, gateway, \"Falta:\") saiu da tela; teste impede promessa de leitura ativa."
+    },
+    {
+      "id": "FER-10",
+      "titulo": "Seção Meus Monitoramentos sem dados fictícios",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "Se exibida nesta fase, estado promocional claramente distinguível de painéis reais.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Não há seção \"Meus Monitoramentos\": nada de painel fictício (critério: \"se exibida\")."
+    },
+    {
+      "id": "FER-11",
+      "titulo": "ONA apenas como divulgação de solução futura",
+      "versao": "ATUAL_VITRINE",
+      "modulo": "Ferramentas futuras — vitrine atual",
+      "criterio_de_aceite": "ONA no catálogo de ferramentas, sem afirmar homologação/acreditação ou checklist normativo implementado.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 12:41, 12:51, 12:59 e 13:01; WhatsApp 20/10 09:07.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ferramentas/ferramentas.tsx",
+        "teste: apps/web/src/__tests__/ferramentas.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "ONA como FUTURO, requisitos na V2, sem alegar acreditação."
+    },
+    {
+      "id": "OPS-01",
+      "titulo": "Link de marca volta à página inicial",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Clique no nome/logo ITECH/Téchne Care recarrega/navega para home correta sem limpar dados.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "marca vira link",
+      "evidencias": [
+        "apps/web/src/shell/sidebar.tsx",
+        "teste: e2e/specs/ferramentas.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Pedido de 19/10: clicar na marca leva à página inicial e recarrega (link comum); sessão mantida. Conferido no navegador (modo demonstração)."
+    },
+    {
+      "id": "OPS-02",
+      "titulo": "Página pública /apresentacao funcionando",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Validar rota, conteúdo verdadeiro, layout premium, CTA, responsive e ausência de erro console.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/apresentacao/pagina.tsx",
+        "teste: e2e/specs/apresentacao.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Página /apresentacao com CTAs, responsiva e console limpo."
+    },
+    {
+      "id": "OPS-03",
+      "titulo": "Demonstração pública sem credenciais e dados reais",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Verificar modo demo, dados fictícios, limites e não persistência, sem backend/tenant de produção.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/demo/cliente.ts",
+        "teste: e2e/demo/demonstracao.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Demonstração com respostas gravadas, sem escrita e sem rede."
+    },
+    {
+      "id": "OPS-04",
+      "titulo": "Navegação e rotas sem links/ações mortas",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Testar links e botões por perfil e mobile/desktop, inclusive refresh de rotas internas.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "teste: e2e/specs/navegacao-links.spec.ts",
+        "teste: e2e/specs/console.spec.ts",
+        "teste: e2e/specs/viewports.spec.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Varredura E2E de todos os links do menu por perfil (admin, técnico, auditora), com recarga de cada rota e checagem de celular sem rolagem horizontal; somam-se console limpo e viewports."
+    },
+    {
+      "id": "OPS-05",
+      "titulo": "Infraestrutura VPS, domínio e backups — apenas verificar",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Confirmar destino real de DNS e homologação; 'htec.b' é referência incompleta, não assumir domínio nem migrar servidores.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "docs/AUDITORIA-VPS-TECHNECARE.md"
+      ],
+      "bloqueio": "domínio e VPS definitivos a escolher",
+      "observacao": "Apenas verificado: \"htec.b\" não existe; produção segue em technecaremeds.voceconecta.com.br (Cloudflare Pages + API no HostPanel); nenhuma migração de servidor."
+    },
+    {
+      "id": "OPS-06",
+      "titulo": "Segurança multi-tenant em endpoints críticos",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Testar usuários de dois tenants e setores, consultas diretas, escrita e download de arquivos.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-tenant-isolation.test.ts",
+        "teste: apps/api/src/__tests__/pente-fino-acesso.test.ts",
+        "teste: apps/api/src/__tests__/api-estoque-store.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "RLS forçada, escrita entre tenants bloqueada, escopo de cliente/setor e download de arquivos com testes adversariais; nesta rodada, testes de público da Store."
+    },
+    {
+      "id": "OPS-07",
+      "titulo": "Privacidade de CPF, geolocalização, dados profissionais e logs",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Minimização, perfis, proteção de secrets, retenção e consentimento conforme LGPD e políticas.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "conclusão 30/10",
+      "evidencias": [
+        "apps/api/src/common/logger.ts",
+        "teste: apps/api/src/__tests__/logger.test.ts"
+      ],
+      "bloqueio": "Anderson (controlador) definir prazo de retenção da geolocalização",
+      "observacao": "Logs mascaram CPF, telefone, registro profissional e coordenadas (também aninhados e CPF em texto). Política em docs/PRIVACIDADE-LOGS-E-GEOLOCALIZACAO.md: o prazo de retenção da geolocalização depende do controlador (cliente)."
+    },
+    {
+      "id": "OPS-08",
+      "titulo": "Validar CI, build, testes e deploy efetivo",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Usar rastreabilidade de branch, PR, commit, CI de main, URL e evidências de publicação; nenhuma afirmação sem teste.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "PARCIAL",
+      "nesta_rodada": null,
+      "evidencias": [
+        "https://github.com/voceconectadigital/technecaremeds/pull/42"
+      ],
+      "bloqueio": "deploy depende de ordem expressa",
+      "observacao": "Rastreabilidade de branch, PR, commits e CI registrada. CI completo verde no HEAD de código 62eb8c3 (run 41048276925): Estático, PostgreSQL 16 2.846/2.846, E2E 237 passaram (1 pulado, 0 instável), Gate. Builds de produção ok. Deploy efetivo não feito (sem autorização) — checklist em docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md."
+    },
+    {
+      "id": "OPS-09",
+      "titulo": "Handoff e relatório final completos",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Atualizar AI-HANDOFF.md e docs/NOVAS-SOLICITACOES.md com status por ID, evidências, bloqueios e V2.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "documentação",
+      "evidencias": [
+        "docs/AI-HANDOFF.md",
+        "docs/NOVAS-SOLICITACOES.md",
+        "docs/auditoria/RELATORIO_FINAL_AUDITORIA_ANDERSON_2026-10-29.md"
+      ],
+      "bloqueio": null,
+      "observacao": "AI-HANDOFF, NOVAS-SOLICITACOES, este JSON e o relatório final atualizados nesta rodada."
+    },
+    {
+      "id": "OPS-10",
+      "titulo": "Confirmar estado real de fórmulas prometidas em 22/10",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Procurar arquivos/conversa/repo que contenham fórmulas; se não recebidas marcar dependência explícita, não inventar.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "BLOQUEADO_DEPENDENCIA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "docs/VALIDACAO-RELATORIOS-COMPLETO-EXPERT-2026-09.md",
+        "docs/AUDITORIA-INDICADORES-BASIC-ADVANCED-EXPERT.md"
+      ],
+      "bloqueio": "cliente enviar as fórmulas",
+      "observacao": "Nenhum arquivo traz as fórmulas prometidas em 22/10; o memorial do Data Studio não tem fórmula escrita. P-01…P-16 seguem abertas."
+    },
+    {
+      "id": "OPS-11",
+      "titulo": "Não comprometer produção com migrações remotas ou segredos",
+      "versao": "OPERACIONAL_VALIDAR",
+      "modulo": "UX, publicacao, seguranca e operacao",
+      "criterio_de_aceite": "Observar proteções e permissões prévias; operação destrutiva, migração remota ou troca de infraestrutura exige aprovação explícita.",
+      "fonte": "Reunião 16/10 01:25–01:30; WhatsApp 19/10 13:02; WhatsApp 20–29/10; handoff técnico anterior.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": "respeitado",
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Nenhuma migração remota, deploy, DNS ou troca de infraestrutura nesta rodada; migrations 0084–0086 só locais/CI."
+    },
+    {
+      "id": "TEN-01",
+      "titulo": "Inclusão de novo negócio por administrador central",
+      "versao": "AVALIAR_ESCOPO",
+      "modulo": "Plataforma multi-negocio",
+      "criterio_de_aceite": "Auditar cadastro e provisionamento de negócio hospitalar ou corporativo; implementar apenas se coberto/aprovado formalmente.",
+      "fonte": "Reunião 16/10 00:23–00:30; contrato comercial de referência.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/platform/tenants.controller.ts",
+        "teste: apps/api/src/__tests__/api-novo-negocio.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Admin de plataforma (concedido por DBA) cria negócio com base de fábrica e primeiro admin."
+    },
+    {
+      "id": "TEN-02",
+      "titulo": "Instância lógica isolada e identidade própria do cliente",
+      "versao": "AVALIAR_ESCOPO",
+      "modulo": "Plataforma multi-negocio",
+      "criterio_de_aceite": "Verificar isolamento por tenant, personalização de logomarca e domínio; não clonar banco ou infraestrutura sem desenho e autorização.",
+      "fonte": "Reunião 16/10 00:23–00:30; contrato comercial de referência.",
+      "status_auditoria": "EXIGE_APROVACAO_COMERCIAL",
+      "nesta_rodada": null,
+      "evidencias": [
+        "teste: apps/api/src/__tests__/api-novo-negocio.test.ts"
+      ],
+      "bloqueio": "DNS/certificado por cliente",
+      "observacao": "Isolamento lógico e marca por negócio testados; domínio próprio fica \"aguardando DNS\"."
+    },
+    {
+      "id": "TEN-03",
+      "titulo": "Visão central multi-tenant e limites de acesso",
+      "versao": "AVALIAR_ESCOPO",
+      "modulo": "Plataforma multi-negocio",
+      "criterio_de_aceite": "Administração central autorizada visualiza negócios conforme governança; nenhum tenant acessa outro, com testes de isolamento reais.",
+      "fonte": "Reunião 16/10 00:23–00:30; contrato comercial de referência.",
+      "status_auditoria": "IMPLEMENTADO_COM_TESTE",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0068_novo_negocio.sql",
+        "teste: packages/db/src/__tests__/tenant-isolation.test.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "A plataforma vê só o registro dos tenants; dado de negócio fica atrás da RLS."
+    },
+    {
+      "id": "TEN-04",
+      "titulo": "Provisionamento seguro e auditável de novas organizações",
+      "versao": "AVALIAR_ESCOPO",
+      "modulo": "Plataforma multi-negocio",
+      "criterio_de_aceite": "Se aprovado, configurar contas, privilégios, branding, limites e revogação sem expor código-fonte.",
+      "fonte": "Reunião 16/10 00:23–00:30; contrato comercial de referência.",
+      "status_auditoria": "EXIGE_APROVACAO_COMERCIAL",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/api/src/platform/tenants.controller.ts"
+      ],
+      "bloqueio": null,
+      "observacao": "Criar e listar negócios funciona; não há suspensão, limites nem revogação de tenant."
+    },
+    {
+      "id": "COM-01",
+      "titulo": "Cobrança por usuário e hospedagem centralizada",
+      "versao": "DECISAO_COMERCIAL",
+      "modulo": "Modelo comercial futuro",
+      "criterio_de_aceite": "Registrar decisão de modelo comercial; não implementar billing, checkout ou assinaturas sem especificação e orçamento.",
+      "fonte": "Reunião 16/10 00:24–00:30.",
+      "status_auditoria": "DECISAO_REGISTRADA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "docs/auditoria/AMPLIACOES_ESCOPO_ANDERSON.md"
+      ],
+      "bloqueio": null,
+      "observacao": "Registrado: cobrança por usuário e hospedagem centralizada é decisão comercial; nada de billing implementado."
+    },
+    {
+      "id": "COM-02",
+      "titulo": "Distribuição sem entrega de código-fonte",
+      "versao": "DECISAO_COMERCIAL",
+      "modulo": "Modelo comercial futuro",
+      "criterio_de_aceite": "Tratar como requisito contratual de acesso/licenciamento; não interpretar como autorização para arquitetura nova.",
+      "fonte": "Reunião 16/10 00:24–00:30.",
+      "status_auditoria": "DECISAO_REGISTRADA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0068_novo_negocio.sql"
+      ],
+      "bloqueio": null,
+      "observacao": "Registrado: distribuição como serviço, sem entrega de código-fonte; o negócio novo é tenant lógico, não cópia de código."
+    },
+    {
+      "id": "ATF-01",
+      "titulo": "Monitoramento automático ANVISA por IA e internet",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Ativos — integrações inteligentes futuras",
+      "criterio_de_aceite": "Futuro: consultar notificações/restrições oficiais, atualizar e alertar; requer arquitetura, veracidade e aprovação de integração.",
+      "fonte": "WhatsApp 19/10 12:27, 12:31 e 12:34; reunião 16/10 01:10 e 01:22.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/ativos/anvisa.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "Hoje: verificação ANVISA por pessoa com aviso aos gestores. Consulta automática exige fonte oficial, frequência e limite de uso."
+    },
+    {
+      "id": "ATF-02",
+      "titulo": "Criar plano de manutenção com IA",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Ativos — integrações inteligentes futuras",
+      "criterio_de_aceite": "Futuro: avaliar sugestão assistida e supervisão técnica; criação manual vigente não depende dessa IA.",
+      "fonte": "WhatsApp 19/10 12:27, 12:31 e 12:34; reunião 16/10 01:10 e 01:22.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "apps/web/src/features/planos/novo-plano.tsx"
+      ],
+      "bloqueio": null,
+      "observacao": "O assistente de plano mostra \"Com ajuda de IA — em breve\"; nenhuma IA ativa."
+    },
+    {
+      "id": "ATF-03",
+      "titulo": "Rastreamento em tempo real por chips",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Ativos — integrações inteligentes futuras",
+      "criterio_de_aceite": "Futuro: exigir dispositivos, integrações, segurança e fonte de dados real; nesta rodada só campo de cadastro.",
+      "fonte": "WhatsApp 19/10 12:27, 12:31 e 12:34; reunião 16/10 01:10 e 01:22.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [
+        "packages/db/migrations/0063_familia_e_identificacao_do_equipamento.sql"
+      ],
+      "bloqueio": null,
+      "observacao": "Só o campo do chip no cadastro; leitura em tempo real depende de hardware."
+    },
+    {
+      "id": "FUT-01",
+      "titulo": "Integração real de sensores temperatura e umidade",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Integracoes e hardware futuros",
+      "criterio_de_aceite": "Deixar fora da atual; exige hardware, API, calibração, governança e orçamento.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 13:01.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Fora desta fase (sensores, gateway, calibração)."
+    },
+    {
+      "id": "FUT-02",
+      "titulo": "Telemetria de gases medicinais",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Integracoes e hardware futuros",
+      "criterio_de_aceite": "Deixar fora da atual; pressão, consumo, vazamentos e segurança requerem dispositivos e validação clínica.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 13:01.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Fora desta fase (medidores de gases, validação clínica)."
+    },
+    {
+      "id": "FUT-03",
+      "titulo": "Rastreabilidade CME com impressora, scanner e microtags",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Integracoes e hardware futuros",
+      "criterio_de_aceite": "Deixar fora da atual; requer hardware, processo hospitalar, rastreabilidade e integração.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 13:01.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Fora desta fase (impressora, leitor e etiquetas da CME)."
+    },
+    {
+      "id": "FUT-04",
+      "titulo": "Integração de analisadores e simuladores de engenharia clínica",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Integracoes e hardware futuros",
+      "criterio_de_aceite": "Deixar fora da atual; SDK, protocolos, dispositivos, medições e alertas são expansão.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 13:01.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Fora desta fase (SDK e protocolos dos fabricantes)."
+    },
+    {
+      "id": "FUT-05",
+      "titulo": "Medição de eficiência energética em tempo real",
+      "versao": "EVOLUCAO_FUTURA",
+      "modulo": "Integracoes e hardware futuros",
+      "criterio_de_aceite": "Deixar fora da atual; exige medidores reais e correlação por equipamento/setor/estabelecimento.",
+      "fonte": "Reunião 16/10 01:16–01:24; WhatsApp 19/10 13:01.",
+      "status_auditoria": "EVOLUCAO_FUTURA",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Fora desta fase (medidores de energia)."
+    },
+    {
+      "id": "V2Q-01",
+      "titulo": "Matriz de processos e requisitos por setor",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: cadastrar processos, responsáveis, riscos, indicadores, documentos e requisitos; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-02",
+      "titulo": "Expansão a outros setores por matrizes configuráveis",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: matrizes específicas por setor, com estrutura comum e critérios próprios; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-03",
+      "titulo": "Gestão de fornecedores e avaliações",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: contratos, qualificações, avaliações e documentação de prestadores; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-04",
+      "titulo": "Documentos controlados com versões e revisão",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: procedimentos, formulários e registros vigentes com fluxo de versões; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-05",
+      "titulo": "Gestão formal de riscos, incidentes e não conformidades",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: ocorrências, análise de riscos e ações preventivas/corretivas; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-06",
+      "titulo": "Planos de ação da qualidade e evidências",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: responsáveis, prazos, aprovações e provas de conclusão; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-07",
+      "titulo": "Painel de auditoria e preparação ONA",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: organização de evidências e pendências, sem alegar certificação; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-08",
+      "titulo": "To-do parametrizado com temporizador e criticidade",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: tarefas com tempo, peso/criticidade, usuário individual, grupo ou todos; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-09",
+      "titulo": "Cronograma e calendário de tarefas",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: início, fim, prazo restante, visão lista/matriz/calendário e concluir tarefa; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-10",
+      "titulo": "Painel de tarefas em andamento e atrasos",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: acompanhamento e status concluída/pendente com evidência; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-11",
+      "titulo": "Checklists da qualidade configuráveis, sequenciais ou paralelos",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: encadeamento opcional, unificação, regras por setor; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-12",
+      "titulo": "Biblioteca ONA baseada em requisitos autorizados",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: confirmar versão/licença/manual e critérios antes de carregar ou alegar aderência; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    },
+    {
+      "id": "V2Q-13",
+      "titulo": "Indicadores e rastreabilidade de gestão da qualidade",
+      "versao": "V2",
+      "modulo": "Gestao da Qualidade completa — V2 explicita",
+      "criterio_de_aceite": "V2: apuração de métricas, trilhas, relatórios e conformidade por matrizes; não implementar agora.",
+      "fonte": "WhatsApp 20/10 06:58–09:08; resposta do usuário 09:03 confirma V2.",
+      "status_auditoria": "NAO_IMPLEMENTAR_V2",
+      "nesta_rodada": null,
+      "evidencias": [],
+      "bloqueio": null,
+      "observacao": "Encaminhado para a V2 (WhatsApp 20/10, 9h03). Nesta fase: só o tópico Qualidade com certificados e a ONA como vitrine."
+    }
+  ]
+}

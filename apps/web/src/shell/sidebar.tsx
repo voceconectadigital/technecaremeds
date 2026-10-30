@@ -52,12 +52,17 @@ export function Sidebar({ onNavigate, header }: SidebarProps) {
     >
       {/* ---------------------------------------------------------- marca */}
       <div className="flex items-center gap-2 px-6 pt-6 pb-6">
-        <Logo
-          src={MARCA.logoHorizontal}
-          srcEscuro={MARCA.logoHorizontalEscuro}
-          nome={MARCA.produto}
-          largura={140}
-        />
+        {/* A marca leva ao início e RECARREGA (conversa com o cliente, 19/10: "ao clicar em itech tem
+            que atualizar e voltar para a página inicial"). Link comum, e não o do roteador, de propósito:
+            o recarregamento busca a versão nova publicada; a sessão fica guardada e não se perde. */}
+        <a href="/" aria-label={`${MARCA.produto} — página inicial`} className="rounded-control">
+          <Logo
+            src={MARCA.logoHorizontal}
+            srcEscuro={MARCA.logoHorizontalEscuro}
+            nome={MARCA.produto}
+            largura={140}
+          />
+        </a>
         {header}
       </div>
 

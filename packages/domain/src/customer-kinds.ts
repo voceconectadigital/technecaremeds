@@ -44,6 +44,28 @@ export function isValidCustomerSubtype(kind: string, subtype: string | null | un
   return Boolean(lista?.some((s) => s.key === subtype));
 }
 
+/**
+ * "Outro EAS" e "Outra empresa" SAÍRAM das opções (CLI-02 · WhatsApp 19/10/2026: eliminar o
+ * "Outro" redundante). Continuam na lista acima porque há cadastro antigo com eles: o cliente
+ * antigo segue exibido com o rótulo e editável — só não se ESCOLHE mais esse segmento.
+ */
+export const LEGACY_CUSTOMER_SUBTYPES: readonly string[] = Object.freeze(['outro_eas', 'outro_corporativo']);
+
+/**
+ * O subtipo pode ser GRAVADO? Válido para a classificação e, se for um dos antigos, só quando já
+ * era o do cliente (`current`) — editar o cadastro antigo não obriga a reclassificá-lo; cadastrar
+ * um novo com ele, sim, é recusado.
+ */
+export function isSelectableCustomerSubtype(
+  kind: string,
+  subtype: string | null | undefined,
+  current: string | null = null
+): boolean {
+  if (!isValidCustomerSubtype(kind, subtype)) return false;
+  if (subtype && LEGACY_CUSTOMER_SUBTYPES.includes(subtype)) return subtype === current;
+  return true;
+}
+
 export function customerSubtypeLabel(subtype: string | null | undefined): string | null {
   if (!subtype) return null;
   for (const k of CUSTOMER_KINDS) {
@@ -54,13 +76,69 @@ export function customerSubtypeLabel(subtype: string | null | undefined): string
 }
 
 /**
+ * Os setores PADRÃO de um EAS (CLI-03 · reunião 16/10/2026): pronto atendimento, bloco
+ * cirúrgico, UTI e enfermaria. Criados junto com o cliente EAS quando quem cadastra deixa
+ * marcado "Criar setores padrão" — são locais comuns do cliente, renomeáveis, e o cliente
+ * continua criando os seus.
+ */
+export const DEFAULT_EAS_SECTORS: readonly string[] = Object.freeze([
+  'Pronto Atendimento',
+  'Bloco Cirúrgico',
+  'UTI',
+  'Enfermaria',
+]);
+
+/**
  * Setores comuns oferecidos como atalho de NOME (não enum): o cliente digita
  * qualquer outro em "Novo setor". O setor sempre pertence a um cliente.
  */
-export const COMMON_SECTORS: readonly string[] = Object.freeze([
-  'UTI',
-  'Bloco Cirúrgico',
-  'Pronto Atendimento',
-  'Enfermaria',
-  'Imaginologia',
-]);
+export const COMMON_SECTORS: readonly string[] = Object.freeze([...DEFAULT_EAS_SECTORS, 'Imaginologia']);
+
+/* -------------------------------------------------------------------------- */
+/* vigência do contrato (CLI-06 · pedido do cliente, 19/10/2026 · 0085)        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A situação da vigência, DERIVADA das duas datas e do dia de hoje — nunca
+ * gravada: gravada, envelheceria sozinha e mentiria no dia seguinte.
+ *
+ *   · not_informed — sem datas no cadastro;
+ *   · not_started  — o início ainda não chegou;
+ *   · expired      — o fim já passou;
+ *   · expiring     — vigente, e o fim cai nos próximos 30 dias (inclusive);
+ *   · active       — vigente, com mais de 30 dias pela frente.
+ *
+ * O último dia da vigência ainda é vigente: "até 31/12" inclui o dia 31.
+ */
+export const CONTRACT_TERM_STATUSES = [
+  'active',
+  'expiring',
+  'expired',
+  'not_started',
+  'not_informed',
+] as const;
+export type ContractTermStatus = (typeof CONTRACT_TERM_STATUSES)[number];
+
+/** Quantos dias antes do fim a vigência passa a "vence em breve". */
+export const CONTRACT_EXPIRING_DAYS = 30;
+
+/** Dias de calendário entre dois AAAA-MM-DD (b − a). */
+function diasEntre(a: string, b: string): number {
+  const ms = (d: string) =>
+    Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  return Math.round((ms(b) - ms(a)) / 86_400_000);
+}
+
+/** `hoje` é o dia de calendário (AAAA-MM-DD) no fuso da organização — ver `localDay`. */
+export function contractTermStatus(
+  startsOn: string | null | undefined,
+  endsOn: string | null | undefined,
+  hoje: string
+): ContractTermStatus {
+  if (!startsOn || !endsOn) return 'not_informed';
+  const inicio = startsOn.slice(0, 10);
+  const fim = endsOn.slice(0, 10);
+  if (fim < hoje) return 'expired';
+  if (inicio > hoje) return 'not_started';
+  return diasEntre(hoje, fim) <= CONTRACT_EXPIRING_DAYS ? 'expiring' : 'active';
+}

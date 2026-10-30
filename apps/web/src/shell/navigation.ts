@@ -185,7 +185,7 @@ export const MAIN_NAV: readonly NavItem[] = Object.freeze([
     permissions: ['insight.read'],
     hint: 'Como estamos indo: indicadores, gráficos e Modo Exibição',
     grupo: 'Inteligência',
-    tambem: ['/indicadores'],
+    tambem: ['/indicadores', '/relatorios'],
   },
   {
     // 16/10/2026 (Fase 12): vitrine do que está a caminho — temperatura,

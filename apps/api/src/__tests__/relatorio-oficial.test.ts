@@ -1,5 +1,5 @@
 /**
- * Aurora — layout oficial do Completo e casca do IMR (22/10/2026).
+ * Aurora — layout do Advanced (modelo Completo do cliente), do Basic (29/10/2026) e casca do IMR.
  *
  * O que se prova: o texto sai dos números que o relatório já calculou (nenhum número novo), a
  * unidade de exibição do cliente (h:mm, meses) é só conversão, o IMR não inventa desconto nem
@@ -13,7 +13,9 @@ import { gerarPdf, type LinhaPdf } from '../documents/pdf';
 import {
   CHAVES_IMR_COM_NUMERO,
   ITENS_IMR,
+  cartaoDaSecao,
   competenciaDe,
+  montarBasic,
   montarCompleto,
   montarImr,
   paraExibicao,
@@ -173,6 +175,8 @@ describe('Completo', () => {
     expect(t).toContain('Relatório de Atividades – Departamento de Engenharia Clínica');
     expect(t).toContain('pela empresa TéchneCare nas dependências de Complexo Hospitalar Samuel Libânio');
     expect(rodape).toContain('SETEMBRO / 2026');
+    // REL-01: o nome é o do nível, e não "Completo".
+    expect(rodape).toMatch(/^Relatório Advanced — /);
   });
 
   it('cada seção traz valor, meta e variação a partir dos números recebidos', () => {
@@ -325,7 +329,8 @@ describe('IMR (Expert)', () => {
     const t = texto(imr.linhas);
     expect(t).toContain('Itens aguardando definição do cliente');
     expect(t).toContain('1. Tempo médio para o primeiro atendimento');
-    expect(t).not.toContain('Indicador do IMR (FHEMIG) — ');
+    expect(t).not.toContain('Indicador do IMR — ');
+    expect(t).not.toContain('FHEMIG');
   });
 
   it('o PDF tem tabela e mais de uma página quando preciso', () => {
@@ -399,5 +404,85 @@ describe('escritor de PDF: eixo e legenda', () => {
     ).toString('latin1');
     expect(s).not.toContain('(Meta)');
     expect(s).not.toContain('[4 3] 0 d');
+  });
+});
+
+describe('Basic (REL-08)', () => {
+  const pendentes = [
+    {
+      key: 'training_ratio',
+      label: 'Treinamentos realizados/solicitados',
+      state: 'PENDING_DEFINITION' as const,
+      note: 'Sem vínculo solicitado → realizado.',
+    },
+  ];
+  const { linhas, rodape } = montarBasic({ ...base, pendentes });
+  const t = texto(linhas);
+
+  it('cabeçalho com o nome do nível, cliente e competência; sem faixa de "aguardando modelo"', () => {
+    expect(t).toContain('Relatório Basic');
+    expect(t).toContain('Complexo Hospitalar Samuel Libânio · Competência SETEMBRO / 2026');
+    expect(t).toContain('Centro de Custo: HCSL020');
+    expect(t).not.toMatch(/AGUARDANDO|Completo/);
+    expect(rodape).toBe('Relatório Basic — Complexo Hospitalar Samuel Libânio — SETEMBRO / 2026');
+  });
+
+  it('painel: um cartão por indicador calculado e um por pendente, sem número para o pendente', () => {
+    const cartoes = linhas.find((l) => l.cartoes)!.cartoes!;
+    expect(cartoes).toHaveLength(secoes.length + 1);
+    const pendente = cartoes.at(-1)!;
+    expect(pendente).toEqual({
+      rotulo: 'Treinamentos realizados/solicitados',
+      valor: '—',
+      detalhe: 'Pendente de definição',
+      tom: 'neutro',
+    });
+    expect(t).toContain(
+      '4 indicador(es) calculado(s): 4 com a meta atendida, 0 abaixo da meta, 0 sem meta configurada; 2 provisório(s). 1 pendente(s) de definição, sem número.'
+    );
+  });
+
+  it('o cartão diz a situação: atendida em verde, provisório em âmbar, barra só para percentual', () => {
+    expect(cartaoDaSecao(secoes[0]!)).toEqual({
+      rotulo: 'Avaliação da qualidade dos serviços',
+      valor: '4,6',
+      detalhe: 'Meta ≥ 3,0 · atendida',
+      tom: 'bom',
+    });
+    const mttr = cartaoDaSecao(secoes[1]!);
+    expect(mttr).toMatchObject({ rotulo: 'MTTR (provisório)', valor: '13:49h', tom: 'aviso' });
+    expect(mttr.detalhe).toBe('Provisório · Meta ≤ 72:00h · atendida');
+    expect(cartaoDaSecao(secoes[2]!).barra).toEqual({ valor: 97, meta: 95 });
+    const abaixo = cartaoDaSecao({ ...secoes[2]!, value: 80, target_evaluation: 'not_met' });
+    expect(abaixo).toMatchObject({ tom: 'ruim', detalhe: 'Meta ≥ 95,0% · não atendida' });
+    const semDado = cartaoDaSecao({ ...secoes[2]!, value: null, target_evaluation: 'no_value' });
+    expect(semDado).toMatchObject({ valor: '—', detalhe: 'Sem dados suficientes no período' });
+  });
+
+  it('seções com texto, gráfico de 12 meses e a lista dos pendentes com o motivo', () => {
+    expect(t).toContain('1. AVALIAÇÃO DA QUALIDADE DOS SERVIÇOS');
+    expect(t).toContain('2. MTTR (PROVISÓRIO)');
+    expect(t).toContain('O índice subiu em relação ao mês anterior');
+    expect(linhas.filter((l) => l.grafico)).toHaveLength(3); // a disponibilidade não tem série
+    expect(t).toContain('Sem gráfico mensal: Disponibilidade é a situação do parque agora.');
+    expect(t).toContain('Indicadores pendentes de definição');
+    expect(t).toContain('Treinamentos realizados/solicitados — Pendente de definição');
+    expect(t).toContain('Sem vínculo solicitado → realizado.');
+    expect(linhas.at(-1)!.assinaturas).toHaveLength(2);
+  });
+
+  it('o PDF é válido e determinístico, com os cartões desenhados', () => {
+    const opcoes = { titulo: 'Relatório Basic', autor: 'x', rodape };
+    const pdf = gerarPdf(linhas, opcoes);
+    expect(pdf.equals(gerarPdf(linhas, opcoes))).toBe(true);
+    const s = pdf.toString('latin1');
+    expect(s.startsWith('%PDF-1.4')).toBe(true);
+    expect(s).toContain('(Pendente de defini\\347\\343o)');
+    expect(s).toContain('0.16 0.55 0.33 rg'); // a faixa verde do cartão de meta atendida
+    expect(s).not.toContain('AGUARDANDO MODELO');
+    if (process.env.PDF_OUT) {
+      mkdirSync(process.env.PDF_OUT, { recursive: true });
+      writeFileSync(join(process.env.PDF_OUT, 'basic.pdf'), pdf);
+    }
   });
 });

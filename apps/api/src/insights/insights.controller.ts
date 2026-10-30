@@ -23,6 +23,7 @@ import {
   timeByWaitReason,
   preventiveVsCorrective,
   planCompliance,
+  workOrderRating,
   productivity,
   laborHours,
   firstResponseTime,
@@ -298,6 +299,8 @@ export class InsightsController {
         await planCompliance(s, p, f),
         await productivity(s, p, f),
       ];
+      // Avaliação das OS (REL-14): a MESMA função do relatório, no mesmo recorte.
+      const avaliacao = await workOrderRating(s, p, f);
       const granularity = granularityFor(p);
       return {
         generated_at: new Date().toISOString(),
@@ -314,6 +317,7 @@ export class InsightsController {
           mix: mx,
           plan_compliance: pc,
           productivity: pr,
+          work_order_rating: avaliacao,
         },
         series: await workOrderSeries(s, p, granularity, f),
         preventives: await (async () => {

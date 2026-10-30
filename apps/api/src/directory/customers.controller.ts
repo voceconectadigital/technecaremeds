@@ -8,13 +8,24 @@
  * código para a mesma pergunta e divergiria no primeiro cliente que crescer.
  */
 import { Body, Controller, Get, Inject, Param, Patch, Post, Req } from '@nestjs/common';
-import { withTenant, createCustomer, updateCustomer, type Database, type TenantSession } from '@aurora/db';
+import {
+  withTenant,
+  createCustomer,
+  createLocation,
+  updateCustomer,
+  type Database,
+  type TenantSession,
+} from '@aurora/db';
 import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
   isValidCustomerSubtype,
+  isSelectableCustomerSubtype,
+  DEFAULT_EAS_SECTORS,
+  contractTermStatus,
+  localDay,
 } from '@aurora/domain';
 import { customersCreate, customersUpdate, customersAddContact, type Customer } from '@aurora/contracts';
 import { newId } from '@aurora/domain';
@@ -40,7 +51,10 @@ interface CustomerListView {
  */
 const SELECT_CUSTOMER = `
   SELECT c.id, c.name, c.trade_name, c.code, c.tax_id, c.is_internal, c.segment, c.kind, c.subtype,
-         c.status::text AS status,
+         c.status::text AS status, c.report_tier,
+         -- Dia de calendário, em texto: "date" virando instante no driver muda de dia no fuso.
+         to_char(c.contract_starts_on, 'YYYY-MM-DD') AS contract_starts_on,
+         to_char(c.contract_ends_on, 'YYYY-MM-DD') AS contract_ends_on,
          (SELECT count(*) FROM aurora.locations l
            WHERE l.customer_id = c.id AND l.deleted_at IS NULL)::int AS location_count,
          (SELECT count(*) FROM aurora.assets a
@@ -98,9 +112,63 @@ function conflitoLegivel(err: unknown): unknown {
   return err;
 }
 
+/**
+ * A situação da vigência (CLI-06), derivada a cada leitura a partir das duas datas e do dia
+ * de hoje no fuso padrão da organização — nunca gravada, porque gravada envelheceria sozinha.
+ */
+function comSituacaoDoContrato(c: Customer): Customer {
+  return {
+    ...c,
+    contract_status: contractTermStatus(c.contract_starts_on, c.contract_ends_on, localDay(new Date())),
+  };
+}
+
+/**
+ * Vigência do contrato: início e fim JUNTOS (ou nenhum), e o fim depois do início. O banco
+ * tem as mesmas regras (0085); aqui elas chegam com o campo nomeado, para o formulário.
+ */
+function conferirVigencia(inicio: string | null | undefined, fim: string | null | undefined): void {
+  if (Boolean(inicio) !== Boolean(fim)) {
+    throw new ValidationError('informe o início e o fim da vigência do contrato juntos (ou nenhum)', {
+      field: inicio ? 'contract_ends_on' : 'contract_starts_on',
+    });
+  }
+  if (inicio && fim && fim <= inicio) {
+    throw new ValidationError('o fim da vigência precisa ser depois do início', {
+      field: 'contract_ends_on',
+    });
+  }
+}
+
+/**
+ * CLI-03: os setores padrão do EAS (`DEFAULT_EAS_SECTORS`), criados sob uma unidade com o nome do
+ * cliente — o setor não fica na raiz da árvore (a escada de tipos o põe sob unidade). São locais
+ * comuns: renomeiam-se, recebem equipamento, e o cliente segue criando os seus.
+ *
+ * Organização sem os tipos "Unidade"/"Setor" (catálogo editado) não recebe nada: devolve 0, e a
+ * resposta diz isso em vez de inventar um tipo de local.
+ */
+async function criarSetoresPadrao(
+  s: TenantSession,
+  customerId: string,
+  nomeDaUnidade: string
+): Promise<number> {
+  const tipos = await s.query<{ key: string; id: string }>(
+    `SELECT key, id FROM aurora.location_types WHERE key IN ('unidade', 'setor') AND deleted_at IS NULL`
+  );
+  const unidade = tipos.find((t) => t.key === 'unidade')?.id;
+  const setor = tipos.find((t) => t.key === 'setor')?.id;
+  if (!unidade || !setor) return 0;
+  const raiz = await createLocation(s, { customerId, locationTypeId: unidade, name: nomeDaUnidade });
+  for (const nome of DEFAULT_EAS_SECTORS) {
+    await createLocation(s, { customerId, parentId: raiz, locationTypeId: setor, name: nome });
+  }
+  return DEFAULT_EAS_SECTORS.length;
+}
+
 async function lerCliente(s: TenantSession, id: string): Promise<Customer | undefined> {
   const [row] = await s.query<Customer>(`${SELECT_CUSTOMER} WHERE c.id = $1 AND c.deleted_at IS NULL`, [id]);
-  return row;
+  return row ? comSituacaoDoContrato(row) : undefined;
 }
 
 @Controller()
@@ -121,7 +189,7 @@ export class CustomersController {
         [membershipId]
       );
       return {
-        items,
+        items: items.map(comSituacaoDoContrato),
         single_customer: items.length === 1 && items[0]!.is_internal === true,
       };
     });
@@ -141,11 +209,30 @@ export class CustomersController {
    */
   @Post('customers')
   @RequirePermissions('customer.create')
-  async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<Customer> {
+  async create(
+    @Req() req: AuroraRequest,
+    @Body() body: unknown
+  ): Promise<Customer & { default_sectors_created: number }> {
+    const ctx = req.auroraContext!;
     const b = parseWith(customersCreate.body, body);
-    conferirSubtipo(b.kind ?? 'eas', b.subtype);
+    const kind = b.kind ?? 'eas';
+    conferirSubtipo(kind, b.subtype);
+    // CLI-02: "Outro EAS"/"Outra empresa" não se escolhem mais num cadastro NOVO.
+    if (!isSelectableCustomerSubtype(kind, b.subtype)) {
+      throw new ValidationError('este segmento não é mais oferecido: escolha um dos segmentos da lista', {
+        field: 'subtype',
+      });
+    }
+    conferirVigencia(b.contract_starts_on, b.contract_ends_on);
+    // CLI-03: setores padrão para EAS. A opção vem MARCADA no formulário; pela API ela é pedida
+    // explicitamente (integração e importação seguem criando cliente sem locais). Quem não cria
+    // local não os cria.
+    const criarSetores = kind === 'eas' && b.create_default_sectors === true;
+    if (criarSetores && !ctx.permissions.has('location.create')) {
+      throw new ForbiddenError('criar os setores padrão exige a permissão location.create');
+    }
     try {
-      return await withTenant(this.db, req.auroraContext!, async (s) => {
+      return await withTenant(this.db, ctx, async (s) => {
         const id = await createCustomer(s, {
           name: b.name,
           tradeName: ouNulo(b.trade_name),
@@ -154,8 +241,12 @@ export class CustomersController {
           segment: ouNulo(b.segment),
           kind: b.kind ?? 'eas',
           subtype: b.subtype ? b.subtype : null,
+          reportTier: b.report_tier ?? null,
+          contractStartsOn: b.contract_starts_on ?? null,
+          contractEndsOn: b.contract_ends_on ?? null,
         });
-        return (await lerCliente(s, id))!;
+        const criados = criarSetores ? await criarSetoresPadrao(s, id, b.trade_name || b.name) : 0;
+        return { ...(await lerCliente(s, id))!, default_sectors_created: criados };
       });
     } catch (err) {
       throw conflitoLegivel(err);
@@ -190,6 +281,18 @@ export class CustomersController {
         const subtype =
           b.subtype !== undefined ? b.subtype || null : b.kind && b.kind !== atual.kind ? null : undefined;
         conferirSubtipo(kind, subtype);
+        // CLI-02: o cliente antigo com "Outro EAS"/"Outra empresa" continua editável com ele; passar
+        // um cliente PARA esse segmento, não.
+        if (subtype !== undefined && !isSelectableCustomerSubtype(kind, subtype, atual.subtype ?? null)) {
+          throw new ValidationError('este segmento não é mais oferecido: escolha um dos segmentos da lista', {
+            field: 'subtype',
+          });
+        }
+        // A vigência é conferida com o que FICA: mandar só o fim confere contra o início gravado.
+        conferirVigencia(
+          b.contract_starts_on !== undefined ? b.contract_starts_on : atual.contract_starts_on,
+          b.contract_ends_on !== undefined ? b.contract_ends_on : atual.contract_ends_on
+        );
         await updateCustomer(s, customerId, {
           name: b.name,
           tradeName: b.trade_name === undefined ? undefined : ouNulo(b.trade_name),
@@ -197,6 +300,9 @@ export class CustomersController {
           taxId: b.tax_id === undefined ? undefined : ouNulo(b.tax_id),
           kind: b.kind,
           subtype,
+          reportTier: b.report_tier,
+          contractStartsOn: b.contract_starts_on,
+          contractEndsOn: b.contract_ends_on,
         });
         return (await lerCliente(s, customerId))!;
       });

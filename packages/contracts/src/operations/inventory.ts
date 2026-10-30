@@ -478,6 +478,53 @@ export const storeItemsList = defineOperation({
   response: z.object({ items: z.array(StoreItem) }),
 });
 
+/** Para quem o item da Store aparece (0084): toda a rede ou só os clientes escolhidos. */
+export const STORE_AUDIENCES = ['all', 'selected'] as const;
+
+export const StoreCatalogItem = z.object({
+  id: Uuid,
+  sku: z.string(),
+  name: z.string(),
+  unit: z.string(),
+  category: z.string().nullable(),
+  list_price_cents: z.string().nullable(),
+  store_published: z.boolean(),
+  store_summary: z.string().nullable(),
+  store_audience: z.enum(STORE_AUDIENCES),
+  customer_ids: z.array(Uuid),
+});
+export type StoreCatalogItem = z.infer<typeof StoreCatalogItem>;
+
+export const storeCatalogList = defineOperation({
+  operationId: 'store.catalog',
+  method: 'GET',
+  path: '/store/catalog',
+  summary: 'Gestão da Store: todos os itens, publicados ou não, com o público de cada um',
+  description:
+    'Só para o dono da Store (quem edita o catálogo). O cliente vê `/store/items`, já filtrado pelo público.',
+  permissions: ['inventory.update'],
+  response: z.object({ items: z.array(StoreCatalogItem) }),
+});
+
+export const storeItemAudience = defineOperation({
+  operationId: 'store.setAudience',
+  method: 'PUT',
+  path: '/store/items/:id/audience',
+  summary: 'Define para quem o item aparece na Store: toda a rede ou clientes escolhidos',
+  description:
+    'Troca a seleção inteira. "selected" sem cliente é recusado — para tirar o item da Store, despublique-o.',
+  permissions: ['inventory.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      audience: z.enum(STORE_AUDIENCES),
+      customer_ids: z.array(Uuid).max(500).default([]),
+    })
+    .strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed'],
+});
+
 export const storeRequestQuote = defineOperation({
   operationId: 'store.requestQuote',
   method: 'POST',

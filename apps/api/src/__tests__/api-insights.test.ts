@@ -109,7 +109,11 @@ beforeAll(async () => {
       });
       if (i < 2) {
         await transitionWorkOrder(s, w.id, 'in_progress');
-        await transitionWorkOrder(s, w.id, 'completed', { resolution: 'concluída no teste' });
+        // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
+        await transitionWorkOrder(s, w.id, 'completed', {
+          resolution: 'concluída no teste',
+          operationalResult: 'released',
+        });
       }
     }
   });

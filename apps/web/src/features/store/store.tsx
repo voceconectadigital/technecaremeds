@@ -10,6 +10,9 @@
  * 21/10/2026 (conversa com o cliente): a Store também recebe PEDIDOS — o cliente monta o pedido, a
  * prestadora confirma com a previsão de entrega, despacha, entrega e anexa a nota fiscal, e o
  * cliente acompanha tudo na aba Pedidos (`pedidos.tsx`). Continua sem pagamento.
+ *
+ * 23/10/2026: a Store é do dono da plataforma. Quem edita o catálogo ganha a aba "Gerenciar
+ * catálogo" (`gerenciar.tsx`): produto, preço e para quem aparece; o cliente só compra e acompanha.
  */
 import { useState } from 'react';
 import { ShoppingBag } from 'lucide-react';
@@ -35,10 +38,11 @@ import {
   type Customer,
   type StoreItem,
 } from '@aurora/contracts';
-import { ApiError, Can, useApiMutation, useApiQuery, useUrlState } from '@aurora/app-kit';
+import { ApiError, Can, useApiMutation, useApiQuery, usePermissions, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { DialogoDoPedido, PedidosDaStore, type Carrinho } from './pedidos';
+import { GerenciarCatalogo } from './gerenciar';
 
 function reais(centavos: string | null): string {
   return centavos === null
@@ -52,6 +56,8 @@ export function StorePage() {
   // O carrinho é local: um pedido ainda não feito não é dado do servidor.
   const [carrinho, setCarrinho] = useState<Carrinho>(new Map());
   const [revisando, setRevisando] = useState(false);
+  const { can } = usePermissions();
+  const gerencia = can('inventory.update');
   const { data, isLoading, isError, error } = useApiQuery(storeItemsList) as {
     data: { items: StoreItem[] } | undefined;
     isLoading: boolean;
@@ -59,7 +65,7 @@ export function StorePage() {
     error: unknown;
   };
   if (isError) return <ErrorScreen error={error} />;
-  const abaAtual = aba === 'pedidos' ? 'pedidos' : 'catalogo';
+  const abaAtual = aba === 'pedidos' ? 'pedidos' : aba === 'gerenciar' && gerencia ? 'gerenciar' : 'catalogo';
   const totalDoCarrinho = [...carrinho.entries()].reduce((soma, [id, qtd]) => {
     const preco = data?.items.find((i) => i.id === id)?.list_price_cents;
     return preco === null || preco === undefined ? soma : soma + Number(preco) * qtd;
@@ -83,6 +89,7 @@ export function StorePage() {
           items={[
             { id: 'catalogo', label: 'Catálogo' },
             { id: 'pedidos', label: 'Pedidos' },
+            ...(gerencia ? [{ id: 'gerenciar', label: 'Gerenciar catálogo' }] : []),
           ]}
         />
         <div
@@ -92,6 +99,8 @@ export function StorePage() {
         >
           {abaAtual === 'pedidos' ? (
             <PedidosDaStore />
+          ) : abaAtual === 'gerenciar' ? (
+            <GerenciarCatalogo />
           ) : isLoading ? (
             <Skeleton className="h-48 w-full" />
           ) : (data?.items.length ?? 0) === 0 ? (
@@ -99,7 +108,18 @@ export function StorePage() {
               <EmptyState
                 icon={<ShoppingBag className="size-5" />}
                 title="Nenhuma oferta publicada"
-                description="Os itens aparecem aqui quando o estoque os publica na Store (Estoque › Gestão › Itens na Store)."
+                description={
+                  gerencia
+                    ? 'Cadastre produtos, preços e para quem cada um aparece na aba Gerenciar catálogo.'
+                    : 'Ainda não há produtos disponíveis para você. Quando houver, eles aparecem aqui.'
+                }
+                action={
+                  gerencia ? (
+                    <Button variant="primary" onClick={() => setAba('gerenciar')}>
+                      Gerenciar catálogo
+                    </Button>
+                  ) : undefined
+                }
               />
             </Card>
           ) : (

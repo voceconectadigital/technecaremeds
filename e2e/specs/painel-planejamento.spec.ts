@@ -9,6 +9,10 @@
  */
 import { test, expect } from '../fixtures/aurora';
 
+/** Um PNG de 1×1 de verdade: a API confere a assinatura dos bytes da foto do equipamento (ATV-07). */
+const PNG_1X1 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
 test.describe('Painel de Controle', () => {
   test('mostra os números, os gráficos e o filtro de período na URL', async ({ comoCoordenadorA: page }) => {
     await page.goto('/painel');
@@ -17,10 +21,19 @@ test.describe('Painel de Controle', () => {
     for (const rotulo of ['Chamados abertos', 'Concluídos', 'Backlog', 'MTTR', 'MTBF', 'SLA cumprido']) {
       await expect(page.getByText(rotulo, { exact: true }).first()).toBeVisible();
     }
+    // Dentro do cartão do gráfico: ou o gráfico, ou a mensagem de vazio DESTE cartão. O "sem dados"
+    // de outro cartão (a avaliação das OS, por exemplo) não conta como gráfico desenhado.
+    const evolucao = page.getByRole('region', { name: 'Evolução dos chamados' });
+    await expect(evolucao).toBeVisible();
     await expect(
-      page
+      evolucao
         .getByRole('img', { name: 'Ordens abertas e concluídas por período' })
-        .or(page.getByText('Sem dados no período.').first())
+        .or(evolucao.getByText('Sem dados suficientes para este período.'))
+    ).toHaveCount(1);
+    await expect(
+      evolucao
+        .getByRole('img', { name: 'Ordens abertas e concluídas por período' })
+        .or(evolucao.getByText('Sem dados suficientes para este período.'))
     ).toBeVisible();
 
     await page.getByRole('button', { name: '90 dias' }).click();
@@ -154,12 +167,17 @@ test.describe('Setores e Cliente → Setor → Equipamento', () => {
     await dialogo.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
     await expect(dialogo.getByLabel('Setor')).toBeEnabled();
     await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
-    await dialogo.getByLabel('Nome do equipamento').fill(`Desfibrilador E2E ${Date.now() % 10_000}`);
+    // Família → Nome do catálogo (ATV-08, 19/10/2026): o nome padronizado É o tipo, gravado por baixo.
+    await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
+    await dialogo.getByLabel('Nome do equipamento').fill('Ventilador pulmonar');
     // A tag é obrigatória no cadastro (conversa com o cliente, 21/10/2026).
     await dialogo.getByLabel('Tag (obrigatória)').fill(`TAG-E2E-${Date.now() % 100_000}`);
-    // Família → Tipo (16/10/2026): o tipo do equipamento nasce do catálogo.
-    await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
-    await dialogo.getByLabel('Tipo do equipamento').selectOption({ label: 'Ventilador pulmonar' });
+    // A foto também (ATV-07): sem ela o cadastro não segue.
+    await dialogo.getByLabel(/Foto do equipamento/).setInputFiles({
+      name: 'ventilador.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(PNG_1X1, 'base64'),
+    });
     await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
 
     await expect(page).toHaveURL(/\/ativos\/[0-9a-f-]{36}/);
@@ -172,13 +190,32 @@ test.describe('Setores e Cliente → Setor → Equipamento', () => {
     const dialogo = page.getByRole('dialog', { name: 'Novo equipamento' });
     await dialogo.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
     await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
-    await dialogo.getByLabel('Nome do equipamento').fill('Sem tag e2e');
     await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
-    await dialogo.getByLabel('Tipo do equipamento').selectOption({ label: 'Ventilador pulmonar' });
+    await dialogo.getByLabel('Nome do equipamento').fill('Ventilador pulmonar');
     // O navegador já barra o campo vazio (required); tira o atributo para provar a regra do formulário.
     await dialogo.getByLabel('Tag (obrigatória)').evaluate((el) => el.removeAttribute('required'));
     await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
     await expect(dialogo.getByText(/A tag é obrigatória/)).toBeVisible();
+    await expect(dialogo).toBeVisible();
+  });
+
+  test('sem a foto o cadastro não segue (ATV-07), e nome fora do catálogo também não (ATV-08)', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/ativos');
+    await page.getByRole('button', { name: 'Novo equipamento' }).click();
+    const dialogo = page.getByRole('dialog', { name: 'Novo equipamento' });
+    await dialogo.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
+    await dialogo.getByLabel('Setor').selectOption({ label: 'UTI Alfa' });
+    await dialogo.getByLabel('Família').selectOption({ label: 'Suporte à vida' });
+    await dialogo.getByLabel('Nome do equipamento').fill('Nome que não está no catálogo');
+    await dialogo.getByLabel('Tag (obrigatória)').fill(`TAG-E2E-F-${Date.now() % 100_000}`);
+    await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
+    await expect(dialogo.getByText(/não está no catálogo da família/).first()).toBeVisible();
+
+    await dialogo.getByLabel('Nome do equipamento').fill('Ventilador pulmonar');
+    await dialogo.getByRole('button', { name: 'Cadastrar equipamento' }).click();
+    await expect(dialogo.getByText(/A foto do equipamento é obrigatória/)).toBeVisible();
     await expect(dialogo).toBeVisible();
   });
 });

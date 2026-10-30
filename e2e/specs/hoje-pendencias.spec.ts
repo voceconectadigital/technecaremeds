@@ -16,6 +16,32 @@ test.describe('Hoje · pendências de espera e filtro de cliente', () => {
     await expect(page.getByRole('link', { name: /Ver orçamentos/ })).toBeVisible();
   });
 
+  test('ORC-05: cada contador abre a lista FILTRADA pelo motivo, com recortes', async ({
+    comoCoordenadorA: page,
+  }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: /Ver as ordens aguardando peça/ }).click();
+    await expect(page).toHaveURL(/espera=pecas/);
+    const lista = page.getByTestId('lista-de-espera');
+    await expect(lista.getByRole('heading', { name: 'Lista: aguardando peças' })).toBeVisible();
+    await expect(lista.getByLabel('Setor da lista')).toBeVisible();
+    await expect(lista.getByLabel('Responsável da lista')).toBeVisible();
+    // Toda linha leva a uma OS (peça é sempre de uma OS).
+    for (const link of await lista.getByRole('link').all()) {
+      await expect(link).toHaveAttribute('href', /\/ordens\/[0-9a-f-]{36}$/);
+    }
+
+    await page.getByRole('link', { name: /Ver orçamentos aguardando/ }).click();
+    await expect(page).toHaveURL(/espera=orcamento/);
+    await expect(lista.getByRole('heading', { name: 'Lista: aguardando orçamento' })).toBeVisible();
+    for (const link of await lista.getByRole('link').all()) {
+      await expect(link).toHaveAttribute('href', /\/(ordens|orcamentos)\/[0-9a-f-]{36}$/);
+    }
+
+    await lista.getByRole('button', { name: 'Fechar a lista' }).click();
+    await expect(page.getByTestId('lista-de-espera')).toBeHidden();
+  });
+
   test('o seletor de cliente (com mais de um cliente) manda ?customer= ao quadro, à fila e à agenda', async ({
     comoCoordenadorA: page,
   }) => {

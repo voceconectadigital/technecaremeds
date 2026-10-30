@@ -29,6 +29,7 @@ import {
   Gauge,
   Inbox,
   Monitor,
+  Star,
   Timer,
   TriangleAlert,
 } from 'lucide-react';
@@ -62,6 +63,7 @@ import {
 import {
   PERIODOS,
   ROTULO_SITUACAO_OS,
+  cartaoDaAvaliacao,
   formatarDuracao,
   rotuloDaFatia,
   rotuloDoMes,
@@ -250,6 +252,8 @@ function Conteudo({ d }: { d: ControlPanel }) {
   const totalAbertas = abertasAgora.reduce((a, [, v]) => a + v, 0);
   const amostrasMttr = d.series.reduce((a, p) => a + (p.mttrSamples ?? 0), 0);
   const fatia = d.granularity === 'day' ? 'dia' : d.granularity === 'week' ? 'semana' : 'mês';
+  // REL-14: a avaliação das OS (1–5), a mesma função do relatório, no mesmo recorte.
+  const avaliacao = cartaoDaAvaliacao(k.work_order_rating?.data, k.work_order_rating?.period);
 
   return (
     <div className="flex flex-col gap-6">
@@ -328,12 +332,20 @@ function Conteudo({ d }: { d: ControlPanel }) {
               dica={prev ? `${prev.totals.done} realizadas de ${prev.totals.scheduled} programadas` : null}
               vazio={SEM_DADOS}
               link="/planos?aba=cronograma&estado=late"
-              largo
               progresso={
                 prev && prev.totals.scheduled > 0
                   ? { feito: prev.totals.done, total: prev.totals.scheduled }
                   : undefined
               }
+            />
+            <Kpi
+              rotulo="Avaliação das OS"
+              valor={avaliacao.valor}
+              unidade="de 5"
+              icone={Star}
+              dica={avaliacao.dica}
+              vazio={avaliacao.vazio}
+              link="/ordens?vista=lista&categoria=done"
             />
           </div>
         </Card>
@@ -757,24 +769,28 @@ function Grafico({
 }) {
   return (
     <Card className={cn('flex flex-col', className)}>
-      <div
-        className={cn(
-          'flex flex-col gap-2 px-5 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
-          protagonista && 'lg:px-6 lg:pt-6'
-        )}
-      >
-        <div className="min-w-0">
-          <h2 className={cn('font-bold tracking-tight text-text', protagonista ? 'text-xl' : 'text-lg')}>
-            {titulo}
-          </h2>
-          <p className="mt-1 text-sm text-muted">{descricao}</p>
+      {/* Região com o nome do gráfico: o leitor de tela anuncia cada cartão, e um teste ou atalho
+          acha o gráfico certo sem confundir o "sem dados" de um cartão com o de outro. */}
+      <section aria-label={titulo} className="flex flex-1 flex-col">
+        <div
+          className={cn(
+            'flex flex-col gap-2 px-5 pt-5 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
+            protagonista && 'lg:px-6 lg:pt-6'
+          )}
+        >
+          <div className="min-w-0">
+            <h2 className={cn('font-bold tracking-tight text-text', protagonista ? 'text-xl' : 'text-lg')}>
+              {titulo}
+            </h2>
+            <p className="mt-1 text-sm text-muted">{descricao}</p>
+          </div>
+          {destaque && <div className="shrink-0 pt-0.5">{destaque}</div>}
         </div>
-        {destaque && <div className="shrink-0 pt-0.5">{destaque}</div>}
-      </div>
-      <div className={cn('flex-1 px-5 pb-5', protagonista && 'lg:px-6 lg:pb-6')}>
-        {children}
-        {acao && <div className="mt-2 flex justify-end">{acao}</div>}
-      </div>
+        <div className={cn('flex-1 px-5 pb-5', protagonista && 'lg:px-6 lg:pb-6')}>
+          {children}
+          {acao && <div className="mt-2 flex justify-end">{acao}</div>}
+        </div>
+      </section>
     </Card>
   );
 }

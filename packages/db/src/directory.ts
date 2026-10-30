@@ -24,14 +24,20 @@ export interface CustomerInput {
   /** EAS ou empresa corporativa (0062). Padrão: EAS. */
   kind?: 'eas' | 'corporate';
   subtype?: string | null;
+  /** Relatório incluso no contrato (0085): basic, advanced, expert; nulo = não informado. */
+  reportTier?: 'basic' | 'advanced' | 'expert' | null;
+  /** Vigência do contrato (0085), AAAA-MM-DD: juntos ou nenhum, fim depois do início. */
+  contractStartsOn?: string | null;
+  contractEndsOn?: string | null;
 }
 
 export async function createCustomer(session: TenantSession, input: CustomerInput): Promise<string> {
   const id = newId();
   await session.query(
     `INSERT INTO aurora.customers
-       (id, organization_id, name, trade_name, code, tax_id, is_internal, segment, created_by, kind, subtype)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+       (id, organization_id, name, trade_name, code, tax_id, is_internal, segment, created_by, kind, subtype,
+        report_tier, contract_starts_on, contract_ends_on)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
     [
       id,
       session.context.organizationId,
@@ -44,6 +50,9 @@ export async function createCustomer(session: TenantSession, input: CustomerInpu
       session.context.actorId,
       input.kind ?? 'eas',
       input.subtype ?? null,
+      input.reportTier ?? null,
+      input.contractStartsOn ?? null,
+      input.contractEndsOn ?? null,
     ]
   );
   return id;
@@ -56,7 +65,20 @@ export async function createCustomer(session: TenantSession, input: CustomerInpu
 export async function updateCustomer(
   session: TenantSession,
   id: string,
-  patch: Partial<Pick<CustomerInput, 'name' | 'tradeName' | 'code' | 'taxId' | 'kind' | 'subtype'>>
+  patch: Partial<
+    Pick<
+      CustomerInput,
+      | 'name'
+      | 'tradeName'
+      | 'code'
+      | 'taxId'
+      | 'kind'
+      | 'subtype'
+      | 'reportTier'
+      | 'contractStartsOn'
+      | 'contractEndsOn'
+    >
+  >
 ): Promise<boolean> {
   const campos: [string, unknown][] = [];
   if (patch.name !== undefined) campos.push(['name', patch.name]);
@@ -65,6 +87,9 @@ export async function updateCustomer(
   if (patch.taxId !== undefined) campos.push(['tax_id', patch.taxId]);
   if (patch.kind !== undefined) campos.push(['kind', patch.kind]);
   if (patch.subtype !== undefined) campos.push(['subtype', patch.subtype]);
+  if (patch.reportTier !== undefined) campos.push(['report_tier', patch.reportTier]);
+  if (patch.contractStartsOn !== undefined) campos.push(['contract_starts_on', patch.contractStartsOn]);
+  if (patch.contractEndsOn !== undefined) campos.push(['contract_ends_on', patch.contractEndsOn]);
   if (campos.length === 0) {
     const [r] = await session.query(`SELECT 1 FROM aurora.customers WHERE id = $1 AND deleted_at IS NULL`, [
       id,

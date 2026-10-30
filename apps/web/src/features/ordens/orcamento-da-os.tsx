@@ -346,13 +346,34 @@ export function etapaDaOs(os: WorkOrderDetail): { atual: string; negada: boolean
   return { atual: os.service_request_number ? 'Triagem' : 'Abertura', negada: false, cancelada: false };
 }
 
+/** As etapas que dependem de a organização usar orçamento (recurso `quotes`). */
+const ETAPAS_DE_ORCAMENTO: readonly string[] = ['Aguardando aprovação do orçamento', 'Orçamento aprovado'];
+
+/**
+ * A organização usa orçamento nesta OS? (OS-03 · ORC-01 · CLI-07)
+ *
+ * `uses_quotes` ausente (demonstração, resposta antiga) conta como sim — esconder
+ * por falta de dado seria decidir por quem não decidiu. Uma OS que JÁ tem
+ * orçamento continua mostrando as etapas: o histórico não some porque o recurso
+ * foi desligado depois.
+ */
+export function usaOrcamento(os: Pick<WorkOrderDetail, 'uses_quotes' | 'quote_summary'>): boolean {
+  return os.uses_quotes !== false || Boolean(os.quote_summary);
+}
+
+/** As etapas do andamento desta OS: sem orçamento, sem as duas etapas de aprovação. */
+export function etapasDaOs(os: Pick<WorkOrderDetail, 'uses_quotes' | 'quote_summary'>): string[] {
+  return usaOrcamento(os) ? [...ETAPAS] : ETAPAS.filter((e) => !ETAPAS_DE_ORCAMENTO.includes(e));
+}
+
 export function AndamentoDaOs({ os }: { os: WorkOrderDetail }) {
   const e = etapaDaOs(os);
-  const indice = ETAPAS.indexOf(e.atual as (typeof ETAPAS)[number]);
+  const etapas = etapasDaOs(os);
+  const indice = etapas.indexOf(e.atual);
   return (
     <nav aria-label="Andamento da ordem de serviço">
       <ol className="flex flex-wrap gap-1 text-xs">
-        {ETAPAS.map((etapa, i) => (
+        {etapas.map((etapa, i) => (
           <li
             key={etapa}
             aria-current={etapa === e.atual ? 'step' : undefined}

@@ -3,13 +3,15 @@
  *
  * Mesmos campos do "Novo cliente", mais a classificação. O cliente interno (a
  * própria organização) não troca de classificação: o servidor recusa, e a tela
- * já mostra a escolha travada.
+ * já mostra a escolha travada. O contrato (relatório incluso e vigência —
+ * CLI-05/06) é editado aqui também; deixar em branco limpa.
  */
 import { useState, type FormEvent } from 'react';
 import { Button, Dialog, Field, Input, useToast } from '@aurora/ui';
 import { customersDetail, customersList, customersUpdate, type Customer } from '@aurora/contracts';
 import { ApiError, useApiMutation } from '@aurora/app-kit';
 import { CamposDeClassificacao, type TipoDeCliente } from './classificacao';
+import { CamposDoContrato, problemaDaVigencia } from './contrato';
 
 export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer; onFechar: () => void }) {
   const toast = useToast();
@@ -19,6 +21,9 @@ export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer;
   const [codigo, setCodigo] = useState(cliente.code ?? '');
   const [tipo, setTipo] = useState<TipoDeCliente>((cliente.kind as TipoDeCliente) ?? 'eas');
   const [subtipo, setSubtipo] = useState(cliente.subtype ?? '');
+  const [relatorio, setRelatorio] = useState<string>(cliente.report_tier ?? '');
+  const [inicioContrato, setInicioContrato] = useState(cliente.contract_starts_on ?? '');
+  const [fimContrato, setFimContrato] = useState(cliente.contract_ends_on ?? '');
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
 
   const salvar = useApiMutation(customersUpdate, {
@@ -29,6 +34,11 @@ export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer;
   function enviar(e: FormEvent) {
     e.preventDefault();
     setErro(null);
+    const vigencia = problemaDaVigencia(inicioContrato, fimContrato);
+    if (vigencia) {
+      setErro(vigencia);
+      return;
+    }
     salvar.mutate(
       {
         params: { id: cliente.id },
@@ -39,6 +49,9 @@ export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer;
           code: codigo.trim(),
           ...(cliente.is_internal ? {} : { kind: tipo }),
           subtype: subtipo || null,
+          report_tier: (relatorio || null) as 'basic' | 'advanced' | 'expert' | null,
+          contract_starts_on: inicioContrato || null,
+          contract_ends_on: fimContrato || null,
         },
       },
       {
@@ -89,12 +102,33 @@ export function DialogoEditarCliente({ cliente, onFechar }: { cliente: Customer;
           onSubtipo={setSubtipo}
           erroSubtipo={erroDe('subtype') ?? erroDe('kind')}
           bloquearTipo={cliente.is_internal}
+          subtipoOriginal={cliente.subtype ?? null}
         />
-        {erro && !['name', 'trade_name', 'tax_id', 'code', 'subtype', 'kind'].includes(erro.campo ?? '') && (
-          <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
-            {erro.mensagem}
-          </p>
-        )}
+        <CamposDoContrato
+          relatorio={relatorio}
+          inicio={inicioContrato}
+          fim={fimContrato}
+          onRelatorio={setRelatorio}
+          onInicio={setInicioContrato}
+          onFim={setFimContrato}
+          erroDe={erroDe}
+        />
+        {erro &&
+          ![
+            'name',
+            'trade_name',
+            'tax_id',
+            'code',
+            'subtype',
+            'kind',
+            'report_tier',
+            'contract_starts_on',
+            'contract_ends_on',
+          ].includes(erro.campo ?? '') && (
+            <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
+              {erro.mensagem}
+            </p>
+          )}
       </form>
     </Dialog>
   );

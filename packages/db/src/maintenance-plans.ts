@@ -75,6 +75,11 @@ export interface PlanTaskInput {
   filterAssetModelId?: string | null;
   filterManufacturerId?: string | null;
   filterCriticalityId?: string | null;
+  /**
+   * Procedimentos ADICIONAIS (0087, OS-15): a OS gerada recebe o checklist
+   * principal e mais um por chave daqui, cada um com as próprias respostas.
+   */
+  extraChecklistTemplateKeys?: readonly string[];
 }
 
 /**
@@ -86,14 +91,20 @@ export interface PlanTaskInput {
  */
 export async function addPlanTask(session: TenantSession, input: PlanTaskInput): Promise<string> {
   const id = newId();
+  // A chave principal não se repete entre as adicionais: a OS teria o mesmo
+  // checklist duas vezes, e o banco recusaria a segunda resposta (OS+modelo).
+  const extras = [...new Set(input.extraChecklistTemplateKeys ?? [])].filter(
+    (k) => k && k !== input.checklistTemplateKey
+  );
   await session.query(
     `INSERT INTO aurora.plan_tasks
        (id, organization_id, plan_id, name, target_kind, target_asset_id, target_category_id,
         target_location_id, work_order_type_id, checklist_template_key, frequency_unit,
         frequency_interval, lead_time_days, tolerance_days, estimated_duration_min, default_team_id,
-        filter_asset_model_id, filter_manufacturer_id, filter_criticality_id)
+        filter_asset_model_id, filter_manufacturer_id, filter_criticality_id,
+        extra_checklist_template_keys)
      VALUES ($1, $2, $3, $4, $5::aurora.plan_target_kind, $6, $7, $8, $9, $10,
-             $11::aurora.frequency_unit, $12, $13, $14, $15, $16, $17, $18, $19)`,
+             $11::aurora.frequency_unit, $12, $13, $14, $15, $16, $17, $18, $19, $20::text[])`,
     [
       id,
       session.context.organizationId,
@@ -114,9 +125,50 @@ export async function addPlanTask(session: TenantSession, input: PlanTaskInput):
       input.filterAssetModelId ?? null,
       input.filterManufacturerId ?? null,
       input.filterCriticalityId ?? null,
+      extras,
     ]
   );
   return id;
+}
+
+/**
+ * Ativa ou inativa um plano (PLN-01), com motivo opcional.
+ *
+ * NADA É APAGADO. Ciclos, itens e OS já gerados ficam como estão — o
+ * histórico do que se fez sob o plano continua sendo do plano. O que muda é o
+ * futuro: inativo, a varredura (`sweepPlans`) e a geração manual
+ * (`generateCycle`) não abrem ciclo, e o cronograma deixa de projetar.
+ *
+ * A trilha de auditoria (gatilho `plans_audit`) guarda cada mudança com autor
+ * e diff; as colunas da 0087 guardam só a última, para a tela.
+ */
+export async function setPlanActive(
+  session: TenantSession,
+  planId: string,
+  active: boolean,
+  reason: string | null = null
+): Promise<{ changed: boolean; isActive: boolean }> {
+  const motivo = reason?.trim() ? reason.trim() : null;
+  if (motivo && motivo.length > 500) {
+    throw new ValidationError('o motivo tem no máximo 500 caracteres', { field: 'reason' });
+  }
+  const [plano] = await session.query<{ is_active: boolean }>(
+    `SELECT is_active FROM aurora.maintenance_plans WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+    [planId]
+  );
+  if (!plano) throw new NotFoundError('Plano de manutenção', planId);
+  // Pedir o estado em que o plano já está não é erro, mas também não é
+  // mudança: nada é gravado, e a auditoria não ganha uma linha vazia.
+  if (plano.is_active === active) return { changed: false, isActive: active };
+
+  await session.query(
+    `UPDATE aurora.maintenance_plans
+        SET is_active = $2, active_changed_at = now(), active_changed_by = $3,
+            active_change_reason = $4, updated_by = $3
+      WHERE id = $1`,
+    [planId, active, session.context.actorId, motivo]
+  );
+  return { changed: true, isActive: active };
 }
 
 /** Ativos que o alvo da tarefa alcança HOJE. */
@@ -254,9 +306,11 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
     plan_name: string;
     seq: number;
     checklist_template_key: string | null;
+    extra_checklist_template_keys: string[] | null;
   }>(
     `SELECT i.id, i.asset_id, t.name AS task_name, t.work_order_type_id,
-            p.customer_id, p.name AS plan_name, c.seq, t.checklist_template_key
+            p.customer_id, p.name AS plan_name, c.seq, t.checklist_template_key,
+            t.extra_checklist_template_keys
        FROM aurora.plan_cycle_items i
        JOIN aurora.plan_cycles c ON c.id = i.cycle_id
        JOIN aurora.plan_tasks t  ON t.id = i.task_id
@@ -291,7 +345,27 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
 
   let criadas = 0;
   for (const item of pendentes) {
-    const checklist = item.checklist_template_key ? await publicadoDe(item.checklist_template_key) : null;
+    /*
+     * TODOS OS PROCEDIMENTOS DA TAREFA (0087, OS-15): o principal e os
+     * adicionais, nessa ordem e sem repetição. Cada um vira UMA resposta de
+     * checklist na OS — e o banco garante que item de um modelo só se responde
+     * na resposta daquele modelo, então nada se mistura.
+     */
+    const chaves = [
+      ...new Set(
+        [item.checklist_template_key, ...(item.extra_checklist_template_keys ?? [])].filter(
+          (k): k is string => Boolean(k)
+        )
+      ),
+    ];
+    const anexos: string[] = [];
+    const semVersao: string[] = [];
+    for (const chave of chaves) {
+      const tpl = await publicadoDe(chave);
+      if (tpl) {
+        if (!anexos.includes(tpl)) anexos.push(tpl);
+      } else semVersao.push(chave);
+    }
     const [ativo] = await session.query<{ name: string; location_id: string | null; customer_id: string }>(
       `SELECT name, location_id, customer_id FROM aurora.assets WHERE id = $1`,
       [item.asset_id]
@@ -310,14 +384,14 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
       title: `${item.task_name} — ${ativo?.name ?? 'ativo'}`,
       description:
         `Gerada pelo plano "${item.plan_name}", ciclo ${item.seq}.` +
-        (item.checklist_template_key && !checklist
-          ? ` O checklist "${item.checklist_template_key}" do plano não tem versão publicada e não foi anexado.`
-          : ''),
+        semVersao
+          .map((k) => ` O checklist "${k}" do plano não tem versão publicada e não foi anexado.`)
+          .join(''),
       assetId: item.asset_id,
       locationId: ativo?.location_id ?? null,
       source: 'plan',
     });
-    if (checklist) await attachChecklist(session, os.id, checklist);
+    for (const tpl of anexos) await attachChecklist(session, os.id, tpl);
     await session.query(
       `UPDATE aurora.plan_cycle_items SET status = 'generated', work_order_id = $2 WHERE id = $1`,
       [item.id, os.id]

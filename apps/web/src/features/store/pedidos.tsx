@@ -42,10 +42,53 @@ import { ApiError, Can, lerSessaoGuardada, useApi, useApiMutation, useApiQuery }
 const TOM = {
   requested: 'info',
   confirmed: 'accent',
+  separated: 'accent',
   shipped: 'warn',
   delivered: 'good',
   cancelled: 'neutral',
 } as const;
+
+/**
+ * O andamento do pedido em uma linha (conversa de 23/10: "aprovado, sendo separado, em trânsito,
+ * entregue, para o usuário e para nós como donos do Store vermos"). O passo "Separado" é opcional:
+ * pedido despachado direto do aprovado aparece com ele marcado como pulado, não como pendente.
+ */
+const PASSOS = ['requested', 'confirmed', 'separated', 'shipped', 'delivered'] as const;
+
+export function AndamentoDoPedido({ status }: { status: StoreOrderRow['status'] }) {
+  if (status === 'cancelled') return null;
+  const atual = PASSOS.indexOf(status);
+  return (
+    <ol className="flex flex-wrap items-center gap-1 text-xs" aria-label="Andamento do pedido">
+      {PASSOS.map((p, i) => {
+        const feito = i < atual || status === 'delivered';
+        const agora = i === atual && status !== 'delivered';
+        return (
+          <li key={p} className="flex items-center gap-1">
+            {i > 0 && (
+              <span aria-hidden="true" className={feito || agora ? 'text-accent' : 'text-subtle'}>
+                →
+              </span>
+            )}
+            <span
+              aria-current={agora ? 'step' : undefined}
+              className={
+                'rounded-pill px-2 py-0.5 ' +
+                (agora
+                  ? 'bg-accent text-on-accent font-semibold'
+                  : feito
+                    ? 'bg-accent-soft text-accent-text'
+                    : 'bg-surface-sunken text-subtle')
+              }
+            >
+              {STORE_ORDER_STATUS_LABELS[p]}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 export function reais(centavos: string | number | null): string {
   return centavos === null
@@ -258,6 +301,9 @@ export function PedidosDaStore() {
                     {o.customer_name} · {o.item_count} {o.item_count === 1 ? 'item' : 'itens'} ·{' '}
                     {dataBr(o.created_at)}
                   </span>
+                  <span className="mt-2 block">
+                    <AndamentoDoPedido status={o.status} />
+                  </span>
                   {o.expected_delivery && o.status !== 'delivered' && o.status !== 'cancelled' && (
                     <span className="block text-sm text-text">
                       Previsão de entrega: {dataBr(o.expected_delivery)}
@@ -381,7 +427,11 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
     }
   }
 
-  const andando = o.status === 'requested' || o.status === 'confirmed' || o.status === 'shipped';
+  const andando =
+    o.status === 'requested' ||
+    o.status === 'confirmed' ||
+    o.status === 'separated' ||
+    o.status === 'shipped';
   return (
     <Dialog
       open
@@ -392,6 +442,7 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
       footer={<Button onClick={onFechar}>Fechar</Button>}
     >
       <div className="flex flex-col gap-4">
+        <AndamentoDoPedido status={o.status} />
         {o.expected_delivery && andando && (
           <p className="rounded-control bg-accent-soft px-3 py-2 text-sm text-accent-text">
             Previsão de entrega: <strong>{dataBr(o.expected_delivery)}</strong>
@@ -469,7 +520,10 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
             </p>
           )}
           <Can permission="quote.update">
-            {(o.status === 'confirmed' || o.status === 'shipped' || o.status === 'delivered') && (
+            {(o.status === 'confirmed' ||
+              o.status === 'separated' ||
+              o.status === 'shipped' ||
+              o.status === 'delivered') && (
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <Field label="Número da nota fiscal">
                   <Input value={numeroNf} onChange={(e) => setNumeroNf(e.target.value)} maxLength={60} />
@@ -540,7 +594,7 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
             <div className="flex flex-col gap-2 rounded-control bg-surface-sunken p-3">
               <p className="text-sm font-semibold text-text">Andamento (prestadora)</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="Previsão de entrega" hint="Obrigatória para confirmar.">
+                <Field label="Previsão de entrega" hint="Obrigatória para aprovar.">
                   <Input type="date" value={previsao} onChange={(e) => setPrevisao(e.target.value)} />
                 </Field>
                 <Field label="Observação">
@@ -550,17 +604,26 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
               <div className="flex flex-wrap gap-2">
                 {o.status === 'requested' && (
                   <Button variant="primary" loading={mudar.isPending} onClick={() => void passo('confirmed')}>
-                    Confirmar pedido
+                    Aprovar pedido
                   </Button>
                 )}
-                {(o.status === 'confirmed' || o.status === 'shipped') && (
+                {(o.status === 'confirmed' || o.status === 'separated' || o.status === 'shipped') && (
                   <Button loading={mudar.isPending} disabled={!previsao} onClick={() => void passo(o.status)}>
                     Atualizar previsão de entrega
                   </Button>
                 )}
                 {o.status === 'confirmed' && (
-                  <Button variant="primary" loading={mudar.isPending} onClick={() => void passo('shipped')}>
-                    Despachar
+                  <Button variant="primary" loading={mudar.isPending} onClick={() => void passo('separated')}>
+                    Marcar como separado
+                  </Button>
+                )}
+                {(o.status === 'confirmed' || o.status === 'separated') && (
+                  <Button
+                    variant={o.status === 'separated' ? 'primary' : 'secondary'}
+                    loading={mudar.isPending}
+                    onClick={() => void passo('shipped')}
+                  >
+                    Despachar (em trânsito)
                   </Button>
                 )}
                 {o.status === 'shipped' && (
@@ -568,7 +631,7 @@ function DialogoDoAcompanhamento({ id, onFechar }: { id: string; onFechar: () =>
                     Marcar como entregue
                   </Button>
                 )}
-                {(o.status === 'requested' || o.status === 'confirmed') && (
+                {(o.status === 'requested' || o.status === 'confirmed' || o.status === 'separated') && (
                   <Button variant="ghost" loading={mudar.isPending} onClick={() => void passo('cancelled')}>
                     Cancelar (informe o motivo na observação)
                   </Button>

@@ -148,6 +148,7 @@ describe('migrations (EPIC-001)', () => {
       'stock_lots',
       'stock_movements',
       'stock_reservations',
+      'store_item_customers',
       'store_order_events',
       'store_order_items',
       'store_orders',

@@ -191,6 +191,9 @@ export interface AssetInput {
   anvisaRegistration?: string | null;
   usefulLifeYears?: number | null;
   acquisitionInvoice?: string | null;
+  /** "Não se aplica" ao registro ANVISA e valor residual da depreciação (0089 · ATV-11, ATV-10). */
+  anvisaNotApplicable?: boolean;
+  residualValue?: number | null;
   specs?: Record<string, unknown>;
   /** Origem e identificador no sistema legado (0048). Opcionais, e sempre juntos. */
   externalSource?: string | null;
@@ -205,9 +208,10 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
        (id, organization_id, name, customer_id, asset_category_id, location_id, asset_model_id,
         criticality_id, parent_asset_id, tag, serial_number, asset_number, qr_token, status,
         acquired_at, purchase_value, replacement_value, specs, created_by,
-        external_source, external_id, anvisa_registration, useful_life_years, acquisition_invoice)
+        external_source, external_id, anvisa_registration, useful_life_years, acquisition_invoice,
+        anvisa_not_applicable, residual_value)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::aurora.asset_status,
-             $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
+             $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`,
     [
       id,
       session.context.organizationId,
@@ -233,9 +237,55 @@ export async function createAsset(session: TenantSession, input: AssetInput): Pr
       input.anvisaRegistration ?? null,
       input.usefulLifeYears ?? null,
       input.acquisitionInvoice ?? null,
+      input.anvisaNotApplicable ?? false,
+      input.residualValue ?? null,
     ]
   );
   return id;
+}
+
+/* -------------------------------------------------------------------------- */
+/* foto do equipamento (ATV-07 · 0085)                                         */
+/* -------------------------------------------------------------------------- */
+
+export interface AssetPhotoRecord {
+  key: string;
+  contentType: string;
+  size: number;
+  sha256: string;
+}
+
+/**
+ * Grava (ou troca) os metadados da foto. Os BYTES já foram gravados no
+ * armazenamento por quem chama — com a chave gerada pelo servidor. Devolve a
+ * chave anterior, para quem chama apagá-la DEPOIS da transação: apagar antes e
+ * ver a transação desfeita deixaria o equipamento apontando para o nada.
+ *
+ * Não confere escopo: quem chama confere que o equipamento é visível a quem envia.
+ */
+export async function setAssetPhoto(
+  session: TenantSession,
+  assetId: string,
+  foto: AssetPhotoRecord
+): Promise<{ previousKey: string | null; uploadedAt: string }> {
+  const [antes] = await session.query<{ photo_key: string | null }>(
+    `SELECT photo_key FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+    [assetId]
+  );
+  if (!antes) throw new NotFoundError('Ativo', assetId);
+  const [depois] = await session.query<{ photo_uploaded_at: Date | string }>(
+    `UPDATE aurora.assets
+        SET photo_key = $2, photo_content_type = $3, photo_size = $4, photo_sha256 = $5,
+            photo_uploaded_at = now(), updated_at = now(), updated_by = $6
+      WHERE id = $1
+      RETURNING photo_uploaded_at`,
+    [assetId, foto.key, foto.contentType, foto.size, foto.sha256, session.context.actorId]
+  );
+  const quando = depois!.photo_uploaded_at;
+  return {
+    previousKey: antes.photo_key,
+    uploadedAt: quando instanceof Date ? quando.toISOString() : String(quando),
+  };
 }
 
 /**
@@ -496,10 +546,14 @@ export async function importAssets(
     } catch (err) {
       await session.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
       await session.query(`RELEASE SAVEPOINT ${savepoint}`);
+      // Tag repetida na organização (índice da 0089): a linha diz qual campo, em português.
+      const tagRepetida = String((err as Error)?.message ?? '').includes('assets_org_tag_uq');
       issues.push({
         line: row.line,
-        field: (err as { details?: { field?: string } })?.details?.field ?? null,
-        message: (err as Error).message,
+        field: tagRepetida ? 'tag' : ((err as { details?: { field?: string } })?.details?.field ?? null),
+        message: tagRepetida
+          ? `tag "${row.tag ?? ''}" já está em uso por outro equipamento da organização`
+          : (err as Error).message,
       });
     }
   }

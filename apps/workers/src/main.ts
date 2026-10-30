@@ -16,6 +16,7 @@ import { loadEnv } from '@aurora/config';
 import { pgPoolAdapter, protegerPool, OPCOES_DE_POOL } from '@aurora/db';
 import { OutboxPublisher, type EventSink } from './outbox-publisher';
 import { JobRuntime } from './jobs/runtime';
+import { destinoDasAutomacoes, destinosEmSerie } from './automacoes';
 
 /**
  * Destino padrão: registrar e seguir.
@@ -55,7 +56,9 @@ export async function main(): Promise<void> {
     process.stderr.write(JSON.stringify({ nivel: 'error', origem: 'pg-boss', erro: String(e) }) + '\n');
   });
 
-  const publicador = new OutboxPublisher(platformDb, REGISTRO);
+  // Registro + automações por evento (AUT-07): cada evento do outbox chega às regras que o
+  // escutam, uma vez por regra (índice da 0088), cada regra na sua transação.
+  const publicador = new OutboxPublisher(platformDb, destinosEmSerie(REGISTRO, destinoDasAutomacoes(db)));
 
   const runtime = new JobRuntime({
     db,

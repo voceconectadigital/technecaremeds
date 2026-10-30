@@ -27,6 +27,7 @@ import {
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { CamposDeClassificacao, type TipoDeCliente } from './classificacao';
+import { CamposDoContrato, problemaDaVigencia } from './contrato';
 
 /**
  * Segmentos sugeridos.
@@ -81,7 +82,14 @@ export function DialogoNovoCliente({
   const [codigo, setCodigo] = useState('');
   const [tipo, setTipo] = useState<TipoDeCliente>('eas');
   const [subtipo, setSubtipo] = useState('');
+  const [relatorio, setRelatorio] = useState('');
+  const [inicioContrato, setInicioContrato] = useState('');
+  const [fimContrato, setFimContrato] = useState('');
   const [erro, setErro] = useState<Erro | null>(null);
+  /** CLI-03: EAS nasce com Pronto Atendimento, Bloco Cirúrgico, UTI e Enfermaria — marcado por padrão. */
+  const [setoresPadrao, setSetoresPadrao] = useState(true);
+  const podeCriarSetores = can('location.create');
+  const criarSetoresPadrao = tipo === 'eas' && podeCriarSetores && setoresPadrao;
 
   /** Preenchido depois de salvar: o diálogo passa a oferecer a unidade. */
   const [criado, setCriado] = useState<Customer | null>(null);
@@ -115,9 +123,13 @@ export function DialogoNovoCliente({
     setCodigo('');
     setTipo('eas');
     setSubtipo('');
+    setRelatorio('');
+    setInicioContrato('');
+    setFimContrato('');
     setErro(null);
     setCriado(null);
     setUnidade('');
+    setSetoresPadrao(true);
   }
 
   function fechar() {
@@ -132,6 +144,11 @@ export function DialogoNovoCliente({
       setErro({ campo: 'name', mensagem: 'Informe o nome do cliente — o hospital, a clínica ou a rede.' });
       return;
     }
+    const vigencia = problemaDaVigencia(inicioContrato, fimContrato);
+    if (vigencia) {
+      setErro(vigencia);
+      return;
+    }
     criar.mutate(
       {
         body: {
@@ -142,12 +159,25 @@ export function DialogoNovoCliente({
           code: codigo.trim() || undefined,
           kind: tipo,
           subtype: subtipo || null,
+          report_tier: (relatorio || null) as 'basic' | 'advanced' | 'expert' | null,
+          contract_starts_on: inicioContrato || null,
+          contract_ends_on: fimContrato || null,
+          ...(criarSetoresPadrao ? { create_default_sectors: true } : {}),
         },
       },
       {
         onSuccess: (c) => {
-          const cliente = c as Customer;
+          const cliente = c as Customer & { default_sectors_created?: number };
           onCriado?.(cliente);
+          // Com os setores padrão a unidade já nasceu: não há "primeira unidade" a oferecer.
+          if ((cliente.default_sectors_created ?? 0) > 0) {
+            toast.success(
+              'Cliente cadastrado',
+              `${cliente.name} já tem os setores Pronto Atendimento, Bloco Cirúrgico, UTI e Enfermaria.`
+            );
+            fechar();
+            return;
+          }
           if (podeCriarUnidade && tipoUnidade) {
             setCriado(cliente);
             return;
@@ -185,7 +215,18 @@ export function DialogoNovoCliente({
 
   const erroDe = (campo: string) => (erro?.campo === campo ? erro.mensagem : null);
   const erroSolto =
-    erro && !['name', 'trade_name', 'tax_id', 'code', 'subtype', 'unidade'].includes(erro.campo ?? '');
+    erro &&
+    ![
+      'name',
+      'trade_name',
+      'tax_id',
+      'code',
+      'subtype',
+      'unidade',
+      'report_tier',
+      'contract_starts_on',
+      'contract_ends_on',
+    ].includes(erro.campo ?? '');
 
   if (criado) {
     return (
@@ -318,6 +359,34 @@ export function DialogoNovoCliente({
           onTipo={setTipo}
           onSubtipo={setSubtipo}
           erroSubtipo={erroDe('subtype')}
+        />
+
+        {tipo === 'eas' && podeCriarSetores && (
+          <label className="flex items-start gap-2 text-sm text-text">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={setoresPadrao}
+              onChange={(e) => setSetoresPadrao(e.target.checked)}
+            />
+            <span>
+              Criar setores padrão
+              <span className="block text-xs text-muted">
+                Pronto Atendimento, Bloco Cirúrgico, UTI e Enfermaria, numa unidade com o nome do cliente.
+                Outros setores podem ser incluídos depois, na ficha.
+              </span>
+            </span>
+          </label>
+        )}
+
+        <CamposDoContrato
+          relatorio={relatorio}
+          inicio={inicioContrato}
+          fim={fimContrato}
+          onRelatorio={setRelatorio}
+          onInicio={setInicioContrato}
+          onFim={setFimContrato}
+          erroDe={erroDe}
         />
 
         {erroSolto && (

@@ -333,6 +333,9 @@ test.describe('CAMPO · nada é descartado em silêncio', () => {
     await context.setOffline(true);
     const trabalho = 'Diagnóstico: célula de O2 saturada. Substituída e calibrada.';
     await page.getByLabel('O que foi feito').fill(trabalho);
+    // OS de equipamento pede o parecer para concluir (OS-16).
+    if (await page.getByLabel('Liberado para uso').count())
+      await page.getByLabel('Liberado para uso').check();
 
     /*
      * Ele pede uma mudança de situação — qualquer uma que o grafo ofereça a
@@ -416,6 +419,8 @@ test.describe('CAMPO · nada é descartado em silêncio', () => {
 
     await context.setOffline(true);
     await page.getByLabel('O que foi feito').fill('Ajustado o limiar do alarme.');
+    if (await page.getByLabel('Liberado para uso').count())
+      await page.getByLabel('Liberado para uso').check();
     const acoes = page.getByRole('button').filter({ hasNotText: 'Iniciar cronômetro' });
     await acoes.last().click();
     await expect(page.getByText(/(ação guardada|ações guardadas) no aparelho/)).toBeVisible({

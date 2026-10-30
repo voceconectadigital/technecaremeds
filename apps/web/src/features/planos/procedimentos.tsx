@@ -65,6 +65,66 @@ const TIPOS_PROC: Array<{ v: TipoProc; r: string }> = [
   { v: 'acceptance', r: 'Aceite' },
 ];
 
+/**
+ * "ACEITE" SAIU DA CRIAÇÃO E DOS FILTROS (PLN-08, reunião de 16/10/2026): era uma etapa
+ * redundante. O dado antigo continua existindo — o checklist já gravado se acha em "Todos", e um
+ * procedimento antigo desse tipo ainda abre com o tipo dele. Concordâncias de outros fluxos (aceite
+ * de orçamento, assinatura de documento) não são isto e não mudam.
+ */
+export const FILTROS_DE_PROCEDIMENTO: Array<{ v: string; r: string }> = [
+  { v: '', r: 'Todos' },
+  { v: 'none', r: 'Preventiva' },
+  ...TIPOS_PROC.filter((t) => t.v && t.v !== 'acceptance').map((t) => ({ v: t.v, r: rotuloTipo(t.v) })),
+];
+
+/** As opções de tipo do formulário: sem "Aceite", a não ser para o procedimento antigo que já é. */
+export function opcoesDeTipoNoFormulario(tipoAtual: string): Array<{ v: string; r: string }> {
+  return TIPOS_PROC.filter((t) => t.v !== 'acceptance' || tipoAtual === 'acceptance');
+}
+
+export function FiltroDeTipoDeProcedimento({
+  filtro,
+  onFiltro,
+}: {
+  filtro: string;
+  onFiltro: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo de procedimento">
+      {FILTROS_DE_PROCEDIMENTO.map((t) => (
+        <FilterChip key={t.v} active={filtro === t.v} onClick={() => onFiltro(t.v)}>
+          {t.r}
+        </FilterChip>
+      ))}
+    </div>
+  );
+}
+
+export function SeletorDeTipoDeProcedimento({
+  tipo,
+  disabled,
+  onTipo,
+}: {
+  tipo: string;
+  disabled?: boolean;
+  onTipo: (v: string) => void;
+}) {
+  return (
+    <Select
+      aria-label="Tipo de procedimento"
+      value={tipo}
+      disabled={disabled}
+      onChange={(e) => onTipo(e.target.value)}
+    >
+      {opcoesDeTipoNoFormulario(tipo).map((t) => (
+        <option key={t.v} value={t.v}>
+          {t.r}
+        </option>
+      ))}
+    </Select>
+  );
+}
+
 /** Tipos de campo da tela → tipo de item do motor. */
 type Campo =
   'texto' | 'observacao' | 'simnao' | 'numero' | 'conformidade' | 'opcoes' | 'medicao' | 'foto' | 'data';
@@ -230,22 +290,7 @@ export function ProcedimentosAba() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Tipo de procedimento">
-          {[
-            { v: '', r: 'Todos' },
-            { v: 'none', r: 'Preventiva' },
-            // "Aceite" saiu dos filtros (reunião de 16/10/2026: o checklist já gravado se acha em
-            // "Todos"); o dado antigo continua existindo e aparece lá.
-            ...TIPOS_PROC.filter((t) => t.v && t.v !== 'acceptance').map((t) => ({
-              v: t.v,
-              r: rotuloTipo(t.v),
-            })),
-          ].map((t) => (
-            <FilterChip key={t.v} active={filtro === t.v} onClick={() => setFiltro(t.v)}>
-              {t.r}
-            </FilterChip>
-          ))}
-        </div>
+        <FiltroDeTipoDeProcedimento filtro={filtro} onFiltro={setFiltro} />
         <Can permission="procedure.create">
           <Button
             variant="primary"
@@ -471,18 +516,11 @@ function ConstrutorDialog({
             />
           </Field>
           <Field label="Tipo de procedimento" hint={base ? 'O tipo não muda entre versões.' : undefined}>
-            <Select
-              value={tipo}
+            <SeletorDeTipoDeProcedimento
+              tipo={tipo}
               disabled={Boolean(base)}
-              onChange={(e) => setTipo(e.target.value as TipoProc)}
-            >
-              {/* Novo procedimento não oferece "Aceite"; um antigo desse tipo ainda abre. */}
-              {TIPOS_PROC.filter((t) => t.v !== 'acceptance' || tipo === 'acceptance').map((t) => (
-                <option key={t.v} value={t.v}>
-                  {t.r}
-                </option>
-              ))}
-            </Select>
+              onTipo={(v) => setTipo(v as TipoProc)}
+            />
           </Field>
           <Field label="Descrição">
             <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Opcional" />

@@ -26,6 +26,13 @@ export const QualityRecordRow = z.object({
   customer_name: z.string().nullable(),
   asset_id: Uuid.nullable(),
   asset_name: z.string().nullable(),
+  /**
+   * QUA-04 (0089): o procedimento/checklist — a VERSÃO exata — a que o certificado se refere.
+   * Opcionais: capturas anteriores não os têm.
+   */
+  procedure_template_id: Uuid.nullable().optional(),
+  procedure_title: z.string().nullable().optional(),
+  procedure_version: z.number().int().nullable().optional(),
   person_name: z.string().nullable(),
   certificate_number: z.string().nullable(),
   issuer: z.string().nullable(),
@@ -70,6 +77,8 @@ export const qualityCreate = defineOperation({
       title: z.string().trim().min(2).max(200),
       customer_id: Uuid.nullable().optional(),
       asset_id: Uuid.nullable().optional(),
+      /** Procedimento/checklist publicado (a versão), além do equipamento — QUA-04. */
+      procedure_template_id: Uuid.nullable().optional(),
       person_name: z.string().trim().max(200).nullable().optional(),
       certificate_number: z.string().trim().max(80).nullable().optional(),
       issuer: z.string().trim().max(200).nullable().optional(),

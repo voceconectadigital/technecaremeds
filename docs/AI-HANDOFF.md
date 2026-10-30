@@ -24,6 +24,50 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
+> **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
+> Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`; checklist de publicação: `docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md`.
+> Status: 139 de 177 testados; parciais REL-05, AUT-05, OPS-08 (sem deploy). **CI verde completo no HEAD de código `62eb8c3`** (run 41048276925: PG16 2.846/2.846, E2E 237, Gate).
+> · Cartões de gráfico do Painel são regiões nomeadas pelo título (`Grafico` em `painel/painel.tsx`); E2E do celular abre a gaveta "Abrir menu" antes de ler os links.
+> · **Parecer da OS obrigatório por padrão** (`require_operational_result`, desligável): PARADO → ativo `under_maintenance`,
+>   LIBERADO → `active` (`packages/db/src/work-orders.ts`); o app de campo pede o parecer (`apps/field/src/telas/ordem.tsx`).
+>   Testes antigos que concluem OS de equipamento mandam `operationalResult: 'released'`.
+> · `GET /work-orders/:id/completion` = critérios de conclusão; folha de impressão `ordens/folha-de-impressao.tsx` (`?modo=impressao`).
+> · Orçamento só com o recurso `quotes` da organização (modo hospital nasce sem); `createQuote` recusa 409.
+> · Planos: `POST /maintenance-plans/:id/activate|deactivate`, `GET …/eligible-items`, `POST …/compliance-report` (xlsx),
+>   `plan_tasks.extra_checklist_template_keys` (0087); espera filtrada `GET /today/waiting` + `routes/hoje-espera.tsx`.
+> · Relatórios: trava de nível também nos agendados (`nivel-de-relatorio.ts` + `automations.ts`); `GET /reports/options`;
+>   página `/relatorios`; `formula_version` por indicador; marca do servidor em `packages/config/src/marca.gerada.ts`
+>   (gerada por `npm run marca`, fora do prettier); eixo dos gráficos com `passoRedondo` (`documents/pdf.ts`).
+> · **Automações por evento agora rodam** (`apps/workers/src/automacoes.ts`, índice único regra×evento 0088). Antes ficavam caladas.
+> · Cadastros (0089): tag única por organização e não apagável (repetidas antigas marcadas `tag_legacy_duplicate`), ANVISA
+>   "não se aplica" e busca, `GET /assets/:id/life-record`, residual na depreciação, setor na nova solicitação, telefone e
+>   conselho por profissão (`profiles.ts`), `company_tax_id`, setores padrão no EAS, procedimento no certificado, logger
+>   com CPF/telefone/registro/coordenadas mascarados (`docs/PRIVACIDADE-LOGS-E-GEOLOCALIZACAO.md`).
+
+> **Rodada 29/10/2026 (branch `feat/rodada-2026-10-29`, PR #42) — auditoria dos 177 itens + pedidos do WhatsApp de 19 e 23/10:**
+> **Migration mais recente:** `0085_cadastro_cliente_e_ativo.sql` (0084 e 0085 novas, **não aplicadas em banco remoto**; nada publicado).
+> Status por item: `docs/auditoria/technecare-status-requisitos.json`; relatório: `docs/auditoria/RELATORIO_FINAL_AUDITORIA_ANDERSON_2026-10-29.md`;
+> ampliações (uso interno, sem valores): `docs/auditoria/AMPLIACOES_ESCOPO_ANDERSON.md`.
+> · **Store do dono (0084):** `inventory_items.store_audience` ('all' | 'selected') + `store_item_customers`; o filtro de público
+>   vale no servidor em `storeItems(session, membershipId)`, `createStoreOrder` e `requestStoreQuote` (`assertStoreItemsForCustomer`).
+>   Gestão: `GET /store/catalog`, `PUT /store/items/:id/audience` (`inventory.update`); tela `features/store/gerenciar.tsx` (aba
+>   "Gerenciar catálogo", só com `inventory.update`). Pedido ganhou `separated` (Pedido feito → Aprovado → Separado → Em trânsito →
+>   Entregue; "Separado" é opcional).
+> · **OS:** prazos de SLA em etiquetas (`Sla` em `ordens/ficha.tsx`, `onsite` = "Chegada ao local"); "Local" usa
+>   `location_name_snapshot` (o `location_path_snapshot` é cadeia de UUIDs, não é para tela).
+> · **Relatórios:** Basic no padrão do Advanced; `?format=xlsx` (`apps/api/src/documents/xlsx.ts`, ZIP+CRC32 próprios, sem
+>   dependência); patrimonial `POST /reports/assets` (`packages/db/src/relatorio-patrimonial.ts`, valores só com
+>   `asset.read_financials`); `REPORT_LAYOUT_STATUS = 'layouts_defined'`; **nível contratado do cliente é teto**
+>   (`packages/db/src/nivel-de-relatorio.ts`, 403 com explicação; agendados ainda não passam pela trava).
+> · **Cadastros (0085):** `customers.report_tier`, `contract_starts_on/ends_on`; ativo com foto obrigatória na criação (base64 no
+>   `POST /assets`, mesma transação; `PUT/GET /assets/:id/photo`, até 8 MB), nome do equipamento vindo do catálogo (campo
+>   "Tipo" fora da tela), `assets.sla_enabled` (desligado → `resolve_sla_policy` devolve nulo, sem relógio).
+> · **Ferramentas:** subtítulo "Soluções novas de mercado, consulte disponibilidade.", textos comerciais, Eficiência Energética;
+>   a marca na barra lateral é link para "/" (recarrega).
+> · **Pendências que não são código:** fórmulas do cliente (P-01…P-16), provedor de e-mail, primeiro acesso do usuário adicionado,
+>   ANVISA automática, IA, V2 da qualidade, domínio/VPS, e o que a seta da foto do quadro de OS (29/10) quer dizer.
+
 > **Rodada de pendências 17/10/2026 (branch `fix/pendencias-pente-fino-2026-10-17`) — o que muda sobre o bloco abaixo:**
 > **Migration mais recente:** `0077_bloqueio_progressivo_de_senha.sql` · **78 migrations** (0074–0077 novas, **não
 > aplicadas em banco remoto**). Relatório: `docs/RELATORIO-RODADA-PENDENCIAS-2026-10-17.md`.

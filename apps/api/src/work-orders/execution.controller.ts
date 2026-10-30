@@ -25,8 +25,7 @@ import {
   attachFile,
   signWorkOrder,
   verifySignatures,
-  completionCheck,
-  completionRequirementsFor,
+  completionStatus,
   assertCanExecuteWorkOrder,
   workOrderOfChecklistResponse,
   type Database,
@@ -56,18 +55,17 @@ export class ExecutionController {
    * Existe para o aplicativo de campo mostrar a lista enquanto a pessoa
    * trabalha. Descobrir só na hora de fechar significa descobrir quando já
    * saiu do hospital.
+   *
+   * A lista é a MESMA que a transição usa para recusar (OS-17): o que a
+   * natureza exige, o parecer LIBERADO/PARADO e a regra do laudo. É o que deixa
+   * o assistente habilitar "Concluir" só quando o servidor vai aceitar.
    */
   @Get(':id/completion')
   @RequirePermissions('work_order.read')
   async completion(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
     const ctx = req.auroraContext!;
     const woId = uuidParam(id, 'id');
-    return withTenant(this.db, ctx, async (s) => {
-      const requisitos = await completionRequirementsFor(s, woId);
-      if (requisitos.length === 0) return { required: [], ok: true, missing: [] };
-      const r = await completionCheck(s, woId, requisitos);
-      return { required: requisitos, ...r };
-    });
+    return withTenant(this.db, ctx, (s) => completionStatus(s, woId));
   }
 
   @Get(':id/checklists')

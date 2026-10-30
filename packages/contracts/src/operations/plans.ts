@@ -74,6 +74,8 @@ export const PlanTask = z.object({
   target_location_id: Uuid.nullable(),
   work_order_type_id: Uuid.nullable(),
   checklist_template_key: z.string().nullable(),
+  /** Procedimentos adicionais da mesma OS (0087, OS-15). */
+  extra_checklist_template_keys: z.array(z.string()).optional(),
   /**
    * Filtros sobre o alvo (0055): modelo, fabricante e criticidade, por E lógico.
    * Opcionais no contrato porque respostas capturadas antes da 0055 não os têm.
@@ -132,6 +134,10 @@ export const planDetail = defineOperation({
       anchor_date: z.string(),
       created_at: Timestamp,
       updated_at: Timestamp,
+      /** Última ativação/inativação (0087, PLN-01); o histórico inteiro está na auditoria. */
+      active_changed_at: Timestamp.nullable().optional(),
+      active_changed_by_name: z.string().nullable().optional(),
+      active_change_reason: z.string().nullable().optional(),
     }),
     tasks: z.array(PlanTask),
   }),

@@ -28,7 +28,7 @@ import {
   provisionOrganizationBaseline,
 } from '@aurora/db';
 import { loadEnv } from '@aurora/config';
-import { inventoryAbc, storeItemsList } from '@aurora/contracts';
+import { inventoryAbc, storeCatalogList, storeItemsList } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
 
 const ORG = newId();
@@ -311,5 +311,57 @@ describe('Store', () => {
     ).toBe(404);
     const b = await http.get('/v1/store/items').set(auth(ADMIN_B));
     expect(b.body.items).toEqual([]);
+  });
+  it('público do item (0084): reservado a outro cliente some do catálogo e da proposta', async () => {
+    // O solicitante é do Hospital A; o item fica só para o Hospital B.
+    const sel = await http
+      .put(`/v1/store/items/${filtro}/audience`)
+      .set(auth(GESTORA))
+      .send({ audience: 'selected', customer_ids: [hospitalB] });
+    expect(sel.status, JSON.stringify(sel.body)).toBe(200);
+    expect((await http.get('/v1/store/items').set(auth(SOLICITANTE))).body.items).toEqual([]);
+    expect(
+      (await http.post('/v1/store/requests').set(auth(SOLICITANTE)).send({ item_id: filtro, quantity: 1 }))
+        .status
+    ).toBe(404);
+
+    // A gestão continua vendo o item, com o público.
+    const cat = await http.get('/v1/store/catalog').set(auth(GESTORA));
+    expect(storeCatalogList.response.safeParse(cat.body).success).toBe(true);
+    const item = cat.body.items.find((i: { id: string }) => i.id === filtro);
+    expect(item.store_audience).toBe('selected');
+    expect(item.customer_ids).toEqual([hospitalB]);
+
+    // Incluir o Hospital A devolve o item a ele.
+    await http
+      .put(`/v1/store/items/${filtro}/audience`)
+      .set(auth(GESTORA))
+      .send({ audience: 'selected', customer_ids: [hospitalA, hospitalB] });
+    expect((await http.get('/v1/store/items').set(auth(SOLICITANTE))).body.items).toHaveLength(1);
+
+    // De volta para toda a rede.
+    await http.put(`/v1/store/items/${filtro}/audience`).set(auth(GESTORA)).send({ audience: 'all' });
+    const fim = await http.get('/v1/store/catalog').set(auth(GESTORA));
+    expect(fim.body.items.find((i: { id: string }) => i.id === filtro).customer_ids).toEqual([]);
+  });
+
+  it('público: "selecionados" sem cliente é recusado; só quem edita o catálogo gerencia', async () => {
+    const vazio = await http
+      .put(`/v1/store/items/${filtro}/audience`)
+      .set(auth(GESTORA))
+      .send({ audience: 'selected', customer_ids: [] });
+    expect(vazio.status).toBe(422);
+    expect((await http.get('/v1/store/catalog').set(auth(SOLICITANTE))).status).toBe(403);
+    expect(
+      (await http.put(`/v1/store/items/${filtro}/audience`).set(auth(SOLICITANTE)).send({ audience: 'all' }))
+        .status
+    ).toBe(403);
+    // Cliente de outra organização não entra na seleção.
+    const alheio = await http
+      .put(`/v1/store/items/${filtro}/audience`)
+      .set(auth(GESTORA))
+      .send({ audience: 'selected', customer_ids: [newId()] });
+    expect(alheio.status).toBe(404);
+    expect((await http.get('/v1/store/items').set(auth(SOLICITANTE))).body.items).toHaveLength(1);
   });
 });

@@ -67,6 +67,14 @@ import { formatarDataRelativa } from '../../routes/hoje';
 import { AlternadorDeTrabalho } from './alternador';
 import { NovoPlanoDialog } from './novo-plano';
 import { ProcedimentosAba } from './procedimentos';
+import { BotaoPlay } from './play';
+import {
+  DEFINICAO_DO_DENOMINADOR,
+  Distribuicao,
+  FiltroDeSetores,
+  RelatorioDeConformidade,
+  setoresDaUrl,
+} from './conformidade';
 import { ROTULO_ESTADO_ITEM, TOM_ESTADO_ITEM, dataCurta, rotuloDoMes, rotuloTipo } from '../painel/rotulos';
 
 type Aba = 'visao' | 'cronograma' | 'procedimentos';
@@ -169,7 +177,9 @@ const RECORTES_CRONO = {
 export function PlanosModuloPage() {
   const [aba, setAba] = useUrlState<Aba>('aba', 'visao');
   const [cliente, setCliente] = useUrlState<string>('cliente', '');
-  const [setor, setSetor] = useUrlState<string>('setor', '');
+  // Vários setores ao mesmo tempo (PLN-11): `?setor=a,b`.
+  const [setorUrl, setSetorUrl] = useUrlState<string>('setor', '');
+  const setores = setoresDaUrl(setorUrl);
   // Tipo combinável com cliente e setor, nas duas abas (reunião 16/10/2026) — filtro do SERVIDOR.
   const [tipo, setTipo] = useUrlState<string>('tipo', '');
   const [criando, setCriando] = useState(false);
@@ -179,11 +189,15 @@ export function PlanosModuloPage() {
       title="Planos de manutenção"
       subtitle="Preventiva, calibração, TSE e qualificação — o que se repete sozinho, e se está saindo no prazo."
       actions={
-        <Can permission="maintenance_plan.create">
-          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCriando(true)}>
-            Novo plano
-          </Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* ▶ Play (PLN-09): cliente → plano → equipamento → a OS no assistente de execução. */}
+          <BotaoPlay clienteInicial={cliente || undefined} />
+          <Can permission="maintenance_plan.create">
+            <Button icon={<Plus className="size-4" />} onClick={() => setCriando(true)}>
+              Novo plano
+            </Button>
+          </Can>
+        </div>
       }
     >
       <div className="flex flex-col gap-4">
@@ -202,19 +216,19 @@ export function PlanosModuloPage() {
         {aba !== 'procedimentos' && (
           <FiltroClienteSetor
             cliente={cliente}
-            setor={setor}
+            setores={setores}
             onCliente={(c) => {
               setCliente(c);
-              setSetor('');
+              setSetorUrl('');
             }}
-            onSetor={setSetor}
+            onSetores={(ids) => setSetorUrl(ids.join(','))}
             tipo={tipo}
             onTipo={setTipo}
           />
         )}
         <div role="tabpanel" id={tabIds('planos', aba).painel} aria-labelledby={tabIds('planos', aba).aba}>
-          {aba === 'visao' && <VisaoGeral cliente={cliente} setor={setor} tipo={tipo} />}
-          {aba === 'cronograma' && <Cronograma cliente={cliente} setor={setor} tipo={tipo} />}
+          {aba === 'visao' && <VisaoGeral cliente={cliente} setores={setores} tipo={tipo} />}
+          {aba === 'cronograma' && <Cronograma cliente={cliente} setores={setores} tipo={tipo} />}
           {aba === 'procedimentos' && <ProcedimentosAba />}
         </div>
       </div>
@@ -222,7 +236,7 @@ export function PlanosModuloPage() {
         open={criando}
         onOpenChange={setCriando}
         clienteInicial={cliente || undefined}
-        setorInicial={setor || undefined}
+        setorInicial={setores.length === 1 ? setores[0] : undefined}
       />
     </AppShell>
   );
@@ -232,16 +246,16 @@ const TIPOS_DE_PLANO = ['preventive', 'calibration', 'electrical_safety', 'quali
 
 function FiltroClienteSetor({
   cliente,
-  setor,
+  setores: escolhidos,
   onCliente,
-  onSetor,
+  onSetores,
   tipo,
   onTipo,
 }: {
   cliente: string;
-  setor: string;
+  setores: string[];
   onCliente: (c: string) => void;
-  onSetor: (s: string) => void;
+  onSetores: (ids: string[]) => void;
   tipo: string;
   onTipo: (t: string) => void;
 }) {
@@ -255,45 +269,34 @@ function FiltroClienteSetor({
   };
   const setores = (det?.locations ?? []).filter((l) => l.location_type_key === 'setor');
   return (
-    <div className="flex flex-col gap-2 sm:flex-row" role="group" aria-label="Filtros dos planos">
-      <Select aria-label="Tipo" value={tipo} onChange={(e) => onTipo(e.target.value)} className="sm:w-56">
-        <option value="">Todos os tipos</option>
-        {TIPOS_DE_PLANO.map((t) => (
-          <option key={t} value={t}>
-            {rotuloTipo(t)}
-          </option>
-        ))}
-      </Select>
-      {(clientes?.items.length ?? 0) > 1 && (
-        <Select
-          aria-label="Cliente"
-          value={cliente}
-          onChange={(e) => onCliente(e.target.value)}
-          className="sm:w-64"
-        >
-          <option value="">Todos os clientes</option>
-          {clientes!.items.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+    <div className="flex flex-col gap-2" role="group" aria-label="Filtros dos planos">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Select aria-label="Tipo" value={tipo} onChange={(e) => onTipo(e.target.value)} className="sm:w-56">
+          <option value="">Todos os tipos</option>
+          {TIPOS_DE_PLANO.map((t) => (
+            <option key={t} value={t}>
+              {rotuloTipo(t)}
             </option>
           ))}
         </Select>
-      )}
-      {setores.length > 0 && (
-        <Select
-          aria-label="Setor"
-          value={setor}
-          onChange={(e) => onSetor(e.target.value)}
-          className="sm:w-56"
-        >
-          <option value="">Todos os setores</option>
-          {setores.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </Select>
-      )}
+        {(clientes?.items.length ?? 0) > 1 && (
+          <Select
+            aria-label="Cliente"
+            value={cliente}
+            onChange={(e) => onCliente(e.target.value)}
+            className="sm:w-64"
+          >
+            <option value="">Todos os clientes</option>
+            {clientes!.items.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </div>
+      {/* Vários setores ao mesmo tempo (PLN-11): cada chip entra ou sai do filtro. */}
+      <FiltroDeSetores setores={setores} escolhidos={escolhidos} onChange={onSetores} />
     </div>
   );
 }
@@ -302,14 +305,14 @@ function FiltroClienteSetor({
 /* visão geral                                                                 */
 /* -------------------------------------------------------------------------- */
 
-function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; tipo: string }) {
+function VisaoGeral({ cliente, setores, tipo }: { cliente: string; setores: string[]; tipo: string }) {
   const [recorte, setRecorte] = useUrlState<keyof typeof RECORTES_VISAO>('recorte', 'ano');
   const intervalo = useMemo(() => (RECORTES_VISAO[recorte] ?? RECORTES_VISAO.ano).calc(), [recorte]);
   const query = {
     from: intervalo.from.toISOString(),
     to: intervalo.to.toISOString(),
     ...(cliente ? { customer: cliente } : {}),
-    ...(setor ? { sector: setor } : {}),
+    ...(setores.length > 0 ? { sector: setores } : {}),
     ...(tipo ? { kind: tipo as (typeof TIPOS_DE_PLANO)[number] } : {}),
   };
   const board = useApiQuery(plansBoard, { query }) as {
@@ -354,7 +357,8 @@ function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; 
               icone={<Repeat className="size-4" />}
               rotulo="Planos ativos"
               valor={b.plans.active}
-              dica={`${b.plans.tasks} tarefas`}
+              // PLN-02: conta PLANOS (com os mesmos filtros), não programações nem execuções.
+              dica={`planos, não atividades · ${b.plans.tasks} tarefas`}
               tom="accent"
             />
             <Numero
@@ -431,7 +435,7 @@ function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; 
                   </div>
                 </Card>
                 <Card>
-                  <CardHeader title="Em dia" description="Realizados ÷ (programados − dispensados)." />
+                  <CardHeader title="Em dia" description={DEFINICAO_DO_DENOMINADOR} />
                   <div className="flex flex-col items-center gap-3 px-4 pb-4">
                     <RateRing
                       value={b.rate}
@@ -459,6 +463,16 @@ function VisaoGeral({ cliente, setor, tipo }: { cliente: string; setor: string; 
                   <Distribuicao titulo="Por procedimento" linhas={b.byProcedure} />
                 )}
               </div>
+              {/* REL-12: ranking pela TAXA, por plano/cliente/setor, com o Excel. */}
+              <RelatorioDeConformidade
+                filtros={{
+                  from: query.from,
+                  to: query.to,
+                  ...(cliente ? { customer_id: cliente } : {}),
+                  ...(setores.length > 0 ? { sector_ids: setores } : {}),
+                  ...(tipo ? { kind: tipo } : {}),
+                }}
+              />
             </>
           )}
         </>
@@ -583,63 +597,6 @@ function Numero({
   );
 }
 
-/** Barras horizontais empilhadas por estado — composição de cada linha, com o número ao lado. */
-function Distribuicao({
-  titulo,
-  linhas,
-}: {
-  titulo: string;
-  linhas: Array<{ key: string; label: string; done: number; pending: number; late: number; skipped: number }>;
-}) {
-  const ordenadas = [...linhas]
-    .sort((a, b) => b.done + b.pending + b.late + b.skipped - (a.done + a.pending + a.late + a.skipped))
-    .slice(0, 8);
-  const max = Math.max(1, ...ordenadas.map((l) => l.done + l.pending + l.late + l.skipped));
-  const partes = [
-    { k: 'done' as const, cor: 'bg-good', rotulo: 'Realizados' },
-    { k: 'pending' as const, cor: 'bg-info', rotulo: 'Pendentes' },
-    { k: 'late' as const, cor: 'bg-bad', rotulo: 'Vencidos' },
-    { k: 'skipped' as const, cor: 'bg-border-strong', rotulo: 'Dispensados' },
-  ];
-  return (
-    <Card>
-      <CardHeader title={titulo} />
-      <div className="flex flex-col gap-2.5 px-4 pb-4">
-        {ordenadas.length === 0 ? (
-          <p className="text-sm text-muted">Sem atividades.</p>
-        ) : (
-          ordenadas.map((l) => {
-            const total = l.done + l.pending + l.late + l.skipped;
-            return (
-              <div key={l.key} className="flex flex-col gap-1">
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="truncate text-muted" title={l.label}>
-                    {l.label}
-                  </span>
-                  <span className="shrink-0 text-xs text-subtle tabular-nums" data-numeric>
-                    {l.done}/{total - l.skipped}
-                    {l.late > 0 && <span className="ml-1.5 text-bad-text">{l.late} venc.</span>}
-                  </span>
-                </div>
-                <div
-                  className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-surface-sunken"
-                  style={{ width: `${Math.max((total / max) * 100, 6)}%` }}
-                  role="img"
-                  aria-label={`${l.label}: ${partes.map((p) => `${l[p.k]} ${p.rotulo.toLowerCase()}`).join(', ')}`}
-                >
-                  {partes.map((p) =>
-                    l[p.k] > 0 ? <span key={p.k} className={p.cor} style={{ flexGrow: l[p.k] }} /> : null
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </Card>
-  );
-}
-
 /* -------------------------------------------------------------------------- */
 /* cronograma                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -652,7 +609,7 @@ const FILTROS_ESTADO = [
   { v: 'done', r: 'Realizadas' },
 ] as const;
 
-function Cronograma({ cliente, setor, tipo }: { cliente: string; setor: string; tipo: string }) {
+function Cronograma({ cliente, setores, tipo }: { cliente: string; setores: string[]; tipo: string }) {
   const [recorte, setRecorte] = useUrlState<keyof typeof RECORTES_CRONO>('janela', '90d');
   const [estado, setEstado] = useUrlState<string>('estado', '');
   const intervalo = useMemo(() => (RECORTES_CRONO[recorte] ?? RECORTES_CRONO['90d']).calc(), [recorte]);
@@ -661,7 +618,7 @@ function Cronograma({ cliente, setor, tipo }: { cliente: string; setor: string; 
       from: intervalo.from.toISOString(),
       to: intervalo.to.toISOString(),
       ...(cliente ? { customer: cliente } : {}),
-      ...(setor ? { sector: setor } : {}),
+      ...(setores.length > 0 ? { sector: setores } : {}),
       ...(tipo ? { kind: tipo as (typeof TIPOS_DE_PLANO)[number] } : {}),
     },
   }) as {

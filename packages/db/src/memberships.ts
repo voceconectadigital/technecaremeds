@@ -27,6 +27,11 @@ import {
   isKnownUf,
   isValidRegistrationNumber,
   normalizeRegistrationNumber,
+  formatBrazilianPhone,
+  isValidBrazilianPhone,
+  isValidCnpj,
+  normalizeCnpj,
+  missingRegistrationForProfession,
   profileOf,
   canChangeAccessState,
   type AccessState,
@@ -62,6 +67,8 @@ export interface PersonDetailsInput {
   cpf?: string | null;
   phone?: string | null;
   companyName?: string | null;
+  /** CNPJ da empresa da pessoa (USR-05 · 0089): opcional, validado pelos dígitos verificadores. */
+  companyTaxId?: string | null;
   jobTitle?: string | null;
   registrations?: readonly RegistrationInput[];
 }
@@ -126,6 +133,9 @@ export async function inviteMember(session: TenantSession, input: InviteInput): 
     roleKeys = [perfil.roleKey];
   }
   const dados = normalizarDados(input);
+  // USR-04: o conselho da profissão, e só ele (Engenheiro → CREA, Enfermeiro → COREN…).
+  const falta = missingRegistrationForProfession(dados.jobTitle, dados.registrations ?? []);
+  if (falta) throw new ValidationError(falta, { field: 'registrations' });
 
   const org = session.context.organizationId;
 
@@ -193,8 +203,8 @@ export async function inviteMember(session: TenantSession, input: InviteInput): 
     .query(
       `INSERT INTO aurora.memberships
        (id, organization_id, user_id, status, seat_type, is_owner, daily_hours, invited_at,
-        cpf, phone, company_name, job_title)
-     VALUES ($1, $2, $3, 'active', $4::aurora.seat_type, false, $5, now(), $6, $7, $8, $9)`,
+        cpf, phone, company_name, job_title, company_tax_id)
+     VALUES ($1, $2, $3, 'active', $4::aurora.seat_type, false, $5, now(), $6, $7, $8, $9, $10)`,
       [
         membershipId,
         org,
@@ -205,6 +215,7 @@ export async function inviteMember(session: TenantSession, input: InviteInput): 
         dados.phone ?? null,
         dados.companyName ?? null,
         dados.jobTitle ?? null,
+        dados.companyTaxId ?? null,
       ]
     )
     .catch((e: unknown) => traduzirCpfDuplicado(e));
@@ -483,7 +494,8 @@ export async function updateMemberDetails(
           SET cpf          = CASE WHEN $2::boolean THEN $3 ELSE cpf END,
               phone        = CASE WHEN $4::boolean THEN $5 ELSE phone END,
               company_name = CASE WHEN $6::boolean THEN $7 ELSE company_name END,
-              job_title    = CASE WHEN $8::boolean THEN $9 ELSE job_title END
+              job_title    = CASE WHEN $8::boolean THEN $9 ELSE job_title END,
+              company_tax_id = CASE WHEN $10::boolean THEN $11 ELSE company_tax_id END
         WHERE id = $1 AND deleted_at IS NULL
         RETURNING id`,
       [
@@ -496,6 +508,8 @@ export async function updateMemberDetails(
         dados.companyName ?? null,
         input.jobTitle !== undefined,
         dados.jobTitle ?? null,
+        input.companyTaxId !== undefined,
+        dados.companyTaxId ?? null,
       ]
     )
     .catch((e: unknown) => traduzirCpfDuplicado(e));
@@ -507,6 +521,24 @@ export async function updateMemberDetails(
     ]);
     await gravarRegistros(session, membershipId, dados.registrations);
   }
+
+  // USR-04: o conselho da profissão vale para o estado que FICA — mudar só a profissão confere
+  // contra os registros gravados, e trocar só os registros confere contra a profissão gravada.
+  // Cadastro antigo que ninguém edita não é tocado.
+  if (input.jobTitle !== undefined || input.registrations !== undefined) {
+    const [final] = await session.query<{ job_title: string | null; kinds: string[] }>(
+      `SELECT m.job_title,
+              COALESCE((SELECT array_agg(g.kind) FROM aurora.membership_registrations g
+                         WHERE g.membership_id = m.id), '{}') AS kinds
+         FROM aurora.memberships m WHERE m.id = $1`,
+      [membershipId]
+    );
+    const falta = missingRegistrationForProfession(
+      final?.job_title ?? null,
+      (final?.kinds ?? []).map((kind) => ({ kind }))
+    );
+    if (falta) throw new ValidationError(falta, { field: 'registrations' });
+  }
   await emitEvent(session, {
     type: 'member.updated',
     aggregateId: membershipId,
@@ -517,6 +549,7 @@ export async function updateMemberDetails(
 export interface MemberDetail extends MemberRow {
   cpf: string | null;
   phone: string | null;
+  company_tax_id: string | null;
   status_reason: string | null;
   status_changed_at: string | null;
   customer_ids: string[];
@@ -534,7 +567,7 @@ export async function getMember(session: TenantSession, membershipId: string): P
             s.customer_scope::text AS customer_scope, s.location_scope::text AS location_scope,
             COALESCE(s.customer_ids, '{}') AS customer_ids, COALESCE(s.location_ids, '{}') AS location_ids,
             m.job_title, m.company_name, (m.cpf IS NOT NULL) AS has_cpf,
-            m.cpf, m.phone, m.status_reason, m.status_changed_at::text AS status_changed_at,
+            m.cpf, m.phone, m.company_tax_id, m.status_reason, m.status_changed_at::text AS status_changed_at,
             COALESCE((SELECT json_agg(json_build_object('kind', g.kind, 'number', g.number, 'region', g.region)
                                       ORDER BY g.kind, g.number)
                         FROM aurora.membership_registrations g WHERE g.membership_id = m.id), '[]'::json)
@@ -608,6 +641,7 @@ interface DadosNormalizados {
   cpf?: string | null;
   phone?: string | null;
   companyName?: string | null;
+  companyTaxId?: string | null;
   jobTitle?: string | null;
   registrations?: { kind: string; number: string; region: string | null }[];
 }
@@ -628,10 +662,21 @@ function normalizarDados(input: PersonDetailsInput): DadosNormalizados {
   }
   const phone = vazioViraNulo(input.phone);
   if (phone !== undefined) {
-    if (phone !== null && !/^[+()\d\s-]{8,32}$/.test(phone)) {
-      throw new ValidationError('telefone inválido', { field: 'phone' });
+    // USR-04: telefone brasileiro com DDD — fixo ou celular —, gravado num formato só.
+    if (phone !== null && !isValidBrazilianPhone(phone)) {
+      throw new ValidationError('telefone inválido: informe DDD e número, fixo ou celular', {
+        field: 'phone',
+      });
     }
-    out.phone = phone;
+    out.phone = phone === null ? null : formatBrazilianPhone(phone);
+  }
+  const cnpj = vazioViraNulo(input.companyTaxId);
+  if (cnpj !== undefined) {
+    // USR-05: opcional; quando vem, os dígitos verificadores conferem.
+    if (cnpj !== null && !isValidCnpj(cnpj)) {
+      throw new ValidationError('CNPJ inválido', { field: 'company_tax_id' });
+    }
+    out.companyTaxId = cnpj === null ? null : normalizeCnpj(cnpj);
   }
   const empresa = vazioViraNulo(input.companyName);
   if (empresa !== undefined) {

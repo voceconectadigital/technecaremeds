@@ -5,6 +5,7 @@
  * própria linha, e nenhuma função aqui recebe identificador de organização.
  */
 import {
+  ConflictError,
   effectiveFeatures,
   normalizeFeatures,
   ORGANIZATION_USAGE_MODES,
@@ -22,11 +23,13 @@ export interface OrganizationConfiguration {
   /** `false` enquanto ninguém escolheu: tudo habilitado por padrão. */
   features_customized: boolean;
   /**
-   * Concluir a OS exige o parecer LIBERADO/PARADO (pente-fino PF-41).
+   * Concluir a OS de equipamento exige o parecer LIBERADO/PARADO (PF-41; OS-16 da
+   * auditoria de 29/10/2026).
    *
-   * Mora em `organizations.settings` (jsonb, sem migration) e é `false` por
-   * padrão: ninguém pediu a exigência para todos, e ligá-la mudaria o fluxo de
-   * quem conclui hoje sem parecer.
+   * Mora em `organizations.settings` (jsonb, sem migration) e é `true` por
+   * padrão desde 29/10/2026: o critério de aceite do cliente diz "para TODAS as
+   * OS indicar Liberado para uso ou Equipamento parado". A chave continua para a
+   * organização que precisar desligar.
    */
   require_operational_result: boolean;
 }
@@ -49,19 +52,62 @@ export async function loadOrganizationConfiguration(
   if (!row) throw new NotFoundError('Organização');
   return {
     usage_mode: row.usage_mode as OrganizationUsageMode,
-    enabled_features: effectiveFeatures(row.enabled_features),
+    enabled_features: effectiveFeatures(row.enabled_features, row.usage_mode),
     features_customized: row.enabled_features !== null,
-    require_operational_result: row.require_operational_result === true,
+    // Ausente = ligado: só um `false` gravado desliga.
+    require_operational_result: row.require_operational_result !== false,
   };
 }
 
-/** A conclusão exige o parecer? Lido na transição — ver `transitionWorkOrder`. */
+/**
+ * A conclusão exige o parecer? Lido na transição — ver `transitionWorkOrder`.
+ *
+ * Ligado por padrão (OS-16): só `settings.require_operational_result = false`
+ * desliga.
+ */
 export async function requiresOperationalResult(session: TenantSession): Promise<boolean> {
   const [row] = await session.query<{ exige: boolean | null }>(
     `SELECT (settings ->> '${CHAVE_PARECER}')::boolean AS exige
        FROM aurora.organizations WHERE deleted_at IS NULL`
   );
-  return row?.exige === true;
+  return row?.exige !== false;
+}
+
+/**
+ * A organização do contexto usa este recurso?
+ *
+ * Lê o modo junto com a lista: nunca configurada, a lista é a do MODO
+ * (`effectiveFeatures`) — o hospital, por padrão, não usa orçamento.
+ */
+export async function organizationUsesFeature(
+  session: TenantSession,
+  feature: OrganizationFeature
+): Promise<boolean> {
+  const [row] = await session.query<{ usage_mode: string; enabled_features: string[] | null }>(
+    `SELECT usage_mode::text AS usage_mode, enabled_features
+       FROM aurora.organizations WHERE deleted_at IS NULL`
+  );
+  if (!row) return false;
+  return effectiveFeatures(row.enabled_features, row.usage_mode).includes(feature);
+}
+
+/**
+ * Recusa a operação de um recurso que a organização não usa.
+ *
+ * 409, e não 403: não falta permissão a ninguém — a ORGANIZAÇÃO não usa o
+ * módulo. Quem administra liga o recurso em Configurações; a mensagem diz isso.
+ */
+export async function assertFeatureEnabled(
+  session: TenantSession,
+  feature: OrganizationFeature,
+  rotulo: string
+): Promise<void> {
+  if (await organizationUsesFeature(session, feature)) return;
+  throw new ConflictError(
+    `esta organização não usa ${rotulo}: o recurso "${feature}" está desligado no modo de uso dela. ` +
+      'Quem administra pode ligá-lo em Configurações.',
+    { feature }
+  );
 }
 
 /**

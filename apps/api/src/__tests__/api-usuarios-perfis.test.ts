@@ -252,6 +252,8 @@ describe('Adicionar usuário com perfil de acesso', () => {
       seat_type: 'staff',
       role_keys: ['admin'],
       job_title: 'Enfermeiro(a)',
+      // USR-04 (29/10/2026): enfermagem exige o COREN — o conselho da profissão, e só ele.
+      registrations: [{ kind: 'COREN', number: '654321', region: 'MG' }],
       customer_scope: 'listed',
       customer_ids: [hospital],
       location_scope: 'listed',

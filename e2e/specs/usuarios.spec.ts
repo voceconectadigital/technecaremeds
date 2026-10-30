@@ -40,6 +40,13 @@ test.describe('Usuários', () => {
     await dialogo.getByLabel('Nome').fill('Olívia Operadora');
     await dialogo.getByLabel('E-mail').fill(email);
     await dialogo.getByLabel('Profissão / função').fill('Técnico(a)');
+    // USR-04: técnico exige o registro no CFT — o registro novo já nasce com o tipo da profissão.
+    await expect(
+      dialogo.getByText('Esta profissão exige o registro no CFT.', { exact: false })
+    ).toBeVisible();
+    await dialogo.getByRole('button', { name: 'Adicionar registro' }).click();
+    await expect(dialogo.getByLabel('Tipo')).toHaveValue('CFT');
+    await dialogo.getByLabel('Número').fill('123456');
     await dialogo.getByLabel('Cliente / hospital').selectOption({ index: 1 });
     await dialogo.getByRole('button', { name: 'Adicionar usuário' }).click();
     await expect(dialogo).toBeHidden();

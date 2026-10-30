@@ -22,7 +22,12 @@ import type { EventType } from '@aurora/events';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { transitionRequest } from './service-requests';
-import { assertCanExecuteWorkOrder, completionCheck, completionRequirementsFor } from './execution';
+import {
+  assertCanExecuteWorkOrder,
+  completionCheck,
+  completionRequirementsFor,
+  signWorkOrder,
+} from './execution';
 import { requiresOperationalResult } from './organization-config';
 import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
 import { releaseReservations } from './inventory';
@@ -307,6 +312,8 @@ export interface WorkOrderTransitionInput {
   scheduledStart?: Date | null;
   scheduledEnd?: Date | null;
   expectedVersion?: number;
+  /** O parecer LIBERADO/PARADO, quando vem junto com a conclusão (OS-16). */
+  operationalResult?: string | null;
 }
 
 /**
@@ -334,9 +341,13 @@ export async function transitionWorkOrder(
     number: string | null;
     resolution: string | null;
     operational_result: string | null;
+    asset_id: string | null;
+    laudo: boolean;
   }>(
     `SELECT s.key AS status_key, s.label AS status_label, w.status_category::text AS category,
-            w.version, w.number, w.resolution, w.operational_result
+            w.version, w.number, w.resolution, w.operational_result, w.asset_id,
+            coalesce((SELECT t.system_key = 'obsolescence' FROM aurora.catalog_items t
+                       WHERE t.id = w.work_order_type_id), false) AS laudo
        FROM aurora.work_orders w
        JOIN aurora.work_order_statuses s ON s.id = w.status_id
       WHERE w.id = $1
@@ -344,6 +355,20 @@ export async function transitionWorkOrder(
     [workOrderId]
   );
   if (!atual) throw new NotFoundError('Ordem de serviço', workOrderId);
+
+  // O parecer pode vir NA PRÓPRIA transição (quadro, aplicativo de campo): quem
+  // conclui arrastando não precisa abrir o relatório só para marcar LIBERADO.
+  if (
+    input.operationalResult !== undefined &&
+    input.operationalResult !== null &&
+    !(OPERATIONAL_RESULTS as readonly string[]).includes(input.operationalResult)
+  ) {
+    throw new ValidationError('o parecer é LIBERADO (released) ou PARADO (stopped)', {
+      field: 'operational_result',
+      allowed: OPERATIONAL_RESULTS,
+    });
+  }
+  const parecer = input.operationalResult ?? atual.operational_result;
 
   if (input.expectedVersion !== undefined && input.expectedVersion !== atual.version) {
     throw new ConflictError(
@@ -401,24 +426,6 @@ export async function transitionWorkOrder(
     await assertCanExecuteWorkOrder(session, workOrderId);
   }
 
-  // O PARECER NA CONCLUSÃO (PF-41) — só quando a organização ligou a exigência.
-  //
-  // Desligada por padrão: nem o roteiro nem as solicitações do cliente dizem
-  // que é obrigatório, e ligar para todos mudaria o fluxo de quem nunca pediu.
-  // 422, e não 412: não é um requisito da natureza da OS (esses vêm em
-  // `missing`), é um campo que falta e que a pessoa preenche no relatório.
-  if (
-    destino.category === 'review' &&
-    !atual.operational_result &&
-    (await requiresOperationalResult(session))
-  ) {
-    throw new ValidationError(
-      'esta organização exige o parecer do equipamento (LIBERADO ou PARADO) para concluir a OS — ' +
-        'preencha o resultado operacional no relatório de serviço',
-      { field: 'operational_result' }
-    );
-  }
-
   // O BLOCO DE CONCLUSÃO (SPEC §10).
   //
   // Roda aqui, e não numa rota, porque concluir é uma transição — e uma
@@ -444,6 +451,23 @@ export async function transitionWorkOrder(
         );
       }
     }
+  }
+
+  // O PARECER NA CONCLUSÃO (PF-41 · OS-16).
+  //
+  // Obrigatório por padrão em TODA OS de equipamento desde 29/10/2026 ("para
+  // todas as OS indicar Liberado para uso ou Equipamento parado"); a
+  // organização pode desligar (`require_operational_result = false`). OS sem
+  // equipamento não tem o que liberar, e o laudo de obsolescência segue a regra
+  // própria dele (justificativa e foto). 422, e não 412: não é um requisito da
+  // natureza da OS (esses vêm em `missing`), é um campo que falta e que a pessoa
+  // preenche no relatório.
+  if (destino.category === 'review' && (await faltaParecer(session, atual, parecer))) {
+    throw new ValidationError(
+      'esta organização exige o parecer do equipamento (LIBERADO ou PARADO) para concluir a OS — ' +
+        'preencha o resultado operacional no relatório de serviço',
+      { field: 'operational_result' }
+    );
   }
 
   // OS CANCELADA, NEGADA OU FECHADA NÃO TEM CRONÔMETRO CORRENDO.
@@ -480,7 +504,9 @@ export async function transitionWorkOrder(
             assignee_membership_id = coalesce($11, assignee_membership_id),
             scheduled_start = coalesce($12, scheduled_start),
             scheduled_end = coalesce($13, scheduled_end),
-            updated_by = $14
+            updated_by = $14,
+            operational_result = coalesce($15, operational_result),
+            service_report_updated_at = CASE WHEN $15::text IS NULL THEN service_report_updated_at ELSE now() END
       WHERE id = $1
       RETURNING status_category::text AS status_category, version`,
     [
@@ -498,8 +524,21 @@ export async function transitionWorkOrder(
       input.scheduledStart?.toISOString() ?? null,
       input.scheduledEnd?.toISOString() ?? null,
       session.context.actorId,
+      input.operationalResult ?? null,
     ]
   );
+
+  // O PARECER TEM EFEITO NO EQUIPAMENTO (OS-16 · ATV-16). PARADO põe o ativo em
+  // manutenção; LIBERADO devolve à operação o que estava em manutenção. Laudo de
+  // obsolescência não entra: ele baixa o equipamento na validação.
+  if (destino.category === 'review' && atual.asset_id && !atual.laudo && parecer) {
+    await aplicarParecerNoAtivo(session, {
+      assetId: atual.asset_id,
+      workOrderId,
+      workOrderNumber: atual.number,
+      parecer: parecer as OperationalResult,
+    });
+  }
 
   // OS RELÓGIOS DE SLA SEGUEM A CATEGORIA (§11).
   //
@@ -562,6 +601,14 @@ export async function transitionWorkOrder(
   // Laudo de obsolescência validado: o equipamento sai de operação com a justificativa do laudo.
   if (destino.category === 'done' || destino.category === 'closed') {
     await baixarPeloLaudo(session, workOrderId);
+  }
+  // E quem valida ASSINA (OS-24): a assinatura pela sessão, a mesma da avaliação da OS.
+  if (
+    atual.laudo &&
+    atual.category === 'review' &&
+    (destino.category === 'done' || destino.category === 'closed')
+  ) {
+    await assinarValidacaoDoLaudo(session, workOrderId);
   }
 
   const evento = eventForTransition(
@@ -662,6 +709,172 @@ async function baixarPeloLaudo(session: TenantSession, workOrderId: string): Pro
   if (!a || a.status === 'decommissioned' || a.status === 'disposed') return;
   const motivo = [l.description.trim(), l.resolution?.trim()].filter(Boolean).join(' — ');
   await decommissionAsset(session, l.asset_id, motivo);
+}
+
+/**
+ * A assinatura de quem VALIDA o laudo (OS-24 da auditoria de 29/10/2026).
+ *
+ * O mesmo mecanismo da avaliação da OS (migration 0079): assinatura pela SESSÃO
+ * autenticada, com o resumo SHA-256 do que foi assinado (número, título,
+ * resolução, conclusão, equipamento, local), o e-mail, o IP e o agente de quem
+ * validou, e a hora. Não é ICP-Brasil e não afirma validade jurídica — decisão do
+ * cliente. Validação sem pessoa (ator de sistema) não tem quem assine: nada é
+ * forjado em nome de ninguém.
+ */
+async function assinarValidacaoDoLaudo(session: TenantSession, workOrderId: string): Promise<void> {
+  const ator = session.context.actorId;
+  if (!ator) return;
+  const [quem] = await session.query<{ name: string; email: string }>(
+    `SELECT name, email FROM aurora.users WHERE id = $1`,
+    [ator]
+  );
+  if (!quem?.email) return;
+  await signWorkOrder(session, workOrderId, {
+    signerRole: 'supervisor',
+    signerName: quem.name,
+    method: 'session',
+    signerEmail: quem.email,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* parecer LIBERADO/PARADO (PF-41 · OS-16 · ATV-16)                            */
+/* -------------------------------------------------------------------------- */
+
+export const OPERATIONAL_RESULTS = ['released', 'stopped'] as const;
+export type OperationalResult = (typeof OPERATIONAL_RESULTS)[number];
+
+/**
+ * Esta conclusão está sem o parecer que a organização exige?
+ *
+ * Só OS de EQUIPAMENTO (sem ativo não há o que liberar) e nunca o laudo de
+ * obsolescência, que tem regra própria.
+ */
+async function faltaParecer(
+  session: TenantSession,
+  os: { asset_id: string | null; laudo: boolean },
+  parecer: string | null | undefined
+): Promise<boolean> {
+  if (!os.asset_id || os.laudo || parecer) return false;
+  return requiresOperationalResult(session);
+}
+
+/**
+ * O efeito do parecer no equipamento.
+ *
+ *   · PARADO   → `under_maintenance` ("em manutenção"), venha de onde vier;
+ *   · LIBERADO → `active` ("em operação"), mas SÓ se estava em manutenção — um
+ *     ativo de reserva ou emprestado continua de reserva ou emprestado.
+ *
+ * Ativo baixado ou descartado nunca é tocado: a OS não ressuscita equipamento.
+ * A mudança fica na trilha de auditoria (gatilho `assets_audit`) e vira o
+ * evento `asset.status_changed`, com a OS que a causou.
+ */
+async function aplicarParecerNoAtivo(
+  session: TenantSession,
+  input: { assetId: string; workOrderId: string; workOrderNumber: string | null; parecer: OperationalResult }
+): Promise<void> {
+  const [a] = await session.query<{ status: string }>(
+    `SELECT status::text AS status FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+    [input.assetId]
+  );
+  if (!a || a.status === 'decommissioned' || a.status === 'disposed') return;
+  const novo =
+    input.parecer === 'stopped' ? 'under_maintenance' : a.status === 'under_maintenance' ? 'active' : null;
+  if (!novo || novo === a.status) return;
+  await session.query(
+    `UPDATE aurora.assets SET status = $2::aurora.asset_status, updated_by = $3 WHERE id = $1`,
+    [input.assetId, novo, session.context.actorId]
+  );
+  await emitEvent(session, {
+    type: 'asset.status_changed',
+    aggregateId: input.assetId,
+    payload: {
+      from: a.status,
+      to: novo,
+      reason: 'operational_result',
+      operational_result: input.parecer,
+      work_order_id: input.workOrderId,
+      work_order_number: input.workOrderNumber,
+    },
+  });
+}
+
+/**
+ * O que falta para concluir, inteiro: o que a natureza exige, o parecer e a
+ * regra do laudo — a MESMA lista que a transição usa para recusar.
+ *
+ * Existe para a tela habilitar o botão Concluir só quando o servidor vai aceitar
+ * (OS-17), em vez de descobrir na hora do clique.
+ */
+export async function completionStatus(
+  session: TenantSession,
+  workOrderId: string
+): Promise<{
+  required: string[];
+  ok: boolean;
+  missing: Array<{ requirement: string; label: string; detail: string }>;
+  requires_operational_result: boolean;
+}> {
+  const [os] = await session.query<{
+    asset_id: string | null;
+    operational_result: string | null;
+    laudo: boolean;
+  }>(
+    `SELECT w.asset_id, w.operational_result,
+            coalesce((SELECT t.system_key = 'obsolescence' FROM aurora.catalog_items t
+                       WHERE t.id = w.work_order_type_id), false) AS laudo
+       FROM aurora.work_orders w WHERE w.id = $1`,
+    [workOrderId]
+  );
+  if (!os) throw new NotFoundError('Ordem de serviço', workOrderId);
+
+  const required: string[] = [];
+  const missing: Array<{ requirement: string; label: string; detail: string }> = [];
+
+  const requisitos = await completionRequirementsFor(session, workOrderId);
+  if (requisitos.length > 0) {
+    required.push(...requisitos);
+    const check = await completionCheck(session, workOrderId, requisitos);
+    missing.push(...check.missing);
+  }
+
+  const exigeParecer = Boolean(os.asset_id) && !os.laudo && (await requiresOperationalResult(session));
+  if (exigeParecer) {
+    required.push('operational_result');
+    if (!os.operational_result) {
+      missing.push({
+        requirement: 'operational_result',
+        label: 'parecer do equipamento (LIBERADO ou PARADO)',
+        detail: 'marque no passo Parecer final se o equipamento pode voltar ao uso',
+      });
+    }
+  }
+
+  if (os.laudo) {
+    const l = await dadosDoLaudo(session, workOrderId);
+    required.push('obsolescence_justification', 'obsolescence_photo');
+    if (!l || l.description.trim().length < MIN_JUSTIFICATIVA_DO_LAUDO) {
+      missing.push({
+        requirement: 'obsolescence_justification',
+        label: 'justificativa técnica do laudo',
+        detail: `ao menos ${MIN_JUSTIFICATIVA_DO_LAUDO} caracteres na descrição`,
+      });
+    }
+    const [f] = await session.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM aurora.attachments WHERE work_order_id = $1`,
+      [workOrderId]
+    );
+    if ((f?.n ?? 0) < 1) {
+      missing.push({
+        requirement: 'obsolescence_photo',
+        label: 'foto do equipamento',
+        detail: 'o laudo exige ao menos uma foto antes de ser concluído',
+      });
+    }
+  }
+
+  return { required, ok: missing.length === 0, missing, requires_operational_result: exigeParecer };
 }
 
 /* -------------------------------------------------------------------------- */

@@ -9,10 +9,12 @@
  *   3. Procedimento   — o checklist da OS; cada resposta é gravada NA HORA.
  *   4. Preencher OS   — descrição do serviço, observações e peças (estoque, ou
  *                        fornecida pelo cliente).
- *   5. Anexos         — foto antes e depois.
+ *   5. Anexos         — "Há anexos para esta OS?": foto antes e depois e
+ *                        documento/manual (PDF ou imagem); "Não" segue sem anexo.
  *   6. Parecer final  — LIBERADO ou PARADO (uso do equipamento) e parecer.
  *   7. Revisão        — tudo junto, e o que ainda falta para concluir.
- *   8. Concluir       — check-out (fecha o cronômetro) e conclusão da OS.
+ *   8. Concluir       — check-out (fecha o cronômetro) e conclusão da OS. O botão só
+ *                        habilita quando o servidor vai aceitar, e diz o que falta.
  *
  * SEM "SALVAR RASCUNHO". O progresso é o próprio registro no servidor: a
  * resposta do checklist, o texto da OS, a peça usada. Se a rede cai no meio,
@@ -23,7 +25,17 @@
  */
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, Check, ChevronLeft, ChevronRight, MapPin, Package, Play } from 'lucide-react';
+import {
+  Camera,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  MapPin,
+  Package,
+  Play,
+  Printer,
+} from 'lucide-react';
 import {
   Button,
   Card,
@@ -94,6 +106,7 @@ const ENCERRADA = new Set(['done', 'closed', 'cancelled']);
 
 export function ExecutarOrdemPage() {
   const { id } = useParams({ strict: false }) as { id: string };
+  const navigate = useNavigate();
   const [passo, setPasso] = useUrlState<string>('passo', 'resumo');
   const {
     data: os,
@@ -132,6 +145,21 @@ export function ExecutarOrdemPage() {
         { label: os.number ?? '—', href: `/ordens/${id}` },
         { label: 'Executar' },
       ]}
+      // Imprimir aqui levaria só o passo aberto: o botão abre a folha completa da OS (OS-26).
+      imprimir={false}
+      actions={
+        <Button
+          variant="secondary"
+          size="sm"
+          className="aurora-no-print"
+          icon={<Printer className="size-4" aria-hidden="true" />}
+          onClick={() =>
+            void navigate({ to: '/ordens/$id', params: { id }, search: { modo: 'impressao' } as never })
+          }
+        >
+          Imprimir OS
+        </Button>
+      }
     >
       <div className="flex flex-col gap-4">
         <nav aria-label="Passos da execução">
@@ -261,7 +289,7 @@ function PassoResumo({ os }: { os: WorkOrderDetail }) {
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
           <Info rotulo="Cliente" valor={os.customer_name} />
           <Info rotulo="Equipamento" valor={os.asset_name_snapshot} />
-          <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+          <Info rotulo="Local" valor={os.location_name_snapshot} />
           <Info rotulo="Natureza" valor={os.work_order_type_label} />
           <Info rotulo="Situação" valor={os.status_label} />
           <Info rotulo="Solicitação" valor={os.service_request_number} />
@@ -433,7 +461,7 @@ function PassoVisita({ id, tipo }: { id: string; tipo: 'check_in' | 'check_out' 
 
 /* 3 · Procedimento ---------------------------------------------------------- */
 
-function PassoProcedimento({ id }: { id: string }) {
+export function PassoProcedimento({ id }: { id: string }) {
   const { can } = usePermissions();
   const { data, isLoading } = useApiQuery(workOrderChecklists, { params: { id } }) as {
     data: { items: WorkOrderChecklist[] } | undefined;
@@ -701,7 +729,7 @@ function useRelatorio() {
   });
 }
 
-function PassoPreencherOS({ id, os }: { id: string; os: WorkOrderDetail }) {
+export function PassoPreencherOS({ id, os }: { id: string; os: WorkOrderDetail }) {
   const toast = useToast();
   const { data: visitas } = useApiQuery(workOrderVisits, { params: { id } }) as {
     data: { items: WorkOrderVisit[] } | undefined;
@@ -722,7 +750,7 @@ function PassoPreencherOS({ id, os }: { id: string; os: WorkOrderDetail }) {
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
             <Info rotulo="Cliente" valor={os.customer_name} />
             <Info rotulo="Equipamento" valor={os.asset_name_snapshot} />
-            <Info rotulo="Local" valor={os.location_path_snapshot ?? os.location_name_snapshot} />
+            <Info rotulo="Local" valor={os.location_name_snapshot} />
             <Info
               rotulo="Check-in"
               valor={checkin ? new Date(checkin.occurred_at).toLocaleString('pt-BR') : null}
@@ -931,38 +959,109 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-function PassoAnexos({ id }: { id: string }) {
+/**
+ * O passo Anexos (OS-12): "Há anexos para esta OS?".
+ *
+ * Anexo é OPCIONAL: "Não" segue sem nenhum, e a resposta não é gravada — o que a
+ * OS guarda são os anexos, não a pergunta. "Sim" abre as fotos de antes e depois e
+ * o envio de documento/manual (PDF ou imagem), com a finalidade `document` que a
+ * API já aceita. Quem já anexou alguma coisa cai direto no "Sim".
+ */
+export function PassoAnexos({ id }: { id: string }) {
   const { data } = useApiQuery(workOrderAttachments, { params: { id } }) as {
     data: { items: Attachment[] } | undefined;
   };
+  const [resposta, setResposta] = useState<'' | 'sim' | 'nao'>('');
+  const itens = data?.items ?? [];
+  const efetiva = resposta || (itens.length > 0 ? 'sim' : '');
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {(['before', 'after'] as const).map((f) => (
-        <EnvioDeFoto
-          key={f}
-          id={id}
-          finalidade={f}
-          fotos={(data?.items ?? []).filter((a) => a.purpose === f)}
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader
+          title="Há anexos para esta OS?"
+          description="Fotos, documentos e manuais são opcionais. Sem anexo, é só seguir."
         />
-      ))}
+        <div role="radiogroup" aria-label="Há anexos para esta OS?" className="flex flex-wrap gap-2 p-4">
+          {(
+            [
+              ['sim', 'Sim, anexar'],
+              ['nao', 'Não, seguir sem anexo'],
+            ] as const
+          ).map(([v, r]) => (
+            <label
+              key={v}
+              className={cn(
+                'flex min-h-11 cursor-pointer items-center gap-2 rounded-control border px-3 text-sm',
+                efetiva === v ? 'border-accent bg-accent-soft text-accent-text' : 'border-border-subtle'
+              )}
+            >
+              <input type="radio" name="ha-anexos" checked={efetiva === v} onChange={() => setResposta(v)} />
+              {r}
+            </label>
+          ))}
+        </div>
+        {efetiva === 'nao' && (
+          <p
+            role="status"
+            className="mx-4 mb-4 rounded-control bg-surface-subtle px-3 py-2 text-sm text-muted"
+          >
+            Sem anexos nesta OS. Pode avançar para o parecer final.
+          </p>
+        )}
+      </Card>
+      {efetiva === 'sim' && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {(['before', 'after', 'document'] as const).map((f) => (
+            <EnvioDeAnexo key={f} id={id} finalidade={f} anexos={itens.filter((a) => a.purpose === f)} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function EnvioDeFoto({
+const ENVIO: Record<
+  'before' | 'after' | 'document',
+  { titulo: string; acao: string; aceita: string; padrao: string; foto: boolean }
+> = {
+  before: {
+    titulo: 'Foto ANTES',
+    acao: 'Tirar ou escolher a foto antes',
+    aceita: 'image/*',
+    padrao: 'image/jpeg',
+    foto: true,
+  },
+  after: {
+    titulo: 'Foto DEPOIS',
+    acao: 'Tirar ou escolher a foto depois',
+    aceita: 'image/*',
+    padrao: 'image/jpeg',
+    foto: true,
+  },
+  document: {
+    titulo: 'Documento ou manual',
+    acao: 'Escolher documento (PDF ou imagem)',
+    aceita: 'application/pdf,image/*',
+    padrao: 'application/pdf',
+    foto: false,
+  },
+};
+
+function EnvioDeAnexo({
   id,
   finalidade,
-  fotos,
+  anexos,
 }: {
   id: string;
-  finalidade: 'before' | 'after';
-  fotos: Attachment[];
+  finalidade: 'before' | 'after' | 'document';
+  anexos: Attachment[];
 }) {
   const toast = useToast();
   const api = useApi();
   const [enviando, setEnviando] = useState(false);
   const registrar = useApiMutation(workOrderAttachmentCreate, { invalidates: [workOrderAttachments] });
-  const titulo = finalidade === 'before' ? 'Foto ANTES' : 'Foto DEPOIS';
+  const cfg = ENVIO[finalidade];
+  const titulo = cfg.titulo;
 
   async function enviar(arquivo: File) {
     setEnviando(true);
@@ -973,8 +1072,8 @@ function EnvioDeFoto({
         params: { id },
         body: {
           purpose: finalidade,
-          file_name: arquivo.name || `${finalidade}.jpg`,
-          content_type: arquivo.type || 'image/jpeg',
+          file_name: arquivo.name || `${finalidade}.${cfg.foto ? 'jpg' : 'pdf'}`,
+          content_type: arquivo.type || cfg.padrao,
           byte_size: arquivo.size,
           sha256,
         },
@@ -995,9 +1094,12 @@ function EnvioDeFoto({
         body: bytes,
       });
       if (!resp.ok) throw new Error(`o envio dos bytes falhou (${resp.status})`);
-      toast.success(`${titulo} enviada`);
+      toast.success(`${titulo}: enviado`);
     } catch (e) {
-      toast.error('A foto não foi enviada', e instanceof ApiError ? e.problem.message : (e as Error).message);
+      toast.error(
+        `${titulo}: não foi enviado`,
+        e instanceof ApiError ? e.problem.message : (e as Error).message
+      );
     } finally {
       setEnviando(false);
     }
@@ -1005,7 +1107,7 @@ function EnvioDeFoto({
 
   return (
     <Card>
-      <CardHeader title={titulo} description={`${fotos.length} enviada(s)`} />
+      <CardHeader title={titulo} description={`${anexos.length} enviado(s)`} />
       <div className="flex flex-col gap-3 p-4">
         <label
           className={cn(
@@ -1013,12 +1115,16 @@ function EnvioDeFoto({
             enviando && 'opacity-60'
           )}
         >
-          <Camera aria-hidden="true" className="size-4" />
-          {enviando ? 'Enviando…' : `Tirar ou escolher ${titulo.toLowerCase()}`}
+          {cfg.foto ? (
+            <Camera aria-hidden="true" className="size-4" />
+          ) : (
+            <FileText aria-hidden="true" className="size-4" />
+          )}
+          {enviando ? 'Enviando…' : cfg.acao}
           <input
             type="file"
-            accept="image/*"
-            capture="environment"
+            accept={cfg.aceita}
+            {...(cfg.foto ? { capture: 'environment' as const } : {})}
             className="sr-only"
             disabled={enviando}
             onChange={(e) => {
@@ -1029,7 +1135,7 @@ function EnvioDeFoto({
           />
         </label>
         <ul className="text-xs text-muted">
-          {fotos.map((f) => (
+          {anexos.map((f) => (
             <li key={f.id}>
               {f.file_name} · {new Date(f.uploaded_at).toLocaleString('pt-BR')}
             </li>
@@ -1056,6 +1162,10 @@ function PassoParecer({ id, os }: { id: string; os: WorkOrderDetail }) {
         title="Parecer final"
         description="Situação de USO do equipamento depois do serviço. Não é veredito metrológico."
       />
+      <p className="mx-4 rounded-control bg-surface-subtle px-3 py-2 text-xs text-muted">
+        Obrigatório para concluir OS de equipamento. Na conclusão, PARADO coloca o equipamento “em
+        manutenção”; LIBERADO o devolve “em operação” se ele estava em manutenção.
+      </p>
       <div className="flex flex-col gap-4 p-4">
         <div role="radiogroup" aria-label="Resultado operacional" className="grid gap-2 sm:grid-cols-2">
           {(
@@ -1114,7 +1224,7 @@ function PassoParecer({ id, os }: { id: string; os: WorkOrderDetail }) {
 
 function PassoRevisao({ id, os }: { id: string; os: WorkOrderDetail }) {
   const { data: falta } = useApiQuery(workOrderCompletion, { params: { id } }) as {
-    data: { ok: boolean; missing: unknown[] } | undefined;
+    data: Conclusao | undefined;
   };
   const { data: visitas } = useApiQuery(workOrderVisits, { params: { id } }) as {
     data: { items: WorkOrderVisit[] } | undefined;
@@ -1123,11 +1233,10 @@ function PassoRevisao({ id, os }: { id: string; os: WorkOrderDetail }) {
     data: { items: Attachment[] } | undefined;
   };
   const pendencias = useMemo(() => {
-    const p: string[] = [];
-    if (!os.service_description) p.push('Descrição do serviço (passo Preencher OS)');
-    if (!os.operational_result) p.push('Resultado LIBERADO/PARADO (passo Parecer final)');
-    if (!(visitas?.items ?? []).some((v) => v.kind === 'check_in')) p.push('Check-in');
-    for (const m of falta?.missing ?? []) p.push(typeof m === 'string' ? m : JSON.stringify(m));
+    const p = faltasParaConcluir(os, falta);
+    // Sem check-in a OS conclui (o servidor só cobra horas quando a natureza exige);
+    // aqui é lembrete, não trava.
+    if (!(visitas?.items ?? []).some((v) => v.kind === 'check_in')) p.push('Check-in (recomendado)');
     return p;
   }, [os, visitas, falta]);
   return (
@@ -1170,53 +1279,182 @@ function PassoRevisao({ id, os }: { id: string; os: WorkOrderDetail }) {
 
 /* 8 · Concluir --------------------------------------------------------------- */
 
+/** O que `GET /work-orders/:id/completion` devolve: a mesma lista com que a transição recusa. */
+export type Conclusao = {
+  ok: boolean;
+  missing: Array<{ requirement?: string; label?: string; detail?: string } | string>;
+  requires_operational_result?: boolean;
+};
+
+/** Onde, no assistente, se resolve cada exigência do servidor. */
+const ONDE: Record<string, string> = {
+  operational_result: 'passo Parecer final',
+  checklist_complete: 'passo Procedimento',
+  failed_items_have_photo: 'passo Procedimento',
+  photo_before_after: 'passo Anexos',
+  obsolescence_photo: 'passo Anexos',
+  hours_logged: 'check-in e check-out',
+  parts_confirmed: 'passo Preencher OS',
+};
+
+/**
+ * O que ainda falta para concluir (OS-17), em texto, na ordem em que se resolve.
+ *
+ * A descrição do serviço vai como a resolução da OS na conclusão: por isso ela é
+ * cobrada aqui, e a exigência "descrição da resolução" do servidor some quando a
+ * descrição já tem o tamanho que ele pede — o próprio clique a entrega.
+ */
+export function faltasParaConcluir(
+  os: Pick<WorkOrderDetail, 'service_description'>,
+  conclusao: Conclusao | undefined
+): string[] {
+  const faltas: string[] = [];
+  const descricao = os.service_description?.trim() ?? '';
+  if (!descricao) faltas.push('Descrição do serviço (passo Preencher OS)');
+  for (const m of conclusao?.missing ?? []) {
+    if (typeof m === 'string') {
+      faltas.push(m);
+      continue;
+    }
+    if (m.requirement === 'resolution_filled' && descricao.length >= 10) continue;
+    const onde = m.requirement ? ONDE[m.requirement] : undefined;
+    const texto = m.label ?? m.requirement ?? 'requisito';
+    faltas.push(`${texto.charAt(0).toUpperCase()}${texto.slice(1)}${onde ? ` (${onde})` : ''}`);
+  }
+  return faltas;
+}
+
+/**
+ * O cartão de conclusão, sem rede nem rota: recebe o que falta e o que fazer.
+ *
+ * O botão só habilita sem pendência; enquanto houver, a lista diz o quê e onde. A
+ * recusa do servidor (que pode chegar mesmo assim — outra pessoa mudou a OS) aparece
+ * aqui, na tela, e não só num aviso que some.
+ */
+export function CartaoConcluir({
+  faltas,
+  disponivel,
+  situacao,
+  verificando,
+  ocupado,
+  concluida,
+  erro,
+  onConcluir,
+}: {
+  faltas: string[];
+  disponivel: boolean;
+  situacao: string;
+  verificando: boolean;
+  ocupado: boolean;
+  concluida: boolean;
+  erro: string | null;
+  onConcluir: () => void;
+}) {
+  const pode = disponivel && !verificando && faltas.length === 0 && !concluida;
+  return (
+    <Card>
+      <CardHeader title="Concluir a OS" description="Leva a descrição do serviço como solução registrada." />
+      <div className="flex flex-col gap-3 p-4">
+        {concluida ? (
+          <p
+            role="status"
+            className="flex items-center gap-2 rounded-control bg-good-soft px-3 py-2 text-sm text-good-text"
+          >
+            <Check aria-hidden="true" className="size-4" />
+            Ordem de serviço concluída. Abrindo a ficha…
+          </p>
+        ) : faltas.length > 0 ? (
+          <div role="status" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+            <p className="font-medium">Para concluir, falta:</p>
+            <ul className="mt-1 list-disc pl-5" aria-label="O que falta para concluir">
+              {faltas.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          disponivel &&
+          !verificando && (
+            <p role="status" className="rounded-control bg-good-soft px-3 py-2 text-sm text-good-text">
+              Tudo o que é obrigatório está preenchido. Pode concluir.
+            </p>
+          )
+        )}
+        {erro && (
+          <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
+            {erro}
+          </p>
+        )}
+        <Button
+          variant="primary"
+          className="min-h-12 self-start"
+          icon={<Check className="size-4" />}
+          disabled={!pode}
+          loading={ocupado}
+          onClick={onConcluir}
+        >
+          Concluir ordem de serviço
+        </Button>
+        {!disponivel && !concluida && (
+          <p className="text-xs text-muted">
+            A conclusão não está disponível na situação “{situacao}” para o seu perfil.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function PassoConcluir({ id, os }: { id: string; os: WorkOrderDetail }) {
   const toast = useToast();
   const navigate = useNavigate();
-  const transicao = useTransicao();
-  const concluir = os.available_transitions.find((t) => t.to === 'completed');
+  const [erro, setErro] = useState<string | null>(null);
+  const [concluida, setConcluida] = useState(false);
+  const transicao = useApiMutation(workOrderTransition, {
+    invalidates: [workOrderDetail, workOrdersList, workOrdersBoard, workOrderCompletion],
+    onError: (e: ApiError) => {
+      // 412 traz a lista do que falta, item a item: mostra a lista, não só a frase.
+      const faltando = (e.problem.details?.missing as Conclusao['missing'] | undefined) ?? [];
+      const itens = faltasParaConcluir(os, { ok: false, missing: faltando });
+      setErro(itens.length > 0 ? `O servidor recusou: falta ${itens.join('; ')}.` : e.problem.message);
+      toast.error('A conclusão foi recusada', e.problem.message);
+    },
+  });
+  const { data: conclusao, isLoading: verificando } = useApiQuery(workOrderCompletion, {
+    params: { id },
+  }) as { data: Conclusao | undefined; isLoading: boolean };
+  const disponivel = os.available_transitions.some((t) => t.to === 'completed');
   return (
     <div className="flex flex-col gap-4">
       <PassoVisita id={id} tipo="check_out" />
-      <Card>
-        <CardHeader
-          title="Concluir a OS"
-          description="Leva a descrição do serviço como solução registrada."
-        />
-        <div className="flex flex-col gap-3 p-4">
-          {!os.service_description && (
-            <p className="text-sm text-warn-text">Preencha a descrição do serviço antes de concluir.</p>
-          )}
-          <Button
-            variant="primary"
-            className="min-h-12 self-start"
-            icon={<Check className="size-4" />}
-            disabled={!concluir || !os.service_description}
-            loading={transicao.isPending}
-            onClick={() =>
-              transicao.mutate(
-                {
-                  params: { id },
-                  body: { to: 'completed', version: os.version, resolution: os.service_description ?? '' },
-                },
-                {
-                  onSuccess: () => {
-                    toast.success(`${os.number ?? 'OS'} concluída`);
-                    void navigate({ to: '/ordens/$id', params: { id } });
-                  },
-                }
-              )
+      <CartaoConcluir
+        faltas={faltasParaConcluir(os, conclusao)}
+        disponivel={disponivel}
+        situacao={os.status_label}
+        verificando={verificando}
+        ocupado={transicao.isPending}
+        concluida={concluida}
+        erro={erro}
+        onConcluir={() => {
+          setErro(null);
+          transicao.mutate(
+            {
+              params: { id },
+              body: { to: 'completed', version: os.version, resolution: os.service_description ?? '' },
+            },
+            {
+              onSuccess: () => {
+                setConcluida(true);
+                toast.success(
+                  `${os.number ?? 'OS'} concluída`,
+                  'A conclusão ficou registrada no histórico da OS.'
+                );
+                void navigate({ to: '/ordens/$id', params: { id } });
+              },
             }
-          >
-            Concluir ordem de serviço
-          </Button>
-          {!concluir && (
-            <p className="text-xs text-muted">
-              A conclusão não está disponível na situação “{os.status_label}” para o seu perfil.
-            </p>
-          )}
-        </div>
-      </Card>
+          );
+        }}
+      />
     </div>
   );
 }

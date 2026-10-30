@@ -5,6 +5,8 @@
  * vertical clínica. Não existe entidade `equipment` — `organization.asset_label`
  * define o termo exibido, e toda a interface o usa.
  */
+import { ValidationError } from './errors';
+import { contentMatchesDeclaredType } from './attachments';
 
 export const ASSET_STATUSES = [
   'active',
@@ -143,7 +145,29 @@ export const ANVISA_STATUS_LABELS: Record<AnvisaStatus, string> = {
  * `null` quando faltam data de aquisição válida ou vida útil: sem esses dois não há
  * o que depreciar, e "0 % depreciado" seria afirmar que o bem é novo.
  */
+export const DEPRECIATION_METHOD = 'straight_line' as const;
+export type DepreciationMethod = typeof DEPRECIATION_METHOD;
+
+/**
+ * A metodologia, explícita (ATV-10): quem lê o número vê COMO ele foi feito — método, data-base,
+ * vida útil e residual. Não há escolha de outro método: linha reta é o "cálculo comum" pedido, e
+ * nenhuma norma contábil é inventada aqui.
+ */
+export interface DepreciationMethodology {
+  method: DepreciationMethod;
+  /** Data-base: a data de aquisição (AAAA-MM-DD). */
+  baseDate: string;
+  usefulLifeYears: number;
+  /** Data em que o bem fica totalmente depreciado (data-base + vida útil). */
+  endDate: string;
+  /** Valor residual considerado (0 quando não informado). `null` sem valor de compra. */
+  residualValue: number | null;
+  /** Compra − residual: o que se distribui ao longo da vida útil. `null` sem valor de compra. */
+  depreciableBase: number | null;
+}
+
 export interface Depreciation {
+  methodology: DepreciationMethodology;
   /** Anos desde a aquisição, limitado à vida útil. */
   elapsedYears: number;
   /** Anos que restam (nunca negativo). */
@@ -179,7 +203,20 @@ export function straightLineDepreciation(input: {
   const baseDepreciavel = compra === null ? null : Math.max(0, compra - residual);
   const arred = (n: number) => Math.round(n * 100) / 100;
 
+  // Fim da vida útil: a data-base somada dos anos inteiros (29/02 cai em 01/03 em ano comum).
+  const fim = new Date(
+    Date.UTC(inicio.getUTCFullYear() + usefulLifeYears, inicio.getUTCMonth(), inicio.getUTCDate())
+  );
+
   return {
+    methodology: {
+      method: DEPRECIATION_METHOD,
+      baseDate: inicio.toISOString().slice(0, 10),
+      usefulLifeYears,
+      endDate: fim.toISOString().slice(0, 10),
+      residualValue: compra === null ? null : arred(Math.min(residual, compra)),
+      depreciableBase: baseDepreciavel === null ? null : arred(baseDepreciavel),
+    },
     elapsedYears: Math.round(anos * 100) / 100,
     remainingYears: Math.round((usefulLifeYears - anos) * 100) / 100,
     percentDepreciated: Math.round(percentual * 10) / 10,
@@ -191,6 +228,42 @@ export function straightLineDepreciation(input: {
         ? null
         : arred(compra - (baseDepreciavel * percentual) / 100),
   };
+}
+
+/**
+ * Valor residual coerente com o valor de compra (ATV-10): não negativo e não maior que a compra —
+ * residual acima da compra daria depreciação negativa, e o cálculo a esconderia (base 0).
+ * `null`/ausente vale 0. Sem valor de compra conhecido não há com o que comparar.
+ */
+export function assertResidualValue(
+  purchaseValue: number | null | undefined,
+  residualValue: number | null | undefined
+): void {
+  if (residualValue === null || residualValue === undefined) return;
+  if (!Number.isFinite(residualValue) || residualValue < 0) {
+    throw new ValidationError('o valor residual não pode ser negativo', { field: 'residual_value' });
+  }
+  if (purchaseValue !== null && purchaseValue !== undefined && residualValue > purchaseValue) {
+    throw new ValidationError('o valor residual não pode ser maior que o valor de compra', {
+      field: 'residual_value',
+    });
+  }
+}
+
+/**
+ * Registro ANVISA × "não se aplica" (ATV-11): um OU outro. Número e "não se aplica" juntos se
+ * contradizem; o banco tem a mesma regra (`assets_anvisa_na_exclusive`, 0089).
+ */
+export function assertAnvisaConsistency(
+  registration: string | null | undefined,
+  notApplicable: boolean | null | undefined
+): void {
+  if (notApplicable && registration && registration.trim() !== '') {
+    throw new ValidationError(
+      'registro ANVISA e "não se aplica" não andam juntos: informe o número ou marque que não se aplica',
+      { field: 'anvisa_not_applicable' }
+    );
+  }
 }
 
 /**
@@ -289,4 +362,65 @@ export function validateImportRow(row: AssetImportRow): ImportIssue[] {
   }
 
   return issues;
+}
+
+/* -------------------------------------------------------------------------- */
+/* foto do equipamento (ATV-07 · pedido do cliente, 19/10/2026 · 0085)         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O que a foto do equipamento pode ser: imagem que o navegador mostra e a
+ * impressão leva. HEIC (padrão do iPhone) fica de fora de propósito — o
+ * navegador do computador não o desenha, e a ficha impressa sairia sem foto.
+ */
+export const ASSET_PHOTO_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export type AssetPhotoContentType = (typeof ASSET_PHOTO_CONTENT_TYPES)[number];
+
+/**
+ * 8 MB. A foto de antes/depois aceita 15 MB, mas sobe em fatias; a do
+ * equipamento viaja INTEIRA dentro do JSON do cadastro (para que o ativo e a
+ * foto nasçam na mesma transação), e o JSON da API tem teto de 12 MB — 8 MB
+ * em base64 são ~10,7 MB. Uma foto de celular em qualidade alta fica entre 3 e
+ * 8 MB. O banco tem o mesmo teto (`assets_photo_size_valid`).
+ */
+export const MAX_ASSET_PHOTO_BYTES = 8 * 1024 * 1024;
+
+export const ASSET_PHOTO_EXTENSION: Record<AssetPhotoContentType, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+/**
+ * Confere a foto pelos BYTES, não só pelo que foi declarado.
+ *
+ * O tipo declarado é escrito por quem envia; um "image/png" que é HTML vira
+ * XSS armazenado quando servido de volta. Por isso o tipo real é conferido
+ * pelos números mágicos (`contentMatchesDeclaredType`, o mesmo da subida de
+ * anexo), e o tamanho é o dos bytes decodificados.
+ */
+export function validateAssetPhoto(contentType: string, bytes: Uint8Array): AssetPhotoContentType {
+  const tipo = String(contentType || '')
+    .split(';')[0]!
+    .trim()
+    .toLowerCase();
+  if (!(ASSET_PHOTO_CONTENT_TYPES as readonly string[]).includes(tipo)) {
+    throw new ValidationError('a foto do equipamento precisa ser PNG, JPEG ou WebP', {
+      field: 'photo',
+      allowed: ASSET_PHOTO_CONTENT_TYPES,
+    });
+  }
+  if (bytes.byteLength === 0) {
+    throw new ValidationError('a foto do equipamento veio vazia', { field: 'photo' });
+  }
+  if (bytes.byteLength > MAX_ASSET_PHOTO_BYTES) {
+    throw new ValidationError('a foto do equipamento passa de 8 MB', {
+      field: 'photo',
+      max: MAX_ASSET_PHOTO_BYTES,
+    });
+  }
+  if (!contentMatchesDeclaredType(tipo, bytes.subarray(0, 16))) {
+    throw new ValidationError('o conteúdo do arquivo não é a imagem declarada', { field: 'photo' });
+  }
+  return tipo as AssetPhotoContentType;
 }

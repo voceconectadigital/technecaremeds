@@ -1,10 +1,11 @@
 /**
  * Aurora — relatórios BASIC / ADVANCED / EXPERT: fundação (reunião 16/10/2026, Fase 9).
  *
- *   · o catálogo diz a situação de cada indicador; layout AGUARDANDO MODELO PDF OFICIAL;
+ *   · o catálogo diz a situação de cada indicador; nenhum layout "aguardando modelo" (29/10/2026);
  *   · os números do relatório são os MESMOS do Painel (mesma função, mesmo filtro);
  *   · indicador sem fórmula/definição sai sem valor, com a situação — nunca inventado;
- *   · PDF provisório com a faixa; escopo e tenant respeitados.
+ *   · PDF Basic no padrão do Advanced (REL-08); Excel com a mesma permissão e o mesmo escopo
+ *     (REL-10); escopo e tenant respeitados.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
@@ -30,6 +31,7 @@ import {
 import { loadEnv } from '@aurora/config';
 import { reportsCatalog, reportsGenerate } from '@aurora/contracts';
 import { createApp } from '../bootstrap';
+import { abaPorNome, celulas, lerZip } from './apoio/ler-xlsx';
 
 const ORG = newId();
 const ORG_B = newId();
@@ -150,12 +152,15 @@ const gerar = (quem: string, body: Record<string, unknown>, pdf = false) =>
     .send({ from: DE, to: ATE, ...body });
 
 describe('catálogo', () => {
-  it('três modelos; layout aguardando o modelo oficial; cada indicador com código, unidade, situação e sentido', async () => {
+  it('três modelos; layouts definidos; cada indicador com código, unidade, situação e sentido', async () => {
     const r = await http.get('/v1/reports/catalog').set(auth(GESTORA));
     expect(r.status).toBe(200);
     expect(reportsCatalog.response.safeParse(r.body).success).toBe(true);
     expect(r.body.tiers.map((x: { label: string }) => x.label)).toEqual(['Basic', 'Advanced', 'Expert']);
-    expect(r.body.layout_status).toBe('awaiting_official_model');
+    expect(r.body.layout_status).toBe('layouts_defined');
+    expect(JSON.stringify(r.body)).not.toContain('AGUARDANDO MODELO');
+    // REL-16: a nota que aparece na tela de escolha não cita o órgão.
+    expect(JSON.stringify(r.body)).not.toContain('FHEMIG');
     const tmpa = r.body.indicators.find((i: { key: string }) => i.key === 'first_response_time');
     expect(tmpa.state).toBe('PENDING_DEFINITION');
     expect(tmpa.tiers).toEqual(['expert']);
@@ -359,7 +364,7 @@ describe('geração com dados reais', () => {
     expect(fora.status).toBe(404);
   });
 
-  it('PDF provisório com a faixa; solicitante sem indicador → 403; outra organização: zero', async () => {
+  it('PDF Basic no padrão do Advanced (painel, sem faixa); solicitante sem indicador → 403; outra organização: zero', async () => {
     const pdf = await gerar(GESTORA, { tier: 'basic' }, true)
       .buffer(true)
       .parse((res, cb) => {
@@ -371,7 +376,13 @@ describe('geração com dados reais', () => {
     expect(pdf.headers['content-type']).toMatch(/application\/pdf/);
     const corpo = (pdf.body as Buffer).toString('latin1');
     expect(corpo.startsWith('%PDF')).toBe(true);
-    expect(corpo).toContain('AGUARDANDO MODELO PDF OFICIAL');
+    expect(corpo).not.toContain('AGUARDANDO MODELO PDF OFICIAL');
+    expect(corpo).not.toContain('provis\\363rio)'); // o rodapé antigo dizia "Relatório Basic — provisório"
+    expect(corpo).toContain('(Relat\\363rio Basic)');
+    expect(corpo).toContain('(Resumo do per\\355odo)');
+    // Os pendentes do Basic aparecem listados, como texto, sem número.
+    expect(corpo).toContain('Pendente de defini\\347\\343o');
+    expect(pdf.headers['content-disposition']).toContain('relatorio-basic.pdf');
     expect((await gerar(SOLICITANTE, { tier: 'basic' })).status).toBe(403);
     const b = await gerar(ADMIN_B, { tier: 'basic', indicators: ['work_orders_opened'] });
     expect(b.body.sections[0].value).toBe(0);
@@ -453,5 +464,117 @@ describe('geração com dados reais', () => {
       buildReport(s, null, { tier: 'advanced', from: DE, to: ATE, indicators: ['work_orders_opened'] })
     );
     expect(total).toBeGreaterThanOrEqual(janela.sections[0]!.value ?? 0);
+  });
+});
+
+describe('Excel (REL-10)', () => {
+  const baixarXlsx = (quem: string, body: Record<string, unknown>) =>
+    http
+      .post('/v1/reports/generate?format=xlsx')
+      .set(auth(quem))
+      .send({ from: DE, to: ATE, ...body })
+      .buffer(true)
+      .parse((res, cb) => {
+        const partes: Buffer[] = [];
+        res.on('data', (c: Buffer) => partes.push(c));
+        res.on('end', () => cb(null, Buffer.concat(partes)));
+      });
+
+  it('planilha com Indicadores, Série mensal e Filtros; o número é o mesmo do JSON, tipado', async () => {
+    const r = await baixarXlsx(GESTORA, { tier: 'basic', indicators: ['work_orders_opened'] });
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toBe(
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    expect(r.headers['content-disposition']).toBe('attachment; filename="relatorio-basic.xlsx"');
+    const arquivos = lerZip(r.body as Buffer);
+    for (const k of ['[Content_Types].xml', 'xl/workbook.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml']) {
+      expect(arquivos.has(k), k).toBe(true);
+    }
+    const ind = celulas(abaPorNome(arquivos, 'Indicadores'));
+    expect(ind.get('A2')!.valor).toBe('work_orders_opened');
+    expect(ind.get('D2')).toMatchObject({ tipo: 'n', valor: '4' }); // as 4 OS abertas do cenário
+    // Os pendentes do Basic saem como TEXTO "Pendente de definição", nunca como número.
+    const pendentes = [...ind.entries()].filter(
+      ([ref, c]) => ref.startsWith('D') && c.valor === 'Pendente de definição'
+    );
+    expect(pendentes.length).toBeGreaterThanOrEqual(2);
+    const serie = celulas(abaPorNome(arquivos, 'Série mensal'));
+    expect(serie.get('A13')).toMatchObject({ tipo: 'n', estilo: 2 }); // 12 meses, data com estilo de data
+    const filtros = celulas(abaPorNome(arquivos, 'Filtros'));
+    expect(filtros.get('B2')).toMatchObject({ valor: 'Basic' });
+    expect(filtros.get('B5')).toMatchObject({ valor: 'Todos os clientes do escopo' });
+  });
+
+  it('mesma permissão e mesmo escopo do JSON: 403 sem indicador, 404 fora do escopo, só o Hospital A', async () => {
+    expect((await baixarXlsx(SOLICITANTE, { tier: 'basic' })).status).toBe(403);
+    expect((await baixarXlsx(RESTRITA, { tier: 'basic', customer_id: hospitalB })).status).toBe(404);
+    const restrita = await baixarXlsx(RESTRITA, { tier: 'advanced', indicators: ['work_orders_opened'] });
+    expect(restrita.status).toBe(200);
+    const ind = celulas(abaPorNome(lerZip(restrita.body as Buffer), 'Indicadores'));
+    expect(ind.get('D2')).toMatchObject({ tipo: 'n', valor: '3' }); // só as 3 do Hospital A
+    const outra = await baixarXlsx(ADMIN_B, { tier: 'basic', indicators: ['work_orders_opened'] });
+    expect(celulas(abaPorNome(lerZip(outra.body as Buffer), 'Indicadores')).get('D2')!.valor).toBe('0');
+  });
+
+  it('Expert em Excel: sem série; formato desconhecido é 422', async () => {
+    const r = await baixarXlsx(GESTORA, { tier: 'expert' });
+    expect(r.status).toBe(200);
+    const arquivos = lerZip(r.body as Buffer);
+    expect(arquivos.get('xl/workbook.xml')!.toString('utf8')).not.toContain('Série mensal');
+    const ind = celulas(abaPorNome(arquivos, 'Indicadores'));
+    expect([...ind.values()].some((c) => c.valor === 'imr_penalty')).toBe(true);
+    const ruim = await http
+      .post('/v1/reports/generate?format=docx')
+      .set(auth(GESTORA))
+      .send({ from: DE, to: ATE, tier: 'basic' });
+    expect(ruim.status).toBe(422);
+  });
+});
+
+describe('nível de relatório contratado pelo cliente (REL-13)', () => {
+  const gerar = (email: string, corpo: Record<string, unknown>) =>
+    http
+      .post('/v1/reports/generate')
+      .set(auth(email))
+      .send({ from: DE, to: ATE, ...corpo });
+  const contratar = (tier: string | null) =>
+    withTenant(t.db, buildContext({ organizationId: ORG, actorKind: 'system', requestId: 'tier' }), (s) =>
+      s.query(`UPDATE aurora.customers SET report_tier = $2 WHERE id = $1`, [hospitalA, tier])
+    );
+
+  it('o Hospital A com contrato Basic não sai em Advanced nem Expert — no JSON, no PDF e no Excel', async () => {
+    await contratar('basic');
+    try {
+      const adv = await gerar(GESTORA, { tier: 'advanced', customer_id: hospitalA });
+      expect(adv.status).toBe(403);
+      expect(adv.body.message).toMatch(/Hospital A inclui o relatório Basic/);
+      expect(adv.body.details).toMatchObject({ contracted_tier: 'basic', requested_tier: 'advanced' });
+      for (const formato of ['pdf', 'xlsx']) {
+        const r = await http
+          .post(`/v1/reports/generate?format=${formato}`)
+          .set(auth(GESTORA))
+          .send({ from: DE, to: ATE, tier: 'expert', customer_id: hospitalA });
+        expect(r.status, formato).toBe(403);
+      }
+      expect((await gerar(GESTORA, { tier: 'basic', customer_id: hospitalA })).status).toBe(201);
+      // A carteira inteira (sem cliente, escopo de toda a organização) não é contrato de um cliente.
+      expect((await gerar(GESTORA, { tier: 'expert' })).status).toBe(201);
+    } finally {
+      await contratar(null);
+    }
+  });
+
+  it('quem só alcança o Hospital A não pula a trava deixando o cliente em branco; fora do escopo segue 404', async () => {
+    await contratar('advanced');
+    try {
+      expect((await gerar(RESTRITA, { tier: 'expert' })).status).toBe(403);
+      expect((await gerar(RESTRITA, { tier: 'advanced' })).status).toBe(201);
+      // O Hospital B não está no escopo da Restrita: a trava não revela nada sobre ele.
+      const fora = await gerar(RESTRITA, { tier: 'basic', customer_id: hospitalB });
+      expect(fora.status).toBe(404);
+    } finally {
+      await contratar(null);
+    }
   });
 });

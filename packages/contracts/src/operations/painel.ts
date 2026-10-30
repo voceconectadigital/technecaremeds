@@ -103,6 +103,17 @@ export const ControlPanel = z.object({
         rate: z.number().nullable(),
       })
     ),
+    /**
+     * Avaliação das OS (REL-14): média de 1 a 5 das notas dadas e assinadas no período, uma por
+     * OS. Nula sem avaliação — nunca zero. Opcional: capturas antigas da demo não têm.
+     */
+    work_order_rating: Envelope(
+      z.object({
+        average: z.number().nullable(),
+        count: z.number().int(),
+        distribution: z.record(z.string(), z.number().int()),
+      })
+    ).optional(),
     productivity: Envelope(
       z.array(
         z.object({

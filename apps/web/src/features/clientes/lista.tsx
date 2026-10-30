@@ -21,6 +21,7 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { DialogoNovoCliente, rotuloDoSegmento } from './novo-cliente';
 import { rotuloDaClassificacao } from './classificacao';
+import { ROTULO_DO_RELATORIO, SeloDoContrato } from './contrato';
 
 export function ClientesPage() {
   // Na URL: o atalho "Novo cliente" do Painel de Controle abre o diálogo direto (?novo=sim).
@@ -164,7 +165,14 @@ export function ClientesPage() {
 
 function LinhaCliente({ cliente: c, primeira }: { cliente: Customer; primeira: boolean }) {
   const segmento = rotuloDaClassificacao(c) ?? rotuloDoSegmento(c.segment);
-  const detalhes = [c.trade_name && c.trade_name !== c.name ? c.trade_name : null, segmento, c.tax_id, c.code]
+  const detalhes = [
+    c.trade_name && c.trade_name !== c.name ? c.trade_name : null,
+    segmento,
+    c.tax_id,
+    c.code,
+    // Relatório incluso no contrato (CLI-05).
+    c.report_tier ? `Relatório ${ROTULO_DO_RELATORIO[c.report_tier]}` : null,
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -213,6 +221,8 @@ function LinhaCliente({ cliente: c, primeira }: { cliente: Customer; primeira: b
           </span>
         </span>
 
+        {/* Vigência do contrato (CLI-06): só aparece quando há o que dizer. */}
+        {c.contract_status && c.contract_status !== 'not_informed' && <SeloDoContrato cliente={c} />}
         {c.status !== 'active' && (
           <StatusChip tone="neutral" size="sm">
             Inativo

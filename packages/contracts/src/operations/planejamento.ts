@@ -45,6 +45,11 @@ export const plansCreate = defineOperation({
       asset_ids: z.array(Uuid).max(500).default([]),
       kind: z.enum(PLAN_KINDS),
       checklist_template_key: z.string().trim().min(2).max(64).nullable().optional(),
+      /**
+       * Procedimentos que vão JUNTO na mesma OS (OS-15). Cada um vira um
+       * checklist próprio na OS gerada, com as próprias respostas.
+       */
+      extra_checklist_template_keys: z.array(z.string().trim().min(2).max(64)).max(10).optional(),
       frequency_unit: z.enum(PLAN_FREQUENCY_UNITS),
       frequency_interval: z.number().int().min(1).max(60),
       /** Data civil (AAAA-MM-DD) de onde o primeiro ciclo começa a contar. */
@@ -98,13 +103,30 @@ const Estados = z.object({
   pending: z.number().int(),
   late: z.number().int(),
   skipped: z.number().int(),
+  /**
+   * Conformidade DA FATIA (PLN-10): realizados ÷ (programados − dispensados),
+   * em %. Nula sem denominador. Opcional: capturas antigas não a têm.
+   */
+  rate: z.number().nullable().optional(),
 });
+
+/**
+ * Um ou vários setores (PLN-11): `?sector=a&sector=b`. O item entra se o
+ * equipamento está em QUALQUER um deles; setor fora do escopo → 404.
+ */
+export const SetoresDoFiltro = z.union([Uuid, z.array(Uuid).max(50)]);
+
+/** `sector` da consulta, sempre como lista. */
+export function setoresDaConsulta(v: string | string[] | undefined): string[] {
+  if (v === undefined) return [];
+  return Array.isArray(v) ? v : [v];
+}
 
 const FiltroDoPlano = z.object({
   from: z.string(),
   to: z.string(),
   customer: Uuid.optional(),
-  sector: Uuid.optional(),
+  sector: SetoresDoFiltro.optional(),
   /** Tipo do plano, combinável com cliente e setor (reunião 16/10/2026). */
   kind: z.enum(PLAN_KINDS).optional(),
 });
@@ -321,4 +343,133 @@ export const plansExecuteItem = defineOperation({
   response: z.object({ work_order_id: Uuid, created: z.boolean() }),
   status: 201,
   errors: ['not_found', 'validation_failed', 'forbidden'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* ativar / inativar (PLN-01)                                                  */
+/* -------------------------------------------------------------------------- */
+
+const CorpoDaAtivacao = z
+  .object({
+    /** Opcional: fica na auditoria e na ficha do plano. */
+    reason: z.string().trim().max(500).nullable().optional(),
+  })
+  .strict();
+
+const RespostaDaAtivacao = z.object({ is_active: z.boolean(), changed: z.boolean() });
+
+export const plansActivate = defineOperation({
+  operationId: 'plans.activate',
+  method: 'POST',
+  path: '/maintenance-plans/:id/activate',
+  summary: 'Ativa o plano: a varredura volta a abrir os ciclos dele',
+  description:
+    'Motivo opcional, gravado com autor e data (a trilha de auditoria guarda cada mudança). ' +
+    'Ciclos, itens e OS já existentes não mudam. Exige `maintenance_plan.update`.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ id: Uuid }),
+  body: CorpoDaAtivacao,
+  response: RespostaDaAtivacao,
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'forbidden'],
+});
+
+export const plansDeactivate = defineOperation({
+  operationId: 'plans.deactivate',
+  method: 'POST',
+  path: '/maintenance-plans/:id/deactivate',
+  summary: 'Inativa o plano: nenhum ciclo novo, nenhuma OS futura',
+  description:
+    'Preserva o histórico: o que já foi gerado (ciclos, itens, OS) fica como está. Plano ' +
+    'inativo não abre ciclo na varredura nem à mão, e sai da projeção do cronograma. Motivo ' +
+    'opcional, auditado. Exige `maintenance_plan.update`.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ id: Uuid }),
+  body: CorpoDaAtivacao,
+  response: RespostaDaAtivacao,
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'forbidden'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* ▶ Play: equipamentos elegíveis de um plano (PLN-09)                          */
+/* -------------------------------------------------------------------------- */
+
+export const EligibleItem = z.object({
+  id: Uuid,
+  due_at: Timestamp,
+  state: z.enum(['done', 'pending', 'late', 'skipped']),
+  task_id: Uuid,
+  task_name: z.string(),
+  asset_id: Uuid,
+  asset_name: z.string(),
+  sector_name: z.string().nullable(),
+  work_order_id: Uuid.nullable(),
+  work_order_number: z.string().nullable(),
+});
+export type EligibleItem = z.infer<typeof EligibleItem>;
+
+export const plansEligibleItems = defineOperation({
+  operationId: 'plans.eligibleItems',
+  method: 'GET',
+  path: '/maintenance-plans/:id/eligible-items',
+  summary: '▶ Play: os equipamentos do plano com atividade em aberto para executar',
+  description:
+    'Itens de ciclo pendentes ou com OS gerada e não encerrada, no escopo de quem pergunta. ' +
+    'O passo seguinte é `POST /maintenance-plans/cycle-items/:itemId/execute`.',
+  permissions: ['maintenance_plan.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ items: z.array(EligibleItem) }),
+  errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* relatório de conformidade (REL-12)                                          */
+/* -------------------------------------------------------------------------- */
+
+export const ComplianceRankRow = z.object({
+  position: z.number().int(),
+  key: z.string(),
+  label: z.string(),
+  scheduled: z.number().int(),
+  done: z.number().int(),
+  pending: z.number().int(),
+  late: z.number().int(),
+  skipped: z.number().int(),
+  /** Programados − dispensados. */
+  denominator: z.number().int(),
+  rate: z.number().nullable(),
+});
+export type ComplianceRankRow = z.infer<typeof ComplianceRankRow>;
+
+export const plansComplianceReport = defineOperation({
+  operationId: 'plans.complianceReport',
+  method: 'POST',
+  path: '/maintenance-plans/compliance-report',
+  summary: 'Relatório de conformidade dos planos: ranking por taxa, por plano, cliente e setor',
+  description:
+    'Ordena pela CONFORMIDADE (realizados ÷ (programados − dispensados)), não pelo volume. ' +
+    'Traz a definição do numerador e do denominador. `?format=xlsx` devolve a planilha. Rota ' +
+    'de LEITURA: POST só porque os filtros vão no corpo.',
+  permissions: ['maintenance_plan.read'],
+  body: z
+    .object({
+      from: z.string(),
+      to: z.string(),
+      customer_id: Uuid.optional(),
+      sector_ids: z.array(Uuid).max(50).optional(),
+      kind: z.enum(PLAN_KINDS).optional(),
+    })
+    .strict(),
+  response: z.object({
+    definition: z.object({ numerator: z.string(), denominator: z.string(), formula: z.string() }),
+    period: z.object({ from: Timestamp, to: Timestamp }),
+    totals: Estados.extend({ scheduled: z.number().int(), denominator: z.number().int() }),
+    rate: z.number().nullable(),
+    byPlan: z.array(ComplianceRankRow),
+    byCustomer: z.array(ComplianceRankRow),
+    bySector: z.array(ComplianceRankRow),
+  }),
+  status: 200,
+  errors: ['not_found', 'validation_failed'],
 });

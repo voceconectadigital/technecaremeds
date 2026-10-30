@@ -47,6 +47,7 @@ function cadastroDoCorpo(body: {
   cpf?: string | null;
   phone?: string | null;
   company_name?: string | null;
+  company_tax_id?: string | null;
   job_title?: string | null;
   registrations?: { kind: string; number: string; region?: string | null }[];
 }) {
@@ -54,6 +55,7 @@ function cadastroDoCorpo(body: {
     cpf: body.cpf,
     phone: body.phone,
     companyName: body.company_name,
+    companyTaxId: body.company_tax_id,
     jobTitle: body.job_title,
     registrations: body.registrations,
   };

@@ -279,6 +279,12 @@ export const WorkOrderDetail = z.object({
   operational_result: z.enum(['released', 'stopped']).nullable().optional(),
   final_opinion: z.string().nullable().optional(),
   service_report_updated_at: z.string().nullable().optional(),
+  /**
+   * A organização usa orçamento (recurso `quotes`; OS-03 · ORC-01 · CLI-07)?
+   * Sem ele, a ficha esconde "Gerar orçamento" e as etapas de aprovação.
+   * Opcional por causa da demonstração.
+   */
+  uses_quotes: z.boolean().optional(),
   /** O orçamento vivo ligado a esta OS, se houver. */
   quote_summary: z
     .object({
@@ -308,6 +314,11 @@ export const workOrdersList = defineOperation({
   query: z.object({
     customer: Uuid.optional(),
     category: z.enum(STATUS_CATEGORIES).optional(),
+    /** A situação pela chave (`denied` = a visão "Negados", OS-01). */
+    status: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]{0,63}$/)
+      .optional(),
     assignee: Uuid.optional(),
     limit: z.coerce.number().int().positive().max(500).optional(),
   }),
@@ -361,6 +372,8 @@ export const workOrderTransition = defineOperation({
     scheduled_start: z.string().nullable().optional(),
     scheduled_end: z.string().nullable().optional(),
     version: z.number().int().optional(),
+    /** O parecer LIBERADO/PARADO junto com a conclusão (OS-16) — o quadro e o campo não abrem o relatório. */
+    operational_result: z.enum(['released', 'stopped']).nullable().optional(),
   }),
   response: z.object({
     status: z.string(),
@@ -488,6 +501,36 @@ export const workOrderEvaluation = defineOperation({
   permissions: ['work_order.read'],
   params: z.object({ id: Uuid }),
   response: z.object({ evaluation: WorkOrderEvaluationView.nullable(), can_evaluate: z.boolean() }),
+  errors: ['not_found'],
+});
+
+/** Uma assinatura da OS, com o que ela prova (OS-24). Não é ICP-Brasil. */
+export const WorkOrderSignature = z.object({
+  id: Uuid,
+  signer_name: z.string(),
+  signed_at: Timestamp,
+  /** `false` quando a OS mudou depois de assinada: a assinatura não cobre mais o texto atual. */
+  still_valid: z.boolean(),
+  signer_role: z.enum(['technician', 'customer', 'supervisor']),
+  signer_email: z.string().nullable(),
+  method: z.enum(['drawn', 'email_code', 'session']),
+  client_ip: z.string().nullable(),
+  /** O resumo SHA-256 do que foi assinado. */
+  signed_content_sha256: z.string(),
+});
+export type WorkOrderSignature = z.infer<typeof WorkOrderSignature>;
+
+export const workOrderSignatures = defineOperation({
+  operationId: 'workOrders.signatures',
+  method: 'GET',
+  path: '/work-orders/:id/signatures',
+  summary: 'As assinaturas da OS e se ainda cobrem o texto atual',
+  description:
+    'Inclui a assinatura de quem VALIDOU o laudo de obsolescência (pela sessão: resumo SHA-256, ' +
+    'e-mail, IP e hora). Não é assinatura ICP-Brasil e não afirma validade jurídica.',
+  permissions: ['work_order.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ items: z.array(WorkOrderSignature) }),
   errors: ['not_found'],
 });
 

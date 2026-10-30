@@ -12,6 +12,7 @@ import { OrganizationsController } from './platform/organizations.controller';
 import { PortalController } from './portal/portal.controller';
 import { PlansController } from './plans/plans.controller';
 import { ProceduresController } from './plans/procedures.controller';
+import { HojeEsperaController } from './hoje/espera.controller';
 import { InventoryController } from './inventory/inventory.controller';
 import { RolesController } from './platform/roles.controller';
 import { MembersController } from './platform/members.controller';
@@ -100,6 +101,7 @@ export function createAppModule(deps: AppDeps): new () => NestModule {
       InventoryController,
       PlansController,
       ProceduresController,
+      HojeEsperaController,
       PortalController,
       CustomersController,
       LocationsController,

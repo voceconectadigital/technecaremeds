@@ -61,6 +61,7 @@ interface TransicaoLocal {
 interface SituacaoLocal {
   key: string;
   label: string;
+  category?: string;
 }
 
 interface ItemDeChecklist {
@@ -108,6 +109,8 @@ export function OrdemPage() {
   const { linhas: estoque } = useColecaoLocal<SaldoLocal>('estoque');
 
   const [diagnostico, setDiagnostico] = useRascunho(`os:${id}:diagnostico`);
+  // O parecer do equipamento (OS-16, 29/10/2026): obrigatório para concluir OS de equipamento.
+  const [parecer, setParecer] = useRascunho(`os:${id}:parecer`);
   const [resolucao, setResolucao] = useRascunho(`os:${id}:resolucao`);
   const [nomeAssina, setNomeAssina] = useRascunho(`os:${id}:assina-nome`);
   const [docAssina, setDocAssina] = useRascunho(`os:${id}:assina-doc`);
@@ -162,6 +165,11 @@ export function OrdemPage() {
 
   const ordem = ordens.find((o) => o.id === id);
   const rotulos = useMemo(() => new Map(situacoes.map((s) => [s.key, s.label])), [situacoes]);
+  /** Ir para uma situação da categoria "review" é CONCLUIR — é ali que o servidor cobra o parecer. */
+  const conclui = useMemo(
+    () => new Set(situacoes.filter((s) => s.category === 'review').map((s) => s.key)),
+    [situacoes]
+  );
   const situacaoPendente = situacoesNaFila.length > 0 ? situacoesNaFila[situacoesNaFila.length - 1]! : null;
   const situacaoEfetiva = situacaoPendente ?? ordem?.status_key;
   const possiveis = useMemo(
@@ -365,6 +373,7 @@ export function OrdemPage() {
         corpo: {
           to: para,
           ...(resolucao.trim() ? { resolution: resolucao.trim() } : {}),
+          ...(parecer === 'released' || parecer === 'stopped' ? { operational_result: parecer } : {}),
         },
         rotulo: `${rotulos.get(para) ?? para} — ${ordemAtual.number ?? ordemAtual.title}`,
       });
@@ -381,6 +390,10 @@ export function OrdemPage() {
        */
       await limparRascunhos(base, [`os:${id}:resolucao`]);
       setResolucao('');
+      if (conclui.has(para)) {
+        await limparRascunhos(base, [`os:${id}:parecer`]);
+        setParecer('');
+      }
     });
   }
 
@@ -769,6 +782,33 @@ export function OrdemPage() {
             Guardado no aparelho enquanto você escreve. Fechar o aplicativo não perde.
           </p>
         </div>
+
+        {ordemAtual.asset_id && (
+          /*
+           * O PARECER DO EQUIPAMENTO (OS-16). O servidor recusa concluir OS de equipamento sem ele;
+           * perguntar aqui evita que a conclusão volte recusada horas depois, quando a rede voltar.
+           * PARADO deixa o equipamento "em manutenção"; LIBERADO o devolve à operação.
+           */
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-xs text-subtle">Parecer do equipamento</legend>
+            {(
+              [
+                ['released', 'Liberado para uso'],
+                ['stopped', 'Equipamento parado'],
+              ] as const
+            ).map(([valor, rotulo]) => (
+              <label key={valor} className="flex min-h-11 items-center gap-2 text-sm text-text">
+                <input
+                  type="radio"
+                  name="parecer"
+                  checked={parecer === valor}
+                  onChange={() => setParecer(valor)}
+                />
+                {rotulo}
+              </label>
+            ))}
+          </fieldset>
+        )}
       </section>
 
       {/* ------------------------------------------------------- assinatura */}
@@ -846,7 +886,22 @@ export function OrdemPage() {
               onClick={() => void mudarSituacao(t.to_key)}
               // A mudança que já está na fila não é pedida duas vezes: o
               // segundo pedido voltaria como conflito e iria para a atenção.
-              disabled={enviando !== null || situacoesNaFila.includes(t.to_key)}
+              disabled={
+                enviando !== null ||
+                situacoesNaFila.includes(t.to_key) ||
+                (conclui.has(t.to_key) &&
+                  !!ordemAtual.asset_id &&
+                  parecer !== 'released' &&
+                  parecer !== 'stopped')
+              }
+              title={
+                conclui.has(t.to_key) &&
+                ordemAtual.asset_id &&
+                parecer !== 'released' &&
+                parecer !== 'stopped'
+                  ? 'Escolha o parecer do equipamento antes de concluir'
+                  : undefined
+              }
               className="min-h-12 rounded-control border border-border-subtle bg-surface px-3 text-sm font-medium text-text"
             >
               {rotulos.get(t.to_key) ?? t.to_key}

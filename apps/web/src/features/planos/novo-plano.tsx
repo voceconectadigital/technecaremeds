@@ -127,6 +127,7 @@ export function NovoPlanoDialog({
   const [escolhidos, setEscolhidos] = useState<Set<string>>(new Set());
   const [tipo, setTipo] = useState<Tipo | ''>('');
   const [modelo, setModelo] = useState('');
+  const [adicionais, setAdicionais] = useState<Set<string>>(new Set());
   const [intervalo, setIntervalo] = useState(6);
   const [unidade, setUnidade] = useState<Unidade>('month');
   const [inicio, setInicio] = useState(hojeIso());
@@ -146,6 +147,7 @@ export function NovoPlanoDialog({
     setEscolhidos(new Set());
     setTipo('');
     setModelo('');
+    setAdicionais(new Set());
     setIntervalo(6);
     setUnidade('month');
     setInicio(hojeIso());
@@ -229,6 +231,9 @@ export function NovoPlanoDialog({
           asset_ids: todos ? [] : [...escolhidos],
           kind: tipo as Tipo,
           checklist_template_key: modelo || null,
+          ...(adicionais.size > 0
+            ? { extra_checklist_template_keys: [...adicionais].filter((k) => k !== modelo) }
+            : {}),
           frequency_unit: unidade,
           frequency_interval: intervalo,
           anchor_date: inicio,
@@ -557,6 +562,37 @@ export function NovoPlanoDialog({
                 ))}
               </Select>
             </Field>
+            {/* OS-15: procedimentos que vão JUNTO na mesma OS — cada um com o seu checklist e as
+                suas respostas. Qualquer tipo publicado (é para combinar, ex.: preventiva + TSE). */}
+            {(opcoes?.templates ?? []).filter((t) => t.key !== modelo).length > 0 && (
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="text-sm font-medium text-text">Procedimentos adicionais (opcional)</legend>
+                <p className="text-xs text-muted">
+                  Cada um vira um checklist próprio na mesma OS; as respostas não se misturam.
+                </p>
+                <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                  {(opcoes?.templates ?? [])
+                    .filter((t) => t.key !== modelo)
+                    .map((t) => (
+                      <label key={t.key} className="flex items-center gap-2 text-sm text-text">
+                        <input
+                          type="checkbox"
+                          checked={adicionais.has(t.key)}
+                          onChange={() =>
+                            setAdicionais((atual) => {
+                              const novo = new Set(atual);
+                              if (novo.has(t.key)) novo.delete(t.key);
+                              else novo.add(t.key);
+                              return novo;
+                            })
+                          }
+                        />
+                        {t.title} · {rotuloTipo(t.procedure_kind ?? 'preventive')} · v{t.version}
+                      </label>
+                    ))}
+                </div>
+              </fieldset>
+            )}
             {tipo && tipo !== 'preventive' && (
               <p className="flex gap-2 rounded-control bg-info-soft px-3 py-2 text-xs text-info-text">
                 <ClipboardCheck className="size-4 shrink-0" aria-hidden="true" />
@@ -643,6 +679,15 @@ export function NovoPlanoDialog({
               />
               <Resumo r="Tipo" v={rotuloTipo(tipo)} />
               <Resumo r="Procedimento" v={modelos.find((m) => m.key === modelo)?.title ?? 'Sem checklist'} />
+              {adicionais.size > 0 && (
+                <Resumo
+                  r="Adicionais"
+                  v={(opcoes?.templates ?? [])
+                    .filter((t) => adicionais.has(t.key) && t.key !== modelo)
+                    .map((t) => t.title)
+                    .join(', ')}
+                />
+              )}
               <Resumo
                 r="Periodicidade"
                 v={`${periodicidade}, desde ${new Date(`${inicio}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`}

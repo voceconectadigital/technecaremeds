@@ -1165,7 +1165,19 @@ export async function signWorkOrder(
 export async function verifySignatures(
   session: TenantSession,
   workOrderId: string
-): Promise<Array<{ id: string; signer_name: string; signed_at: string; still_valid: boolean }>> {
+): Promise<
+  Array<{
+    id: string;
+    signer_name: string;
+    signed_at: string;
+    still_valid: boolean;
+    signer_role: string;
+    signer_email: string | null;
+    method: string;
+    client_ip: string | null;
+    signed_content_sha256: string;
+  }>
+> {
   const [os] = await session.query<{
     number: string | null;
     title: string;
@@ -1189,13 +1201,20 @@ export async function verifySignatures(
     locationName: os.location_name_snapshot,
   });
 
+  // Papel, método, e-mail, IP e o resumo vêm junto (OS-24): a assinatura pela
+  // sessão só prova alguma coisa se quem lê o laudo vê de quem, de onde e sobre o quê.
   const assinaturas = await session.query<{
     id: string;
     signer_name: string;
     signed_at: string;
     signed_content_sha256: string;
+    signer_role: string;
+    signer_email: string | null;
+    method: string;
+    client_ip: string | null;
   }>(
-    `SELECT id, signer_name, signed_at, signed_content_sha256
+    `SELECT id, signer_name, signed_at, signed_content_sha256, signer_role::text AS signer_role,
+            signer_email, method::text AS method, client_ip
        FROM aurora.signatures WHERE work_order_id = $1 ORDER BY signed_at`,
     [workOrderId]
   );
@@ -1205,6 +1224,11 @@ export async function verifySignatures(
     signer_name: a.signer_name,
     signed_at: a.signed_at,
     still_valid: a.signed_content_sha256 === atual,
+    signer_role: a.signer_role,
+    signer_email: a.signer_email,
+    method: a.method,
+    client_ip: a.client_ip,
+    signed_content_sha256: a.signed_content_sha256,
   }));
 }
 

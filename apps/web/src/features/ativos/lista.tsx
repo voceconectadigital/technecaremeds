@@ -69,6 +69,8 @@ export function AtivosPage() {
   const [tipo, setTipo] = useUrlState<string>('tipo', '');
   const [criticidade, setCriticidade] = useUrlState<string>('criticidade', '');
   const [chip, setChip] = useUrlState<string>('chip', '');
+  // Registro ANVISA (ATV-11): com número, "não se aplica" ou pendente — no servidor.
+  const [anvisa, setAnvisa] = useUrlState<string>('anvisa', '');
   // Filtro por cliente (conversa com o cliente, 21/10/2026): ativo × cliente, no servidor.
   const [cliente, setCliente] = useUrlState<string>('cliente', '');
   const { data: clientes } = useApiQuery(customersList, undefined, { staleTime: 5 * 60_000 }) as {
@@ -108,6 +110,9 @@ export function AtivosPage() {
       ...(tipo ? { category: tipo } : {}),
       ...(criticidade ? { criticality: criticidade } : {}),
       ...(chip === 'yes' || chip === 'no' ? { tracker: chip as 'yes' | 'no' } : {}),
+      ...(anvisa === 'registered' || anvisa === 'not_applicable' || anvisa === 'pending'
+        ? { anvisa: anvisa as 'registered' | 'not_applicable' | 'pending' }
+        : {}),
       limit: LIMITE,
     },
   }) as {
@@ -134,7 +139,9 @@ export function AtivosPage() {
         a.name.toLowerCase().includes(termo) ||
         a.tag?.toLowerCase().includes(termo) ||
         a.serial_number?.toLowerCase().includes(termo) ||
-        a.asset_number?.toLowerCase().includes(termo)
+        a.asset_number?.toLowerCase().includes(termo) ||
+        // Registro ANVISA pesquisável (ATV-11).
+        a.anvisa_registration?.toLowerCase().includes(termo)
     );
   }, [itens, busca]);
 
@@ -189,7 +196,7 @@ export function AtivosPage() {
                   type="search"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
-                  placeholder={`Filtrar por nome, patrimônio ou série`}
+                  placeholder={`Filtrar por nome, tag, patrimônio, série ou registro ANVISA`}
                   aria-label={`Filtrar ${rotulo.toLowerCase()}s nesta lista`}
                   className="h-10 w-full rounded-control border border-border bg-surface pr-3 pl-9 text-sm text-text shadow-card transition-[border-color,box-shadow] placeholder:text-subtle focus:border-accent focus:shadow-[0_0_0_3px_var(--aurora-accent-soft)]"
                 />
@@ -234,8 +241,13 @@ export function AtivosPage() {
                   </option>
                 ))}
               </Select>
-              <Select value={tipo} aria-label="Tipo do equipamento" onChange={(e) => setTipo(e.target.value)}>
-                <option value="">Todos os tipos</option>
+              {/* O nome do equipamento é o do catálogo (ATV-08): filtrar pelo nome é filtrar pelo tipo. */}
+              <Select
+                value={tipo}
+                aria-label="Nome do equipamento (catálogo)"
+                onChange={(e) => setTipo(e.target.value)}
+              >
+                <option value="">Todos os nomes</option>
                 {tipos.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -258,6 +270,12 @@ export function AtivosPage() {
                 <option value="">Com ou sem chip</option>
                 <option value="yes">Com chip de localização</option>
                 <option value="no">Sem chip de localização</option>
+              </Select>
+              <Select value={anvisa} aria-label="Registro ANVISA" onChange={(e) => setAnvisa(e.target.value)}>
+                <option value="">ANVISA: todos</option>
+                <option value="registered">Com registro ANVISA</option>
+                <option value="not_applicable">ANVISA não se aplica</option>
+                <option value="pending">Registro ANVISA pendente</option>
               </Select>
             </div>
             {isLoading ? (

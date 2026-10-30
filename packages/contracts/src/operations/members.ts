@@ -90,6 +90,8 @@ const camposDeCadastro = {
   cpf: z.string().trim().max(14).nullable().optional(),
   phone: z.string().trim().max(32).nullable().optional(),
   company_name: z.string().trim().max(160).nullable().optional(),
+  /** CNPJ da empresa (USR-05): opcional, com ou sem pontuação; os dígitos verificadores conferem. */
+  company_tax_id: z.string().trim().max(18).nullable().optional(),
   job_title: z.string().trim().max(80).nullable().optional(),
   registrations: z.array(ProfessionalRegistration).max(10).optional(),
 };
@@ -97,6 +99,8 @@ const camposDeCadastro = {
 export const MemberDetail = Member.extend({
   cpf: z.string().nullable(),
   phone: z.string().nullable(),
+  /** Sem pontuação (0089). Opcional: capturas anteriores não o têm. */
+  company_tax_id: z.string().nullable().optional(),
   status_reason: z.string().nullable(),
   status_changed_at: z.string().nullable(),
   customer_ids: z.array(Uuid),

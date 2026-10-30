@@ -29,10 +29,12 @@ import {
   requestCreate,
   requestsQueue,
   assetsList,
+  customersDetail,
   customersList,
   SERVICE_REQUEST_TYPE_KEYS,
   type AssetRow,
   type Customer,
+  type CustomerLocation,
 } from '@aurora/contracts';
 import { ApiError, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
@@ -65,6 +67,7 @@ export function NovaSolicitacaoPage() {
   const [descricao, setDescricao] = useState('');
   const [prioridade, setPrioridade] = useState<string>('none');
   const [equipamento, setEquipamento] = useState('');
+  const [setor, setSetor] = useState('');
   const [tipo, setTipo] = useState<string>('corrective');
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
   const [cadastrandoCliente, setCadastrandoCliente] = useState(false);
@@ -90,10 +93,20 @@ export function NovaSolicitacaoPage() {
   const clienteUnico = clientes?.single_customer && !clienteNovo ? lista[0] : undefined;
   const clienteEscolhido = clienteUnico?.id ?? cliente;
 
-  // SÓ os equipamentos do cliente escolhido — já recortados pelo escopo no servidor.
+  // SOL-01: os setores do cliente que esta pessoa alcança (a ficha do cliente já vem recortada
+  // pelo escopo no servidor). Escolher o setor reduz a lista de equipamentos.
+  const { data: ficha } = useApiQuery(
+    customersDetail,
+    { params: { id: clienteEscolhido } },
+    { enabled: Boolean(clienteEscolhido) && can('customer.read') }
+  ) as { data: { customer: Customer; locations: CustomerLocation[] } | undefined };
+  const setores = (ficha?.locations ?? []).filter((l) => l.location_type_key === 'setor');
+
+  // SÓ os equipamentos do cliente escolhido (e do setor, se escolhido) — já recortados pelo
+  // escopo no servidor, que confere de novo ao gravar.
   const { data: ativos, isLoading: carregandoAtivos } = useApiQuery(
     assetsList,
-    { query: { customer: clienteEscolhido, limit: 500 } },
+    { query: { customer: clienteEscolhido, ...(setor ? { location: setor } : {}), limit: 500 } },
     { enabled: Boolean(clienteEscolhido) && can('asset.read') }
   ) as { data: { items: AssetRow[] } | undefined; isLoading: boolean };
 
@@ -125,6 +138,7 @@ export function NovaSolicitacaoPage() {
           requested_priority: prioridade as never,
           requested_type: tipo as (typeof SERVICE_REQUEST_TYPE_KEYS)[number],
           asset_id: equipamento || null,
+          location_id: setor || null,
         },
       },
       {
@@ -192,7 +206,8 @@ export function NovaSolicitacaoPage() {
                     value={cliente}
                     onChange={(e) => {
                       setCliente(e.target.value);
-                      // Equipamento é sempre DE um cliente: trocar o cliente o descarta.
+                      // Setor e equipamento são sempre DE um cliente: trocar o cliente os descarta.
+                      setSetor('');
                       setEquipamento('');
                     }}
                     className="min-w-0 flex-1"
@@ -217,6 +232,30 @@ export function NovaSolicitacaoPage() {
               </Field>
             )}
 
+            {setores.length > 0 && (
+              <Field
+                label="Setor"
+                error={erro?.campo === 'location_id' ? erro.mensagem : null}
+                hint="Opcional. Reduz a lista de equipamentos aos deste setor."
+              >
+                <Select
+                  value={setor}
+                  onChange={(e) => {
+                    setSetor(e.target.value);
+                    // O equipamento escolhido pode não estar no setor novo.
+                    setEquipamento('');
+                  }}
+                >
+                  <option value="">Todos os setores</option>
+                  {setores.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
+
             <Field
               label="Equipamento"
               error={erro?.campo === 'asset_id' ? erro.mensagem : null}
@@ -224,8 +263,12 @@ export function NovaSolicitacaoPage() {
                 !clienteEscolhido
                   ? 'Escolha o cliente primeiro.'
                   : !carregandoAtivos && (ativos?.items.length ?? 0) === 0
-                    ? 'Nenhum equipamento deste cliente nos setores que você alcança.'
-                    : 'Só os equipamentos deste cliente, nos setores que você alcança.'
+                    ? setor
+                      ? 'Nenhum equipamento neste setor.'
+                      : 'Nenhum equipamento deste cliente nos setores que você alcança.'
+                    : setor
+                      ? 'Só os equipamentos deste setor.'
+                      : 'Só os equipamentos deste cliente, nos setores que você alcança.'
               }
             >
               <Select
@@ -285,11 +328,18 @@ export function NovaSolicitacaoPage() {
               </Select>
             </Field>
 
-            {erro && !['customer_id', 'summary', 'asset_id', 'requested_type'].includes(erro.campo ?? '') && (
-              <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
-                {erro.mensagem}
-              </p>
-            )}
+            {erro &&
+              ![
+                'customer_id',
+                'summary',
+                'asset_id',
+                'requested_type',
+                ...(setores.length > 0 ? ['location_id'] : []),
+              ].includes(erro.campo ?? '') && (
+                <p role="alert" className="rounded-control bg-bad-soft px-3 py-2 text-sm text-bad-text">
+                  {erro.mensagem}
+                </p>
+              )}
 
             <div className="flex items-center justify-end gap-2 border-t border-border-subtle pt-4">
               <Button onClick={() => void navigate({ to: '/solicitacoes' })}>Cancelar</Button>

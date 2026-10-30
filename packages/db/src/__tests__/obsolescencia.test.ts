@@ -3,6 +3,7 @@
  *
  * Numeração própria (OBC-AAAA-NNNN), justificativa técnica, um laudo aberto por equipamento;
  * concluir exige foto; validar descomissiona o equipamento — e gerar o laudo, não.
+ * Quem valida assina pela sessão (OS-24 da auditoria de 29/10/2026).
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { newId, buildContext, PERMISSION_KEYS } from '@aurora/domain';
@@ -12,6 +13,7 @@ import { createAssetCategory, createAsset } from '../assets';
 import { provisionFactoryRoles } from '../rbac';
 import { provisionWorkOrderStates, transitionWorkOrder } from '../work-orders';
 import { createObsolescenceReport } from '../obsolescencia';
+import { verifySignatures } from '../execution';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '../testing/harness';
 
 const ORG = newId(),
@@ -155,6 +157,33 @@ describe('concluir e validar o laudo', () => {
       [ativo]
     );
     expect(a!.decommission_reason).toContain('sem peças de reposição');
+  });
+
+  it('OS-24: quem valida assina pela sessão — resumo SHA-256, e-mail e hora; concluir não assinava', async () => {
+    const assinaturas = await t.admin.query<{
+      signer_role: string;
+      method: string;
+      signer_name: string;
+      signer_email: string | null;
+      signed_content_sha256: string;
+      signed_at: Date;
+    }>(
+      `SELECT signer_role::text AS signer_role, method::text AS method, signer_name, signer_email,
+              signed_content_sha256, signed_at
+         FROM aurora.signatures WHERE work_order_id = $1`,
+      [laudo]
+    );
+    // Uma só: a da validação. A conclusão (teste anterior) não assinou nada.
+    expect(assinaturas).toHaveLength(1);
+    const a = assinaturas[0]!;
+    expect(a.signer_role).toBe('supervisor');
+    expect(a.method).toBe('session');
+    expect(a.signer_name).toBe('Coordenadora');
+    expect(a.signer_email).toBe('coord@obs.test');
+    expect(a.signed_content_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.signed_at).toBeTruthy();
+    const [v] = await withTenant(t.db, ctx, (s) => verifySignatures(s, laudo));
+    expect(v!.still_valid).toBe(true);
   });
 
   it('equipamento que já saiu de operação não gera outro laudo', async () => {

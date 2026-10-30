@@ -231,3 +231,187 @@ export async function assetTimeline(
   // qualquer hora daquele dia, que é o que se espera de "fabricado em".
   return ev.sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0)).slice(0, limite);
 }
+
+/* -------------------------------------------------------------------------- */
+/* ficha de vida: planos, procedimentos e histórico de campos (ATV-13)         */
+/* -------------------------------------------------------------------------- */
+
+export interface AssetLifePlan {
+  plan_id: string;
+  plan_name: string;
+  plan_active: boolean;
+  task_id: string;
+  task_name: string;
+  target_kind: 'asset' | 'asset_category' | 'location_subtree';
+  frequency_unit: string;
+  frequency_interval: number;
+  checklist_template_key: string | null;
+}
+
+export interface AssetLifeProcedure {
+  response_id: string;
+  work_order_id: string;
+  work_order_number: string | null;
+  template_key: string;
+  template_title: string;
+  template_version: number;
+  started_at: string;
+  finished_at: string | null;
+  answers: { pass: number; fail: number; na: number };
+}
+
+export interface AssetFieldChange {
+  at: string;
+  actor_name: string | null;
+  action: 'create' | 'update' | 'delete' | 'restore';
+  changes: Array<{ field: string; from: unknown; to: unknown }>;
+}
+
+export interface AssetLifeRecord {
+  /** `null` = quem pergunta não tem a permissão da seção (diferente de lista vazia). */
+  plans: AssetLifePlan[] | null;
+  procedures: AssetLifeProcedure[] | null;
+  field_changes: AssetFieldChange[] | null;
+}
+
+/** Campos de máquina: mudam com o registro, mas não dizem nada a quem lê a história. */
+const CAMPOS_TECNICOS = new Set([
+  'id',
+  'organization_id',
+  'created_at',
+  'created_by',
+  'updated_at',
+  'updated_by',
+  'photo_key',
+  'photo_sha256',
+  'tag_legacy_duplicate',
+]);
+/** Valores financeiros: só para `asset.read_financials` — os mesmos que a ficha esconde. */
+const CAMPOS_FINANCEIROS = new Set([
+  'purchase_value',
+  'residual_value',
+  'replacement_value',
+  'currency',
+  'acquisition_invoice',
+]);
+
+/**
+ * O que a linha do tempo não contava (ATV-13): os planos que COBREM o equipamento hoje, os
+ * procedimentos/checklists executados nele e o histórico de alteração de campo (da trilha de
+ * auditoria que já existe — 0002/0015). Leitura composta, como a linha do tempo: cada seção vem
+ * da tabela dona, e a seção que a pessoa não pode ver vem `null`.
+ *
+ * Não confere escopo: quem chama confere que o equipamento é visível a quem pergunta.
+ */
+export async function assetLifeRecord(
+  session: TenantSession,
+  assetId: string,
+  opts: {
+    canReadPlans: boolean;
+    canReadWorkOrders: boolean;
+    canReadFieldHistory: boolean;
+    canReadFinancials: boolean;
+    canReadInternalNotes: boolean;
+    limit?: number;
+  }
+): Promise<AssetLifeRecord> {
+  const limite = Math.min(Math.max(opts.limit ?? 200, 1), 500);
+  const [a] = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL`,
+    [assetId]
+  );
+  if (!a) throw new NotFoundError('Ativo', assetId);
+  const iso = (v: unknown): string => (v instanceof Date ? v.toISOString() : String(v));
+
+  let plans: AssetLifePlan[] | null = null;
+  if (opts.canReadPlans) {
+    // As tarefas cujo alvo alcança o equipamento HOJE — a mesma resolução que gera as OS
+    // (`resolve_plan_task_assets`, 0055): ativo, tipo ou subárvore de local, com os filtros.
+    plans = await session.query<AssetLifePlan>(
+      `SELECT p.id AS plan_id, p.name AS plan_name, p.is_active AS plan_active,
+              pt.id AS task_id, pt.name AS task_name, pt.target_kind::text AS target_kind,
+              pt.frequency_unit::text AS frequency_unit, pt.frequency_interval,
+              pt.checklist_template_key
+         FROM aurora.plan_tasks pt
+         JOIN aurora.maintenance_plans p ON p.id = pt.plan_id
+         JOIN aurora.assets a ON a.id = $1
+        WHERE p.archived_at IS NULL AND pt.archived_at IS NULL
+          AND p.customer_id = a.customer_id
+          AND EXISTS (SELECT 1 FROM aurora.resolve_plan_task_assets(pt.id) r WHERE r.asset_id = a.id)
+        ORDER BY p.name, pt.position, pt.name
+        LIMIT $2`,
+      [assetId, limite]
+    );
+  }
+
+  let procedures: AssetLifeProcedure[] | null = null;
+  if (opts.canReadWorkOrders) {
+    const linhas = await session.query<Record<string, unknown>>(
+      `SELECT r.id AS response_id, w.id AS work_order_id, w.number AS work_order_number,
+              r.template_key, t.title AS template_title, r.template_version,
+              r.started_at, r.finished_at,
+              count(ans.id) FILTER (WHERE ans.verdict = 'pass')::int AS pass,
+              count(ans.id) FILTER (WHERE ans.verdict = 'fail')::int AS fail,
+              count(ans.id) FILTER (WHERE ans.verdict = 'na')::int AS na
+         FROM aurora.checklist_responses r
+         JOIN aurora.work_orders w ON w.id = r.work_order_id
+         JOIN aurora.checklist_templates t ON t.id = r.template_id
+         LEFT JOIN aurora.checklist_answers ans ON ans.response_id = r.id
+        WHERE w.asset_id = $1 AND w.status_category <> 'draft'
+        GROUP BY r.id, w.id, w.number, r.template_key, t.title, r.template_version,
+                 r.started_at, r.finished_at
+        ORDER BY r.started_at DESC
+        LIMIT $2`,
+      [assetId, limite]
+    );
+    procedures = linhas.map((l) => ({
+      response_id: l.response_id as string,
+      work_order_id: l.work_order_id as string,
+      work_order_number: (l.work_order_number as string | null) ?? null,
+      template_key: l.template_key as string,
+      template_title: l.template_title as string,
+      template_version: Number(l.template_version),
+      started_at: iso(l.started_at),
+      finished_at: l.finished_at ? iso(l.finished_at) : null,
+      answers: { pass: Number(l.pass), fail: Number(l.fail), na: Number(l.na) },
+    }));
+  }
+
+  let field_changes: AssetFieldChange[] | null = null;
+  if (opts.canReadFieldHistory) {
+    const linhas = await session.query<{
+      occurred_at: Date | string;
+      actor_name: string | null;
+      action: AssetFieldChange['action'];
+      changes: Record<string, { from: unknown; to: unknown }> | null;
+    }>(
+      `SELECT l.occurred_at, u.name AS actor_name, l.action::text AS action, l.changes
+         FROM aurora.audit_logs l
+         LEFT JOIN aurora.users u ON u.id = l.actor_user_id
+        WHERE l.entity_type = 'assets' AND l.entity_id = $1
+        ORDER BY l.occurred_at DESC, l.id DESC
+        LIMIT $2`,
+      [assetId, limite]
+    );
+    const visivel = (campo: string): boolean =>
+      !CAMPOS_TECNICOS.has(campo) &&
+      (opts.canReadFinancials || !CAMPOS_FINANCEIROS.has(campo)) &&
+      (opts.canReadInternalNotes || campo !== 'internal_notes');
+    field_changes = [];
+    for (const l of linhas) {
+      // O cadastro traz TODAS as colunas como "mudança": a ficha diz "cadastrado", sem a lista.
+      const changes =
+        l.action === 'create'
+          ? []
+          : Object.entries(l.changes ?? {})
+              .filter(([campo]) => visivel(campo))
+              .map(([field, c]) => ({ field, from: c?.from ?? null, to: c?.to ?? null }))
+              .sort((x, y) => x.field.localeCompare(y.field));
+      // Uma alteração que só mexeu em campo técnico ou escondido não vira linha vazia.
+      if (l.action === 'update' && changes.length === 0) continue;
+      field_changes.push({ at: iso(l.occurred_at), actor_name: l.actor_name, action: l.action, changes });
+    }
+  }
+
+  return { plans, procedures, field_changes };
+}

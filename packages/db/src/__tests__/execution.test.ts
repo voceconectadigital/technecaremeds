@@ -449,7 +449,10 @@ describe('anexos e assinatura', () => {
   beforeAll(async () => {
     os = await novaOsEmExecucao('Com assinatura');
     await withTenant(t.db, ctx, async (s) => {
-      await transitionWorkOrder(s, os, 'completed', { resolution: 'Manutenção preventiva executada' });
+      await transitionWorkOrder(s, os, 'completed', {
+        operationalResult: 'released',
+        resolution: 'Manutenção preventiva executada',
+      });
     });
   });
 

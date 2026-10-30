@@ -18,10 +18,14 @@
  * `asset.read_internal_notes`. A tela não esconde: o campo vem nulo, e o bloco
  * inteiro deixa de existir. É a diferença entre "não está na tela" e "não
  * saiu do servidor".
+ *
+ * A FOTO DO EQUIPAMENTO (ATV-07) abre a ficha e sai na impressão: é o que faz
+ * a pessoa no setor reconhecer o aparelho sem ler a tag. Os bytes vêm de
+ * `GET /assets/:id/photo`, com o mesmo escopo da ficha.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import { BadgeCheck, CalendarDays, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
+import { BadgeCheck, CalendarDays, Camera, MapPin, Pencil, QrCode, ShieldAlert, Wrench } from 'lucide-react';
 import {
   Button,
   Card,
@@ -38,6 +42,8 @@ import {
 import {
   assetDetail,
   assetIndicators,
+  assetsLifeRecord,
+  assetPhoto,
   assetsLinkQr,
   assetsList,
   workOrdersList,
@@ -83,7 +89,13 @@ export function AtivoPage() {
   return (
     <AppShell
       title={data.name}
-      subtitle={[data.family_name, data.category_name, data.manufacturer_name, data.model_name]
+      subtitle={[
+        data.family_name,
+        // O nome já é o do catálogo (ATV-08): repetir o tipo igual ao título seria ruído.
+        data.category_name !== data.name ? data.category_name : null,
+        data.manufacturer_name,
+        data.model_name,
+      ]
         .filter(Boolean)
         .join(' · ')}
       breadcrumbs={[{ label: 'Ativos', href: '/ativos' }, { label: data.tag ?? data.name }]}
@@ -120,73 +132,91 @@ export function AtivoPage() {
           tracker_kind: data.tracker_kind ?? null,
           tracker_tag: data.tracker_tag ?? null,
           anvisa_registration: data.anvisa_registration ?? null,
+          anvisa_not_applicable: data.anvisa_not_applicable ?? false,
           acquired_at: data.acquired_at ?? null,
           useful_life_years: data.useful_life_years ?? null,
           purchase_value: data.purchase_value ?? null,
+          residual_value: data.residual_value ?? null,
           acquisition_invoice: data.acquisition_invoice ?? null,
+          sla_enabled: data.sla_enabled ?? true,
+          sla_policy_id: data.sla_policy_id,
+          tem_foto: Boolean(data.photo),
         }}
       />
       <div className="flex flex-col gap-4">
         <Card>
-          <div className="flex flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusChip tone={data.status === 'active' ? 'good' : 'neutral'}>
-                {ROTULO_SITUACAO[data.status] ?? data.status}
-              </StatusChip>
-              {data.under_warranty && (
-                <StatusChip tone="info" size="sm">
-                  <BadgeCheck aria-hidden="true" className="mr-1 inline size-3" />
-                  Na garantia
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
+            <FotoDoEquipamento ativo={data} />
+            <div className="flex min-w-0 flex-1 flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusChip tone={data.status === 'active' ? 'good' : 'neutral'}>
+                  {ROTULO_SITUACAO[data.status] ?? data.status}
                 </StatusChip>
+                {data.under_warranty && (
+                  <StatusChip tone="info" size="sm">
+                    <BadgeCheck aria-hidden="true" className="mr-1 inline size-3" />
+                    Na garantia
+                  </StatusChip>
+                )}
+                {data.requires_calibration && (
+                  <StatusChip tone="warn" size="sm">
+                    Exige calibração
+                  </StatusChip>
+                )}
+                {data.requires_electrical_test && (
+                  <StatusChip tone="warn" size="sm">
+                    Exige ensaio elétrico
+                  </StatusChip>
+                )}
+                {data.risk_class && (
+                  <StatusChip tone="neutral" size="sm">
+                    <ShieldAlert aria-hidden="true" className="mr-1 inline size-3" />
+                    Classe {data.risk_class}
+                  </StatusChip>
+                )}
+              </div>
+
+              {data.decommissioned_at && (
+                <p className="rounded-control bg-surface-sunken px-3 py-2 text-sm text-muted">
+                  Baixado em {new Date(data.decommissioned_at).toLocaleDateString('pt-BR')}
+                  {data.decommission_reason ? `: ${data.decommission_reason}` : '.'}
+                </p>
               )}
-              {data.requires_calibration && (
-                <StatusChip tone="warn" size="sm">
-                  Exige calibração
-                </StatusChip>
-              )}
-              {data.requires_electrical_test && (
-                <StatusChip tone="warn" size="sm">
-                  Exige ensaio elétrico
-                </StatusChip>
-              )}
-              {data.risk_class && (
-                <StatusChip tone="neutral" size="sm">
-                  <ShieldAlert aria-hidden="true" className="mr-1 inline size-3" />
-                  Classe {data.risk_class}
-                </StatusChip>
-              )}
+
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+                <Info rotulo="Cliente / Hospital" valor={data.customer_name ?? null} />
+                <Info
+                  rotulo="Setor"
+                  valor={data.location_name}
+                  vazio="Sem setor"
+                  icone={<MapPin className="size-3.5" />}
+                />
+                <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
+                <Info rotulo="Número de série" valor={data.serial_number} />
+                <Info
+                  rotulo="Idade"
+                  valor={
+                    data.age_years === null
+                      ? null
+                      : `${data.age_years.toFixed(1)} ${data.age_years === 1 ? 'ano' : 'anos'}`
+                  }
+                  // Nula é diferente de zero: zero diria "novo", e o que se sabe
+                  // aqui é que ninguém informou nenhuma das três datas.
+                  vazio="Sem data de origem"
+                  icone={<CalendarDays className="size-3.5" />}
+                />
+                <Info
+                  rotulo="SLA"
+                  valor={
+                    data.sla_enabled === false
+                      ? 'Desabilitado'
+                      : data.sla_policy_name
+                        ? `Habilitado · ${data.sla_policy_name}`
+                        : 'Habilitado · herdado'
+                  }
+                />
+              </dl>
             </div>
-
-            {data.decommissioned_at && (
-              <p className="rounded-control bg-surface-sunken px-3 py-2 text-sm text-muted">
-                Baixado em {new Date(data.decommissioned_at).toLocaleDateString('pt-BR')}
-                {data.decommission_reason ? `: ${data.decommission_reason}` : '.'}
-              </p>
-            )}
-
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
-              <Info rotulo="Cliente / Hospital" valor={data.customer_name ?? null} />
-              <Info
-                rotulo="Setor"
-                valor={data.location_name}
-                vazio="Sem setor"
-                icone={<MapPin className="size-3.5" />}
-              />
-              <Info rotulo="Patrimônio" valor={data.tag ?? data.asset_number} />
-              <Info rotulo="Número de série" valor={data.serial_number} />
-              <Info
-                rotulo="Idade"
-                valor={
-                  data.age_years === null
-                    ? null
-                    : `${data.age_years.toFixed(1)} ${data.age_years === 1 ? 'ano' : 'anos'}`
-                }
-                // Nula é diferente de zero: zero diria "novo", e o que se sabe
-                // aqui é que ninguém informou nenhuma das três datas.
-                vazio="Sem data de origem"
-                icone={<CalendarDays className="size-3.5" />}
-              />
-            </dl>
           </div>
         </Card>
 
@@ -195,6 +225,7 @@ export function AtivoPage() {
             <div className="flex flex-col gap-4">
               <IndicadoresDoAtivo assetId={id} />
               <HistoricoDeOs assetId={id} />
+              <FichaDeVidaDoAtivo assetId={id} />
             </div>
           </div>
 
@@ -316,6 +347,50 @@ export function AtivoPage() {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * A foto do equipamento (ATV-07). Pedida só quando existe; o arquivo vira um
+ * endereço local (`blob:`) que a impressão também leva. Sem foto — o parque
+ * cadastrado antes da exigência —, o quadro diz isso em vez de ficar vazio.
+ */
+function FotoDoEquipamento({ ativo }: { ativo: AssetDetail }) {
+  const temFoto = Boolean(ativo.photo);
+  const { data: arquivo, isError } = useApiQuery(
+    assetPhoto,
+    { params: { id: ativo.id } },
+    { enabled: temFoto, staleTime: 5 * 60_000 }
+  ) as { data: Blob | undefined; isError: boolean };
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!arquivo) {
+      setUrl(null);
+      return;
+    }
+    const endereco = URL.createObjectURL(arquivo);
+    setUrl(endereco);
+    return () => URL.revokeObjectURL(endereco);
+  }, [arquivo]);
+
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={`Foto do equipamento ${ativo.name}`}
+        className="h-40 w-full shrink-0 rounded-card border border-border-subtle object-cover sm:w-40"
+      />
+    );
+  }
+  return (
+    <div
+      className="flex h-40 w-full shrink-0 flex-col items-center justify-center gap-1 rounded-card border border-dashed border-border-strong bg-surface-subtle text-center text-xs text-muted sm:w-40"
+      role={temFoto ? undefined : 'note'}
+    >
+      <Camera aria-hidden="true" className="size-5 text-subtle" />
+      {temFoto ? (isError ? 'Foto indisponível' : 'Carregando a foto…') : 'Sem foto cadastrada'}
+    </div>
+  );
+}
 
 /**
  * O histórico de ordens deste equipamento.
@@ -646,6 +721,203 @@ function Info({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* ficha de vida (ATV-13)                                                      */
+/* -------------------------------------------------------------------------- */
+
+type FichaDeVida = {
+  plans: AssetLifePlanRow[] | null;
+  procedures: AssetLifeProcedureRow[] | null;
+  field_changes: AssetFieldChangeRow[] | null;
+};
+type AssetLifePlanRow = {
+  plan_id: string;
+  plan_name: string;
+  plan_active: boolean;
+  task_id: string;
+  task_name: string;
+  target_kind: 'asset' | 'asset_category' | 'location_subtree';
+  frequency_unit: string;
+  frequency_interval: number;
+};
+type AssetLifeProcedureRow = {
+  response_id: string;
+  work_order_id: string;
+  work_order_number: string | null;
+  template_title: string;
+  template_version: number;
+  started_at: string;
+  finished_at: string | null;
+  answers: { pass: number; fail: number; na: number };
+};
+type AssetFieldChangeRow = {
+  at: string;
+  actor_name: string | null;
+  action: 'create' | 'update' | 'delete' | 'restore';
+  changes: { field: string; from: unknown; to: unknown }[];
+};
+
+const ROTULO_FREQUENCIA: Record<string, [string, string]> = {
+  day: ['dia', 'dias'],
+  week: ['semana', 'semanas'],
+  month: ['mês', 'meses'],
+  quarter: ['trimestre', 'trimestres'],
+  semester: ['semestre', 'semestres'],
+  year: ['ano', 'anos'],
+};
+const ROTULO_ALVO: Record<string, string> = {
+  asset: 'este equipamento',
+  asset_category: 'o tipo do equipamento',
+  location_subtree: 'o local do equipamento',
+};
+const ROTULO_ACAO: Record<string, string> = {
+  create: 'Cadastrado',
+  update: 'Alterado',
+  delete: 'Excluído',
+  restore: 'Restaurado',
+};
+
+function valorDeCampo(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'sim' : 'não';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+/**
+ * Planos que cobrem o equipamento, procedimentos executados nele e o histórico de alterações de
+ * campo. Cada parte só aparece para quem tem a permissão dela — o servidor a manda `null`.
+ */
+function FichaDeVidaDoAtivo({ assetId }: { assetId: string }) {
+  const { data, isLoading } = useApiQuery(assetsLifeRecord, { params: { id: assetId } }) as {
+    data: FichaDeVida | undefined;
+    isLoading: boolean;
+  };
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader title="Ficha de vida" />
+        <div className="p-4">
+          <SkeletonList rows={4} label="ficha de vida" />
+        </div>
+      </Card>
+    );
+  }
+  if (!data) return null;
+  const { plans, procedures, field_changes: mudancas } = data;
+  if (plans === null && procedures === null && mudancas === null) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Ficha de vida"
+        description="Planos que cobrem o equipamento, procedimentos executados e alterações de cadastro."
+      />
+      <div className="flex flex-col gap-5 p-4 text-sm">
+        {plans !== null && (
+          <section aria-label="Planos de manutenção">
+            <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Planos</h3>
+            {plans.length === 0 ? (
+              <p className="text-muted">Nenhum plano de manutenção cobre este equipamento.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {plans.map((p) => {
+                  const [um, varios] = ROTULO_FREQUENCIA[p.frequency_unit] ?? [
+                    p.frequency_unit,
+                    p.frequency_unit,
+                  ];
+                  return (
+                    <li key={p.task_id} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium text-text">{p.plan_name}</span>
+                      <span className="text-muted">
+                        · {p.task_name} · a cada{' '}
+                        {p.frequency_interval > 1 ? `${p.frequency_interval} ${varios}` : um} · por{' '}
+                        {ROTULO_ALVO[p.target_kind] ?? p.target_kind}
+                      </span>
+                      {!p.plan_active && (
+                        <StatusChip tone="neutral" size="sm">
+                          Plano inativo
+                        </StatusChip>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {procedures !== null && (
+          <section aria-label="Procedimentos executados">
+            <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">
+              Procedimentos executados
+            </h3>
+            {procedures.length === 0 ? (
+              <p className="text-muted">Nenhum procedimento ou checklist executado neste equipamento.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {procedures.map((p) => (
+                  <li key={p.response_id} className="flex flex-wrap items-baseline gap-x-2">
+                    <Link
+                      to="/ordens/$id"
+                      params={{ id: p.work_order_id }}
+                      className="font-medium text-accent"
+                    >
+                      {p.work_order_number ?? 'OS'}
+                    </Link>
+                    <span className="text-text">
+                      {p.template_title} (v{p.template_version})
+                    </span>
+                    <span className="text-xs text-muted" data-numeric>
+                      {formatarDataRelativa(p.started_at)} · {p.answers.pass} conforme
+                      {p.answers.pass === 1 ? '' : 's'} · {p.answers.fail} não conforme
+                      {p.answers.fail === 1 ? '' : 's'}
+                      {p.finished_at ? '' : ' · em andamento'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {mudancas !== null && (
+          <section aria-label="Histórico de alterações">
+            <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">
+              Histórico de alterações
+            </h3>
+            {mudancas.length === 0 ? (
+              <p className="text-muted">Nenhuma alteração registrada.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {mudancas.map((m, i) => (
+                  <li key={`${m.at}-${i}`}>
+                    <span className="text-text">{ROTULO_ACAO[m.action] ?? m.action}</span>
+                    <span className="text-xs text-muted" data-numeric>
+                      {' '}
+                      · {formatarDataRelativa(m.at)}
+                      {m.actor_name ? ` · ${m.actor_name}` : ''}
+                    </span>
+                    {m.changes.length > 0 && (
+                      <ul className="mt-0.5 flex flex-col text-xs text-muted">
+                        {m.changes.map((c) => (
+                          <li key={c.field}>
+                            <code>{c.field}</code>: {valorDeCampo(c.from)} → {valorDeCampo(c.to)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 type Depreciacao = NonNullable<AssetDetail['depreciation']>;
 
 /**
@@ -690,6 +962,37 @@ function CartaoDeDepreciacao({ d, moedaDoBem }: { d: Depreciacao; moedaDoBem?: s
               valor={moeda(String(d.accumulatedDepreciation), moedaDoBem)}
             />
           </dl>
+        )}
+        {d.methodology && (
+          /*
+           * A metodologia, explícita (ATV-10): de onde o número saiu. Linha reta é o único método —
+           * não há escolha de outro, e nenhuma norma contábil é inventada aqui.
+           */
+          <details className="rounded-control border border-border-subtle px-3 py-2">
+            <summary className="cursor-pointer text-xs font-medium text-muted">Como foi calculado</summary>
+            <dl className="mt-2 flex flex-col gap-2">
+              <Info rotulo="Método" valor="Linha reta (cotas iguais por ano)" />
+              <Info rotulo="Data-base (aquisição)" valor={formatarData(d.methodology.baseDate)} />
+              <Info rotulo="Vida útil" valor={`${d.methodology.usefulLifeYears} anos`} />
+              <Info rotulo="Fim da vida útil" valor={formatarData(d.methodology.endDate)} />
+              {d.methodology.residualValue !== null && (
+                <Info
+                  rotulo="Valor residual"
+                  valor={moeda(String(d.methodology.residualValue), moedaDoBem)}
+                />
+              )}
+              {d.methodology.depreciableBase !== null && (
+                <Info
+                  rotulo="Base depreciável (compra − residual)"
+                  valor={moeda(String(d.methodology.depreciableBase), moedaDoBem)}
+                />
+              )}
+            </dl>
+            <p className="mt-2 text-xs text-muted">
+              Depreciação por ano = base depreciável ÷ vida útil. Calculado no servidor; as alterações de
+              data, vida útil e valores ficam no histórico de alterações.
+            </p>
+          </details>
         )}
       </div>
     </Card>

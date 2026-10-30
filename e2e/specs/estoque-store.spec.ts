@@ -20,9 +20,33 @@ test.describe('Estoque e Store', () => {
     comoCoordenadorA: page,
   }) => {
     await page.goto('/store');
-    await expect(page.getByRole('tab', { name: 'Catálogo' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Catálogo', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
     await page.getByRole('tab', { name: 'Pedidos' }).click();
     await expect(page.getByText('Nenhum pedido ainda')).toBeVisible();
     expect(page.url()).toContain('aba=pedidos');
+  });
+
+  test('quem edita o catálogo (o admin da organização) gerencia produtos na própria Store', async ({
+    comoCoordenadorA: page,
+  }) => {
+    // 23/10/2026: "a Store é uma funcionalidade somente do adm da plataforma". O usuário "coordenador A"
+    // do E2E é ADMIN na semeadura, então ele vê a aba. Quem não tem inventory.update recebe 403 na gestão
+    // (api-estoque-store.test.ts) e a aba nem aparece (store.tsx).
+    await page.goto('/store?aba=gerenciar');
+    await expect(page.getByRole('tab', { name: 'Gerenciar catálogo' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await expect(page.getByRole('button', { name: 'Novo produto' })).toBeVisible();
+    await page.getByRole('button', { name: 'Novo produto' }).click();
+    const dialogo = page.getByRole('dialog');
+    await expect(dialogo.getByText('Quem vê este produto')).toBeVisible();
+    await expect(dialogo.getByLabel('Toda a rede de clientes')).toBeChecked();
+    await dialogo.getByLabel('Só os clientes que eu escolher').check();
+    // "Publicado na Store" + ao menos um cliente para marcar.
+    await expect.poll(() => dialogo.getByRole('checkbox').count()).toBeGreaterThan(1);
   });
 });

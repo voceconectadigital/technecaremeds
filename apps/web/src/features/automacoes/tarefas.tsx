@@ -181,7 +181,7 @@ type SecaoEntregue = Partial<Pick<Secao, 'state' | 'target' | 'target_evaluation
 };
 
 function valor(s: SecaoEntregue): string {
-  if (s.status === 'awaiting_official_model') return 'AGUARDANDO MODELO PDF OFICIAL';
+  // 'awaiting_official_model' (gravado antes de 29/10/2026) era só o aviso do layout: o número existe.
   if (s.status === 'awaiting_definition') return 'Aguardando definição do cliente';
   return valorDe(s);
 }
@@ -239,9 +239,8 @@ export function RelatorioAgendadoPage() {
         <SkeletonList rows={6} label="relatório" />
       ) : (
         <Card>
-          <p role="note" className="m-3 rounded-control bg-warn-soft px-3 py-2 text-xs text-warn-text">
-            Layout provisório — AGUARDANDO MODELO PDF OFICIAL. E-mail:{' '}
-            {EMAIL[data.email_state] ?? data.email_state}.
+          <p role="note" className="m-3 rounded-control bg-accent-soft px-3 py-2 text-xs text-text">
+            E-mail: {EMAIL[data.email_state] ?? data.email_state}.
           </p>
           <section aria-label="Indicadores" className="flex flex-col divide-y divide-border-subtle">
             {data.sections.map((s) => (

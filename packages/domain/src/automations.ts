@@ -18,6 +18,7 @@
  *   sozinha no sistema é o que faz o operador desconfiar do próprio dado.
  */
 import { REPORT_TIERS, reportSelectionProblem, type ReportTier } from './report-tiers';
+import { isServiceRequestType } from './request-types';
 
 /* -------------------------------------------------------------------------- */
 /* gatilhos                                                                    */
@@ -345,6 +346,17 @@ function validarParametros(kind: string, p: Record<string, unknown>, path: strin
         const problema = reportSelectionProblem(p.tier as ReportTier, lista as string[]);
         if (problema) erros.push(`${path}: ${problema}`);
       }
+    }
+    // Filtros vindos do gerador de relatório (REL-15): tipo de manutenção e tipo de plano.
+    if (p.workOrderType !== undefined && p.workOrderType !== null && !isServiceRequestType(p.workOrderType)) {
+      erros.push(`${path}: "workOrderType" é um dos sete tipos de manutenção`);
+    }
+    if (
+      p.planKind !== undefined &&
+      p.planKind !== null &&
+      !['preventive', 'calibration', 'electrical_safety', 'qualification'].includes(String(p.planKind))
+    ) {
+      erros.push(`${path}: "planKind" é preventive, calibration, electrical_safety ou qualification`);
     }
     for (const k of ['customerId', 'sectorId', 'assetCategoryId']) {
       if (p[k] !== undefined && p[k] !== null && (typeof p[k] !== 'string' || !UUID.test(p[k] as string))) {

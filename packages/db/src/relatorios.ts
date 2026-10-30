@@ -30,7 +30,10 @@ import {
   defaultIndicatorsForTier,
   evaluateTarget,
   findIndicator,
+  formulaInfo,
   indicatorsForTier,
+  isServiceRequestType,
+  serviceRequestTypeLabel,
   isReportable,
   legacyStatusOf,
   reportSelectionProblem,
@@ -71,7 +74,7 @@ import {
   parkSnapshot,
   type MembershipScope,
 } from './painel';
-import { planBoard } from './plan-board';
+import { complianceRate, planBoard } from './plan-board';
 import { loadVisibleTargets, organizationTimezone } from './indicator-targets';
 
 export interface ReportInput {
@@ -84,7 +87,10 @@ export interface ReportInput {
   contract_id?: string;
   sector_id?: string;
   plan_kind?: string;
+  /** Categoria do equipamento; uma família inclui os tipos dela (REL-03). */
   asset_category_id?: string;
+  /** Tipo de manutenção da OS — um dos sete de `request-types` (REL-03). */
+  work_order_type?: string;
 }
 
 export interface ReportSectionTarget {
@@ -119,6 +125,12 @@ export interface ReportSection {
   target_evaluation: TargetEvaluation;
   /** `SEM META CONFIGURADA` quando o indicador tem sentido de meta e nenhuma vale. */
   target_label: string | null;
+  /** Versão da fórmula com que o número saiu (REL-07): `v1`, `v1-provisoria`. */
+  formula_version: string;
+  /** Quando a definição em uso entrou no catálogo (AAAA-MM-DD). */
+  formula_defined_on: string | null;
+  /** De onde veio a definição em uso. */
+  formula_source: string;
 }
 
 export interface PendingIndicator {
@@ -126,6 +138,8 @@ export interface PendingIndicator {
   label: string;
   state: IndicatorState;
   note: string | null;
+  /** Sempre `pendente`: não há fórmula para versionar (REL-07). */
+  formula_version: string;
 }
 
 const PLAN_KIND_DO_INDICADOR: Record<string, string> = {
@@ -297,10 +311,29 @@ export async function buildReport(
     locationPath = setor.path;
     sectorName = setor.name;
   }
+  if (b.work_order_type !== undefined && !isServiceRequestType(b.work_order_type)) {
+    throw new ValidationError('tipo de manutenção inválido', { field: 'work_order_type' });
+  }
+  let categoriaNome: string | null = null;
+  let categorias: string[] = [];
+  if (b.asset_category_id) {
+    // A família inclui os tipos dela; o tipo é só ele (REL-03).
+    const linhas = await s.query<{ id: string; name: string; escolhida: boolean }>(
+      `SELECT id, name, id = $1 AS escolhida FROM aurora.asset_categories
+        WHERE id = $1 OR (parent_id = $1 AND EXISTS (
+              SELECT 1 FROM aurora.asset_categories f WHERE f.id = $1 AND f.family_key IS NOT NULL))`,
+      [b.asset_category_id]
+    );
+    const escolhida = linhas.find((l) => l.escolhida);
+    if (!escolhida) throw new NotFoundError('categoria de equipamento', b.asset_category_id);
+    categoriaNome = escolhida.name;
+    categorias = linhas.map((l) => l.id);
+  }
   const f = scopedFilters(escopo, {
     customerId: clienteId,
     locationPath,
     assetCategoryId: b.asset_category_id ?? null,
+    workOrderTypeKey: b.work_order_type ?? null,
   });
 
   const doModelo = indicatorsForTier(b.tier);
@@ -316,7 +349,13 @@ export async function buildReport(
   }
   const pending: PendingIndicator[] = doModelo
     .filter((i) => !isReportable(i))
-    .map((i) => ({ key: i.key, label: i.label, state: i.state, note: i.note ?? null }));
+    .map((i) => ({
+      key: i.key,
+      label: i.label,
+      state: i.state,
+      note: i.note ?? null,
+      formula_version: formulaInfo(i).version,
+    }));
 
   const metas: IndicatorTarget[] = await loadVisibleTargets(
     s,
@@ -327,9 +366,10 @@ export async function buildReport(
   const diaDaMeta = targetReferenceDay(p.to, agora, fuso);
   const clienteDaMeta = targetCustomerFor(escopo, clienteId);
 
-  let quadro: Awaited<ReturnType<typeof planBoard>> | null = null;
-  const plano = async () =>
-    (quadro ??= await planBoard(
+  type PorTipo = Awaited<ReturnType<typeof planBoard>>['byKind'];
+  let quadro: { byKind: PorTipo } | null = null;
+  const umQuadro = (categoria: string | null) =>
+    planBoard(
       s,
       {
         from: p.from,
@@ -338,10 +378,39 @@ export async function buildReport(
         sectorId: b.sector_id ?? null,
         // O filtro de categoria valia nos números de OS e era ignorado aqui
         // (pente-fino 17/10/2026, PF-53).
-        assetCategoryId: b.asset_category_id ?? null,
+        assetCategoryId: categoria,
       },
       escopo
-    ));
+    );
+  const plano = async (): Promise<{ byKind: PorTipo }> => {
+    if (quadro) return quadro;
+    if (categorias.length <= 1) {
+      quadro = await umQuadro(b.asset_category_id ?? null);
+      return quadro;
+    }
+    // Família escolhida: o quadro de cada categoria dela, somado por tipo de plano — cada item de
+    // plano é de UM equipamento, de UMA categoria, então a soma não conta nada duas vezes.
+    const soma = new Map<string, PorTipo[number]>();
+    for (const c of categorias) {
+      for (const k of (await umQuadro(c)).byKind) {
+        const atual = soma.get(k.key);
+        soma.set(
+          k.key,
+          atual
+            ? {
+                ...atual,
+                done: atual.done + k.done,
+                pending: atual.pending + k.pending,
+                late: atual.late + k.late,
+                skipped: atual.skipped + k.skipped,
+              }
+            : { ...k }
+        );
+      }
+    }
+    quadro = { byKind: [...soma.values()].map((k) => ({ ...k, rate: complianceRate(k) })) };
+    return quadro;
+  };
 
   const calcular = async (ind: ReportIndicator): Promise<Calculo | null> => {
     switch (ind.key) {
@@ -424,6 +493,8 @@ export async function buildReport(
       case 'compliance_qualification': {
         const tipo = PLAN_KIND_DO_INDICADOR[ind.key]!;
         if (b.plan_kind && b.plan_kind !== tipo) return null;
+        // Tipo de manutenção escolhido: a conformidade de outro tipo de plano fica de fora.
+        if (b.work_order_type && b.work_order_type !== tipo) return null;
         const q = await plano();
         const k = q.byKind.find((x) => x.key === tipo);
         const programados = k ? k.done + k.pending + k.late + k.skipped : 0;
@@ -509,6 +580,10 @@ export async function buildReport(
       target: metaDaSecao(valida),
       target_evaluation: avaliacao,
       target_label: avaliacao === 'no_target' ? NO_TARGET_LABEL : null,
+      ...(() => {
+        const fi = formulaInfo(ind);
+        return { formula_version: fi.version, formula_defined_on: fi.definedOn, formula_source: fi.source };
+      })(),
     });
   }
 
@@ -526,6 +601,9 @@ export async function buildReport(
       sector: sectorName,
       plan_kind: b.plan_kind ?? null,
       asset_category_id: b.asset_category_id ?? null,
+      asset_category: categoriaNome,
+      work_order_type: b.work_order_type ?? null,
+      work_order_type_label: serviceRequestTypeLabel(b.work_order_type ?? null),
       target_day: diaDaMeta,
       timezone: fuso,
     },

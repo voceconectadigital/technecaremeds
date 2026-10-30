@@ -392,13 +392,106 @@ export interface StoreItem {
 }
 
 /** O que a Store mostra: só item publicado, e NUNCA saldo de almoxarifado. */
-export async function storeItems(session: TenantSession): Promise<StoreItem[]> {
+/**
+ * O item aparece para quem pergunta? Toda a rede (`all`) ou um dos clientes escolhidos que o vínculo
+ * alcança (`selected`, 0084). `$1` é o vínculo; sem vínculo, só o que é da rede toda.
+ */
+const VISIVEL_AO_VINCULO = `(i.store_audience = 'all' OR EXISTS (
+     SELECT 1 FROM aurora.store_item_customers sc
+      WHERE sc.item_id = i.id
+        AND sc.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))))`;
+
+/** O catálogo de quem compra: publicado, não arquivado e com público que inclui o vínculo. */
+export async function storeItems(session: TenantSession, membershipId: string | null): Promise<StoreItem[]> {
   return session.query<StoreItem>(
-    `SELECT id, sku, name, unit, category, store_summary AS summary,
-            list_price_cents::text AS list_price_cents, image_key
-       FROM aurora.inventory_items
-      WHERE store_published AND archived_at IS NULL
-      ORDER BY category NULLS LAST, name`
+    `SELECT i.id, i.sku, i.name, i.unit, i.category, i.store_summary AS summary,
+            i.list_price_cents::text AS list_price_cents, i.image_key
+       FROM aurora.inventory_items i
+      WHERE i.store_published AND i.archived_at IS NULL AND ${VISIVEL_AO_VINCULO}
+      ORDER BY i.category NULLS LAST, i.name`,
+    [membershipId]
+  );
+}
+
+/**
+ * Um item da Store pode ser pedido POR ESTE CLIENTE? Publicado, não arquivado e com o cliente no
+ * público. A resposta de erro é a mesma do item inexistente: não se revela o catálogo reservado.
+ */
+export async function assertStoreItemsForCustomer(
+  session: TenantSession,
+  itemIds: string[],
+  customerId: string
+): Promise<void> {
+  const [r] = await session.query<{ ok: number }>(
+    `SELECT count(*)::int AS ok
+       FROM aurora.inventory_items i
+      WHERE i.id = ANY($1::uuid[]) AND i.store_published AND i.archived_at IS NULL
+        AND (i.store_audience = 'all'
+             OR EXISTS (SELECT 1 FROM aurora.store_item_customers sc
+                         WHERE sc.item_id = i.id AND sc.customer_id = $2))`,
+    [[...new Set(itemIds)], customerId]
+  );
+  if ((r?.ok ?? 0) !== new Set(itemIds).size) throw new NotFoundError('item da Store', 'um ou mais itens');
+}
+
+export interface StoreCatalogRow {
+  id: string;
+  sku: string;
+  name: string;
+  unit: string;
+  category: string | null;
+  list_price_cents: string | null;
+  store_published: boolean;
+  store_summary: string | null;
+  store_audience: 'all' | 'selected';
+  customer_ids: string[];
+}
+
+/** A gestão do catálogo (dono da Store): todos os itens não arquivados, com o público de cada um. */
+export async function listStoreCatalog(session: TenantSession): Promise<StoreCatalogRow[]> {
+  return session.query<StoreCatalogRow>(
+    `SELECT i.id, i.sku, i.name, i.unit, i.category, i.list_price_cents::text AS list_price_cents,
+            i.store_published, i.store_summary, i.store_audience,
+            COALESCE((SELECT array_agg(sc.customer_id ORDER BY sc.customer_id)
+                        FROM aurora.store_item_customers sc WHERE sc.item_id = i.id), '{}') AS customer_ids
+       FROM aurora.inventory_items i
+      WHERE i.archived_at IS NULL
+      ORDER BY i.store_published DESC, i.category NULLS LAST, i.name`
+  );
+}
+
+/**
+ * Troca o público do item: toda a rede, ou exatamente estes clientes. "Selecionados" sem nenhum
+ * cliente é recusado — o item sumiria para todos sem que ninguém percebesse; para tirar da Store,
+ * despublica-se.
+ */
+export async function setStoreItemAudience(
+  session: TenantSession,
+  itemId: string,
+  input: { audience: 'all' | 'selected'; customerIds: string[] }
+): Promise<void> {
+  const clientes = [...new Set(input.customerIds)];
+  if (input.audience === 'selected' && clientes.length === 0) {
+    throw new ValidationError('escolha ao menos um cliente — ou deixe o item para toda a rede', {
+      field: 'customer_ids',
+    });
+  }
+  const [item] = await session.query<{ id: string }>(
+    `UPDATE aurora.inventory_items SET store_audience = $2 WHERE id = $1 AND archived_at IS NULL RETURNING id`,
+    [itemId, input.audience]
+  );
+  if (!item) throw new NotFoundError('item', itemId);
+  await session.query(`DELETE FROM aurora.store_item_customers WHERE item_id = $1`, [itemId]);
+  if (input.audience === 'all') return;
+  const achados = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.customers WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [clientes]
+  );
+  if (achados.length !== clientes.length) throw new NotFoundError('cliente', 'um ou mais clientes');
+  await session.query(
+    `INSERT INTO aurora.store_item_customers (organization_id, item_id, customer_id, created_by)
+     SELECT $1, $2, c, $4 FROM unnest($3::uuid[]) AS c`,
+    [session.context.organizationId, itemId, clientes, session.context.actorId]
   );
 }
 
@@ -412,6 +505,7 @@ export async function requestStoreQuote(
     [input.itemId]
   );
   if (!item) throw new NotFoundError('item da Store', input.itemId);
+  await assertStoreItemsForCustomer(session, [input.itemId], input.customerId);
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
     throw new ValidationError('quantidade precisa ser maior que zero', { field: 'quantity' });
   }

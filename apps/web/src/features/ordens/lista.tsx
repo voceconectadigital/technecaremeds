@@ -394,14 +394,39 @@ function CartaoDeOs({
 
 /* ----------------------------------------------------------------- a lista */
 
+/**
+ * As abas da lista.
+ *
+ * "Negados" (OS-01, reunião de 16/10/2026) ocupa o lugar que era do "Rascunho": é a
+ * visão dos chamados que a triagem NEGOU, separada das ordens de serviço. Não há
+ * migração de estado nenhuma — a OS negada continua na situação `denied` (categoria
+ * `cancelled`), e o rascunho legado continua no histórico de quem o tinha.
+ */
+export const ABAS_DA_LISTA = [
+  { id: 'todas', label: 'Todas' },
+  { id: 'open', label: 'Abertas' },
+  { id: 'in_progress', label: 'Em execução' },
+  { id: 'waiting', label: 'Paradas' },
+  { id: 'done', label: 'Concluídas' },
+  { id: 'negados', label: 'Negados' },
+] as const;
+
+/** A consulta de cada aba: "Negados" pede a situação `denied`; as demais, a categoria. */
+export function consultaDaAba(aba: string): { limit: number; category?: string; status?: string } {
+  if (aba === 'negados') return { limit: 200, status: 'denied' };
+  return { limit: 200, ...(aba !== 'todas' ? { category: aba } : {}) };
+}
+
+/** Fora da aba "Negados", o negado não se mistura às ordens de serviço. */
+export function itensDaAba(aba: string, itens: WorkOrderRow[]): WorkOrderRow[] {
+  return aba === 'negados' ? itens : itens.filter((os) => os.status_key !== 'denied');
+}
+
 function Lista() {
   const [categoria, setCategoria] = useUrlState<string>('categoria', 'todas');
 
   const { data, isLoading, isError, error } = useApiQuery(workOrdersList, {
-    query: {
-      limit: 200,
-      ...(categoria !== 'todas' ? { category: categoria } : {}),
-    },
+    query: consultaDaAba(categoria),
   }) as {
     data: { items: WorkOrderRow[] } | undefined;
     isLoading: boolean;
@@ -411,7 +436,7 @@ function Lista() {
 
   if (isError) return <ErrorScreen error={error} />;
 
-  const itens = data?.items ?? [];
+  const itens = itensDaAba(categoria, data?.items ?? []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -423,13 +448,7 @@ function Lista() {
             value={categoria}
             onChange={setCategoria}
             className="border-b-0"
-            items={[
-              { id: 'todas', label: 'Todas' },
-              { id: 'open', label: 'Abertas' },
-              { id: 'in_progress', label: 'Em execução' },
-              { id: 'waiting', label: 'Paradas' },
-              { id: 'done', label: 'Concluídas' },
-            ]}
+            items={[...ABAS_DA_LISTA]}
           />
           {!isLoading && (
             <span className="hidden shrink-0 text-xs text-subtle sm:block" data-numeric>
@@ -444,12 +463,14 @@ function Lista() {
         ) : itens.length === 0 ? (
           <EmptyState
             icon={<ClipboardList className="size-5" />}
-            title="Nenhuma ordem de serviço"
+            title={categoria === 'negados' ? 'Nenhum chamado negado' : 'Nenhuma ordem de serviço'}
             filtered={categoria !== 'todas'}
             description={
               categoria === 'todas'
                 ? 'As ordens aparecem aqui assim que uma solicitação é aceita ou um plano preventivo abre um ciclo.'
-                : undefined
+                : categoria === 'negados'
+                  ? 'Chamados negados na triagem ficam aqui, separados das ordens de serviço.'
+                  : undefined
             }
             origem="Uma OS nasce quando a triagem aceita uma solicitação (Solicitações → Assumir triagem → Aceitar) ou quando um plano preventivo abre um ciclo."
             action={
