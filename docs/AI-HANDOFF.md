@@ -24,7 +24,10 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
-> **Ajustes de Anderson 06/11/2026 (branch `feat/ajustes-anderson-2026-11-06`, sobre `2541c65`; NÃO publicado):**
+> **Ajustes de Anderson 06/11/2026 (PR #44, merge `2b5af48`; PUBLICADO EM PRODUÇÃO em 09/11/2026):**
+> API impressão `b99006b8db42` + só o front web (deploy `a399b7b7`); portal e campo seguem em `2541c65`. Backup verificado
+> `f609a095`; volta: API `2541c65`, web `f607839c`. Homologação, ressalvas e pendências do Anderson:
+> `docs/auditoria/RELATORIO_DEPLOY_PRODUCAO_PR44.md` (§6–§7). A organização ficou SEM logomarca (o cliente envia as reais).
 > Sem migration (a mais recente segue `0089`). Relatório: `docs/auditoria/RELATORIO_AJUSTES_ANDERSON_2026-11-06.md`;
 > status por item (IDs `AND-1106-xx`, fora dos 177): `docs/auditoria/REQUISITOS_ANDERSON_2026-11-06.json`;
 > Anexo F (IMR, 16 fórmulas): `docs/auditoria/MATRIZ_FORMULAS_ANEXO_F.md` — **nenhum cálculo novo**; D-1 (item 15 do IMR
@@ -42,7 +45,8 @@
 >   ≤ 512 kB com assinatura conferida, SVG recusado; GET devolve `data_url` (a API autentica por cabeçalho, `<img>` não).
 >   Tela `configuracoes/logomarcas.tsx`; a folha da OS usa as da organização e só mostra a marca do produto sem nenhuma.
 >   Logomarca POR CLIENTE (`customers.logo_key`, sem tela) é ampliação não feita.
-> · **CI do GitHub roda** (repo público): PR #44 em `bf5b34c` → PG16 2.863, E2E 237 + 1 pulado, Gate verde.
+> · **CI do GitHub roda** (repo público): PR #44 em `bf5b34c` → PG16 2.863, E2E 237 + 1 pulado, Gate verde; no código das
+>   logomarcas (`41f5984`) → PG16 2.878/2.878, E2E 238 + 1 pulado; head `eac9902` todo verde antes do merge.
 
 > **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
 > **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
@@ -1675,10 +1679,10 @@ continua publicada, só que em `technecaremeds.pages.dev` (§27-A).
 
 | Peça | Onde | Estado |
 | --- | --- | --- |
-| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · `main` `f16d0b1` (redesign v2), publicado em 10/10/2026 |
-| **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `f16d0b1` |
-| **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `f16d0b1` |
-| **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ runtime `pgv-pe0b9asx` (HostPanel → Aplicações) reimplantado do `main` `f16d0b1` em 10/10/2026. `/v1/health/version` → `impressao` **`adcda99e0720`** (= `npm run versao` no `f16d0b1`); `commit` vem **nulo** (o HostPanel monta a imagem sem `.git`). `/v1/health/ready` ok |
+| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · `main` `2b5af48` (PR #44), deploy `a399b7b7` em 09/11/2026 (antes: `f16d0b1` em 10/10, `2541c65` em 30/10) |
+| **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `2541c65` (30/10/2026) |
+| **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `2541c65` (30/10/2026) |
+| **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ runtime `pgv-pe0b9asx` (HostPanel → Aplicações) reimplantado do `main` `2b5af48` (PR #44) em 09/11/2026, sem migration (até `0089`). `/v1/health/version` → `impressao` **`b99006b8db42`** (= `npm run versao` no `2b5af48`; em 10/10 era `adcda99e0720` no `f16d0b1`); `commit` vem **nulo** (o HostPanel monta a imagem sem `.git`). `/v1/health/ready` ok |
 | **Workers** (pg-boss) | mesmo runtime, pelo manifesto `deploy/hostpanel/technecare-producao.manifest.json` | 🟡 não verificável de fora |
 | **PostgreSQL 16** | mesmo runtime, rede interna, sem porta pública (`db`, banco `aurora`; `aurora.destinos.json` → `producao.hostsInternos`) | ✅ (pela saúde da API) |
 | **Demo** | Pages `technecaremeds` (ligado ao GitHub) → https://technecaremeds.pages.dev | ✅ publica sozinho a cada push no `main` — é também o rollback do domínio principal |
