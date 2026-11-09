@@ -87,8 +87,8 @@ test.describe('OS — auditoria de 29/10/2026', () => {
     await expect(page).toHaveURL(/modo=impressao/);
     const folha = page.getByTestId('folha-de-impressao');
     await expect(folha).toBeVisible({ timeout: 15_000 });
-    await expect(folha.getByRole('heading', { name: 'Dados técnicos' })).toBeVisible();
-    await expect(folha.getByRole('heading', { name: 'Serviço executado' })).toBeVisible();
+    await expect(folha.getByRole('heading', { name: 'Cliente e local do atendimento' })).toBeVisible();
+    await expect(folha.getByRole('heading', { name: 'Registro técnico do atendimento' })).toBeVisible();
     await expect(folha).toContainText('Troca do cabo de força e teste.');
     await expect
       .poll(() => page.evaluate(() => (window as unknown as { __impressoes: number }).__impressoes))

@@ -445,18 +445,32 @@ describe('OS-20 · OS-26 · OS-24 — folha de impressão completa', () => {
     );
     await waitFor(() => expect(pronta).toHaveBeenCalled());
     const secoes = [...container.querySelectorAll('[data-secao]')].map((s) => s.getAttribute('data-secao'));
+    // 08/11/2026: diagramação das referências de Anderson — seções numeradas, datas e responsáveis.
     expect(secoes).toEqual([
-      'dados',
-      'checkin',
-      'checklist',
+      'cliente',
+      'equipamento',
       'servico',
+      'checklist',
+      'datas',
+      'checkin',
       'parecer',
       'pecas',
       'anexos',
       'avaliacao',
+      'responsaveis',
       'assinaturas',
     ]);
     const texto = screen.getByTestId('folha-de-impressao').textContent ?? '';
+    expect(texto).toContain('Situação da OS');
+    expect(texto).toContain('Tipo de atendimento');
+    expect(texto).toContain('Prioridade');
+    expect(texto).toContain('WO-2026-0042');
+    // Sem procedimento com título, cai na chave; o diagnóstico ausente é "Não informado".
+    expect(texto).toContain('monitor-preventiva · versão 3');
+    expect(texto).toContain('Não informado');
+    // Aceite: só a assinatura de papel "customer" vale como aceite; aqui não há.
+    expect(texto).toContain('Aceite não registrado no sistema.');
+    expect(texto).toContain('Confidencial');
     expect(texto).toContain('Monitor multiparamétrico');
     expect(texto).toContain('PAT-0099');
     expect(texto).toContain('Alarmes funcionam');
@@ -489,7 +503,88 @@ describe('OS-20 · OS-26 · OS-24 — folha de impressão completa', () => {
     );
     await waitFor(() => expect(pronta).toHaveBeenCalled());
     const secoes = [...container.querySelectorAll('[data-secao]')].map((s) => s.getAttribute('data-secao'));
-    expect(secoes).toEqual(['dados', 'servico']);
+    // Cliente, equipamento, registro, datas e responsáveis saem sempre (com "Não informado").
+    expect(secoes).toEqual(['cliente', 'equipamento', 'servico', 'datas', 'responsaveis']);
+  });
+
+  it('calibração (08/11/2026): imprime as leituras com nominal e tolerância, sem veredito inventado', async () => {
+    const pronta = vi.fn();
+    const MEDICAO = {
+      ...CHECKLIST,
+      template_title: 'Calibração de monitor — protocolo',
+      items: [
+        {
+          id: '0193dd00-0000-7000-8000-0000000000e9',
+          kind: 'measurement',
+          label: 'Frequência cardíaca simulada',
+          required: true,
+          unit: 'bpm',
+          nominalValue: 60,
+          toleranceMinus: 2,
+          tolerancePlus: 2,
+          toleranceMode: 'absolute',
+        },
+      ],
+      answers: [
+        {
+          item_id: '0193dd00-0000-7000-8000-0000000000e9',
+          value_text: null,
+          value_number: null,
+          value_boolean: null,
+          value_options: null,
+          value_date: null,
+          photo_count: null,
+          verdict: 'na',
+          value_readings: [59.5, 60, 60.5],
+          unit: 'bpm',
+        },
+      ],
+    };
+    render(
+      <Envolver respostas={{ ...tudo, 'workOrders.checklists': { items: [MEDICAO] } }}>
+        <FolhaDeImpressao
+          os={{
+            ...OS,
+            work_order_type_label: 'Calibração',
+            completed_at: '2026-10-28T16:12:00.000Z',
+          }}
+          onPronta={pronta}
+        />
+      </Envolver>
+    );
+    await waitFor(() => expect(pronta).toHaveBeenCalled());
+    const texto = screen.getByTestId('folha-de-impressao').textContent ?? '';
+    expect(texto).toContain('Calibração de monitor — protocolo · versão 3');
+    expect(texto).toContain('59,5 · 60 · 60,5 bpm');
+    expect(texto).toContain('nominal 60 bpm (−2 bpm / +2 bpm)');
+    expect(texto).toContain('registrado (sem veredito automático)');
+    expect(texto).toContain('03h12min');
+    expect(texto).toContain('Calibração');
+  });
+
+  it('OS de local (sem equipamento): equipamento e parecer são "Não se aplica"', async () => {
+    const pronta = vi.fn();
+    render(
+      <Envolver respostas={{ ...tudo, 'workOrders.signatures': { items: [] } }}>
+        <FolhaDeImpressao
+          os={{
+            ...OS,
+            asset_id: null,
+            asset_name_snapshot: null,
+            asset_serial_snapshot: null,
+            operational_result: null,
+            final_opinion: 'Rede elétrica do setor revisada.',
+          }}
+          onPronta={pronta}
+        />
+      </Envolver>
+    );
+    await waitFor(() => expect(pronta).toHaveBeenCalled());
+    const equipamento = document.querySelector('[data-secao="equipamento"]')?.textContent ?? '';
+    expect(equipamento).toContain('Não se aplica');
+    expect(equipamento).not.toContain('Monitor');
+    const parecer = document.querySelector('[data-secao="parecer"]')?.textContent ?? '';
+    expect(parecer).toContain('Não se aplica');
   });
 
   it('OS-24: o laudo mostra a assinatura de quem validou, com e-mail, IP e SHA-256', async () => {

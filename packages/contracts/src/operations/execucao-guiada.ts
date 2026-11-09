@@ -203,6 +203,8 @@ export const WorkOrderChecklist = z.object({
   template_id: Uuid,
   template_key: z.string(),
   template_version: z.number().int(),
+  /** O título do procedimento (opcional: capturas antigas não o têm). */
+  template_title: z.string().nullable().optional(),
   items: z.array(ItemDeChecklist),
   status: z.record(z.string(), z.unknown()),
   answers: z.array(
@@ -215,6 +217,9 @@ export const WorkOrderChecklist = z.object({
       value_date: z.string().nullable(),
       photo_count: z.number().nullable(),
       verdict: z.string().nullable(),
+      /** Leituras do ponto de medição, na ordem; nulo fora de medição. */
+      value_readings: z.array(z.number()).nullable().optional(),
+      unit: z.string().nullable().optional(),
     })
   ),
 });
