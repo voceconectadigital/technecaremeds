@@ -13,7 +13,13 @@
       "AVALIAR_ESCOPO": "ampliação a validar comercial/contratualmente antes de construir",
       "V2_FUTURO": "pertence à V2"
     },
-    "status": ["IMPLEMENTADO_COM_TESTE", "JA_EXISTIA_COM_TESTE", "DOCUMENTADO", "NAO_IMPLEMENTADO", "BLOQUEADO"]
+    "status": [
+      "IMPLEMENTADO_COM_TESTE",
+      "JA_EXISTIA_COM_TESTE",
+      "DOCUMENTADO",
+      "NAO_IMPLEMENTADO",
+      "BLOQUEADO"
+    ]
   },
   "fontes": {
     "audio": "WhatsApp Ptt 2026-11-06 at 13.23.12.txt",
@@ -51,7 +57,10 @@
       "classificacao": "CORRIGIR_AGORA",
       "status": "IMPLEMENTADO_COM_TESTE",
       "correcao": "Cabeçalho com o nome da organização logada e a marca autorizada do sistema; faixa Situação/Tipo/Prioridade; seções numeradas (cliente e local, equipamento, registro técnico, procedimentos/medições, datas e tempo decorrido, check-in, condição final, peças, anexos, avaliação, responsáveis e aceite, assinaturas); 'Não informado' × 'Não se aplica'; aceite só com assinatura real de papel cliente; rodapé LGPD; @page A4 com margens; moldura da aplicação fora do papel; tabelas quebram entre páginas.",
-      "evidencias": ["apps/web/src/features/ordens/folha-de-impressao.tsx", "apps/web/src/styles.css"],
+      "evidencias": [
+        "apps/web/src/features/ordens/folha-de-impressao.tsx",
+        "apps/web/src/styles.css"
+      ],
       "testes": [
         "apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx",
         "e2e/specs/os-auditoria-29-10.spec.ts (títulos atualizados; não executado localmente — sem PostgreSQL)"
@@ -108,7 +117,10 @@
       "escopo": "fase atual",
       "classificacao": "JA_ATENDE",
       "status": "JA_EXISTIA_COM_TESTE",
-      "evidencias": ["apps/web/src/features/qualidade/pagina.tsx", "apps/api/src/__tests__/api-qualidade.test.ts"],
+      "evidencias": [
+        "apps/web/src/features/qualidade/pagina.tsx",
+        "apps/api/src/__tests__/api-qualidade.test.ts"
+      ],
       "bloqueio": null
     },
     {
@@ -129,7 +141,9 @@
       "classificacao": "DEPENDENCIA_CLIENTE",
       "status": "DOCUMENTADO",
       "achado": "Nenhum indicador reúne regra inequívoca + dado registrado + escopo autorizado; nenhum cálculo novo. 12 ambiguidades documentais registradas (A-1…A-12) e 8 perguntas objetivas.",
-      "evidencias": ["docs/auditoria/MATRIZ_FORMULAS_ANEXO_F.md"],
+      "evidencias": [
+        "docs/auditoria/MATRIZ_FORMULAS_ANEXO_F.md"
+      ],
       "bloqueio": "Anderson: perguntas 1–8 da matriz; Anexos A–D; tabela 04 do item 9.3.5 do TR."
     },
     {
@@ -163,13 +177,38 @@
       "bloqueio": "Validação expressa do cliente e do contrato."
     },
     {
+      "id": "AND-1106-13",
+      "titulo": "Até 2 logomarcas por organização, impressas na folha da OS",
+      "origem": "pedido do Anderson (\"um campo em config que permita anexar até 2 logos por empresa\"), complemento de 08/11",
+      "escopo": "web + API",
+      "classificacao": "CORRIGIR_AGORA",
+      "status": "IMPLEMENTADO_COM_TESTE",
+      "achado": "Já estava no roteiro aprovado (T-03 do ROADMAP de 16/10: branding por organização com logo seguro), com a logo pendente. Nenhuma tela de configuração aceitava logomarca; a folha só mostrava a marca do produto.",
+      "correcao": "Configurações → Logomarcas: duas vagas por organização (enviar, substituir, remover, prévia, nome da marca). PNG/JPEG/WebP até 512 kB, com o tipo conferido pelos primeiros bytes; SVG recusado. Metadados em organizations.settings.logos (mesclados, sem migration); bytes no armazenamento de objetos já usado pelos certificados. A folha da OS imprime 0, 1 ou 2 logomarcas lado a lado, proporcionais (object-contain, altura fixa); com logomarca da organização, a marca do produto sai do cabeçalho e fica só o texto \"Emitido pelo sistema\".",
+      "evidencias": [
+        "packages/db/src/organization-logos.ts",
+        "apps/api/src/platform/organizations.controller.ts (GET/PUT/DELETE /v1/organizations/current/logos)",
+        "packages/contracts/src/operations/platform.ts",
+        "apps/web/src/features/configuracoes/logomarcas.tsx",
+        "apps/web/src/features/ordens/folha-de-impressao.tsx"
+      ],
+      "testes": [
+        "apps/api/src/__tests__/api-logomarcas.test.ts (8)",
+        "apps/web/src/__tests__/logomarcas.test.tsx (4)",
+        "apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx (+3: zero, uma e duas logomarcas)",
+        "e2e/specs/logomarcas.spec.ts (envio pela tela, folha da OS, isolamento)"
+      ],
+      "limites": "A logomarca é da ORGANIZAÇÃO (a empresa logada), não do cliente da OS: todas as OS daquela organização saem com as mesmas marcas. Logomarca por cliente/hospital (a coluna customers.logo_key existe desde 0008, sem tela) é ampliação a decidir — ver relatório §3.3.",
+      "bloqueio": "Deploy desta rodada."
+    },
+    {
       "id": "AND-1106-12",
       "titulo": "Piloto real em 09/11/2026",
       "origem": "áudio 06/11",
       "escopo": "operação",
       "classificacao": "DEPENDENCIA_CLIENTE",
       "status": "BLOQUEADO",
-      "achado": "Código pronto e testado na branch; produção ainda roda a versão da PR #42 (impressão pela ficha já existe lá; espelhamento e lista com impressão, não).",
+      "achado": "Código pronto e testado na branch: CI da PR #44 verde no GitHub (PostgreSQL 16 real, E2E e estáticos). Produção ainda roda a versão da PR #42 (impressão pela ficha já existe lá; espelhamento, lista com impressão e logomarcas, não).",
       "bloqueio": "Autorização expressa para merge e deploy desta rodada (API + front web). Sem migration."
     }
   ]

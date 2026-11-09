@@ -36,6 +36,13 @@
 > · **Impressão de OS:** botão por linha na lista (`ordens/lista.tsx`); folha reestruturada (`ordens/folha-de-impressao.tsx`,
 >   seções `cliente/equipamento/servico/checklist/datas/checkin/parecer/pecas/anexos/avaliacao/responsaveis/assinaturas`);
 >   `@page folha-os` A4 em `styles.css`; `GET /work-orders/:id/checklists` devolve `value_readings`, `unit`, `template_title`.
+> · **Logomarcas da organização (até 2):** `GET/PUT/DELETE /v1/organizations/current/logos[/:slot]`
+>   (`platform/organizations.controller.ts`, `packages/db/src/organization-logos.ts`); metadados em
+>   `organizations.settings.logos` (MESCLADO, sem migration), bytes no `ARQUIVOS` em `orgs/<org>/marca/`; PNG/JPEG/WebP
+>   ≤ 512 kB com assinatura conferida, SVG recusado; GET devolve `data_url` (a API autentica por cabeçalho, `<img>` não).
+>   Tela `configuracoes/logomarcas.tsx`; a folha da OS usa as da organização e só mostra a marca do produto sem nenhuma.
+>   Logomarca POR CLIENTE (`customers.logo_key`, sem tela) é ampliação não feita.
+> · **CI do GitHub roda** (repo público): PR #44 em `bf5b34c` → PG16 2.863, E2E 237 + 1 pulado, Gate verde.
 
 > **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
 > **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
