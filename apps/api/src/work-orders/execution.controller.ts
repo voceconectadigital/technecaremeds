@@ -79,9 +79,13 @@ export class ExecutionController {
         template_id: string;
         template_key: string;
         template_version: number;
+        template_title: string | null;
       }>(
-        `SELECT id, template_id, template_key, template_version
-           FROM aurora.checklist_responses WHERE work_order_id = $1 ORDER BY started_at`,
+        // O título do procedimento (aditivo, 08/11/2026): a folha de impressão mostra o nome, não a chave.
+        `SELECT r.id, r.template_id, r.template_key, r.template_version, ct.title AS template_title
+           FROM aurora.checklist_responses r
+           LEFT JOIN aurora.checklist_templates ct ON ct.id = r.template_id
+          WHERE r.work_order_id = $1 ORDER BY r.started_at`,
         [woId]
       );
       return Promise.all(
@@ -93,7 +97,10 @@ export class ExecutionController {
           // o progresso mora no servidor, não num rascunho da tela.
           answers: await s.query(
             `SELECT item_id, value_text, value_number::float8 AS value_number, value_boolean,
-                    value_options, value_date::text AS value_date, photo_count, verdict::text AS verdict
+                    value_options, value_date::text AS value_date, photo_count, verdict::text AS verdict,
+                    -- As leituras do ponto de medição (calibração/TSE) e a unidade: sem elas a
+                    -- folha imprimia "—" onde houve medição.
+                    value_readings::float8[] AS value_readings, unit
                FROM aurora.checklist_answers WHERE response_id = $1`,
             [r.id]
           ),

@@ -1,0 +1,215 @@
+{
+  "projeto": "Téchne Care",
+  "rodada": "Ajustes de Anderson — áudio de 06/11/2026 (piloto real previsto para 09/11/2026)",
+  "data": "2026-11-08",
+  "branch": "feat/ajustes-anderson-2026-11-06",
+  "base": "2541c65 (merge da PR #42, publicada em produção em 30/10/2026)",
+  "observacao": "IDs próprios (AND-1106-xx), sem mistura com os 177 IDs históricos de technecare-status-requisitos.json. Nada desta rodada foi publicado: sem merge, sem deploy, sem migration.",
+  "legenda": {
+    "classificacao": {
+      "JA_ATENDE": "já existia e funciona; nada a fazer",
+      "CORRIGIR_AGORA": "lacuna corrigida nesta rodada",
+      "DEPENDENCIA_CLIENTE": "depende de regra, dado ou decisão do cliente",
+      "AVALIAR_ESCOPO": "ampliação a validar comercial/contratualmente antes de construir",
+      "V2_FUTURO": "pertence à V2"
+    },
+    "status": [
+      "IMPLEMENTADO_COM_TESTE",
+      "JA_EXISTIA_COM_TESTE",
+      "DOCUMENTADO",
+      "NAO_IMPLEMENTADO",
+      "BLOQUEADO"
+    ]
+  },
+  "fontes": {
+    "audio": "WhatsApp Ptt 2026-11-06 at 13.23.12.txt",
+    "referencia_layout_1": "OS_WO-2026-0021_Novo_Layout (1).pdf",
+    "referencia_layout_2": "OS_CISSUL_Modelo_Referencia (1).pdf",
+    "anexo_f": "AnexoF (1).pdf (SEI 2270.01.0007370/2022-76, pp. 104–111)"
+  },
+  "itens": [
+    {
+      "id": "AND-1106-01",
+      "titulo": "Imprimir OS de qualquer natureza (corretiva, preventiva, calibração, TSE, qualificação, instrução, treinamento, laudo)",
+      "origem": "áudio 06/11: \"senti falta lá de lugar para imprimir todas as ordens de serviço, as de calibração\"",
+      "escopo": "fase atual (OS-20/OS-26)",
+      "classificacao": "CORRIGIR_AGORA",
+      "status": "IMPLEMENTADO_COM_TESTE",
+      "achado": "A ficha já tinha 'Imprimir OS' para qualquer natureza (a folha não depende do tipo). A LISTA não tinha ponto de acesso: só abrindo cada OS. A folha não mostrava as leituras de medição (calibração/TSE) — imprimia '—' no ponto medido.",
+      "correcao": "Botão 'Imprimir' (ícone) em cada linha da lista de OS → /ordens/:id?modo=impressao; GET /work-orders/:id/checklists passa a devolver value_readings, unit e template_title (aditivo).",
+      "evidencias": [
+        "apps/web/src/features/ordens/lista.tsx",
+        "apps/api/src/work-orders/execution.controller.ts",
+        "packages/contracts/src/operations/execucao-guiada.ts"
+      ],
+      "testes": [
+        "apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx (calibração com leituras; OS de local)",
+        "apps/api/src/__tests__/api-qualidade-servicos.test.ts (título do procedimento na rota de checklists)",
+        "validação visual: demonstração local, 29 botões na lista; PDFs A4 de corretiva, calibração, TSE e preventiva"
+      ],
+      "bloqueio": null
+    },
+    {
+      "id": "AND-1106-02",
+      "titulo": "Folha de impressão refinada com as referências de layout (sem copiar os dados delas)",
+      "origem": "prompt da rodada + PDFs de referência",
+      "escopo": "fase atual",
+      "classificacao": "CORRIGIR_AGORA",
+      "status": "IMPLEMENTADO_COM_TESTE",
+      "correcao": "Cabeçalho com o nome da organização logada e a marca autorizada do sistema; faixa Situação/Tipo/Prioridade; seções numeradas (cliente e local, equipamento, registro técnico, procedimentos/medições, datas e tempo decorrido, check-in, condição final, peças, anexos, avaliação, responsáveis e aceite, assinaturas); 'Não informado' × 'Não se aplica'; aceite só com assinatura real de papel cliente; rodapé LGPD; @page A4 com margens; moldura da aplicação fora do papel; tabelas quebram entre páginas.",
+      "evidencias": [
+        "apps/web/src/features/ordens/folha-de-impressao.tsx",
+        "apps/web/src/styles.css"
+      ],
+      "testes": [
+        "apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx",
+        "e2e/specs/os-auditoria-29-10.spec.ts (títulos atualizados; não executado localmente — sem PostgreSQL)"
+      ],
+      "nao_copiado_das_referencias": "nomes, CNPJ, endereços, contatos, hospitais, logotipos Be Care, datas, assinaturas e textos",
+      "bloqueio": null
+    },
+    {
+      "id": "AND-1106-03",
+      "titulo": "Impressão EM LOTE de várias OS",
+      "origem": "ambiguidade de \"imprimir todas as ordens de serviço\"",
+      "escopo": "não comprovado",
+      "classificacao": "AVALIAR_ESCOPO",
+      "status": "NAO_IMPLEMENTADO",
+      "achado": "O áudio pede 'lugar para imprimir' e cita as de calibração: leitura mais provável é cobertura de todos os TIPOS, atendida em AND-1106-01. Lote não foi pedido de forma comprovável.",
+      "bloqueio": "Anderson: confirmar se quer imprimir várias OS de uma vez (e com qual filtro)."
+    },
+    {
+      "id": "AND-1106-04",
+      "titulo": "Impressão da OS pelo portal do cliente",
+      "origem": "verificação de perfis",
+      "escopo": "não pedido",
+      "classificacao": "AVALIAR_ESCOPO",
+      "status": "NAO_IMPLEMENTADO",
+      "achado": "O portal mostra chamados e avaliação, não a ficha da OS. Perfis da web com work_order.read (inclusive escopo restrito por cliente/setor) imprimem; o escopo continua aplicado no servidor (404 fora do escopo).",
+      "bloqueio": "Anderson: o cliente final precisa baixar o relatório pelo portal?"
+    },
+    {
+      "id": "AND-1106-05",
+      "titulo": "Espelhamento automático das OS concluídas de preventiva, calibração, TSE e qualificação em Qualidade",
+      "origem": "áudio 06/11: \"cada manutenção preventiva que for concluída vai para lá. Cada calibração… cada qualificação\"",
+      "escopo": "fase atual (integração de registros existentes à área QUA-01…05; não é V2Q)",
+      "classificacao": "CORRIGIR_AGORA",
+      "status": "IMPLEMENTADO_COM_TESTE",
+      "solucao": "Consulta derivada (sem tabela nova, sem migration, sem evento): GET /v1/quality-records/services lê as OS de natureza preventive/calibration/electrical_safety/qualification nas situações Concluída/Validada/Fechada. Idempotente por construção; OS antigas aparecem sem backfill; OS reaberta sai sozinha; rascunho, aberta, em execução, cancelada e negada não entram. Exige document.read E work_order.read; escopo cliente/setor da própria OS; RLS por organização. Aba 'Serviços concluídos' na página Qualidade com filtros (tipo, busca, período), plano/tarefa de origem, procedimentos (um por resposta, com versão), medições, assinaturas, parecer, executor e os links 'Abrir OS' e 'Relatório'.",
+      "evidencias": [
+        "packages/db/src/qualidade.ts (listServiceRecords)",
+        "apps/api/src/quality/quality.controller.ts",
+        "packages/contracts/src/operations/quality.ts (qualityServiceRecords)",
+        "apps/web/src/features/qualidade/pagina.tsx (ServicosConcluidos)",
+        "docs/openapi.json"
+      ],
+      "testes": [
+        "apps/api/src/__tests__/api-qualidade-servicos.test.ts (13 casos: tipos, situações, plano, 2 procedimentos, filtros, 422, idempotência, reabrir/concluir, validada, escopo restrito, 403 sem work_order.read, outra organização)",
+        "apps/web/src/__tests__/qualidade-servicos.test.tsx"
+      ],
+      "limites": "A natureza vem do system_key do catálogo de tipos de OS: um tipo criado à mão sem chave de sistema (ex.: 'Calibração 2') não espelha. A semeadura da demonstração usa 'inspection' para TSE.",
+      "bloqueio": null
+    },
+    {
+      "id": "AND-1106-06",
+      "titulo": "Manter a criação manual de certificado",
+      "origem": "áudio 06/11: \"ficou legal aquela parte de poder também criar um certificado direto ali\"",
+      "escopo": "fase atual",
+      "classificacao": "JA_ATENDE",
+      "status": "JA_EXISTIA_COM_TESTE",
+      "evidencias": [
+        "apps/web/src/features/qualidade/pagina.tsx",
+        "apps/api/src/__tests__/api-qualidade.test.ts"
+      ],
+      "bloqueio": null
+    },
+    {
+      "id": "AND-1106-07",
+      "titulo": "Emitir certificado (calibração/qualificação) automaticamente a partir da OS",
+      "origem": "leitura possível do pedido de espelhamento",
+      "escopo": "fora — certificado emitido/assinado ≠ relatório de serviço",
+      "classificacao": "AVALIAR_ESCOPO",
+      "status": "NAO_IMPLEMENTADO",
+      "achado": "O espelho mostra o RELATÓRIO DE SERVIÇO. Nenhum certificado é criado, assinado ou homologado automaticamente; a tela diz isso.",
+      "bloqueio": "Anderson: se quiser certificado emitido pelo sistema (numeração, responsável técnico, rastreabilidade metrológica), é escopo novo."
+    },
+    {
+      "id": "AND-1106-08",
+      "titulo": "Análise das 16 fórmulas do Anexo F",
+      "origem": "prompt da rodada",
+      "escopo": "análise; cálculo só onde inequívoco",
+      "classificacao": "DEPENDENCIA_CLIENTE",
+      "status": "DOCUMENTADO",
+      "achado": "Nenhum indicador reúne regra inequívoca + dado registrado + escopo autorizado; nenhum cálculo novo. 12 ambiguidades documentais registradas (A-1…A-12) e 8 perguntas objetivas.",
+      "evidencias": [
+        "docs/auditoria/MATRIZ_FORMULAS_ANEXO_F.md"
+      ],
+      "bloqueio": "Anderson: perguntas 1–8 da matriz; Anexos A–D; tabela 04 do item 9.3.5 do TR."
+    },
+    {
+      "id": "AND-1106-09",
+      "titulo": "IMR item 15 (AQS) preenchido com a média das avaliações de OS",
+      "origem": "cruzamento Anexo F × relatorio-oficial.ts",
+      "escopo": "relatório Expert existente",
+      "classificacao": "DEPENDENCIA_CLIENTE",
+      "status": "DOCUMENTADO",
+      "achado": "Anexo F: AQS = pontuação de formulário próprio, meta 0. Sistema: service_rating (1–5), que bate com o Data Studio do cliente. Duas fontes do próprio cliente divergem; linha não alterada.",
+      "bloqueio": "Anderson: qual das duas vale (D-1 da matriz)."
+    },
+    {
+      "id": "AND-1106-10",
+      "titulo": "IMR item 13 (ACM) só com preventiva e contando o atraso",
+      "origem": "cruzamento Anexo F × report-tiers.ts",
+      "escopo": "relatório existente (PROVISIONAL)",
+      "classificacao": "DEPENDENCIA_CLIENTE",
+      "status": "DOCUMENTADO",
+      "achado": "Anexo F agrega MP+CAL+TSE e conta só o realizado dentro do prazo. Continua PROVISIONAL até confirmar 'prazo' e dispensados (D-2).",
+      "bloqueio": "Anderson: pergunta 5 da matriz."
+    },
+    {
+      "id": "AND-1106-11",
+      "titulo": "Glosa / desconto contratual do IMR",
+      "origem": "Anexo F",
+      "escopo": "comercial/contratual",
+      "classificacao": "AVALIAR_ESCOPO",
+      "status": "NAO_IMPLEMENTADO",
+      "achado": "Faixas de desconto existem no Anexo F, mas cobrança/glosa não está autorizada e depende do contrato e do valor mensal.",
+      "bloqueio": "Validação expressa do cliente e do contrato."
+    },
+    {
+      "id": "AND-1106-13",
+      "titulo": "Até 2 logomarcas por organização, impressas na folha da OS",
+      "origem": "pedido do Anderson (\"um campo em config que permita anexar até 2 logos por empresa\"), complemento de 08/11",
+      "escopo": "web + API",
+      "classificacao": "CORRIGIR_AGORA",
+      "status": "IMPLEMENTADO_COM_TESTE",
+      "achado": "Já estava no roteiro aprovado (T-03 do ROADMAP de 16/10: branding por organização com logo seguro), com a logo pendente. Nenhuma tela de configuração aceitava logomarca; a folha só mostrava a marca do produto.",
+      "correcao": "Configurações → Logomarcas: duas vagas por organização (enviar, substituir, remover, prévia, nome da marca). PNG/JPEG/WebP até 512 kB, com o tipo conferido pelos primeiros bytes; SVG recusado. Metadados em organizations.settings.logos (mesclados, sem migration); bytes no armazenamento de objetos já usado pelos certificados. A folha da OS imprime 0, 1 ou 2 logomarcas lado a lado, proporcionais (object-contain, altura fixa); com logomarca da organização, a marca do produto sai do cabeçalho e fica só o texto \"Emitido pelo sistema\".",
+      "evidencias": [
+        "packages/db/src/organization-logos.ts",
+        "apps/api/src/platform/organizations.controller.ts (GET/PUT/DELETE /v1/organizations/current/logos)",
+        "packages/contracts/src/operations/platform.ts",
+        "apps/web/src/features/configuracoes/logomarcas.tsx",
+        "apps/web/src/features/ordens/folha-de-impressao.tsx"
+      ],
+      "testes": [
+        "apps/api/src/__tests__/api-logomarcas.test.ts (8)",
+        "apps/web/src/__tests__/logomarcas.test.tsx (4)",
+        "apps/web/src/__tests__/ordens-auditoria-29-10.test.tsx (+3: zero, uma e duas logomarcas)",
+        "e2e/specs/logomarcas.spec.ts (envio pela tela, folha da OS, isolamento)"
+      ],
+      "limites": "A logomarca é da ORGANIZAÇÃO (a empresa logada), não do cliente da OS: todas as OS daquela organização saem com as mesmas marcas. Logomarca por cliente/hospital (a coluna customers.logo_key existe desde 0008, sem tela) é ampliação a decidir — ver relatório §3.3.",
+      "bloqueio": "Deploy desta rodada."
+    },
+    {
+      "id": "AND-1106-12",
+      "titulo": "Piloto real em 09/11/2026",
+      "origem": "áudio 06/11",
+      "escopo": "operação",
+      "classificacao": "DEPENDENCIA_CLIENTE",
+      "status": "BLOQUEADO",
+      "achado": "Código pronto e testado na branch: CI da PR #44 verde no GitHub (PostgreSQL 16 real, E2E e estáticos). Produção ainda roda a versão da PR #42 (impressão pela ficha já existe lá; espelhamento, lista com impressão e logomarcas, não).",
+      "bloqueio": "Autorização expressa para merge e deploy desta rodada (API + front web). Sem migration."
+    }
+  ]
+}

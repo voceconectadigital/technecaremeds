@@ -62,6 +62,40 @@
   }
 }
 
+/* Folha da OS (08/11/2026): A4 com margens próprias, e a folha pode quebrar entre páginas — a regra
+   genérica de "cartão não se parte" valeria para a folha inteira e empurraria tudo para o fim. */
+@page folha-os {
+  size: A4;
+  margin: 12mm 12mm 14mm;
+}
+@media print {
+  .aurora-folha-os {
+    page: folha-os;
+    break-inside: auto !important;
+    font-size: 10.5pt;
+  }
+  .aurora-folha-os table {
+    break-inside: auto !important;
+  }
+  .aurora-folha-os thead {
+    display: table-header-group;
+  }
+  /* Na página da folha, só a folha vai ao papel: some o cabeçalho da moldura ("Imprimir WO-…",
+     trilha, "Impresso em") — a folha já tem o seu —, e os fundos/cantos/margens do layout. */
+  body:has(.aurora-folha-os) main > section,
+  body:has(.aurora-folha-os) section:has(+ main) {
+    display: none !important;
+  }
+  body:has(.aurora-folha-os) div:has(.aurora-folha-os) {
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
 /* "Imprimir etiqueta" (ficha do ativo): só o cartão da etiqueta sai no papel. */
 @media print {
   body[data-imprimir='etiqueta'] * {

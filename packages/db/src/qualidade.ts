@@ -276,3 +276,167 @@ export async function setQualityFile(
   );
   if (r.length === 0) throw new NotFoundError('Registro de qualidade', id);
 }
+
+/* -------------------------------------------------------------------------- */
+/* espelhamento: serviços concluídos (pedido de Anderson, 06/11/2026)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * "Cada manutenção preventiva que for concluída vai para lá. Cada calibração que for concluída,
+ * vai para lá. Cada qualificação que for concluída, vai para lá." (áudio de 06/11/2026)
+ *
+ * É uma CONSULTA DERIVADA, e não uma cópia: a Qualidade lê as próprias OS concluídas. Assim:
+ *   · reprocessar o mesmo evento não duplica nada — não há evento nem linha gravada;
+ *   · as OS concluídas antes desta mudança aparecem sem backfill e sem reescrever histórico;
+ *   · a OS reaberta sai da lista sozinha, e a cancelada/negada/rascunho nunca entra;
+ *   · tenant (RLS) e escopo de cliente/setor são os da própria OS.
+ *
+ * O que aparece é o RELATÓRIO DE SERVIÇO (a folha da OS), não um certificado: nada aqui é
+ * emitido, assinado ou homologado automaticamente. O certificado continua sendo o registro
+ * cadastrado à mão (`quality_records`), quando existe.
+ */
+export const SERVICE_RECORD_KINDS = [
+  'preventive',
+  'calibration',
+  'electrical_safety',
+  'qualification',
+] as const;
+export type ServiceRecordKind = (typeof SERVICE_RECORD_KINDS)[number];
+
+export interface ServiceRecordFilters {
+  kind?: ServiceRecordKind | null;
+  customerId?: string | null;
+  assetId?: string | null;
+  /** AAAA-MM-DD, inclusive, sobre a data da conclusão. */
+  from?: string | null;
+  /** AAAA-MM-DD, inclusive. */
+  to?: string | null;
+  /** Número da OS, título, equipamento, patrimônio ou plano. */
+  search?: string | null;
+  /** Só para quem tem escopo RESTRITO: o vínculo cujo cliente/setor limita a lista. */
+  scopeMembershipId?: string | null;
+}
+
+export interface ServiceRecordProcedure {
+  response_id: string;
+  template_id: string;
+  title: string;
+  version: number;
+  procedure_kind: string | null;
+}
+
+export interface ServiceRecordRow {
+  work_order_id: string;
+  number: string | null;
+  title: string;
+  kind: ServiceRecordKind;
+  type_label: string;
+  status_key: string;
+  status_label: string;
+  category: string;
+  customer_id: string;
+  customer_name: string | null;
+  location_name: string | null;
+  asset_id: string | null;
+  asset_name: string | null;
+  asset_tag: string | null;
+  asset_serial: string | null;
+  completed_at: Date | null;
+  validated_at: Date | null;
+  closed_at: Date | null;
+  operational_result: string | null;
+  executor_name: string | null;
+  plan_id: string | null;
+  plan_name: string | null;
+  plan_task_name: string | null;
+  procedures: ServiceRecordProcedure[];
+  measurement_sessions: number;
+  signatures: number;
+}
+
+/** A conclusão: "Concluída" (review) carimba `completed_at`; as seguintes carimbam as suas. */
+const CONCLUSAO = 'COALESCE(w.completed_at, w.validated_at, w.closed_at)';
+
+export async function listServiceRecords(
+  session: TenantSession,
+  filters: ServiceRecordFilters = {},
+  limit = 300
+): Promise<ServiceRecordRow[]> {
+  if (filters.kind && !(SERVICE_RECORD_KINDS as readonly string[]).includes(filters.kind)) {
+    throw new ValidationError('tipo de serviço desconhecido', { field: 'kind' });
+  }
+  if (filters.from && !DATA.test(filters.from)) {
+    throw new ValidationError('a data precisa ser AAAA-MM-DD', { field: 'from' });
+  }
+  if (filters.to && !DATA.test(filters.to)) {
+    throw new ValidationError('a data precisa ser AAAA-MM-DD', { field: 'to' });
+  }
+  const busca = filters.search?.trim().slice(0, 100) || null;
+  const rows = await session.query<
+    Omit<ServiceRecordRow, 'procedures'> & {
+      procedures: ServiceRecordProcedure[] | null;
+    }
+  >(
+    `SELECT w.id AS work_order_id, w.number, w.title, t.system_key AS kind, t.label AS type_label,
+            st.key AS status_key, st.label AS status_label, w.status_category::text AS category,
+            w.customer_id, c.name AS customer_name, w.location_name_snapshot AS location_name,
+            w.asset_id, COALESCE(w.asset_name_snapshot, a.name) AS asset_name, a.tag AS asset_tag,
+            COALESCE(w.asset_serial_snapshot, a.serial_number) AS asset_serial,
+            ${CONCLUSAO} AS completed_at, w.validated_at, w.closed_at, w.operational_result,
+            u.name AS executor_name,
+            pl.plan_id, pl.plan_name, pl.task_name AS plan_task_name,
+            (SELECT json_agg(json_build_object(
+                      'response_id', r.id, 'template_id', r.template_id,
+                      'title', COALESCE(ct.title, r.template_key), 'version', r.template_version,
+                      'procedure_kind', ct.procedure_kind::text) ORDER BY r.started_at)
+               FROM aurora.checklist_responses r
+               LEFT JOIN aurora.checklist_templates ct ON ct.id = r.template_id
+              WHERE r.work_order_id = w.id) AS procedures,
+            (SELECT count(*)::int FROM aurora.measurement_sessions ms WHERE ms.work_order_id = w.id)
+              AS measurement_sessions,
+            (SELECT count(*)::int FROM aurora.signatures sg WHERE sg.work_order_id = w.id)
+              AS signatures
+       FROM aurora.work_orders w
+       JOIN aurora.catalog_items t ON t.id = w.work_order_type_id
+       JOIN aurora.work_order_statuses st ON st.id = w.status_id
+       LEFT JOIN aurora.customers c ON c.id = w.customer_id
+       LEFT JOIN aurora.assets a ON a.id = w.asset_id
+       LEFT JOIN aurora.memberships m ON m.id = w.assignee_membership_id
+       LEFT JOIN aurora.users u ON u.id = m.user_id
+       LEFT JOIN LATERAL (
+         SELECT p.id AS plan_id, p.name AS plan_name, pt.name AS task_name
+           FROM aurora.plan_cycle_items i
+           JOIN aurora.plan_tasks pt ON pt.id = i.task_id
+           JOIN aurora.maintenance_plans p ON p.id = pt.plan_id
+          WHERE i.work_order_id = w.id
+          LIMIT 1
+       ) pl ON true
+      WHERE t.system_key = ANY($1::text[])
+        AND w.status_category IN ('review', 'done', 'closed')
+        AND ($2::uuid IS NULL OR w.customer_id = $2)
+        AND ($3::uuid IS NULL OR w.asset_id = $3)
+        AND ($4::date IS NULL OR ${CONCLUSAO} >= $4::date)
+        AND ($5::date IS NULL OR ${CONCLUSAO} < $5::date + 1)
+        AND ($6::text IS NULL
+             OR w.number ILIKE '%' || $6 || '%' OR w.title ILIKE '%' || $6 || '%'
+             OR w.asset_name_snapshot ILIKE '%' || $6 || '%' OR a.tag ILIKE '%' || $6 || '%'
+             OR pl.plan_name ILIKE '%' || $6 || '%')
+        AND ($7::uuid IS NULL
+             OR (w.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($7))
+                 AND (w.location_id IS NULL
+                      OR w.location_id IN (SELECT location_id FROM aurora.accessible_location_ids($7)))))
+      ORDER BY ${CONCLUSAO} DESC NULLS LAST, w.number DESC
+      LIMIT $8`,
+    [
+      filters.kind ? [filters.kind] : [...SERVICE_RECORD_KINDS],
+      filters.customerId ?? null,
+      filters.assetId ?? null,
+      filters.from ?? null,
+      filters.to ?? null,
+      busca,
+      filters.scopeMembershipId ?? null,
+      limit,
+    ]
+  );
+  return rows.map((r) => ({ ...r, procedures: r.procedures ?? [] }));
+}

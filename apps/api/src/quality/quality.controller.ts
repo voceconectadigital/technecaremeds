@@ -32,6 +32,7 @@ import {
   deleteQualityRecord,
   getQualityFile,
   setQualityFile,
+  listServiceRecords,
   QUALITY_KINDS,
   QUALITY_STATUSES,
   type Database,
@@ -39,7 +40,8 @@ import {
   type QualityStatus,
 } from '@aurora/db';
 import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
-import { qualityCreate } from '@aurora/contracts';
+import { qualityCreate, qualityServiceRecords } from '@aurora/contracts';
+import { escopoRestrito } from '../common/scope-sql';
 import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
@@ -111,6 +113,31 @@ export class QualityController {
         customerId: customer === undefined ? null : uuidParam(customer, 'customer'),
         assetId: asset === undefined ? null : uuidParam(asset, 'asset'),
         scopeMembershipId: eu,
+      })
+    );
+    return { items };
+  }
+
+  /**
+   * Os serviços concluídos (preventiva, calibração, TSE, qualificação), lidos das próprias OS.
+   * Exige ler documentos E ordens de serviço: quem só lê certificados não passa a ver OS por aqui.
+   * O escopo de cliente/setor é o da OS (o mesmo filtro da lista de OS).
+   */
+  @Get('services')
+  @RequirePermissions('document.read', 'work_order.read')
+  async services(@Req() req: AuroraRequest, @Query() query: unknown): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    meuVinculo(req);
+    const q = parseWith(qualityServiceRecords.query, query);
+    const items = await withTenant(this.db, ctx, (s) =>
+      listServiceRecords(s, {
+        kind: q.kind ?? null,
+        customerId: q.customer ?? null,
+        assetId: q.asset ?? null,
+        from: q.from ?? null,
+        to: q.to ?? null,
+        search: q.q ?? null,
+        scopeMembershipId: escopoRestrito(ctx) ? ctx.membershipId : null,
       })
     );
     return { items };

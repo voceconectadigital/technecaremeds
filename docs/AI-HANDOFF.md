@@ -24,6 +24,26 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Ajustes de Anderson 06/11/2026 (branch `feat/ajustes-anderson-2026-11-06`, sobre `2541c65`; NÃO publicado):**
+> Sem migration (a mais recente segue `0089`). Relatório: `docs/auditoria/RELATORIO_AJUSTES_ANDERSON_2026-11-06.md`;
+> status por item (IDs `AND-1106-xx`, fora dos 177): `docs/auditoria/REQUISITOS_ANDERSON_2026-11-06.json`;
+> Anexo F (IMR, 16 fórmulas): `docs/auditoria/MATRIZ_FORMULAS_ANEXO_F.md` — **nenhum cálculo novo**; D-1 (item 15 do IMR
+> usa `service_rating`, o Anexo F define AQS por pontos) e D-2 (ACM = MP+CAL+TSE no prazo) aguardam Anderson.
+> · **Qualidade espelha OS concluídas** (preventiva, calibração, TSE, qualificação; categorias `review`/`done`/`closed`):
+>   `GET /v1/quality-records/services` = `listServiceRecords` (`packages/db/src/qualidade.ts`), CONSULTA DERIVADA — sem
+>   tabela, sem evento, idempotente; exige `document.read` + `work_order.read`; aba "Serviços concluídos" em
+>   `features/qualidade/pagina.tsx`. Natureza pelo `system_key` do catálogo `work_order_type`.
+> · **Impressão de OS:** botão por linha na lista (`ordens/lista.tsx`); folha reestruturada (`ordens/folha-de-impressao.tsx`,
+>   seções `cliente/equipamento/servico/checklist/datas/checkin/parecer/pecas/anexos/avaliacao/responsaveis/assinaturas`);
+>   `@page folha-os` A4 em `styles.css`; `GET /work-orders/:id/checklists` devolve `value_readings`, `unit`, `template_title`.
+> · **Logomarcas da organização (até 2):** `GET/PUT/DELETE /v1/organizations/current/logos[/:slot]`
+>   (`platform/organizations.controller.ts`, `packages/db/src/organization-logos.ts`); metadados em
+>   `organizations.settings.logos` (MESCLADO, sem migration), bytes no `ARQUIVOS` em `orgs/<org>/marca/`; PNG/JPEG/WebP
+>   ≤ 512 kB com assinatura conferida, SVG recusado; GET devolve `data_url` (a API autentica por cabeçalho, `<img>` não).
+>   Tela `configuracoes/logomarcas.tsx`; a folha da OS usa as da organização e só mostra a marca do produto sem nenhuma.
+>   Logomarca POR CLIENTE (`customers.logo_key`, sem tela) é ampliação não feita.
+> · **CI do GitHub roda** (repo público): PR #44 em `bf5b34c` → PG16 2.863, E2E 237 + 1 pulado, Gate verde.
+
 > **Conclusão 30/10/2026 (mesma branch/PR #42) — parciais e itens sem teste da auditoria:**
 > **Migration mais recente:** `0089_identificacao_ativo_pessoa_e_qualidade.sql` (0086 não usada; 0084–0089 **não aplicadas no remoto**).
 > Relatório: `docs/auditoria/RELATORIO_CONCLUSAO_FINAL_ANDERSON.md`; checklist de publicação: `docs/auditoria/CHECKLIST_PRE_PUBLICACAO_PR42.md`.

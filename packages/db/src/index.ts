@@ -39,6 +39,7 @@ export * from './attachment-uploads';
 export * from './field-sync';
 export * from './credenciais';
 export * from './organization-config';
+export * from './organization-logos';
 export * from './metrology';
 export * from './session-documents';
 export * from './asset-timeline';

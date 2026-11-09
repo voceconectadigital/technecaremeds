@@ -17,7 +17,7 @@
  */
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { CalendarClock, ClipboardList, LayoutGrid, List, MapPin } from 'lucide-react';
+import { CalendarClock, ClipboardList, LayoutGrid, List, MapPin, Printer } from 'lucide-react';
 import { Button, Card, EmptyState, SkeletonList, StatusChip, Tabs, cn, useToast } from '@aurora/ui';
 import {
   workOrdersBoard,
@@ -495,14 +495,15 @@ function Lista() {
               <span className="w-20 shrink-0 text-right">Aberta</span>
               <span className="w-28 shrink-0 text-right">Prioridade</span>
               <span className="w-28 shrink-0 text-right">Situação</span>
+              <span className="w-9 shrink-0" />
             </div>
             <ul>
               {itens.map((os, i) => (
-                <li key={os.id} className={cn(i > 0 && 'border-t border-border-subtle')}>
+                <li key={os.id} className={cn('flex items-center', i > 0 && 'border-t border-border-subtle')}>
                   <Link
                     to="/ordens/$id"
                     params={{ id: os.id }}
-                    className="flex items-center gap-4 px-4 py-2.5 transition-colors hover:bg-surface-hover"
+                    className="flex min-w-0 flex-1 items-center gap-4 py-2.5 pl-4 transition-colors hover:bg-surface-hover"
                   >
                     <span
                       className="w-24 shrink-0 font-mono text-xs whitespace-nowrap text-muted tabular-nums"
@@ -530,6 +531,18 @@ function Lista() {
                         {os.status_label}
                       </StatusChip>
                     </span>
+                  </Link>
+                  {/* Imprimir direto da lista (pedido de 06/11/2026): abre a folha completa da OS,
+                      de qualquer natureza, e o diálogo de impressão do navegador. */}
+                  <Link
+                    to="/ordens/$id"
+                    params={{ id: os.id }}
+                    search={{ modo: 'impressao' } as never}
+                    aria-label={`Imprimir ${os.number ?? 'OS'}`}
+                    title="Imprimir OS"
+                    className="mx-2 inline-flex size-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-hover hover:text-text"
+                  >
+                    <Printer aria-hidden="true" className="size-4" />
                   </Link>
                 </li>
               ))}

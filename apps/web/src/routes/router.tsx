@@ -160,6 +160,9 @@ const NegociosPage = preguicosa(() =>
 const MetasPage = preguicosa(() =>
   import('../features/configuracoes/metas').then((m) => ({ default: m.MetasPage }))
 );
+const LogomarcasPage = preguicosa(() =>
+  import('../features/configuracoes/logomarcas').then((m) => ({ default: m.LogomarcasPage }))
+);
 const TarefasPage = preguicosa(() =>
   import('../features/automacoes/tarefas').then((m) => ({ default: m.TarefasPage }))
 );
@@ -347,6 +350,7 @@ export const routeTree = raiz.addChildren([
   rotaProtegida('/configuracoes/automacoes', AutomacoesPage),
   rotaProtegida('/configuracoes/negocios', NegociosPage),
   rotaProtegida('/configuracoes/metas', MetasPage),
+  rotaProtegida('/configuracoes/logomarcas', LogomarcasPage),
   rotaProtegida('/tarefas', TarefasPage),
   // O gerador de relatório na página própria (REL-03): o mesmo diálogo do Painel.
   rotaProtegida('/relatorios', RelatoriosPage),
