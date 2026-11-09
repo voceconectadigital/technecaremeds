@@ -191,6 +191,73 @@ export const organizationsCurrent = defineOperation({
 });
 
 /* -------------------------------------------------------------------------- */
+/* Logomarcas da organização (Anderson, 06/11/2026)                           */
+/* -------------------------------------------------------------------------- */
+
+/** Tipos aceitos. SVG fica de fora: é documento ativo, não imagem. */
+export const ORGANIZATION_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+/** Teto por logomarca. Logo de cabeçalho não precisa de mais que isso. */
+export const ORGANIZATION_LOGO_MAX_BYTES = 512 * 1024;
+
+const LogoSlotParam = z.object({ slot: z.enum(['1', '2']) });
+
+export const OrganizationLogo = z.object({
+  slot: z.union([z.literal(1), z.literal(2)]),
+  /** Nome curto (ex.: "Hospital", "Mantenedora"). Vira o texto alternativo. */
+  label: z.string().nullable(),
+  file_name: z.string(),
+  content_type: z.enum(ORGANIZATION_LOGO_TYPES),
+  size: z.number().int(),
+  updated_at: z.string(),
+  /** A imagem em `data:` — a API autentica por cabeçalho, e um `<img>` não manda cabeçalho. */
+  data_url: z.string(),
+});
+export type OrganizationLogo = z.infer<typeof OrganizationLogo>;
+
+export const organizationsLogos = defineOperation({
+  operationId: 'organizations.logos',
+  method: 'GET',
+  path: '/organizations/current/logos',
+  summary: 'As logomarcas da organização do contexto (zero, uma ou duas)',
+  description:
+    'Saem no cabeçalho da folha de impressão da OS. Qualquer membro da organização lê — quem imprime ' +
+    'a OS precisa delas. Só a própria organização: não há rota por identificador.',
+  response: z.object({ items: z.array(OrganizationLogo) }),
+});
+
+export const organizationsLogoSet = defineOperation({
+  operationId: 'organizations.logoSet',
+  method: 'PUT',
+  path: '/organizations/current/logos/:slot',
+  summary: 'Põe ou troca a logomarca de uma vaga (1 ou 2)',
+  description: 'PNG, JPEG ou WebP, até 512 kB, em base64. Substitui a anterior da mesma vaga.',
+  permissions: ['organization.update'],
+  params: LogoSlotParam,
+  body: z.object({
+    file_name: NonEmpty.max(200),
+    content_type: z.enum(ORGANIZATION_LOGO_TYPES),
+    data_base64: z
+      .string()
+      .min(1)
+      .max(Math.ceil((ORGANIZATION_LOGO_MAX_BYTES * 4) / 3) + 8),
+    label: z.string().max(80).nullable().optional(),
+  }),
+  response: OrganizationLogo,
+  errors: ['validation_failed', 'not_found'],
+});
+
+export const organizationsLogoRemove = defineOperation({
+  operationId: 'organizations.logoRemove',
+  method: 'DELETE',
+  path: '/organizations/current/logos/:slot',
+  summary: 'Tira a logomarca de uma vaga',
+  permissions: ['organization.update'],
+  params: LogoSlotParam,
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
 /* Novo Negócio — tenants (reunião 16/10/2026, Fase 11)                        */
 /* -------------------------------------------------------------------------- */
 

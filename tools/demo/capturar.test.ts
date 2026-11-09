@@ -260,6 +260,8 @@ it('captura as respostas da demonstração', async () => {
   // Qualidade (08/11/2026): certificados e o espelho dos serviços concluídos.
   await ler(C.qualityList, null, {});
   await ler(C.qualityServiceRecords, null, {});
+  // Logomarcas da organização (08/11/2026): a demonstração sai sem nenhuma.
+  await ler(C.organizationsLogos);
 
   await app.close();
   await t.close();

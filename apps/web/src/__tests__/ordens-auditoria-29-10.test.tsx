@@ -507,6 +507,57 @@ describe('OS-20 · OS-26 · OS-24 — folha de impressão completa', () => {
     expect(secoes).toEqual(['cliente', 'equipamento', 'servico', 'datas', 'responsaveis']);
   });
 
+  describe('logomarcas da organização no cabeçalho (Anderson, 06/11/2026)', () => {
+    const logo = (slot: 1 | 2, label: string | null) => ({
+      slot,
+      label,
+      file_name: `logo-${slot}.png`,
+      content_type: 'image/png',
+      size: 1000,
+      updated_at: '2026-11-08T12:00:00.000Z',
+      data_url: `data:image/png;base64,bG9nby0${slot}`,
+    });
+
+    async function cabecalhoCom(items: unknown[]) {
+      const pronta = vi.fn();
+      render(
+        <Envolver respostas={{ ...tudo, 'organizations.logos': { items } }}>
+          <FolhaDeImpressao os={OS} onPronta={pronta} />
+        </Envolver>
+      );
+      await waitFor(() => expect(pronta).toHaveBeenCalled());
+      return screen.getByTestId('folha-de-impressao');
+    }
+
+    it('sem logomarca: nenhum bloco de logos, só a marca do sistema', async () => {
+      const folha = await cabecalhoCom([]);
+      expect(folha.querySelector('[data-testid="logos-da-organizacao"]')).toBeNull();
+      expect(folha.querySelectorAll('header img')).toHaveLength(1);
+    });
+
+    it('com uma: a logomarca sai com o nome dela como texto alternativo', async () => {
+      const folha = await cabecalhoCom([logo(1, 'Hospital')]);
+      const bloco = folha.querySelector('[data-testid="logos-da-organizacao"]')!;
+      const imgs = [...bloco.querySelectorAll('img')];
+      expect(imgs.map((i) => i.getAttribute('alt'))).toEqual(['Hospital']);
+      expect(imgs[0]!.getAttribute('src')).toBe('data:image/png;base64,bG9nby01');
+      expect(imgs[0]!.className).toContain('object-contain');
+    });
+
+    it('com duas: na ordem das vagas, separadas por um fio; sem rótulo vira "Logomarca N"', async () => {
+      const folha = await cabecalhoCom([logo(1, 'Hospital'), logo(2, null)]);
+      const bloco = folha.querySelector('[data-testid="logos-da-organizacao"]')!;
+      expect([...bloco.querySelectorAll('img')].map((i) => i.getAttribute('alt'))).toEqual([
+        'Hospital',
+        'Logomarca 2',
+      ]);
+      expect(bloco.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1);
+      // Com as marcas da organização, a do sistema não entra no cabeçalho; o texto diz quem emitiu.
+      expect(folha.querySelectorAll('header img')).toHaveLength(2);
+      expect(folha.textContent).toContain('Emitido pelo sistema');
+    });
+  });
+
   it('calibração (08/11/2026): imprime as leituras com nominal e tolerância, sem veredito inventado', async () => {
     const pronta = vi.fn();
     const MEDICAO = {

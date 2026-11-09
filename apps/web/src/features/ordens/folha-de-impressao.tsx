@@ -40,6 +40,8 @@ import {
   type WorkOrderPart,
   type WorkOrderSignature,
   type WorkOrderVisit,
+  organizationsLogos,
+  type OrganizationLogo,
 } from '@aurora/contracts';
 import { MARCA, useApiQuery, useSessionQuery } from '@aurora/app-kit';
 
@@ -216,10 +218,44 @@ export function useDadosDaFolha(id: string) {
   const assinaturas = useApiQuery(workOrderSignatures, { params: { id } }) as Q<{
     items: WorkOrderSignature[];
   }>;
-  const carregando = [visitas, checklists, pecas, doCliente, anexos, horas, avaliacao, assinaturas].some(
-    (q) => q.isLoading
+  // As logomarcas da organização (até duas): mudam raramente, por isso ficam em cache por mais tempo.
+  const logos = useApiQuery(organizationsLogos, undefined, { staleTime: 10 * 60_000 }) as Q<{
+    items: OrganizationLogo[];
+  }>;
+  const carregando = [
+    visitas,
+    checklists,
+    pecas,
+    doCliente,
+    anexos,
+    horas,
+    avaliacao,
+    assinaturas,
+    logos,
+  ].some((q) => q.isLoading);
+  return { visitas, checklists, pecas, doCliente, anexos, horas, avaliacao, assinaturas, logos, carregando };
+}
+
+/**
+ * As logomarcas da organização (zero, uma ou duas), lado a lado e separadas por um fio.
+ * Cada uma cabe numa caixa de altura fixa e largura máxima: a proporção é a do arquivo, sem
+ * distorcer, e uma marca alta não empurra o cabeçalho.
+ */
+function LogosDaOrganizacao({ logos }: { logos: OrganizationLogo[] }) {
+  return (
+    <div className="flex shrink-0 items-center gap-3" data-testid="logos-da-organizacao">
+      {logos.map((l, i) => (
+        <span key={l.slot} className="flex items-center gap-3">
+          {i > 0 && <span aria-hidden="true" className="h-10 w-px bg-border print:h-[11mm]" />}
+          <img
+            src={l.data_url}
+            alt={l.label ?? `Logomarca ${l.slot}`}
+            className="block h-auto max-h-14 w-auto max-w-[10rem] object-contain print:max-h-[15mm] print:max-w-[42mm]"
+          />
+        </span>
+      ))}
+    </div>
   );
-  return { visitas, checklists, pecas, doCliente, anexos, horas, avaliacao, assinaturas, carregando };
 }
 
 export function FolhaDeImpressao({ os, onPronta }: { os: WorkOrderDetail; onPronta?: () => void }) {
@@ -237,6 +273,7 @@ export function FolhaDeImpressao({ os, onPronta }: { os: WorkOrderDetail; onPron
   const anexos = d.anexos.data?.items ?? [];
   const avaliacao = d.avaliacao.data?.evaluation ?? null;
   const assinaturas = d.assinaturas.data?.items ?? [];
+  const logos = (d.logos.data?.items ?? []).slice(0, 2);
   const minutos = d.horas.data?.total_minutes ?? 0;
   const temEquipamento = Boolean(os.asset_id);
   // O nome da organização que emite (a logada), sem o marcador de ambiente "[Homologação] ".
@@ -255,12 +292,19 @@ export function FolhaDeImpressao({ os, onPronta }: { os: WorkOrderDetail; onPron
       className="aurora-folha-os mx-auto flex max-w-4xl flex-col gap-3 rounded-card border border-border bg-surface p-6 text-text print:max-w-none print:rounded-none print:border-0 print:p-0"
     >
       <header className="flex flex-col gap-3" style={{ breakInside: 'avoid' }}>
-        <div className="flex items-start justify-between gap-4 border-b-2 border-brand pb-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-text">{emissora}</p>
-            <p className="text-xs text-muted">Emitido pelo sistema {MARCA.produto}</p>
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-brand pb-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-4">
+            {logos.length > 0 && <LogosDaOrganizacao logos={logos} />}
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-text">{emissora}</p>
+              <p className="text-xs text-muted">Emitido pelo sistema {MARCA.produto}</p>
+            </div>
           </div>
-          <img src={MARCA.logoHorizontal} alt={MARCA.produto} className="h-9 w-auto shrink-0" />
+          {/* Com as marcas da organização no papel, só elas assinam o documento; a do sistema
+              (de marca.config.json) fica para quem ainda não configurou nenhuma. */}
+          {logos.length === 0 && (
+            <img src={MARCA.logoHorizontal} alt={MARCA.produto} className="h-9 w-auto shrink-0" />
+          )}
         </div>
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
