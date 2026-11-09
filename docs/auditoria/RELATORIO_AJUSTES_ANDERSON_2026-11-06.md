@@ -1,7 +1,7 @@
 # Relatório: ajustes de Anderson (áudio de 06/11/2026)
 
 **Data:** 08/11/2026 · **Branch:** `feat/ajustes-anderson-2026-11-06` (base `2541c65`, a PR #42 publicada em 30/10)
-**PR:** __PR__ · **Merge e deploy:** não feitos; aguardam sua autorização expressa.
+**PR:** [voceconectadigital/technecaremeds#44](https://github.com/voceconectadigital/technecaremeds/pull/44) · **Merge e deploy:** não feitos; aguardam sua autorização expressa.
 **Migrations:** nenhuma. A mais recente continua sendo a `0089`, já aplicada em produção.
 
 ## 1. Prontidão para o piloto de 09/11/2026
