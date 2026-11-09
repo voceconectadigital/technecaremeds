@@ -8,7 +8,8 @@
  */
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Award, Download, FilePlus2, Paperclip, Trash2 } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
+import { Award, ClipboardCheck, Download, FilePlus2, Paperclip, Printer, Trash2 } from 'lucide-react';
 import {
   Button,
   Card,
@@ -31,8 +32,11 @@ import {
   qualityCreate,
   qualityDelete,
   qualityList,
+  qualityServiceRecords,
   QUALITY_KIND_LABELS,
+  SERVICE_RECORD_KIND_LABELS,
   type QualityRecordRow,
+  type ServiceRecordRow,
 } from '@aurora/contracts';
 import {
   ApiError,
@@ -80,20 +84,26 @@ export function frasePorVencimento(validUntil: string | null, hoje = new Date())
 export function QualidadePage() {
   const [aba, setAba] = useUrlState<string>('tipo', 'todos');
   const [novo, setNovo] = useState(false);
+  const { can } = usePermissions();
+  // Espelhamento (06/11/2026): quem lê OS vê também os serviços concluídos aqui.
+  const veServicos = can('work_order.read');
+  const servicos = aba === 'servicos' && veServicos;
   const tipo = (TIPOS as string[]).includes(aba) ? (aba as Tipo) : null;
 
-  const { data, isLoading, isError } = useApiQuery(qualityList, {
-    query: tipo ? { kind: tipo } : {},
-  }) as { data: { items: QualityRecordRow[] } | undefined; isLoading: boolean; isError: boolean };
+  const { data, isLoading, isError } = useApiQuery(
+    qualityList,
+    { query: tipo ? { kind: tipo } : {} },
+    { enabled: !servicos }
+  ) as { data: { items: QualityRecordRow[] } | undefined; isLoading: boolean; isError: boolean };
   const itens = data?.items ?? [];
   const vencidos = itens.filter((i) => i.status === 'expired').length;
   const vencendo = itens.filter((i) => i.status === 'expiring').length;
-  const abaAtual = tipo ?? 'todos';
+  const abaAtual = servicos ? 'servicos' : (tipo ?? 'todos');
 
   return (
     <AppShell
       title="Qualidade"
-      subtitle="Certificados de calibração, segurança elétrica, qualificação e treinamento — com a validade à vista."
+      subtitle="Certificados com a validade à vista e os serviços concluídos de preventiva, calibração, TSE e qualificação."
       actions={
         <Can permission="document.create">
           <Button variant="primary" icon={<FilePlus2 className="size-4" />} onClick={() => setNovo(true)}>
@@ -111,6 +121,7 @@ export function QualidadePage() {
           items={[
             { id: 'todos', label: 'Todos' },
             ...TIPOS.map((k) => ({ id: k, label: QUALITY_KIND_LABELS[k] })),
+            ...(veServicos ? [{ id: 'servicos', label: 'Serviços concluídos' }] : []),
           ]}
         />
         <div
@@ -118,39 +129,45 @@ export function QualidadePage() {
           id={tabIds('qualidade', abaAtual).painel}
           aria-labelledby={tabIds('qualidade', abaAtual).aba}
         >
-          {(vencidos > 0 || vencendo > 0) && (
-            <p
-              role="status"
-              className={`mb-3 rounded-control px-3 py-2 text-sm ${vencidos > 0 ? 'bg-bad-soft text-bad-text' : 'bg-warn-soft text-warn-text'}`}
-            >
-              {vencidos > 0 &&
-                `${vencidos} ${vencidos === 1 ? 'certificado vencido' : 'certificados vencidos'}`}
-              {vencidos > 0 && vencendo > 0 && ' · '}
-              {vencendo > 0 && `${vencendo} ${vencendo === 1 ? 'vence' : 'vencem'} em até 30 dias`}
-            </p>
-          )}
-          {isLoading ? (
-            <SkeletonList rows={4} label="certificados" />
-          ) : isError ? (
-            <EmptyState
-              icon={<Award className="size-5" />}
-              title="Não conseguimos carregar agora"
-              description="Confira a conexão e tente de novo."
-            />
-          ) : itens.length === 0 ? (
-            <EmptyState
-              icon={<Award className="size-5" />}
-              title="Nenhum certificado ainda"
-              description="Cadastre o primeiro: a validade passa a ser acompanhada aqui."
-            />
+          {servicos ? (
+            <ServicosConcluidos />
           ) : (
-            <ul className="flex flex-col gap-3" aria-label="Certificados">
-              {itens.map((r) => (
-                <li key={r.id}>
-                  <CartaoDoCertificado registro={r} />
-                </li>
-              ))}
-            </ul>
+            <>
+              {(vencidos > 0 || vencendo > 0) && (
+                <p
+                  role="status"
+                  className={`mb-3 rounded-control px-3 py-2 text-sm ${vencidos > 0 ? 'bg-bad-soft text-bad-text' : 'bg-warn-soft text-warn-text'}`}
+                >
+                  {vencidos > 0 &&
+                    `${vencidos} ${vencidos === 1 ? 'certificado vencido' : 'certificados vencidos'}`}
+                  {vencidos > 0 && vencendo > 0 && ' · '}
+                  {vencendo > 0 && `${vencendo} ${vencendo === 1 ? 'vence' : 'vencem'} em até 30 dias`}
+                </p>
+              )}
+              {isLoading ? (
+                <SkeletonList rows={4} label="certificados" />
+              ) : isError ? (
+                <EmptyState
+                  icon={<Award className="size-5" />}
+                  title="Não conseguimos carregar agora"
+                  description="Confira a conexão e tente de novo."
+                />
+              ) : itens.length === 0 ? (
+                <EmptyState
+                  icon={<Award className="size-5" />}
+                  title="Nenhum certificado ainda"
+                  description="Cadastre o primeiro: a validade passa a ser acompanhada aqui."
+                />
+              ) : (
+                <ul className="flex flex-col gap-3" aria-label="Certificados">
+                  {itens.map((r) => (
+                    <li key={r.id}>
+                      <CartaoDoCertificado registro={r} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -511,5 +528,168 @@ function DialogoNovoCertificado({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/* --------------------------------------------- serviços concluídos (espelho) */
+
+const ROTULO_PARECER: Record<string, string> = {
+  released: 'Liberado para uso',
+  stopped: 'Equipamento parado',
+};
+
+function dataHoraBr(v: string | null): string {
+  if (!v) return 'não informado';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? v : d.toLocaleString('pt-BR');
+}
+
+const CLASSE_LINK =
+  'inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border px-3 text-sm font-medium text-text hover:bg-surface-sunken';
+
+/**
+ * As OS concluídas de preventiva, calibração, TSE e qualificação (pedido de Anderson, 06/11/2026).
+ * É o RELATÓRIO DE SERVIÇO de cada OS, com a origem — não um certificado: o certificado continua
+ * sendo cadastrado nas outras abas, quando existir.
+ */
+export function ServicosConcluidos() {
+  const [tipo, setTipo] = useUrlState<string>('servico', '');
+  const [busca, setBusca] = useUrlState<string>('busca', '');
+  const [de, setDe] = useUrlState<string>('de', '');
+  const [ate, setAte] = useUrlState<string>('ate', '');
+  const tipoValido = (Object.keys(SERVICE_RECORD_KIND_LABELS) as string[]).includes(tipo)
+    ? (tipo as keyof typeof SERVICE_RECORD_KIND_LABELS)
+    : undefined;
+  const { data, isLoading, isError } = useApiQuery(qualityServiceRecords, {
+    query: {
+      kind: tipoValido,
+      q: busca.trim() || undefined,
+      from: de || undefined,
+      to: ate || undefined,
+    },
+  }) as { data: { items: ServiceRecordRow[] } | undefined; isLoading: boolean; isError: boolean };
+  const itens = data?.items ?? [];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted">
+        Cada OS de preventiva, calibração, segurança elétrica ou qualificação aparece aqui ao ser concluída,
+        com o relatório de serviço e a origem. Não é certificado: nada é emitido nem assinado automaticamente.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-4" role="search" aria-label="Filtrar serviços concluídos">
+        <Field label="Tipo de serviço">
+          <Select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option value="">Todos</option>
+            {Object.entries(SERVICE_RECORD_KIND_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Buscar">
+          <Input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="OS, equipamento, patrimônio, plano"
+            maxLength={100}
+          />
+        </Field>
+        <Field label="Concluída de">
+          <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
+        </Field>
+        <Field label="Concluída até">
+          <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+        </Field>
+      </div>
+      {isLoading ? (
+        <SkeletonList rows={4} label="serviços concluídos" />
+      ) : isError ? (
+        <EmptyState
+          icon={<ClipboardCheck className="size-5" />}
+          title="Não conseguimos carregar agora"
+          description="Confira a conexão e tente de novo."
+        />
+      ) : itens.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardCheck className="size-5" />}
+          title="Nenhum serviço concluído com estes filtros"
+          description="Ao concluir uma OS de preventiva, calibração, TSE ou qualificação, ela aparece aqui."
+        />
+      ) : (
+        <ul className="flex flex-col gap-3" aria-label="Serviços concluídos">
+          {itens.map((r) => (
+            <li key={r.work_order_id}>
+              <CartaoDoServico registro={r} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CartaoDoServico({ registro: r }: { registro: ServiceRecordRow }) {
+  const equipamento = r.asset_name
+    ? [
+        r.asset_name,
+        r.asset_tag ? `patrimônio ${r.asset_tag}` : null,
+        r.asset_serial ? `série ${r.asset_serial}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
+  const onde = [r.customer_name, r.location_name, equipamento].filter(Boolean).join(' · ');
+  const origem = r.plan_name
+    ? `Plano: ${r.plan_name}${r.plan_task_name ? ` — ${r.plan_task_name}` : ''}`
+    : 'Sem plano de origem (OS avulsa)';
+  const procedimentos =
+    r.procedures.length > 0
+      ? `Procedimentos: ${r.procedures.map((p) => `${p.title} (v${p.version})`).join('; ')}`
+      : 'Sem procedimento/checklist registrado';
+  return (
+    <Card>
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-text">
+              {r.number ?? 'sem número'} · {r.title}
+            </h3>
+            <StatusChip tone="info" size="sm" withoutDot>
+              {SERVICE_RECORD_KIND_LABELS[r.kind]}
+            </StatusChip>
+            <StatusChip tone={r.category === 'review' ? 'warn' : 'good'} size="sm">
+              {r.status_label}
+            </StatusChip>
+          </div>
+          {onde && <p className="mt-1 text-sm text-muted">{onde}</p>}
+          <p className="mt-1 text-sm text-text">
+            Concluída em {dataHoraBr(r.completed_at)}
+            {r.executor_name ? ` por ${r.executor_name}` : ''}
+            {r.operational_result ? ` · ${ROTULO_PARECER[r.operational_result] ?? r.operational_result}` : ''}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {origem} · {procedimentos}
+            {r.measurement_sessions > 0 ? ` · ${r.measurement_sessions} sessão(ões) de medição` : ''}
+            {r.signatures > 0 ? ` · ${r.signatures} assinatura(s)` : ''}
+          </p>
+        </div>
+        <div className="aurora-no-print flex flex-wrap items-center gap-2">
+          <Link to="/ordens/$id" params={{ id: r.work_order_id }} className={CLASSE_LINK}>
+            Abrir OS
+          </Link>
+          <Link
+            to="/ordens/$id"
+            params={{ id: r.work_order_id }}
+            search={{ modo: 'impressao' } as never}
+            aria-label={`Relatório de serviço da ${r.number ?? 'OS'}`}
+            className={CLASSE_LINK}
+          >
+            <Printer aria-hidden="true" className="size-4" />
+            Relatório
+          </Link>
+        </div>
+      </div>
+    </Card>
   );
 }

@@ -62,6 +62,91 @@ export const qualityList = defineOperation({
   response: z.object({ items: z.array(QualityRecordRow) }),
 });
 
+/**
+ * Espelhamento (pedido de Anderson, 06/11/2026): as OS CONCLUÍDAS de preventiva, calibração, TSE e
+ * qualificação aparecem na Qualidade, com o relatório de serviço (a folha da OS) e a origem
+ * (plano, procedimento). Consulta derivada: nada é copiado, emitido ou assinado.
+ */
+export const SERVICE_RECORD_KINDS = [
+  'preventive',
+  'calibration',
+  'electrical_safety',
+  'qualification',
+] as const;
+export const SERVICE_RECORD_KIND_LABELS: Record<(typeof SERVICE_RECORD_KINDS)[number], string> = {
+  preventive: 'Manutenção preventiva',
+  calibration: 'Calibração',
+  electrical_safety: 'Segurança elétrica',
+  qualification: 'Qualificação',
+};
+
+export const ServiceRecordRow = z.object({
+  work_order_id: Uuid,
+  number: z.string().nullable(),
+  title: z.string(),
+  kind: z.enum(SERVICE_RECORD_KINDS),
+  type_label: z.string(),
+  status_key: z.string(),
+  status_label: z.string(),
+  category: z.string(),
+  customer_id: Uuid,
+  customer_name: z.string().nullable(),
+  location_name: z.string().nullable(),
+  asset_id: Uuid.nullable(),
+  asset_name: z.string().nullable(),
+  asset_tag: z.string().nullable(),
+  asset_serial: z.string().nullable(),
+  completed_at: Timestamp.nullable(),
+  validated_at: Timestamp.nullable(),
+  closed_at: Timestamp.nullable(),
+  /** `released` (liberado para uso) ou `stopped` (parado), quando o parecer foi dado. */
+  operational_result: z.string().nullable(),
+  executor_name: z.string().nullable(),
+  plan_id: Uuid.nullable(),
+  plan_name: z.string().nullable(),
+  plan_task_name: z.string().nullable(),
+  /** Os procedimentos/checklists executados na OS, um por resposta, na versão congelada. */
+  procedures: z.array(
+    z.object({
+      response_id: Uuid,
+      template_id: Uuid,
+      title: z.string(),
+      version: z.number().int(),
+      procedure_kind: z.string().nullable(),
+    })
+  ),
+  measurement_sessions: z.number().int(),
+  signatures: z.number().int(),
+});
+export type ServiceRecordRow = z.infer<typeof ServiceRecordRow>;
+
+export const qualityServiceRecords = defineOperation({
+  operationId: 'quality.serviceRecords',
+  method: 'GET',
+  path: '/quality-records/services',
+  summary: 'Serviços concluídos de preventiva, calibração, TSE e qualificação (espelho das OS, sem cópia)',
+  description:
+    'OS nas situações Concluída, Validada ou Fechada. Rascunho, aberta, em execução, cancelada e ' +
+    'negada não entram. O documento é o relatório de serviço da OS — não um certificado.',
+  permissions: ['document.read', 'work_order.read'],
+  query: z.object({
+    kind: z.enum(SERVICE_RECORD_KINDS).optional(),
+    customer: Uuid.optional(),
+    asset: Uuid.optional(),
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    q: z.string().max(100).optional(),
+  }),
+  response: z.object({ items: z.array(ServiceRecordRow) }),
+  errors: ['validation_failed'],
+});
+
 export const qualityCreate = defineOperation({
   operationId: 'quality.create',
   method: 'POST',

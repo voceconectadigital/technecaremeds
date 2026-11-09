@@ -257,6 +257,9 @@ it('captura as respostas da demonstração', async () => {
   await ler(C.automationVocabulary);
   await ler(C.automationTasksList, null, {});
   await ler(C.platformMe);
+  // Qualidade (08/11/2026): certificados e o espelho dos serviços concluídos.
+  await ler(C.qualityList, null, {});
+  await ler(C.qualityServiceRecords, null, {});
 
   await app.close();
   await t.close();
