@@ -161,4 +161,4 @@ Cada ponto foi conferido no código. Só os defeitos comprovados foram corrigido
 | Web (`contratos-do-cliente.test.tsx`) | 10/10 |
 | `tsc -b`, eslint, prettier, `openapi` | ok |
 | Suíte completa local (vitest, 3 workers) | 184 arquivos passaram, 2 pulados; **2.887 testes passaram, 32 pulados** |
-| CI (PG16 + Playwright) do commit da revisão | registrado na PR quando terminar |
+| CI do commit da revisão `d19dc2d` (run 43477587158) | Estático ✓; PostgreSQL 16 ✓ **2.919/2.919**; Ponta a ponta (Playwright) ✓ **238 passaram, 1 pulado**; Gate ✓; sem conflitos |
