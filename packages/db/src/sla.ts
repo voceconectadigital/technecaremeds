@@ -558,3 +558,57 @@ export async function assertWorkOrderExists(session: TenantSession, id: string):
   const [row] = await session.query('SELECT 1 FROM aurora.work_orders WHERE id = $1', [id]);
   if (!row) throw new NotFoundError('Ordem de serviço', id);
 }
+
+/* -------------------------------------------------------------------------- */
+/* SLA efetivo do equipamento, com a origem (0090 — Anderson, 10/11/2026)      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * De onde veio a regra de SLA que vale para o equipamento HOJE:
+ *   · `disabled`   — o SLA do equipamento está desligado: nenhum relógio abre;
+ *   · `asset`      — EXCEÇÃO configurada no próprio equipamento;
+ *   · `contract_criticality` — regra do contrato para a criticidade do equipamento;
+ *   · `contract`   — SLA GERAL do contrato que cobre o equipamento;
+ *   · `customer` / `organization` — o padrão de antes, quando não há contrato com SLA;
+ *   · `none`       — nenhuma política em degrau nenhum.
+ */
+export type SlaSource =
+  'disabled' | 'asset' | 'contract_criticality' | 'contract' | 'customer' | 'organization' | 'none';
+
+export interface EffectiveSla {
+  source: SlaSource;
+  policy_id: string | null;
+  policy_name: string | null;
+  /** O contrato que cobre o equipamento hoje, venha o SLA dele ou não. */
+  contract_id: string | null;
+  contract_number: string | null;
+}
+
+/** A mesma cascata dos relógios (`resolve_sla_policy`), dizendo a origem. Nulo = ativo inexistente. */
+export async function effectiveSlaForAsset(
+  session: TenantSession,
+  assetId: string
+): Promise<EffectiveSla | null> {
+  const [ativo] = await session.query<{ customer_id: string; contract_id: string | null }>(
+    `SELECT customer_id, aurora.contract_for_asset(id, CURRENT_DATE) AS contract_id
+       FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL`,
+    [assetId]
+  );
+  if (!ativo) return null;
+  const [regra] = await session.query<{ policy_id: string | null; source: SlaSource }>(
+    `SELECT policy_id, source FROM aurora.resolve_sla_policy_source($1, $2)`,
+    [assetId, ativo.customer_id]
+  );
+  const [nomes] = await session.query<{ policy_name: string | null; contract_number: string | null }>(
+    `SELECT (SELECT name FROM aurora.sla_policies WHERE id = $1) AS policy_name,
+            (SELECT number FROM aurora.contracts WHERE id = $2) AS contract_number`,
+    [regra?.policy_id ?? null, ativo.contract_id]
+  );
+  return {
+    source: regra?.source ?? 'none',
+    policy_id: regra?.policy_id ?? null,
+    policy_name: nomes?.policy_name ?? null,
+    contract_id: ativo.contract_id,
+    contract_number: nomes?.contract_number ?? null,
+  };
+}

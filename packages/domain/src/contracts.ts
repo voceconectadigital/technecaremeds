@@ -33,8 +33,36 @@ export const CONTRACT_KIND_LABELS: Record<ContractKind, string> = {
   warranty: 'Garantia',
 };
 
-export const BILLING_MODELS = ['fixed_monthly', 'per_asset', 'per_call', 'hybrid'] as const;
+/**
+ * BASE DE PRECIFICAÇÃO (Anderson, 10/11/2026: "hora técnica, por demanda, valor fixo").
+ * `per_hour` entrou na 0090. É dado de CADASTRO: nenhum cálculo de cobrança lê este campo.
+ */
+export const BILLING_MODELS = ['fixed_monthly', 'per_asset', 'per_call', 'per_hour', 'hybrid'] as const;
 export type BillingModel = (typeof BILLING_MODELS)[number];
+
+/**
+ * MODALIDADE DE ATENDIMENTO — a periodicidade das visitas, independente da cobrança (0090).
+ * Uma por contrato: se cabem várias ao mesmo tempo é pergunta aberta ao Anderson.
+ */
+export const SERVICE_FREQUENCIES = [
+  'annual',
+  'semiannual',
+  'quarterly',
+  'monthly',
+  'biweekly',
+  'weekly',
+] as const;
+export type ServiceFrequency = (typeof SERVICE_FREQUENCIES)[number];
+
+/**
+ * EQUIPE FIXA 1…10 — só o IDENTIFICADOR do pacote, combinável (ex.: 1 + 10). A composição de
+ * cada pacote (quantos profissionais, quais) NÃO está definida e não é inferida do número.
+ */
+export const FIXED_TEAM_PACKAGES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
+/** CONDIÇÃO DE PAGAMENTO — independente da base de precificação (0090). Só cadastro. */
+export const PAYMENT_TERMS = ['monthly', 'upfront'] as const;
+export type PaymentTerms = (typeof PAYMENT_TERMS)[number];
 
 export const CONTRACT_STATUSES = ['draft', 'active', 'suspended', 'expired', 'terminated'] as const;
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];

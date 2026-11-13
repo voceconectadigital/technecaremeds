@@ -31,3 +31,15 @@ describe('paridade contrato × domínio × banco', () => {
     expect([...ASSENTOS_DB]).toEqual(['staff', 'portal']);
   });
 });
+
+describe('paridade do contrato comercial (0090)', () => {
+  it('naturezas, base de precificação, modalidade, pagamento e equipes fixas', async () => {
+    const dominio = await import('@aurora/domain');
+    const zod = await import('@aurora/contracts');
+    expect([...zod.CONTRACT_KINDS]).toEqual([...dominio.CONTRACT_KINDS]);
+    expect([...zod.BILLING_MODELS]).toEqual([...dominio.BILLING_MODELS]);
+    expect([...zod.SERVICE_FREQUENCIES]).toEqual([...dominio.SERVICE_FREQUENCIES]);
+    expect([...zod.PAYMENT_TERMS]).toEqual([...dominio.PAYMENT_TERMS]);
+    expect([...zod.FIXED_TEAM_PACKAGES]).toEqual([...dominio.FIXED_TEAM_PACKAGES]);
+  });
+});

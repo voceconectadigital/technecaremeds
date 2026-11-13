@@ -21,23 +21,44 @@
  */
 import { Link, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
-import { Boxes, FileSignature, Search, ShieldCheck, RefreshCw } from 'lucide-react';
-import { Card, CardHeader, EmptyState, Select, Skeleton, SkeletonList, StatusChip, cn } from '@aurora/ui';
+import { Boxes, FileSignature, Pencil, Search, ShieldCheck, RefreshCw } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardHeader,
+  EmptyState,
+  Select,
+  Skeleton,
+  SkeletonList,
+  StatusChip,
+  cn,
+} from '@aurora/ui';
 import {
   contractAssets,
   contractDetail,
   contractsList,
   CONTRACT_STATUSES,
+  customersDetail,
+  type BillingModel,
+  type PaymentTerms,
+  type ServiceFrequency,
   type ContractCoverage,
   type ContractRow,
   type ContractStatus,
 } from '@aurora/contracts';
-import { useApiQuery, useUrlState } from '@aurora/app-kit';
+import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
 import { ROTULO_CONTRATO } from '../planos/novo-plano';
+import { DialogoContrato } from '../clientes/contratos-do-cliente';
+import {
+  ROTULO_MODALIDADE,
+  ROTULO_PAGAMENTO,
+  ROTULO_PRECIFICACAO,
+  rotuloDasEquipes,
+} from './rotulos-contrato';
 
 const ROTULO: Record<ContractStatus, string> = {
   draft: 'Rascunho',
@@ -259,6 +280,12 @@ interface Detalhe {
     auto_renew: boolean;
     renewal_notice_days: number | null;
     adjustment_index: string | null;
+    customer_id: string;
+    sla_policy_id: string | null;
+    sla_policy_name?: string | null;
+    service_frequency?: ServiceFrequency | null;
+    fixed_team_packages?: number[] | null;
+    payment_terms?: PaymentTerms | null;
     billing_model: string;
     included_calls: number | null;
     included_hours: string | null;
@@ -289,9 +316,26 @@ export function ContratoPage() {
   const { data: ativos, isLoading: carregandoAtivos } = useApiQuery(contractAssets, {
     params: { id },
   }) as {
-    data: { items: Array<{ id: string; name: string; location_path: string | null }> } | undefined;
+    data:
+      | {
+          items: Array<{
+            id: string;
+            name: string;
+            location_path: string | null;
+            sla_enabled?: boolean;
+            has_own_sla?: boolean;
+          }>;
+        }
+      | undefined;
     isLoading: boolean;
   };
+  const [editando, setEditando] = useState(false);
+  const customerId = data?.contract.customer_id;
+  const { data: cliente } = useApiQuery(
+    customersDetail,
+    { params: { id: customerId ?? '' } },
+    { enabled: editando && !!customerId }
+  );
 
   if (isError) return <ErrorScreen error={error} />;
 
@@ -312,9 +356,40 @@ export function ContratoPage() {
   return (
     <AppShell
       title={c.title || c.number}
-      subtitle={`${c.number} · ${ROTULO_MODELO[c.billing_model] ?? c.billing_model}`}
+      subtitle={`${c.number} · ${ROTULO_PRECIFICACAO[c.billing_model as BillingModel] ?? c.billing_model}`}
       breadcrumbs={[{ label: 'Contratos', href: '/contratos' }, { label: c.number }]}
+      actions={
+        c.status !== 'terminated' && c.status !== 'expired' ? (
+          <Can permission="contract.update">
+            <Button icon={<Pencil className="size-4" />} onClick={() => setEditando(true)}>
+              Editar
+            </Button>
+          </Can>
+        ) : undefined
+      }
     >
+      {editando && cliente && (
+        <DialogoContrato
+          cliente={cliente.customer}
+          contrato={{
+            id: c.id,
+            number: c.number,
+            title: c.title,
+            customer_id: c.customer_id,
+            kind: c.kind,
+            status: c.status,
+            starts_on: c.starts_on,
+            ends_on: c.ends_on,
+            auto_renew: c.auto_renew,
+            billing_model: c.billing_model,
+            sla_policy_id: c.sla_policy_id,
+            service_frequency: c.service_frequency ?? null,
+            fixed_team_packages: c.fixed_team_packages ?? null,
+            payment_terms: c.payment_terms ?? null,
+          }}
+          onFechar={() => setEditando(false)}
+        />
+      )}
       <div className="flex flex-col gap-4">
         <Card>
           <div className="flex flex-col gap-4 p-4">
@@ -340,6 +415,22 @@ export function ContratoPage() {
                 vazio="Sem franquia"
               />
               <Info rotulo="Horas inclusas" valor={c.included_hours} vazio="Sem franquia" />
+              <Info
+                rotulo="SLA geral"
+                valor={c.sla_policy_name ?? null}
+                vazio="Não definido — vale o padrão do cliente/organização"
+              />
+              <Info
+                rotulo="Modalidade de atendimento"
+                valor={c.service_frequency ? ROTULO_MODALIDADE[c.service_frequency] : null}
+                vazio="Não informada"
+              />
+              <Info rotulo="Equipe fixa" valor={rotuloDasEquipes(c.fixed_team_packages)} vazio="Nenhuma" />
+              <Info
+                rotulo="Pagamento"
+                valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : null}
+                vazio="Não informado"
+              />
             </dl>
           </div>
         </Card>
@@ -423,7 +514,18 @@ export function ContratoPage() {
                           params={{ id: a.id }}
                           className="block px-2.5 py-2 transition-colors hover:bg-surface-hover"
                         >
-                          <span className="block truncate text-sm text-text">{a.name}</span>
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-sm text-text">{a.name}</span>
+                            {a.sla_enabled === false ? (
+                              <StatusChip tone="neutral" size="sm">
+                                SLA desligado
+                              </StatusChip>
+                            ) : a.has_own_sla ? (
+                              <StatusChip tone="info" size="sm">
+                                SLA próprio (exceção)
+                              </StatusChip>
+                            ) : null}
+                          </span>
                           {a.location_path && (
                             <span className="block truncate text-xs text-muted">{a.location_path}</span>
                           )}
@@ -505,13 +607,6 @@ export function ContratoPage() {
 }
 
 /* -------------------------------------------------------------------------- */
-
-const ROTULO_MODELO: Record<string, string> = {
-  fixed_monthly: 'Mensalidade fixa',
-  per_call: 'Por chamado',
-  per_hour: 'Por hora',
-  hybrid: 'Misto',
-};
 
 const ROTULO_COBERTURA: Record<string, string> = {
   customer: 'Todos os equipamentos do cliente',
