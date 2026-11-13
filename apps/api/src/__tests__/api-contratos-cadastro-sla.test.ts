@@ -201,15 +201,12 @@ describe('contrato pelo cadastro do cliente', () => {
       .send({ serviceFrequency: 'weekly' });
     expect(negado.status).toBe(403);
 
-    const r = await http
-      .patch(`/v1/contracts/${contrato}`)
-      .set(auth(ADMIN_A))
-      .send({
-        slaPolicyId: politicaExcecao,
-        serviceFrequency: null,
-        billingModel: 'per_hour',
-        paymentTerms: 'upfront',
-      });
+    const r = await http.patch(`/v1/contracts/${contrato}`).set(auth(ADMIN_A)).send({
+      slaPolicyId: politicaExcecao,
+      serviceFrequency: null,
+      billingModel: 'per_hour',
+      paymentTerms: 'upfront',
+    });
     expect(r.status).toBe(200);
     const d = await http.get(`/v1/contracts/${contrato}`).set(auth(ADMIN_A));
     expect(d.body.contract).toMatchObject({
