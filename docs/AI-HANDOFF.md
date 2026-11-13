@@ -24,6 +24,27 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Contratos, SLA e cobrança — áudios do Anderson 10/11/2026 (branch `feat/contratos-sla-anderson-2026-11-10`; NÃO publicado):**
+> **Migration mais recente: `0090_contrato_modalidade_pagamento_sla_efetivo.sql`** (só aditiva; NÃO aplicada no remoto).
+> Relatório: `docs/auditoria/RELATORIO_CONTRATOS_SLA_ANDERSON_2026-11-10.md`; status `CTR-01..13`:
+> `docs/auditoria/REQUISITOS_ANDERSON_CONTRATOS_2026-11-10.json`.
+> · **Contrato no cadastro do cliente** = o MÓDULO de contratos (`aurora.contracts`), não cadastro novo: cartão
+>   `clientes/contratos-do-cliente.tsx` (lista, criar, editar); `POST /v1/contracts` aceita `coverAllAssets` (cobertura
+>   `customer`) e `activate`; `PATCH /v1/contracts/:id` (`updateContract`: encerrado/expirado não edita; início só em
+>   rascunho; vigência nova refaz a exclusividade); `GET /v1/contracts/options` (políticas de SLA).
+> · **Três conceitos separados, só cadastro:** `service_frequency` (anual…semanal, uma por contrato) + `fixed_team_packages`
+>   (Equipe Fixa 1…10, só identificador); `billing_model` (+ `per_hour`); `payment_terms` (mensal/à vista). Nenhum
+>   cálculo financeiro lê esses campos. Tarifa por natureza, orçamento por tarifa e apuração com valor = dependência.
+> · **SLA geral × exceção:** a cascata `resolve_sla_policy` NÃO mudou; `resolve_sla_policy_source` devolve a mesma
+>   política com a origem (`disabled/asset/contract_criticality/contract/customer/organization/none`) →
+>   `effectiveSlaForAsset` → `GET /v1/assets/:id/effective-sla`; a ficha do equipamento escreve a origem.
+> · Decisões pendentes D-1..D-7 no relatório (equipes, modalidades simultâneas, hora técnica, vencimento, cobrança,
+>   fechamento mensal, as duas vigências).
+> · **Revisão pré-deploy 13/11 (relatório §8):** contrato novo nasce RASCUNHO (ativar é decisão explícita); botões
+>   "Cobrir todos os equipamentos"/"Ativar" na ficha do cliente (`contracts.addCoverage`/`contracts.activate`);
+>   `fixed_team_packages` sem repetição no próprio CHECK; `billing_model_informed` (falso nos antigos → "não informada");
+>   vigência do cadastro × contrato com aviso quando divergem.
+
 > **Ajustes de Anderson 06/11/2026 (PR #44, merge `2b5af48`; PUBLICADO EM PRODUÇÃO em 09/11/2026):**
 > API impressão `b99006b8db42` + só o front web (deploy `a399b7b7`); portal e campo seguem em `2541c65`. Backup verificado
 > `f609a095`; volta: API `2541c65`, web `f607839c`. Homologação, ressalvas e pendências do Anderson:

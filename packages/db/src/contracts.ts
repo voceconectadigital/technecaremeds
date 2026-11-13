@@ -18,6 +18,8 @@ import {
   type ContractKind,
   type ContractStatus,
   type BillingModel,
+  type ServiceFrequency,
+  type PaymentTerms,
   type CoverageKind,
   type MeasurementSummary,
   type IsoDate,
@@ -50,6 +52,24 @@ export interface ContractInput {
   slaTargetPercent?: number | null;
   planTargetPercent?: number | null;
   notes?: string | null;
+  /** Modalidade de atendimento (0090). Nula = não informada. */
+  serviceFrequency?: ServiceFrequency | null;
+  /** Equipes fixas 1…10, combináveis (0090). Vazio = nenhuma. */
+  fixedTeamPackages?: number[] | null;
+  /** Condição de pagamento (0090). Nula = não informada. */
+  paymentTerms?: PaymentTerms | null;
+}
+
+/** Equipes fixas: ordenadas, sem repetição; vazio vira NULO (não informado). */
+export function normalizeFixedTeams(valor: number[] | null | undefined): number[] | null {
+  if (!valor || valor.length === 0) return null;
+  const unicos = [...new Set(valor)].sort((a, b) => a - b);
+  for (const n of unicos) {
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      throw new ValidationError('equipe fixa deve ser um número de 1 a 10', { field: 'fixedTeamPackages' });
+    }
+  }
+  return unicos;
 }
 
 export async function createContract(session: TenantSession, input: ContractInput): Promise<string> {
@@ -65,9 +85,10 @@ export async function createContract(session: TenantSession, input: ContractInpu
         auto_renew, renewal_notice_days, adjustment_index, sla_policy_id, billing_model,
         monthly_value, included_calls, included_hours, overage_call_rate, overage_hour_rate,
         penalty_percent_per_breach, penalty_cap_percent, sla_target_percent, plan_target_percent,
-        notes, created_by)
+        notes, created_by, service_frequency, fixed_team_packages, payment_terms,
+        billing_model_informed)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)`,
+             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::smallint[], $27, $28)`,
     [
       id,
       session.context.organizationId,
@@ -93,9 +114,102 @@ export async function createContract(session: TenantSession, input: ContractInpu
       input.planTargetPercent ?? null,
       input.notes ?? null,
       session.context.actorId,
+      input.serviceFrequency ?? null,
+      normalizeFixedTeams(input.fixedTeamPackages),
+      input.paymentTerms ?? null,
+      // Só é ESCOLHA quando veio explícita; o padrão fixed_monthly não conta como informado.
+      input.billingModel !== undefined,
     ]
   );
   return id;
+}
+
+/**
+ * O que se edita num contrato pelo cadastro do cliente (0090). Ausente = não muda; `null` =
+ * apaga. Valores financeiros, franquias e glosa NÃO estão aqui: seguem pela rota de criação e
+ * pelo módulo comercial, porque mexem em medição.
+ */
+export interface ContractPatch {
+  title?: string | null;
+  startsOn?: IsoDate;
+  endsOn?: IsoDate | null;
+  autoRenew?: boolean;
+  slaPolicyId?: string | null;
+  billingModel?: BillingModel;
+  serviceFrequency?: ServiceFrequency | null;
+  fixedTeamPackages?: number[] | null;
+  paymentTerms?: PaymentTerms | null;
+  notes?: string | null;
+}
+
+/**
+ * Edita o contrato. Encerrado ou expirado é histórico e não se edita. O início só muda em
+ * rascunho (depois dele já há OS carimbadas). Mudar o fim refaz a verificação de "um ativo em
+ * um contrato por vez" — e a transação desfaz tudo se ela falhar.
+ *
+ * Trocar o SLA geral vale para o que nascer DEPOIS: o relógio já aberto guarda a política dele.
+ */
+export async function updateContract(
+  session: TenantSession,
+  id: string,
+  patch: ContractPatch
+): Promise<void> {
+  const [atual] = await session.query<{ number: string; status: ContractStatus }>(
+    `SELECT number, status FROM aurora.contracts WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+    [id]
+  );
+  if (!atual) throw new NotFoundError('contrato não encontrado');
+  if (atual.status === 'terminated' || atual.status === 'expired') {
+    throw new ConflictError(`contrato ${atual.number} está encerrado e não pode ser editado`);
+  }
+  if (patch.startsOn !== undefined && atual.status !== 'draft') {
+    throw new ValidationError('o início da vigência só muda com o contrato em rascunho', {
+      field: 'startsOn',
+    });
+  }
+
+  const sets: string[] = [];
+  const valores: unknown[] = [id];
+  const por = (coluna: string, valor: unknown, cast = '') => {
+    valores.push(valor);
+    sets.push(`${coluna} = $${valores.length}${cast}`);
+  };
+  if (patch.title !== undefined) por('title', patch.title?.trim() || null);
+  if (patch.startsOn !== undefined) por('starts_on', patch.startsOn, '::date');
+  if (patch.endsOn !== undefined) por('ends_on', patch.endsOn, '::date');
+  if (patch.autoRenew !== undefined) por('auto_renew', patch.autoRenew);
+  if (patch.slaPolicyId !== undefined) por('sla_policy_id', patch.slaPolicyId);
+  if (patch.billingModel !== undefined) {
+    por('billing_model', patch.billingModel, '::aurora.billing_model');
+    por('billing_model_informed', true);
+  }
+  if (patch.serviceFrequency !== undefined) por('service_frequency', patch.serviceFrequency);
+  if (patch.fixedTeamPackages !== undefined) {
+    por('fixed_team_packages', normalizeFixedTeams(patch.fixedTeamPackages), '::smallint[]');
+  }
+  if (patch.paymentTerms !== undefined) por('payment_terms', patch.paymentTerms);
+  if (patch.notes !== undefined) por('notes', patch.notes?.trim() || null);
+  if (sets.length === 0) return;
+
+  valores.push(session.context.actorId);
+  await session.query(
+    `UPDATE aurora.contracts SET ${sets.join(', ')}, updated_by = $${valores.length}, updated_at = now()
+      WHERE id = $1`,
+    valores
+  );
+
+  if (patch.startsOn !== undefined || patch.endsOn !== undefined) {
+    const conflitos = await overlappingAssets(session, id);
+    if (conflitos.length > 0) {
+      const amostra = conflitos
+        .slice(0, 5)
+        .map((c) => `${c.asset_name} (já em ${c.other_number})`)
+        .join('; ');
+      throw new ConflictError(
+        `a nova vigência colocaria ${conflitos.length} ativo(s) em dois contratos ao mesmo tempo: ${amostra}`
+      );
+    }
+  }
 }
 
 export interface CoverageInput {

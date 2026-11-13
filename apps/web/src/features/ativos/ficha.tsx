@@ -42,6 +42,7 @@ import {
 import {
   assetDetail,
   assetIndicators,
+  assetEffectiveSla,
   assetsLifeRecord,
   assetPhoto,
   assetsLinkQr,
@@ -54,6 +55,7 @@ import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { DialogoEquipamento, TIPOS_DE_RASTREADOR } from './formulario';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
+import { ORIGEM_DO_SLA } from '../comercial/rotulos-contrato';
 import { QrSvg, enderecoDaEtiqueta } from '../../shell/qr';
 import { BotaoLaudoDeObsolescencia } from './laudo';
 import { CartaoAnvisa } from './anvisa';
@@ -70,6 +72,8 @@ export function AtivoPage() {
     isError: boolean;
     error: unknown;
   };
+  // De onde vem o SLA que vale hoje: geral do contrato, exceção do equipamento ou padrão.
+  const { data: slaEfetivo } = useApiQuery(assetEffectiveSla, { params: { id } });
 
   if (isError) return <ErrorScreen error={error} />;
 
@@ -210,9 +214,11 @@ export function AtivoPage() {
                   valor={
                     data.sla_enabled === false
                       ? 'Desabilitado'
-                      : data.sla_policy_name
-                        ? `Habilitado · ${data.sla_policy_name}`
-                        : 'Habilitado · herdado'
+                      : slaEfetivo
+                        ? textoDoSlaEfetivo(slaEfetivo)
+                        : data.sla_policy_name
+                          ? `Habilitado · ${data.sla_policy_name}`
+                          : 'Habilitado · herdado'
                   }
                 />
               </dl>
@@ -695,6 +701,27 @@ function CartaoIdentificacao({ ativo }: { ativo: AssetDetail }) {
       )}
     </Card>
   );
+}
+
+/**
+ * "SLA 4h — SLA geral do contrato CT-2026-00001" ou "Exceção 2h — exceção deste equipamento":
+ * a regra geral e a exceção nunca aparecem com o mesmo texto (Anderson, 10/11/2026).
+ */
+export function textoDoSlaEfetivo(sla: {
+  source: keyof typeof ORIGEM_DO_SLA;
+  policy_name: string | null;
+  contract_number: string | null;
+}): string {
+  const origem = ORIGEM_DO_SLA[sla.source];
+  if (sla.source === 'disabled' || sla.source === 'none') return origem;
+  const doContrato =
+    (sla.source === 'contract' || sla.source === 'contract_criticality') && sla.contract_number
+      ? ` ${sla.contract_number}`
+      : '';
+  // "Padrão da organização" vira "padrão da organização"; sigla ("SLA geral…") fica como está.
+  const inicio =
+    origem.charAt(1) === origem.charAt(1).toLowerCase() ? origem.charAt(0).toLowerCase() : origem.charAt(0);
+  return `${sla.policy_name ?? 'Política'} — ${inicio}${origem.slice(1)}${doContrato}`;
 }
 
 function Info({

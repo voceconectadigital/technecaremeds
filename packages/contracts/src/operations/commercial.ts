@@ -179,6 +179,34 @@ export const quoteTransition = defineOperation({
 export const CONTRACT_STATUSES = ['draft', 'active', 'suspended', 'expired', 'terminated'] as const;
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
+/**
+ * Contrato no cadastro do cliente (Anderson, 10/11/2026 — 0090). TRÊS CONCEITOS SEPARADOS:
+ * modalidade de atendimento (+ equipes fixas), base de precificação (`billing_model`) e
+ * condição de pagamento. Tudo cadastro: nenhum faturamento lê estes campos.
+ */
+export const CONTRACT_KINDS = [
+  'full_service',
+  'preventive_only',
+  'on_demand',
+  'rental',
+  'loan',
+  'warranty',
+] as const;
+export const BILLING_MODELS = ['fixed_monthly', 'per_asset', 'per_call', 'per_hour', 'hybrid'] as const;
+export type BillingModel = (typeof BILLING_MODELS)[number];
+export const SERVICE_FREQUENCIES = [
+  'annual',
+  'semiannual',
+  'quarterly',
+  'monthly',
+  'biweekly',
+  'weekly',
+] as const;
+export type ServiceFrequency = (typeof SERVICE_FREQUENCIES)[number];
+export const PAYMENT_TERMS = ['monthly', 'upfront'] as const;
+export type PaymentTerms = (typeof PAYMENT_TERMS)[number];
+export const FIXED_TEAM_PACKAGES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
 export const ContractRow = z.object({
   id: Uuid,
   number: z.string(),
@@ -191,6 +219,16 @@ export const ContractRow = z.object({
   ends_on: z.string().nullable(),
   auto_renew: z.boolean(),
   billing_model: z.string(),
+  /** Falso = ninguém escolheu: `fixed_monthly` é só o padrão antigo e a tela mostra "não informada". */
+  billing_model_informed: z.boolean().optional(),
+  sla_policy_id: Uuid.nullable().optional(),
+  /** O SLA GERAL do contrato: vale para todo equipamento coberto sem exceção própria. */
+  sla_policy_name: z.string().nullable().optional(),
+  service_frequency: z.enum(SERVICE_FREQUENCIES).nullable().optional(),
+  fixed_team_packages: z.array(z.number().int()).nullable().optional(),
+  payment_terms: z.enum(PAYMENT_TERMS).nullable().optional(),
+  /** Cobertura `customer`: todos os equipamentos do cliente. */
+  covers_all_assets: z.boolean().optional(),
 });
 export type ContractRow = z.infer<typeof ContractRow>;
 
@@ -251,8 +289,13 @@ export const contractDetail = defineOperation({
       renewal_notice_days: z.number().int().nullable(),
       adjustment_index: z.string().nullable(),
       sla_policy_id: Uuid.nullable(),
+      sla_policy_name: z.string().nullable().optional(),
+      service_frequency: z.enum(SERVICE_FREQUENCIES).nullable().optional(),
+      fixed_team_packages: z.array(z.number().int()).nullable().optional(),
+      payment_terms: z.enum(PAYMENT_TERMS).nullable().optional(),
       price_list_id: Uuid.nullable(),
       billing_model: z.string(),
+      billing_model_informed: z.boolean().optional(),
       included_calls: z.number().int().nullable(),
       included_hours: z.string().nullable(),
       sla_target_percent: z.string().nullable(),
@@ -303,9 +346,141 @@ export const contractAssets = defineOperation({
         id: Uuid,
         name: z.string(),
         location_path: z.string().nullable(),
+        /** Desligado: nenhum relógio de SLA abre para o equipamento. */
+        sla_enabled: z.boolean().optional(),
+        /** EXCEÇÃO: o equipamento tem política própria e não segue o SLA geral do contrato. */
+        has_own_sla: z.boolean().optional(),
       })
     ),
   }),
+});
+
+const DataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'data como AAAA-MM-DD');
+
+/** O que o cadastro do cliente grava no contrato (0090). Ausente = não muda; nulo = apaga. */
+const CamposDoContrato = {
+  title: z.string().max(200).nullable().optional(),
+  endsOn: DataIso.nullable().optional(),
+  autoRenew: z.boolean().optional(),
+  slaPolicyId: Uuid.nullable().optional(),
+  billingModel: z.enum(BILLING_MODELS).optional(),
+  serviceFrequency: z.enum(SERVICE_FREQUENCIES).nullable().optional(),
+  fixedTeamPackages: z.array(z.number().int().min(1).max(10)).max(10).nullable().optional(),
+  paymentTerms: z.enum(PAYMENT_TERMS).nullable().optional(),
+  notes: z.string().max(4000).nullable().optional(),
+};
+
+export const contractsCreate = defineOperation({
+  operationId: 'contracts.create',
+  method: 'POST',
+  path: '/contracts',
+  summary: 'Cria o contrato do cliente (rascunho, ou já vigente)',
+  description:
+    'Com `coverAllAssets`, o contrato cobre todos os equipamentos do cliente (cobertura `customer`) — ' +
+    'é o que faz o SLA GERAL valer para eles. Com `activate`, ativa na mesma transação. ' +
+    'Recusa 409 se algum equipamento ficaria em dois contratos ao mesmo tempo.',
+  permissions: ['contract.create'],
+  body: z.object({
+    customerId: Uuid,
+    kind: z.enum(CONTRACT_KINDS),
+    startsOn: DataIso,
+    ...CamposDoContrato,
+    coverAllAssets: z.boolean().optional(),
+    activate: z.boolean().optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'conflict'],
+});
+
+export const contractsUpdate = defineOperation({
+  operationId: 'contracts.update',
+  method: 'PATCH',
+  path: '/contracts/:id',
+  summary: 'Edita vigência, SLA geral, modalidade e condições cadastrais do contrato',
+  description:
+    'Encerrado ou expirado não se edita (409). O início só muda em rascunho. Trocar o SLA geral vale ' +
+    'para o que nascer depois — o relógio já aberto guarda a política dele.',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ startsOn: DataIso.optional(), ...CamposDoContrato }),
+  response: z.object({ id: Uuid }),
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsAddCoverage = defineOperation({
+  operationId: 'contracts.addCoverage',
+  method: 'POST',
+  path: '/contracts/:id/coverages',
+  summary: 'Acrescenta cobertura ao contrato (ex.: todos os equipamentos do cliente)',
+  description:
+    'É o passo que permite ATIVAR depois um contrato criado sem cobertura. Recusa 409 se algum ' +
+    'equipamento ficaria em dois contratos ao mesmo tempo.',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    kind: z.enum(['customer', 'location_subtree', 'asset_category', 'asset']),
+    assetId: Uuid.optional(),
+    locationId: Uuid.optional(),
+    assetCategoryId: Uuid.optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsActivate = defineOperation({
+  operationId: 'contracts.activate',
+  method: 'POST',
+  path: '/contracts/:id/activate',
+  summary: 'Ativa o contrato em rascunho (exige cobertura)',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ status: z.literal('active') }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsOptions = defineOperation({
+  operationId: 'contracts.options',
+  method: 'GET',
+  path: '/contracts/options',
+  summary: 'As políticas de SLA disponíveis para o SLA geral do contrato',
+  permissions: ['contract.read'],
+  response: z.object({
+    sla_policies: z.array(z.object({ id: Uuid, name: z.string(), is_default: z.boolean() })),
+  }),
+});
+
+export const SLA_SOURCES = [
+  'disabled',
+  'asset',
+  'contract_criticality',
+  'contract',
+  'customer',
+  'organization',
+  'none',
+] as const;
+export type SlaSource = (typeof SLA_SOURCES)[number];
+
+export const assetEffectiveSla = defineOperation({
+  operationId: 'assets.effectiveSla',
+  method: 'GET',
+  path: '/assets/:id/effective-sla',
+  summary: 'O SLA que vale para o equipamento hoje, e de onde ele vem',
+  description:
+    'A mesma cascata dos relógios: SLA desligado → exceção do equipamento → criticidade no contrato → ' +
+    'SLA geral do contrato → padrão do cliente → padrão da organização.',
+  permissions: ['asset.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({
+    source: z.enum(SLA_SOURCES),
+    policy_id: Uuid.nullable(),
+    policy_name: z.string().nullable(),
+    contract_id: Uuid.nullable(),
+    contract_number: z.string().nullable(),
+  }),
+  errors: ['not_found'],
 });
 
 /* -------------------------------------------------------------------------- */

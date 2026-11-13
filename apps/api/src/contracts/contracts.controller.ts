@@ -11,10 +11,12 @@
  * isso é rota própria, com permissão própria (`contract.close_period`). Fechar
  * não é "salvar de novo": é dizer que aqueles números são a fatura.
  */
-import { Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import {
   withTenant,
   createContract,
+  updateContract,
+  effectiveSlaForAsset,
   addCoverage,
   addService,
   setSlaOverride,
@@ -27,15 +29,21 @@ import {
   closePeriod,
   sweepContractAlerts,
   type Database,
+  type TenantSession,
 } from '@aurora/db';
 import {
   ValidationError,
   CONTRACT_KINDS,
   COVERAGE_KINDS,
   BILLING_MODELS,
+  SERVICE_FREQUENCIES,
+  PAYMENT_TERMS,
+  NotFoundError,
   type ContractKind,
   type CoverageKind,
   type BillingModel,
+  type ServiceFrequency,
+  type PaymentTerms,
 } from '@aurora/domain';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
@@ -73,6 +81,39 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: s
   return value as T;
 }
 
+/** Opcional que aceita nulo: ausente = undefined (não muda), null/'' = null (apaga). */
+function opcionalOuNulo<T>(value: unknown, ler: (v: unknown) => T): T | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  return ler(value);
+}
+
+function equipesFixas(value: unknown): number[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) {
+    throw new ValidationError('fixedTeamPackages deve ser uma lista de 1 a 10', {
+      field: 'fixedTeamPackages',
+    });
+  }
+  return value.map((v) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 10) {
+      throw new ValidationError('equipe fixa deve ser um número de 1 a 10', { field: 'fixedTeamPackages' });
+    }
+    return n;
+  });
+}
+
+/** A política de SLA precisa existir na organização (a RLS esconde a das outras). */
+async function conferirPolitica(s: TenantSession, id: string | null | undefined): Promise<void> {
+  if (!id) return;
+  const [ok] = await s.query(
+    `SELECT 1 AS ok FROM aurora.sla_policies WHERE id = $1 AND archived_at IS NULL`,
+    [id]
+  );
+  if (!ok) throw new ValidationError('política de SLA não encontrada', { field: 'slaPolicyId' });
+}
+
 /** Hoje, no formato de data — um só lugar, para o teste poder raciocinar sobre ele. */
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -98,6 +139,13 @@ interface CreateBody {
   slaTargetPercent?: unknown;
   planTargetPercent?: unknown;
   notes?: unknown;
+  serviceFrequency?: unknown;
+  fixedTeamPackages?: unknown;
+  paymentTerms?: unknown;
+  /** Cobre todos os equipamentos do cliente (cobertura `customer`), como no cadastro do cliente. */
+  coverAllAssets?: unknown;
+  /** Ativa na mesma transação (exige cobertura). */
+  activate?: unknown;
 }
 
 function optionalNumber(value: unknown, field: string): number | null {
@@ -117,8 +165,10 @@ export class ContractsController {
   @RequirePermissions('contract.create')
   async create(@Req() req: AuroraRequest, @Body() body: CreateBody): Promise<{ id: string }> {
     const ctx = req.auroraContext!;
-    const id = await withTenant(this.db, ctx, (s) =>
-      createContract(s, {
+    const slaPolicyId = body.slaPolicyId ? uuidParam(body.slaPolicyId, 'slaPolicyId') : null;
+    const id = await withTenant(this.db, ctx, async (s) => {
+      await conferirPolitica(s, slaPolicyId);
+      const novo = await createContract(s, {
         customerId: uuidParam(body.customerId, 'customerId'),
         kind: oneOf<ContractKind>(body.kind, CONTRACT_KINDS, 'kind'),
         title: typeof body.title === 'string' ? body.title : undefined,
@@ -126,10 +176,11 @@ export class ContractsController {
         endsOn: body.endsOn === undefined || body.endsOn === null ? null : isoDate(body.endsOn, 'endsOn'),
         autoRenew: body.autoRenew === true,
         renewalNoticeDays: optionalNumber(body.renewalNoticeDays, 'renewalNoticeDays') ?? 30,
-        slaPolicyId: body.slaPolicyId ? uuidParam(body.slaPolicyId, 'slaPolicyId') : null,
+        slaPolicyId,
+        // Ausente = não informada: o banco grava o padrão antigo e marca `billing_model_informed` falso.
         billingModel: body.billingModel
           ? oneOf<BillingModel>(body.billingModel, BILLING_MODELS, 'billingModel')
-          : 'fixed_monthly',
+          : undefined,
         monthlyValue: optionalNumber(body.monthlyValue, 'monthlyValue'),
         includedCalls: optionalNumber(body.includedCalls, 'includedCalls'),
         includedHours: optionalNumber(body.includedHours, 'includedHours'),
@@ -140,9 +191,77 @@ export class ContractsController {
         slaTargetPercent: optionalNumber(body.slaTargetPercent, 'slaTargetPercent'),
         planTargetPercent: optionalNumber(body.planTargetPercent, 'planTargetPercent'),
         notes: typeof body.notes === 'string' ? body.notes : null,
-      })
-    );
+        serviceFrequency:
+          opcionalOuNulo(body.serviceFrequency, (v) =>
+            oneOf<ServiceFrequency>(v, SERVICE_FREQUENCIES, 'serviceFrequency')
+          ) ?? null,
+        fixedTeamPackages: equipesFixas(body.fixedTeamPackages),
+        paymentTerms:
+          opcionalOuNulo(body.paymentTerms, (v) => oneOf<PaymentTerms>(v, PAYMENT_TERMS, 'paymentTerms')) ??
+          null,
+      });
+      if (body.coverAllAssets === true) {
+        await addCoverage(s, { contractId: novo, kind: 'customer' });
+      }
+      if (body.activate === true) await activateContract(s, novo);
+      return novo;
+    });
     return { id };
+  }
+
+  /** Opções do formulário de contrato: as políticas de SLA da organização. */
+  @Get('options')
+  @RequirePermissions('contract.read')
+  async options(@Req() req: AuroraRequest): Promise<{ sla_policies: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const politicas = await withTenant(this.db, ctx, (s) =>
+      s.query(
+        `SELECT id, name, is_default FROM aurora.sla_policies
+          WHERE archived_at IS NULL ORDER BY is_default DESC, name`
+      )
+    );
+    return { sla_policies: politicas };
+  }
+
+  /**
+   * Edita o contrato pelo cadastro do cliente (0090): título, vigência, SLA geral, modalidade,
+   * equipes fixas, base de precificação, condição de pagamento e observações. Valores, franquias
+   * e glosa não passam por aqui.
+   */
+  @Patch(':id')
+  @RequirePermissions('contract.update')
+  async update(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: CreateBody
+  ): Promise<{ id: string }> {
+    const ctx = req.auroraContext!;
+    const contractId = uuidParam(id, 'id');
+    const slaPolicyId = opcionalOuNulo(body.slaPolicyId, (v) => uuidParam(v, 'slaPolicyId'));
+    await withTenant(this.db, ctx, async (s) => {
+      await conferirPolitica(s, slaPolicyId);
+      await updateContract(s, contractId, {
+        title: opcionalOuNulo(body.title, (v) => String(v)),
+        startsOn: body.startsOn === undefined ? undefined : isoDate(body.startsOn, 'startsOn'),
+        endsOn: opcionalOuNulo(body.endsOn, (v) => isoDate(v, 'endsOn')),
+        autoRenew: body.autoRenew === undefined ? undefined : body.autoRenew === true,
+        slaPolicyId,
+        billingModel:
+          body.billingModel === undefined
+            ? undefined
+            : oneOf<BillingModel>(body.billingModel, BILLING_MODELS, 'billingModel'),
+        serviceFrequency: opcionalOuNulo(body.serviceFrequency, (v) =>
+          oneOf<ServiceFrequency>(v, SERVICE_FREQUENCIES, 'serviceFrequency')
+        ),
+        fixedTeamPackages:
+          body.fixedTeamPackages === undefined ? undefined : equipesFixas(body.fixedTeamPackages),
+        paymentTerms: opcionalOuNulo(body.paymentTerms, (v) =>
+          oneOf<PaymentTerms>(v, PAYMENT_TERMS, 'paymentTerms')
+        ),
+        notes: opcionalOuNulo(body.notes, (v) => String(v)),
+      });
+    });
+    return { id: contractId };
   }
 
   @Get()
@@ -155,17 +274,25 @@ export class ContractsController {
     const ctx = req.auroraContext!;
     const items = await withTenant(this.db, ctx, (s) =>
       s.query(
-        `SELECT id, number, title, customer_id, kind, status, starts_on::text, ends_on::text,
-                auto_renew, billing_model
-           FROM aurora.contracts
-          WHERE archived_at IS NULL
-            AND ($1::uuid IS NULL OR customer_id = $1)
-            AND ($2::text  IS NULL OR status::text = $2)
+        `SELECT ct.id, ct.number, ct.title, ct.customer_id, ct.kind, ct.status,
+                ct.starts_on::text AS starts_on, ct.ends_on::text AS ends_on, ct.auto_renew,
+                ct.billing_model,
+                -- Informada = marcada OU diferente do padrão antigo (per_call/per_asset nunca são padrão).
+                (ct.billing_model_informed OR ct.billing_model <> 'fixed_monthly') AS billing_model_informed,
+                ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
+                ct.fixed_team_packages::int[] AS fixed_team_packages, ct.payment_terms,
+                EXISTS (SELECT 1 FROM aurora.contract_coverages cv
+                         WHERE cv.contract_id = ct.id AND cv.kind = 'customer') AS covers_all_assets
+           FROM aurora.contracts ct
+           LEFT JOIN aurora.sla_policies sp ON sp.id = ct.sla_policy_id
+          WHERE ct.archived_at IS NULL
+            AND ($1::uuid IS NULL OR ct.customer_id = $1)
+            AND ($2::text  IS NULL OR ct.status::text = $2)
             -- Quem é restrito vê só os contratos dos clientes do seu escopo
             -- (pente-fino 17/10); as rotas por id ficam com o ScopeGuard.
             AND ($3::uuid IS NULL
-                 OR customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3)))
-          ORDER BY starts_on DESC, number`,
+                 OR ct.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($3)))
+          ORDER BY ct.starts_on DESC, ct.number`,
         [customerId ?? null, status ?? null, escopoRestrito(ctx) ? ctx.membershipId : null]
       )
     );
@@ -194,7 +321,10 @@ export class ContractsController {
                 starts_on::text AS starts_on, ends_on::text AS ends_on,
                 auto_renew, renewal_notice_days, adjustment_index,
                 sla_policy_id, price_list_id,
+                (SELECT sp.name FROM aurora.sla_policies sp WHERE sp.id = sla_policy_id) AS sla_policy_name,
+                service_frequency, fixed_team_packages::int[] AS fixed_team_packages, payment_terms,
                 billing_model::text AS billing_model,
+                (billing_model_informed OR billing_model <> 'fixed_monthly') AS billing_model_informed,
                 included_calls, included_hours::text AS included_hours,
                 sla_target_percent::text AS sla_target_percent,
                 plan_target_percent::text AS plan_target_percent,
@@ -236,7 +366,8 @@ export class ContractsController {
       // O contrato é do cliente; o equipamento coberto pode estar num setor
       // fora do escopo de quem pergunta — esse fica de fora da lista.
       return s.query(
-        `SELECT id, name, location_path FROM aurora.assets
+        `SELECT id, name, location_path, sla_enabled, sla_policy_id IS NOT NULL AS has_own_sla
+           FROM aurora.assets
           WHERE id = ANY($1::uuid[])
             AND ($2::uuid IS NULL
                  OR location_id IS NULL
@@ -421,5 +552,16 @@ export class AssetContractController {
     });
 
     return { contract: contrato };
+  }
+
+  /** O SLA que vale para o equipamento hoje e DE ONDE ele vem (geral do contrato, exceção…). */
+  @Get(':id/effective-sla')
+  @RequirePermissions('asset.read')
+  async effectiveSla(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const assetId = uuidParam(id, 'id');
+    const sla = await withTenant(this.db, ctx, (s) => effectiveSlaForAsset(s, assetId));
+    if (!sla) throw new NotFoundError('Equipamento', assetId);
+    return sla;
   }
 }

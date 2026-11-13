@@ -1,0 +1,23 @@
+{
+  "projeto": "Téchne Care",
+  "fonte": "Áudios Anderson 10/11/2026",
+  "branch": "feat/contratos-sla-anderson-2026-11-10",
+  "migration": "0090_contrato_modalidade_pagamento_sla_efetivo.sql (não aplicada em banco remoto)",
+  "relatorio": "docs/auditoria/RELATORIO_CONTRATOS_SLA_ANDERSON_2026-11-10.md",
+  "estado": "Código e testes na branch; sem merge, sem deploy, sem efeito financeiro",
+  "itens": [
+    { "id": "CTR-01", "requisito": "Contrato vinculado ao cliente e editável no cadastro", "status": "IMPLEMENTADO", "evidencia": "clientes/contratos-do-cliente.tsx; PATCH /contracts/:id; POST /contracts com coverAllAssets/activate" },
+    { "id": "CTR-02", "requisito": "Modalidades anual/semestral/trimestral/mensal/quinzenal/semanal", "status": "IMPLEMENTADO", "evidencia": "contracts.service_frequency (0090); uma por contrato", "pendencia": "D-2: modalidades simultâneas e rótulo 'reincidência'" },
+    { "id": "CTR-03", "requisito": "Equipe Fixa 1 a 10 e possibilidade de combinação", "status": "PARCIAL_DEPENDE_DEFINICAO", "evidencia": "contracts.fixed_team_packages (0090), só identificador", "pendencia": "D-1: significado e composição de cada pacote" },
+    { "id": "CTR-04", "requisito": "SLA geral definido no contrato", "status": "JA_EXISTIA_TELA_IMPLEMENTADA", "evidencia": "contracts.sla_policy_id (0031); formulário e lista" },
+    { "id": "CTR-05", "requisito": "SLA opcional por equipamento sobrescreve SLA geral", "status": "JA_EXISTIA_ORIGEM_IMPLEMENTADA", "evidencia": "assets.sla_policy_id/sla_enabled (0085); resolve_sla_policy_source (0090); GET /assets/:id/effective-sla; ficha do equipamento" },
+    { "id": "CTR-06", "requisito": "Não criar obrigação/SLA individual não contratado", "status": "VALIDADO", "evidencia": "contrato-cadastro-sla.test.ts: 1 relógio por tipo, SLA desligado sem relógio, fallback sem SLA/vencido/encerrado" },
+    { "id": "CTR-07", "requisito": "Separar modalidade de atendimento de modelo de cobrança", "status": "IMPLEMENTADO", "evidencia": "service_frequency × billing_model" },
+    { "id": "CTR-08", "requisito": "Separar cobrança de condição de pagamento", "status": "IMPLEMENTADO", "evidencia": "billing_model × payment_terms (0090)" },
+    { "id": "CTR-09", "requisito": "Tarifa de hora técnica por natureza de atendimento", "status": "DEPENDENCIA", "pendencia": "D-3: categorias, valores, vigência da tabela e eventos de horas faturáveis" },
+    { "id": "CTR-10", "requisito": "Aproveitar tarifas no orçamento com regras definidas", "status": "AMPLIACAO", "pendencia": "depende de CTR-09" },
+    { "id": "CTR-11", "requisito": "Apurar horas técnicas por tipo para relatório mensal", "status": "DEPENDENCIA", "evidencia": "medição de período já existe (measurePeriod)", "pendencia": "D-3 e D-6" },
+    { "id": "CTR-12", "requisito": "Cobrança por demanda e fixa mensal", "status": "CADASTRO_IMPLEMENTADO_EFEITO_AMPLIACAO", "evidencia": "billing_model per_call / fixed_monthly / per_hour", "pendencia": "D-5" },
+    { "id": "CTR-13", "requisito": "Não implementar faturamento financeiro completo agora", "status": "RESPEITADO" }
+  ]
+}
