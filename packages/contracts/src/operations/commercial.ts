@@ -219,6 +219,8 @@ export const ContractRow = z.object({
   ends_on: z.string().nullable(),
   auto_renew: z.boolean(),
   billing_model: z.string(),
+  /** Falso = ninguém escolheu: `fixed_monthly` é só o padrão antigo e a tela mostra "não informada". */
+  billing_model_informed: z.boolean().optional(),
   sla_policy_id: Uuid.nullable().optional(),
   /** O SLA GERAL do contrato: vale para todo equipamento coberto sem exceção própria. */
   sla_policy_name: z.string().nullable().optional(),
@@ -293,6 +295,7 @@ export const contractDetail = defineOperation({
       payment_terms: z.enum(PAYMENT_TERMS).nullable().optional(),
       price_list_id: Uuid.nullable(),
       billing_model: z.string(),
+      billing_model_informed: z.boolean().optional(),
       included_calls: z.number().int().nullable(),
       included_hours: z.string().nullable(),
       sla_target_percent: z.string().nullable(),
@@ -402,6 +405,39 @@ export const contractsUpdate = defineOperation({
   params: z.object({ id: Uuid }),
   body: z.object({ startsOn: DataIso.optional(), ...CamposDoContrato }),
   response: z.object({ id: Uuid }),
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsAddCoverage = defineOperation({
+  operationId: 'contracts.addCoverage',
+  method: 'POST',
+  path: '/contracts/:id/coverages',
+  summary: 'Acrescenta cobertura ao contrato (ex.: todos os equipamentos do cliente)',
+  description:
+    'É o passo que permite ATIVAR depois um contrato criado sem cobertura. Recusa 409 se algum ' +
+    'equipamento ficaria em dois contratos ao mesmo tempo.',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    kind: z.enum(['customer', 'location_subtree', 'asset_category', 'asset']),
+    assetId: Uuid.optional(),
+    locationId: Uuid.optional(),
+    assetCategoryId: Uuid.optional(),
+  }),
+  response: z.object({ id: Uuid }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsActivate = defineOperation({
+  operationId: 'contracts.activate',
+  method: 'POST',
+  path: '/contracts/:id/activate',
+  summary: 'Ativa o contrato em rascunho (exige cobertura)',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ status: z.literal('active') }),
+  status: 201,
   errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
 });
 

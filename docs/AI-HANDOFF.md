@@ -40,6 +40,10 @@
 >   `effectiveSlaForAsset` → `GET /v1/assets/:id/effective-sla`; a ficha do equipamento escreve a origem.
 > · Decisões pendentes D-1..D-7 no relatório (equipes, modalidades simultâneas, hora técnica, vencimento, cobrança,
 >   fechamento mensal, as duas vigências).
+> · **Revisão pré-deploy 13/11 (relatório §8):** contrato novo nasce RASCUNHO (ativar é decisão explícita); botões
+>   "Cobrir todos os equipamentos"/"Ativar" na ficha do cliente (`contracts.addCoverage`/`contracts.activate`);
+>   `fixed_team_packages` sem repetição no próprio CHECK; `billing_model_informed` (falso nos antigos → "não informada");
+>   vigência do cadastro × contrato com aviso quando divergem.
 
 > **Ajustes de Anderson 06/11/2026 (PR #44, merge `2b5af48`; PUBLICADO EM PRODUÇÃO em 09/11/2026):**
 > API impressão `b99006b8db42` + só o front web (deploy `a399b7b7`); portal e campo seguem em `2541c65`. Backup verificado

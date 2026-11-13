@@ -125,11 +125,40 @@
   - não aplicada em produção;
   - `ADD VALUE` em enum não se desfaz com simplicidade (o valor fica);
   - a publicação exige backup, autorização e a ordem API → front.
-- **Rótulo dos contratos antigos:** o `billing_model` nunca foi opcional (padrão `fixed_monthly`). Um contrato antigo aparece como "Valor fixo mensal" mesmo que ninguém tenha escolhido.
+- **Rótulo dos contratos antigos:** resolvido na revisão de 13/11 (§8, item 6). O `fixed_monthly` padrão aparece como "não informada".
 - **Cobertura pela tela:** é sempre "todos os equipamentos do cliente". Cobertura por setor, categoria ou equipamento continua só pela API. Para excluir um equipamento do SLA, desliga-se o SLA dele.
 - **Troca do SLA geral:** vale para OS e solicitações novas; relógios abertos mantêm a política anterior, e isso é intencional.
 
 ## 7. Suíte completa, CI e orçamento
 
-- **Suíte completa local e CI:** os números entram na PR depois da execução. Nada aqui é dado como aprovado sem rodar.
+- **Primeira versão (`8f72e5d`):**
+  - suíte local: 184 arquivos, 2.874 testes passaram e 32 foram pulados;
+  - CI, run 43467461481: Estático, PG16 (2.906/2.906), Ponta a ponta (238 passaram, 1 pulado) e Gate, todos verdes.
+- **Revisão de 13/11:** ver §8.
 - **Orçamento separado:** CTR-03 (composição de equipes), CTR-09 a CTR-11 (tarifas por natureza, orçamento e apuração) e qualquer efeito financeiro são ampliação. Preço e prazo só depois das decisões D-1, D-3, D-5 e D-6. Nenhum valor foi estimado aqui.
+
+## 8. Revisão pré-deploy (13/11/2026)
+
+Cada ponto foi conferido no código. Só os defeitos comprovados foram corrigidos; as regras já homologadas continuam iguais.
+
+| # | Ponto | Achado | Correção |
+|---|---|---|---|
+| 1 | Contrato novo nascia com "cobrir todos" e "ativar agora" marcados | **Defeito:** a ativação imediata era o padrão da tela | "Ativar agora" vem **desmarcado**; o contrato nasce em **rascunho**, e o rascunho não entra na cascata de SLA. A API já só ativava com `activate: true` explícito. Contratos existentes não foram tocados. "Cobrir todos" continua marcado, porque num rascunho não produz efeito. |
+| 2 | `fixed_team_packages` aceitava identificador repetido | **Defeito:** `<@` aceita `{1,1}` | `CHECK` com `aurora.smallint_array_has_no_duplicates` (IMMUTABLE) e recusa de NULL dentro do array. `{1,1}`, `{1,10,1}` e `{1,NULL}` são recusados também em gravação direta. |
+| 3 | Contrato sem cobertura poderia ser coberto e ativado depois? | A API permitia (`POST /contracts/:id/coverages` e `/activate`). **Defeito na tela:** não havia como fazer, e o rascunho ficava preso | Operações zod `contracts.addCoverage` e `contracts.activate`. Botões **Cobrir todos os equipamentos** e **Ativar** na ficha do cliente, com permissão `contract.update`. Ativar sem cobertura continua recusado (422), e o rascunho fica intacto. |
+| 4 | `resolve_sla_policy_source` = política efetiva anterior? | Nenhuma divergência encontrada | Matriz comparando a função antiga e a nova: todos os ativos da organização e "sem ativo", contra o cliente do ativo e outro cliente. Estados testados: SLA desligado, exceção, criticidade no contrato, SLA geral, padrão do cliente, contrato vencido, sem padrão da organização e outra organização. Nenhuma diferença. |
+| 5 | Vigência do cadastro × vigência do contrato | **Defeito:** o selo do cadastro ("Contrato vencido" etc.) aparecia ao lado de um contrato em outra situação | O rótulo passou a ser "Vigência informada no cadastro". O selo só aparece quando não há contrato no módulo. Se as datas divergem, um aviso diz que o SLA segue o contrato e que a vigência do cadastro é informativa. Dados e API do CLI-06 não mudaram. |
+| 6 | `fixed_monthly` dos contratos antigos aparecia como escolha | **Defeito:** a tela mostrava "Valor fixo mensal" | Coluna `billing_model_informed` (0090, `NOT NULL DEFAULT false`), marcada só quando a base vem explícita na criação ou na edição. Sem marcação, a tela mostra "Não informada", e o formulário tem essa opção. Nenhum cálculo lê o campo. |
+
+**Fora do escopo, sem alteração:** tarifas, faturamento e as regras D-1 a D-7. A migration `0090` foi alterada antes de qualquer aplicação fora dos testes e continua **sem aplicação remota**.
+
+**Testes direcionados desta revisão:**
+
+| Suíte | Resultado |
+|---|---|
+| Banco (`contrato-cadastro-sla.test.ts`) | 15/15 |
+| API (`api-contratos-cadastro-sla.test.ts`) | 15/15 |
+| Web (`contratos-do-cliente.test.tsx`) | 10/10 |
+| `tsc -b`, eslint, prettier, `openapi` | ok |
+| Suíte completa local (vitest, 3 workers) | 184 arquivos passaram, 2 pulados; **2.887 testes passaram, 32 pulados** |
+| CI (PG16 + Playwright) do commit da revisão | registrado na PR quando terminar |

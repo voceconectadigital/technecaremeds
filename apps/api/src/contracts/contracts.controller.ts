@@ -177,9 +177,10 @@ export class ContractsController {
         autoRenew: body.autoRenew === true,
         renewalNoticeDays: optionalNumber(body.renewalNoticeDays, 'renewalNoticeDays') ?? 30,
         slaPolicyId,
+        // Ausente = não informada: o banco grava o padrão antigo e marca `billing_model_informed` falso.
         billingModel: body.billingModel
           ? oneOf<BillingModel>(body.billingModel, BILLING_MODELS, 'billingModel')
-          : 'fixed_monthly',
+          : undefined,
         monthlyValue: optionalNumber(body.monthlyValue, 'monthlyValue'),
         includedCalls: optionalNumber(body.includedCalls, 'includedCalls'),
         includedHours: optionalNumber(body.includedHours, 'includedHours'),
@@ -275,7 +276,7 @@ export class ContractsController {
       s.query(
         `SELECT ct.id, ct.number, ct.title, ct.customer_id, ct.kind, ct.status,
                 ct.starts_on::text AS starts_on, ct.ends_on::text AS ends_on, ct.auto_renew,
-                ct.billing_model, ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
+                ct.billing_model, ct.billing_model_informed, ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
                 ct.fixed_team_packages::int[] AS fixed_team_packages, ct.payment_terms,
                 EXISTS (SELECT 1 FROM aurora.contract_coverages cv
                          WHERE cv.contract_id = ct.id AND cv.kind = 'customer') AS covers_all_assets
@@ -319,7 +320,7 @@ export class ContractsController {
                 sla_policy_id, price_list_id,
                 (SELECT sp.name FROM aurora.sla_policies sp WHERE sp.id = sla_policy_id) AS sla_policy_name,
                 service_frequency, fixed_team_packages::int[] AS fixed_team_packages, payment_terms,
-                billing_model::text AS billing_model,
+                billing_model::text AS billing_model, billing_model_informed,
                 included_calls, included_hours::text AS included_hours,
                 sla_target_percent::text AS sla_target_percent,
                 plan_target_percent::text AS plan_target_percent,

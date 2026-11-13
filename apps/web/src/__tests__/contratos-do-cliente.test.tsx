@@ -54,6 +54,7 @@ const CONTRATO = {
   fixed_team_packages: [1, 10],
   payment_terms: 'upfront',
   covers_all_assets: true,
+  billing_model_informed: true,
 };
 
 function montar(contratos: unknown[], permissions: string[]) {
@@ -66,6 +67,8 @@ function montar(contratos: unknown[], permissions: string[]) {
       if (op.operationId === 'contracts.options') {
         return { sla_policies: [{ id: CONTRATO.sla_policy_id, name: 'SLA 4h', is_default: false }] };
       }
+      if (op.operationId === 'contracts.addCoverage') return { id: CONTRATO.id };
+      if (op.operationId === 'contracts.activate') return { status: 'active' };
       if (op.operationId === 'contracts.create' || op.operationId === 'contracts.update')
         return { id: CONTRATO.id };
       throw new Error(`operação sem resposta no teste: ${op.operationId}`);
@@ -142,7 +145,8 @@ describe('ContratosDoCliente', () => {
       billingModel: 'per_call',
       paymentTerms: 'monthly',
       coverAllAssets: true,
-      activate: true,
+      // rascunho por padrão: ativar é decisão deliberada
+      activate: false,
     });
   });
 
@@ -167,6 +171,74 @@ describe('ContratosDoCliente', () => {
       fixedTeamPackages: [1, 10],
       paymentTerms: 'upfront',
     });
+  });
+});
+
+describe('revisão pré-deploy', () => {
+  const RASCUNHO = {
+    ...CONTRATO,
+    id: '44444444-4444-4444-8444-444444444444',
+    number: 'CT-2026-00002',
+    status: 'draft',
+    covers_all_assets: false,
+    billing_model: 'fixed_monthly',
+    billing_model_informed: false,
+    starts_on: '2026-03-01',
+    ends_on: null,
+  };
+
+  it('o padrão antigo fixed_monthly aparece como "Não informada", não como escolha', async () => {
+    montar([RASCUNHO], ['contract.read']);
+    const linha = await screen.findByTestId('contrato-CT-2026-00002');
+    expect(within(linha).getByText('Não informada')).toBeTruthy();
+    expect(within(linha).queryByText('Valor fixo mensal')).toBeNull();
+  });
+
+  it('rascunho sem cobertura: cobrir todos e ativar, cada um por decisão própria', async () => {
+    const chamadas = montar([RASCUNHO], ['contract.read', 'contract.update']);
+    const u = userEvent.setup();
+    const linha = await screen.findByTestId('contrato-CT-2026-00002');
+    expect(within(linha).getByText(/Defina a cobertura e depois ative/)).toBeTruthy();
+    await u.click(
+      within(linha).getByRole('button', { name: /Cobrir todos os equipamentos em CT-2026-00002/ })
+    );
+    await u.click(within(linha).getByRole('button', { name: /Ativar CT-2026-00002/ }));
+    await waitFor(() => expect(chamadas.some((c) => c.op === 'contracts.activate')).toBe(true));
+    expect(chamadas.find((c) => c.op === 'contracts.addCoverage')!.args).toMatchObject({
+      params: { id: RASCUNHO.id },
+      body: { kind: 'customer' },
+    });
+    expect(chamadas.find((c) => c.op === 'contracts.activate')!.args).toMatchObject({
+      params: { id: RASCUNHO.id },
+    });
+  });
+
+  it('marcar "Ativar agora" é o único jeito de criar já vigente; precificação vazia não é enviada', async () => {
+    const chamadas = montar([], ['contract.read', 'contract.create']);
+    const u = userEvent.setup();
+    await u.click(await screen.findByRole('button', { name: /Novo contrato/ }));
+    await u.click(screen.getByLabelText(/Ativar agora/));
+    await u.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(chamadas.some((c) => c.op === 'contracts.create')).toBe(true));
+    const { body } = chamadas.find((c) => c.op === 'contracts.create')!.args as {
+      body: Record<string, unknown>;
+    };
+    expect(body).toMatchObject({ coverAllAssets: true, activate: true });
+    expect(body).not.toHaveProperty('billingModel');
+  });
+
+  it('vigência do cadastro diferente da do contrato: avisa e não mostra o selo do cadastro', async () => {
+    montar([RASCUNHO], ['contract.read']);
+    const aviso = await screen.findByRole('note');
+    expect(aviso.textContent).toMatch(/diferente da do contrato CT-2026-00002/);
+    expect(aviso.textContent).toMatch(/O SLA dos equipamentos segue o contrato/);
+    expect(screen.queryByText('Contrato vigente')).toBeNull();
+  });
+
+  it('vigências iguais: nenhum aviso', async () => {
+    montar([CONTRATO], ['contract.read']);
+    await screen.findByTestId('contrato-CT-2026-00001');
+    expect(screen.queryByRole('note')).toBeNull();
   });
 });
 

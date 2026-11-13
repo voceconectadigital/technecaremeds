@@ -85,9 +85,10 @@ export async function createContract(session: TenantSession, input: ContractInpu
         auto_renew, renewal_notice_days, adjustment_index, sla_policy_id, billing_model,
         monthly_value, included_calls, included_hours, overage_call_rate, overage_hour_rate,
         penalty_percent_per_breach, penalty_cap_percent, sla_target_percent, plan_target_percent,
-        notes, created_by, service_frequency, fixed_team_packages, payment_terms)
+        notes, created_by, service_frequency, fixed_team_packages, payment_terms,
+        billing_model_informed)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::smallint[], $27)`,
+             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::smallint[], $27, $28)`,
     [
       id,
       session.context.organizationId,
@@ -116,6 +117,8 @@ export async function createContract(session: TenantSession, input: ContractInpu
       input.serviceFrequency ?? null,
       normalizeFixedTeams(input.fixedTeamPackages),
       input.paymentTerms ?? null,
+      // Só é ESCOLHA quando veio explícita; o padrão fixed_monthly não conta como informado.
+      input.billingModel !== undefined,
     ]
   );
   return id;
@@ -176,7 +179,10 @@ export async function updateContract(
   if (patch.endsOn !== undefined) por('ends_on', patch.endsOn, '::date');
   if (patch.autoRenew !== undefined) por('auto_renew', patch.autoRenew);
   if (patch.slaPolicyId !== undefined) por('sla_policy_id', patch.slaPolicyId);
-  if (patch.billingModel !== undefined) por('billing_model', patch.billingModel, '::aurora.billing_model');
+  if (patch.billingModel !== undefined) {
+    por('billing_model', patch.billingModel, '::aurora.billing_model');
+    por('billing_model_informed', true);
+  }
   if (patch.serviceFrequency !== undefined) por('service_frequency', patch.serviceFrequency);
   if (patch.fixedTeamPackages !== undefined) {
     por('fixed_team_packages', normalizeFixedTeams(patch.fixedTeamPackages), '::smallint[]');

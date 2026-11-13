@@ -26,7 +26,20 @@ ALTER TYPE aurora.billing_model ADD VALUE IF NOT EXISTS 'per_hour';
 ALTER TABLE aurora.contracts
   ADD COLUMN IF NOT EXISTS service_frequency   text,
   ADD COLUMN IF NOT EXISTS fixed_team_packages smallint[],
-  ADD COLUMN IF NOT EXISTS payment_terms       text;
+  ADD COLUMN IF NOT EXISTS payment_terms       text,
+  -- `billing_model` sempre foi NOT NULL com padrão `fixed_monthly`: o contrato antigo "tem" uma
+  -- base de precificação que ninguém escolheu. Este marcador diz se ela foi INFORMADA; falso nos
+  -- contratos existentes, e a tela mostra "não informada" em vez de apresentar o padrão como escolha.
+  ADD COLUMN IF NOT EXISTS billing_model_informed boolean NOT NULL DEFAULT false;
+
+-- Sem repetição: {1,1} ou {1,10,1} são recusados também em gravação direta no banco.
+CREATE OR REPLACE FUNCTION aurora.smallint_array_has_no_duplicates(p smallint[])
+RETURNS boolean
+LANGUAGE sql IMMUTABLE
+SET search_path = pg_catalog
+AS $fn$
+  SELECT count(*) = count(DISTINCT x) FROM unnest(p) AS x
+$fn$;
 
 ALTER TABLE aurora.contracts
   ADD CONSTRAINT contracts_service_frequency_valid
@@ -37,13 +50,15 @@ ALTER TABLE aurora.contracts
   ADD CONSTRAINT contracts_payment_terms_valid
   CHECK (payment_terms IS NULL OR payment_terms IN ('monthly', 'upfront'));
 
--- Vazio é gravado como NULO pela aplicação; aqui só os identificadores 1…10, sem repetição
--- (a aplicação normaliza; o limite de 10 elementos com valores 1..10 cobre o resto).
+-- Vazio é gravado como NULO pela aplicação; aqui só os identificadores 1…10, SEM REPETIÇÃO.
+-- `<@` sozinho aceitaria {1,1}; a função acima fecha essa porta no próprio banco.
 ALTER TABLE aurora.contracts
   ADD CONSTRAINT contracts_fixed_teams_valid
   CHECK (fixed_team_packages IS NULL OR (
     cardinality(fixed_team_packages) BETWEEN 1 AND 10
+    AND array_position(fixed_team_packages, NULL) IS NULL
     AND fixed_team_packages <@ ARRAY[1,2,3,4,5,6,7,8,9,10]::smallint[]
+    AND aurora.smallint_array_has_no_duplicates(fixed_team_packages)
   ));
 
 -- -----------------------------------------------------------------------------

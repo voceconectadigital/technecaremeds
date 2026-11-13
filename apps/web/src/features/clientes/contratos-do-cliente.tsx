@@ -13,7 +13,7 @@
  */
 import { useState, type FormEvent } from 'react';
 import { Link } from '@tanstack/react-router';
-import { FileSignature, Pencil, Plus } from 'lucide-react';
+import { FileSignature, Pencil, Play, Plus, ShieldCheck } from 'lucide-react';
 import {
   Button,
   Card,
@@ -35,7 +35,10 @@ import {
   FIXED_TEAM_PACKAGES,
   PAYMENT_TERMS,
   SERVICE_FREQUENCIES,
+  contractAssets,
   contractDetail,
+  contractsActivate,
+  contractsAddCoverage,
   contractsCreate,
   contractsList,
   contractsOptions,
@@ -74,6 +77,18 @@ export function ContratosDoCliente({ cliente }: { cliente: Customer }) {
   const { data, isLoading } = useApiQuery(contractsList, { query: { customerId: cliente.id } });
   const contratos = data?.items ?? [];
 
+  // A vigência do CADASTRO (CLI-06) é informativa; a do CONTRATO é a que decide o SLA. Quando as
+  // duas existem e não batem, a tela diz isso em vez de mostrar as duas como se fossem a mesma.
+  const emVigor = contratos.filter(
+    (c) => c.status === 'active' || c.status === 'draft' || c.status === 'suspended'
+  );
+  const divergente =
+    !!periodoDoContrato(cliente) &&
+    emVigor.length > 0 &&
+    !emVigor.some(
+      (c) => c.starts_on === cliente.contract_starts_on && (c.ends_on ?? null) === cliente.contract_ends_on
+    );
+
   return (
     <Card>
       <CardHeader
@@ -106,11 +121,24 @@ export function ContratosDoCliente({ cliente }: { cliente: Customer }) {
             </span>
           </span>
           <span className="text-muted" data-numeric>
-            Vigência no cadastro:{' '}
+            Vigência informada no cadastro:{' '}
             <span className="text-text">{periodoDoContrato(cliente) ?? 'não informada'}</span>
           </span>
-          <SeloDoContrato cliente={cliente} size="md" />
+          {/* Com contrato no módulo, a situação que vale é a dele (na linha abaixo), não a do cadastro. */}
+          {!isLoading && contratos.length === 0 && <SeloDoContrato cliente={cliente} size="md" />}
         </div>
+        {divergente && (
+          <p
+            role="note"
+            className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text"
+            data-numeric
+          >
+            A vigência informada no cadastro é diferente da do contrato {emVigor[0]!.number} (
+            {formatarData(emVigor[0]!.starts_on)} →{' '}
+            {emVigor[0]!.ends_on ? formatarData(emVigor[0]!.ends_on) : 'sem fim'}). O SLA dos equipamentos
+            segue o contrato; a do cadastro é só informativa.
+          </p>
+        )}
 
         {isLoading ? (
           <SkeletonList rows={2} label="Carregando os contratos" />
@@ -151,8 +179,18 @@ function LinhaDoContrato({
   onEditar: () => void;
 }) {
   const s = SITUACAO[c.status];
+  const toast = useToast();
   const editavel = c.status !== 'terminated' && c.status !== 'expired';
   const equipes = rotuloDasEquipes(c.fixed_team_packages);
+  const aoErrar = (e: ApiError) => toast.error(e.problem.message);
+  const cobrir = useApiMutation(contractsAddCoverage, {
+    invalidates: [contractsList, contractDetail, contractAssets],
+    onError: aoErrar,
+  });
+  const ativar = useApiMutation(contractsActivate, {
+    invalidates: [contractsList, contractDetail],
+    onError: aoErrar,
+  });
   return (
     <li
       className={cn(
@@ -195,24 +233,71 @@ function LinhaDoContrato({
           />
           <Par
             rotulo="Precificação"
-            valor={ROTULO_PRECIFICACAO[c.billing_model as BillingModel] ?? c.billing_model}
+            valor={
+              c.billing_model_informed
+                ? (ROTULO_PRECIFICACAO[c.billing_model as BillingModel] ?? c.billing_model)
+                : 'Não informada'
+            }
           />
           <Par
             rotulo="Pagamento"
             valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : 'Não informado'}
           />
         </dl>
+        {c.status === 'draft' && (
+          <p className="mt-2 text-xs text-muted">
+            Rascunho: o SLA geral ainda não vale para os equipamentos.{' '}
+            {c.covers_all_assets
+              ? 'Ative quando o contrato estiver conferido.'
+              : 'Defina a cobertura e depois ative.'}
+          </p>
+        )}
       </div>
       {editavel && (
         <Can permission="contract.update">
-          <Button
-            size="sm"
-            icon={<Pencil className="size-4" />}
-            onClick={onEditar}
-            aria-label={`Editar ${c.number}`}
-          >
-            Editar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {!c.covers_all_assets && (
+              <Button
+                size="sm"
+                icon={<ShieldCheck className="size-4" />}
+                loading={cobrir.isPending}
+                onClick={() =>
+                  cobrir.mutate(
+                    { params: { id: c.id }, body: { kind: 'customer' } },
+                    { onSuccess: () => toast.success(`${c.number} cobre todos os equipamentos do cliente`) }
+                  )
+                }
+                aria-label={`Cobrir todos os equipamentos em ${c.number}`}
+              >
+                Cobrir todos os equipamentos
+              </Button>
+            )}
+            {c.status === 'draft' && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Play className="size-4" />}
+                loading={ativar.isPending}
+                onClick={() =>
+                  ativar.mutate(
+                    { params: { id: c.id } },
+                    { onSuccess: () => toast.success(`${c.number} ativado`) }
+                  )
+                }
+                aria-label={`Ativar ${c.number}`}
+              >
+                Ativar
+              </Button>
+            )}
+            <Button
+              size="sm"
+              icon={<Pencil className="size-4" />}
+              onClick={onEditar}
+              aria-label={`Editar ${c.number}`}
+            >
+              Editar
+            </Button>
+          </div>
         </Can>
       )}
     </li>
@@ -255,11 +340,15 @@ export function DialogoContrato({
   const [sla, setSla] = useState(contrato?.sla_policy_id ?? '');
   const [modalidade, setModalidade] = useState<string>(contrato?.service_frequency ?? '');
   const [equipes, setEquipes] = useState<number[]>(contrato?.fixed_team_packages ?? []);
-  const [precificacao, setPrecificacao] = useState<string>(contrato?.billing_model ?? 'fixed_monthly');
+  // Vazio = não informada. O `fixed_monthly` antigo, nunca escolhido, não aparece como escolha.
+  const [precificacao, setPrecificacao] = useState<string>(
+    contrato?.billing_model_informed ? contrato.billing_model : ''
+  );
   const [pagamento, setPagamento] = useState<string>(contrato?.payment_terms ?? '');
   const [observacoes, setObservacoes] = useState('');
   const [cobreTudo, setCobreTudo] = useState(true);
-  const [ativar, setAtivar] = useState(true);
+  // Rascunho por padrão: ativar é decisão deliberada (o contrato ativo passa a valer no SLA).
+  const [ativar, setAtivar] = useState(false);
   const [erro, setErro] = useState<{ campo?: string; mensagem: string } | null>(null);
 
   const aoErrar = (e: ApiError) => setErro({ campo: e.field, mensagem: e.problem.message });
@@ -294,7 +383,7 @@ export function DialogoContrato({
       slaPolicyId: sla || null,
       serviceFrequency: (modalidade || null) as ServiceFrequency | null,
       fixedTeamPackages: equipes.length > 0 ? equipes : null,
-      billingModel: precificacao as BillingModel,
+      ...(precificacao ? { billingModel: precificacao as BillingModel } : {}),
       paymentTerms: (pagamento || null) as PaymentTerms | null,
       // Observações só na criação: a edição não as recebe e por isso não as apaga.
       ...(novo && observacoes.trim() ? { notes: observacoes.trim() } : {}),
@@ -464,6 +553,7 @@ export function DialogoContrato({
           <legend className="mb-2 text-sm font-semibold text-text">Condições comerciais (só cadastro)</legend>
           <Field label="Base de precificação" hint="Como o valor é calculado. Não gera cobrança.">
             <Select value={precificacao} onChange={(e) => setPrecificacao(e.target.value)}>
+              <option value="">Não informada</option>
               {BILLING_MODELS.map((b) => (
                 <option key={b} value={b}>
                   {ROTULO_PRECIFICACAO[b]}

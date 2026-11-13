@@ -9390,8 +9390,8 @@
     },
     "/v1/contracts/{id}/activate": {
       "post": {
-        "operationId": "ContractsController.activate",
-        "summary": "(sem contrato) ContractsController.activate",
+        "operationId": "contracts.activate",
+        "summary": "Ativa o contrato em rascunho (exige cobertura)",
         "tags": [
           "Contracts"
         ],
@@ -9399,23 +9399,37 @@
           "contract.update"
         ],
         "x-aurora-source": "apps/api/src/contracts/contracts.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "active"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
               }
             }
           },
@@ -9431,6 +9445,26 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9597,8 +9631,9 @@
     },
     "/v1/contracts/{id}/coverages": {
       "post": {
-        "operationId": "ContractsController.coverage",
-        "summary": "(sem contrato) ContractsController.coverage",
+        "operationId": "contracts.addCoverage",
+        "summary": "Acrescenta cobertura ao contrato (ex.: todos os equipamentos do cliente)",
+        "description": "É o passo que permite ATIVAR depois um contrato criado sem cobertura. Recusa 409 se algum equipamento ficaria em dois contratos ao mesmo tempo.",
         "tags": [
           "Contracts"
         ],
@@ -9606,23 +9641,82 @@
           "contract.update"
         ],
         "x-aurora-source": "apps/api/src/contracts/contracts.controller.ts",
-        "x-aurora-contract": "ausente",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "description": "Identificador UUID",
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "customer",
+                      "location_subtree",
+                      "asset_category",
+                      "asset"
+                    ]
+                  },
+                  "assetId": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "locationId": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  },
+                  "assetCategoryId": {
+                    "description": "Identificador UUID",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {
+          "201": {
             "description": "Sucesso",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Identificador UUID",
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000)$"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
               }
             }
           },
@@ -9638,6 +9732,26 @@
           },
           "403": {
             "description": "Falta permissão; a resposta nomeia qual",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Não existe, ou está fora do alcance de quem perguntou",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "O estado atual não permite a operação",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -10369,6 +10483,9 @@
                         },
                         "billing_model": {
                           "type": "string"
+                        },
+                        "billing_model_informed": {
+                          "type": "boolean"
                         },
                         "included_calls": {
                           "anyOf": [
@@ -11204,6 +11321,9 @@
                           },
                           "billing_model": {
                             "type": "string"
+                          },
+                          "billing_model_informed": {
+                            "type": "boolean"
                           },
                           "sla_policy_id": {
                             "anyOf": [

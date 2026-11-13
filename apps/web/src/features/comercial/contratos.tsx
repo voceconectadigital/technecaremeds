@@ -287,6 +287,7 @@ interface Detalhe {
     fixed_team_packages?: number[] | null;
     payment_terms?: PaymentTerms | null;
     billing_model: string;
+    billing_model_informed?: boolean;
     included_calls: number | null;
     included_hours: string | null;
     sla_target_percent: string | null;
@@ -356,7 +357,11 @@ export function ContratoPage() {
   return (
     <AppShell
       title={c.title || c.number}
-      subtitle={`${c.number} · ${ROTULO_PRECIFICACAO[c.billing_model as BillingModel] ?? c.billing_model}`}
+      subtitle={`${c.number} · ${
+        c.billing_model_informed
+          ? (ROTULO_PRECIFICACAO[c.billing_model as BillingModel] ?? c.billing_model)
+          : 'precificação não informada'
+      }`}
       breadcrumbs={[{ label: 'Contratos', href: '/contratos' }, { label: c.number }]}
       actions={
         c.status !== 'terminated' && c.status !== 'expired' ? (
@@ -382,6 +387,7 @@ export function ContratoPage() {
             ends_on: c.ends_on,
             auto_renew: c.auto_renew,
             billing_model: c.billing_model,
+            billing_model_informed: c.billing_model_informed ?? false,
             sla_policy_id: c.sla_policy_id,
             service_frequency: c.service_frequency ?? null,
             fixed_team_packages: c.fixed_team_packages ?? null,

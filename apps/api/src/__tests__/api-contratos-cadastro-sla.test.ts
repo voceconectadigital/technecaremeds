@@ -229,3 +229,82 @@ describe('contrato pelo cadastro do cliente', () => {
     expect(s.status).toBe(404);
   });
 });
+
+describe('rascunho primeiro, cobertura e ativação deliberadas', () => {
+  let outroCliente: string;
+  let rascunho: string;
+
+  beforeAll(async () => {
+    await withTenant(
+      t.db,
+      buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: newId() }),
+      async (s) => {
+        outroCliente = await createCustomer(s, { name: 'Clínica do Rascunho' });
+        const cat = await createAssetCategory(s, { name: 'Bomba' });
+        await createAsset(s, { name: 'Bomba 01', customerId: outroCliente, assetCategoryId: cat });
+      }
+    );
+  });
+
+  it('sem coverAllAssets nem activate, nasce rascunho sem cobertura e sem precificação informada', async () => {
+    const r = await http
+      .post('/v1/contracts')
+      .set(auth(ADMIN_A))
+      .send({ customerId: outroCliente, kind: 'on_demand', startsOn: hoje });
+    expect(r.status).toBe(201);
+    rascunho = r.body.id;
+    const lista = await http.get(`/v1/contracts?customerId=${outroCliente}`).set(auth(ADMIN_A));
+    expect(lista.body.items[0]).toMatchObject({
+      status: 'draft',
+      covers_all_assets: false,
+      billing_model: 'fixed_monthly',
+      billing_model_informed: false,
+    });
+  });
+
+  it('sem cobertura, ativar é recusado — e o rascunho continua intacto', async () => {
+    const r = await http.post(`/v1/contracts/${rascunho}/activate`).set(auth(ADMIN_A));
+    expect(r.status).toBe(422);
+    const d = await http.get(`/v1/contracts/${rascunho}`).set(auth(ADMIN_A));
+    expect(d.body.contract.status).toBe('draft');
+  });
+
+  it('o técnico não cobre nem ativa', async () => {
+    const c = await http
+      .post(`/v1/contracts/${rascunho}/coverages`)
+      .set(auth(TECNICO_A))
+      .send({ kind: 'customer' });
+    expect(c.status).toBe(403);
+    const a = await http.post(`/v1/contracts/${rascunho}/activate`).set(auth(TECNICO_A));
+    expect(a.status).toBe(403);
+  });
+
+  it('depois de receber cobertura, o rascunho é ativado', async () => {
+    const c = await http
+      .post(`/v1/contracts/${rascunho}/coverages`)
+      .set(auth(ADMIN_A))
+      .send({ kind: 'customer' });
+    expect(c.status).toBe(201);
+    const a = await http.post(`/v1/contracts/${rascunho}/activate`).set(auth(ADMIN_A));
+    expect(a.status).toBe(201);
+    expect(a.body).toEqual({ status: 'active' });
+    const lista = await http.get(`/v1/contracts?customerId=${outroCliente}`).set(auth(ADMIN_A));
+    expect(lista.body.items[0]).toMatchObject({ status: 'active', covers_all_assets: true });
+  });
+
+  it('informar a precificação depois marca como escolha expressa', async () => {
+    await http.patch(`/v1/contracts/${rascunho}`).set(auth(ADMIN_A)).send({ billingModel: 'fixed_monthly' });
+    const d = await http.get(`/v1/contracts/${rascunho}`).set(auth(ADMIN_A));
+    expect(d.body.contract).toMatchObject({ billing_model: 'fixed_monthly', billing_model_informed: true });
+  });
+
+  it('a outra organização não cobre nem ativa o contrato da primeira', async () => {
+    const c = await http
+      .post(`/v1/contracts/${contrato}/coverages`)
+      .set(auth(ADMIN_B))
+      .send({ kind: 'customer' });
+    expect(c.status).toBeGreaterThanOrEqual(400);
+    const a = await http.post(`/v1/contracts/${rascunho}/activate`).set(auth(ADMIN_B));
+    expect(a.status).toBeGreaterThanOrEqual(400);
+  });
+});

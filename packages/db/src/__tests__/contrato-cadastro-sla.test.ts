@@ -24,6 +24,7 @@ import {
   terminateContract,
   updateContract,
   normalizeFixedTeams,
+  setSlaOverride,
 } from '../contracts';
 import { createTestDatabase, seedOrganization, type TestDatabase } from '../testing/harness';
 
@@ -131,7 +132,8 @@ describe('cadastro do contrato: três conceitos independentes', () => {
     contratoClinica = id;
     const [row] = await em((s) =>
       s.query<Record<string, unknown>>(
-        `SELECT service_frequency, fixed_team_packages, payment_terms, billing_model::text AS billing_model
+        `SELECT service_frequency, fixed_team_packages, payment_terms, billing_model::text AS billing_model,
+                billing_model_informed
            FROM aurora.contracts WHERE id = $1`,
         [id]
       )
@@ -141,6 +143,8 @@ describe('cadastro do contrato: três conceitos independentes', () => {
       fixed_team_packages: null,
       payment_terms: null,
       billing_model: 'fixed_monthly',
+      // o padrão antigo NÃO é escolha comercial: a tela mostra "não informada"
+      billing_model_informed: false,
     });
   });
 
@@ -163,7 +167,7 @@ describe('cadastro do contrato: três conceitos independentes', () => {
     const [row] = await em((s) =>
       s.query<Record<string, unknown>>(
         `SELECT service_frequency, fixed_team_packages::int[] AS equipes, payment_terms,
-                billing_model::text AS billing_model
+                billing_model::text AS billing_model, billing_model_informed
            FROM aurora.contracts WHERE id = $1`,
         [contratoHospital]
       )
@@ -173,6 +177,7 @@ describe('cadastro do contrato: três conceitos independentes', () => {
       equipes: [1, 10],
       payment_terms: 'upfront',
       billing_model: 'per_hour',
+      billing_model_informed: true,
     });
   });
 
@@ -182,6 +187,10 @@ describe('cadastro do contrato: três conceitos independentes', () => {
       `UPDATE aurora.contracts SET payment_terms = 'barter' WHERE id = $1`,
       `UPDATE aurora.contracts SET fixed_team_packages = '{11}' WHERE id = $1`,
       `UPDATE aurora.contracts SET fixed_team_packages = '{}' WHERE id = $1`,
+      // identificador repetido, mesmo gravando direto no banco
+      `UPDATE aurora.contracts SET fixed_team_packages = '{1,1}' WHERE id = $1`,
+      `UPDATE aurora.contracts SET fixed_team_packages = '{1,10,1}' WHERE id = $1`,
+      `UPDATE aurora.contracts SET fixed_team_packages = '{1,NULL}' WHERE id = $1`,
     ]) {
       await expect(em((s) => s.query(sql, [contratoHospital]))).rejects.toThrow();
     }
@@ -323,5 +332,98 @@ describe('isolamento entre organizações', () => {
     await expect(
       withTenant(t.db, ctxB, (s) => updateContract(s, contratoHospital, { serviceFrequency: 'annual' }))
     ).rejects.toThrow(/não encontrado/);
+  });
+});
+
+describe('resolve_sla_policy_source reproduz EXATAMENTE resolve_sla_policy', () => {
+  /** Cada ativo da organização (e "sem ativo") × cada cliente — inclusive o cliente que não é o do ativo. */
+  async function conferirTudo(rotulo: string, contexto = ctx) {
+    const ativos = await withTenant(t.db, contexto, (s) =>
+      s.query<{ id: string }>(`SELECT id FROM aurora.assets`)
+    );
+    const pares: Array<[string | null, string]> = [];
+    for (const a of [...ativos.map((x) => x.id), null]) {
+      for (const c of [hospital, clinica]) pares.push([a, c]);
+    }
+    for (const [a, c] of pares) {
+      const [r] = await withTenant(t.db, contexto, (s) =>
+        s.query<{ antiga: string | null; nova: string | null }>(
+          `SELECT aurora.resolve_sla_policy($1, $2) AS antiga,
+                  (SELECT policy_id FROM aurora.resolve_sla_policy_source($1, $2)) AS nova`,
+          [a, c]
+        )
+      );
+      expect(r!.nova, `${rotulo}: ativo ${a ?? 'nenhum'} × cliente ${c}`).toBe(r!.antiga);
+    }
+    return pares.length;
+  }
+
+  it('em todos os degraus: desligado, exceção, criticidade, geral, cliente, organização, nenhum', async () => {
+    // estado deixado pelos testes acima: exceção no monitor, desfibrilador desligado, contrato vigente
+    // com SLA geral no hospital, contrato da clínica encerrado
+    expect(await conferirTudo('estado atual')).toBeGreaterThanOrEqual(8);
+
+    await em((s) =>
+      s.query(`UPDATE aurora.customers SET default_sla_policy_id = $1 WHERE id = $2`, [
+        politicaExcecao,
+        clinica,
+      ])
+    );
+    await conferirTudo('padrão do cliente');
+
+    const critico = await em(async (s) => {
+      const id = newId();
+      await s.query(
+        `INSERT INTO aurora.criticality_levels (id, organization_id, name, score, sla_multiplier)
+         VALUES ($1, $2, 'Alta', 90, 1)`,
+        [id, ORG]
+      );
+      await s.query(`UPDATE aurora.assets SET criticality_id = $1 WHERE id IN ($2, $3)`, [
+        id,
+        ventilador,
+        monitor,
+      ]);
+      return id;
+    });
+    await em((s) =>
+      setSlaOverride(s, {
+        contractId: contratoHospital,
+        criticalityLevelId: critico,
+        slaPolicyId: politicaPadrao,
+      })
+    );
+    await conferirTudo('criticidade no contrato');
+    expect((await slaDe(ventilador, hospital)).source).toBe('contract_criticality');
+    // a exceção do equipamento continua vencendo a criticidade
+    expect((await slaDe(monitor, hospital)).source).toBe('asset');
+
+    await em((s) => updateContract(s, contratoHospital, { endsOn: dia(-1) }));
+    await conferirTudo('contrato vencido');
+    await em((s) => updateContract(s, contratoHospital, { endsOn: null }));
+
+    await em((s) =>
+      s.query(`UPDATE aurora.organizations SET default_sla_policy_id = NULL WHERE id = $1`, [ORG])
+    );
+    await conferirTudo('sem padrão da organização');
+    const [solto] = await em((s) =>
+      s.query<{ n: number }>(`SELECT count(*)::int AS n FROM aurora.resolve_sla_policy_source(NULL, $1)`, [
+        hospital,
+      ])
+    );
+    expect(solto!.n).toBe(0); // "nenhum": nenhuma linha, e effectiveSlaForAsset devolve 'none'
+    await em((s) =>
+      s.query(`UPDATE aurora.organizations SET default_sla_policy_id = $1 WHERE id = $2`, [
+        politicaPadrao,
+        ORG,
+      ])
+    );
+  });
+
+  it('na outra organização as duas também coincidem (e nada da primeira aparece)', async () => {
+    await conferirTudo('organização B', ctxB);
+    const linhas = await withTenant(t.db, ctxB, (s) =>
+      s.query(`SELECT * FROM aurora.resolve_sla_policy_source($1, $2)`, [ventilador, hospital])
+    );
+    expect(linhas).toEqual([]);
   });
 });
