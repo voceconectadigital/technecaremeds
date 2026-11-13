@@ -308,3 +308,34 @@ describe('rascunho primeiro, cobertura e ativação deliberadas', () => {
     expect(a.status).toBeGreaterThanOrEqual(400);
   });
 });
+
+describe('contrato antigo com precificação diferente do padrão', () => {
+  it('per_asset/per_call gravados antes da 0090 contam como escolha; fixed_monthly antigo não', async () => {
+    const sistema = buildContext({ organizationId: ORG_A, actorKind: 'system', requestId: newId() });
+    const { antigoPorAtivo, antigoPadrao, clienteAntigo } = await withTenant(t.db, sistema, async (s) => {
+      const clienteAntigo = await createCustomer(s, { name: 'Cliente de contrato antigo' });
+      const ids: string[] = [];
+      for (const modelo of ['per_asset', 'fixed_monthly']) {
+        const [linha] = await s.query<{ id: string }>(
+          `INSERT INTO aurora.contracts (id, organization_id, number, customer_id, kind, starts_on, billing_model)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'preventive_only', CURRENT_DATE, $4::aurora.billing_model)
+           RETURNING id`,
+          [ORG_A, `ANTIGO-${modelo}`, clienteAntigo, modelo]
+        );
+        ids.push(linha!.id);
+      }
+      return { antigoPorAtivo: ids[0]!, antigoPadrao: ids[1]!, clienteAntigo };
+    });
+    const lista = await http.get(`/v1/contracts?customerId=${clienteAntigo}`).set(auth(ADMIN_A));
+    const porId = Object.fromEntries(
+      lista.body.items.map((c: { id: string; billing_model_informed: boolean }) => [
+        c.id,
+        c.billing_model_informed,
+      ])
+    );
+    expect(porId[antigoPorAtivo]).toBe(true);
+    expect(porId[antigoPadrao]).toBe(false);
+    const d = await http.get(`/v1/contracts/${antigoPorAtivo}`).set(auth(ADMIN_A));
+    expect(d.body.contract).toMatchObject({ billing_model: 'per_asset', billing_model_informed: true });
+  });
+});

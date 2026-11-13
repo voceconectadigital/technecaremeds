@@ -276,7 +276,10 @@ export class ContractsController {
       s.query(
         `SELECT ct.id, ct.number, ct.title, ct.customer_id, ct.kind, ct.status,
                 ct.starts_on::text AS starts_on, ct.ends_on::text AS ends_on, ct.auto_renew,
-                ct.billing_model, ct.billing_model_informed, ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
+                ct.billing_model,
+                -- Informada = marcada OU diferente do padrão antigo (per_call/per_asset nunca são padrão).
+                (ct.billing_model_informed OR ct.billing_model <> 'fixed_monthly') AS billing_model_informed,
+                ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
                 ct.fixed_team_packages::int[] AS fixed_team_packages, ct.payment_terms,
                 EXISTS (SELECT 1 FROM aurora.contract_coverages cv
                          WHERE cv.contract_id = ct.id AND cv.kind = 'customer') AS covers_all_assets
@@ -320,7 +323,8 @@ export class ContractsController {
                 sla_policy_id, price_list_id,
                 (SELECT sp.name FROM aurora.sla_policies sp WHERE sp.id = sla_policy_id) AS sla_policy_name,
                 service_frequency, fixed_team_packages::int[] AS fixed_team_packages, payment_terms,
-                billing_model::text AS billing_model, billing_model_informed,
+                billing_model::text AS billing_model,
+                (billing_model_informed OR billing_model <> 'fixed_monthly') AS billing_model_informed,
                 included_calls, included_hours::text AS included_hours,
                 sla_target_percent::text AS sla_target_percent,
                 plan_target_percent::text AS plan_target_percent,

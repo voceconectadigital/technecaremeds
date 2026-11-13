@@ -28,8 +28,9 @@ ALTER TABLE aurora.contracts
   ADD COLUMN IF NOT EXISTS fixed_team_packages smallint[],
   ADD COLUMN IF NOT EXISTS payment_terms       text,
   -- `billing_model` sempre foi NOT NULL com padrão `fixed_monthly`: o contrato antigo "tem" uma
-  -- base de precificação que ninguém escolheu. Este marcador diz se ela foi INFORMADA; falso nos
-  -- contratos existentes, e a tela mostra "não informada" em vez de apresentar o padrão como escolha.
+  -- base de precificação que ninguém escolheu. Este marcador diz se ela foi INFORMADA. Nenhuma linha
+  -- existente é alterada: a API lê "informada" = marcador OU valor diferente do padrão (per_call e
+  -- per_asset nunca foram padrão, então foram escolhidos). Só o fixed_monthly antigo sai "não informada".
   ADD COLUMN IF NOT EXISTS billing_model_informed boolean NOT NULL DEFAULT false;
 
 -- Sem repetição: {1,1} ou {1,10,1} são recusados também em gravação direta no banco.
