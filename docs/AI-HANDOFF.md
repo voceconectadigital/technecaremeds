@@ -24,8 +24,11 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
-> **Contratos, SLA e cobrança — áudios do Anderson 10/11/2026 (branch `feat/contratos-sla-anderson-2026-11-10`; NÃO publicado):**
-> **Migration mais recente: `0090_contrato_modalidade_pagamento_sla_efetivo.sql`** (só aditiva; NÃO aplicada no remoto).
+> **Contratos, SLA e cobrança — áudios do Anderson 10/11/2026 (PR #46, merge `186c748`; PUBLICADO EM PRODUÇÃO em 13/11/2026):**
+> API impressão `e7e464ca30f8` + só o front web (deploy `22adacf6`); portal e campo inalterados. Backup verificado `700860a1`;
+> volta: API `2b5af48` (impressão `b99006b8db42`), web `a399b7b7`. Homologação por leitura e pendências operacionais (gravar,
+> ativar, cobrir): `docs/auditoria/RELATORIO_DEPLOY_CONTRATOS_SLA_2026-11-13.md` — CONCLUÍDA COM RESSALVAS.
+> **Migration mais recente: `0090_contrato_modalidade_pagamento_sla_efetivo.sql`** (só aditiva; APLICADA no remoto em 13/11/2026 20:11 UTC).
 > Relatório: `docs/auditoria/RELATORIO_CONTRATOS_SLA_ANDERSON_2026-11-10.md`; status `CTR-01..13`:
 > `docs/auditoria/REQUISITOS_ANDERSON_CONTRATOS_2026-11-10.json`.
 > · **Contrato no cadastro do cliente** = o MÓDULO de contratos (`aurora.contracts`), não cadastro novo: cartão
@@ -1700,10 +1703,10 @@ continua publicada, só que em `technecaremeds.pages.dev` (§27-A).
 
 | Peça | Onde | Estado |
 | --- | --- | --- |
-| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · `main` `2b5af48` (PR #44), deploy `a399b7b7` em 09/11/2026 (antes: `f16d0b1` em 10/10, `2541c65` em 30/10) |
+| **Web** (equipe) | Cloudflare Pages `technecare-web` → https://technecaremeds.voceconecta.com.br | ✅ produção · `main` `186c748` (PR #46), deploy `22adacf6` em 13/11/2026 (antes: `a399b7b7` em 09/11 no `2b5af48`, `f16d0b1` em 10/10, `2541c65` em 30/10) |
 | **Portal** (cliente) | Pages `technecare-portal` → https://portal-technecaremeds.voceconecta.com.br | ✅ produção · `2541c65` (30/10/2026) |
 | **Campo** (técnico, PWA) | Pages `technecare-field` → https://campo-technecaremeds.voceconecta.com.br | ✅ produção · `2541c65` (30/10/2026) |
-| **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ runtime `pgv-pe0b9asx` (HostPanel → Aplicações) reimplantado do `main` `2b5af48` (PR #44) em 09/11/2026, sem migration (até `0089`). `/v1/health/version` → `impressao` **`b99006b8db42`** (= `npm run versao` no `2b5af48`; em 10/10 era `adcda99e0720` no `f16d0b1`); `commit` vem **nulo** (o HostPanel monta a imagem sem `.git`). `/v1/health/ready` ok |
+| **API** (NestJS) | https://api-technecaremeds.voceconecta.com.br/v1 → `80.190.72.199` (runtime PostgreSQL VPS do HostPanel, node `apps-us-east-01`, segundo o CUTOVER) | ✅ runtime `pgv-pe0b9asx` (HostPanel → Aplicações) reimplantado do `main` `186c748` (PR #46) em 13/11/2026, com a migration `0090` (90 migrations). `/v1/health/version` → `impressao` **`e7e464ca30f8`** (= `npm run versao` no `186c748`; em 09/11 era `b99006b8db42` no `2b5af48`; em 10/10 era `adcda99e0720` no `f16d0b1`); `commit` vem **nulo** (o HostPanel monta a imagem sem `.git`). `/v1/health/ready` ok |
 | **Workers** (pg-boss) | mesmo runtime, pelo manifesto `deploy/hostpanel/technecare-producao.manifest.json` | 🟡 não verificável de fora |
 | **PostgreSQL 16** | mesmo runtime, rede interna, sem porta pública (`db`, banco `aurora`; `aurora.destinos.json` → `producao.hostsInternos`) | ✅ (pela saúde da API) |
 | **Demo** | Pages `technecaremeds` (ligado ao GitHub) → https://technecaremeds.pages.dev | ✅ publica sozinho a cada push no `main` — é também o rollback do domínio principal |
