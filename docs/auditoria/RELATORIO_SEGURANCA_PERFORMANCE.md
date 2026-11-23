@@ -127,7 +127,15 @@ A suíte completa local (cerca de 2.900 testes) não foi rodada de uma vez nesta
 
 ### 4.1 CI
 
-Preenchido com o resultado da última execução no HEAD da PR (ver o fim deste documento e o histórico da PR).
+| Execução | Commit | Estático | PostgreSQL 16 | E2E | Gate |
+|---|---|---|---|---|---|
+| 1 | `0e3e130` | ✗ `npm ci` (lock gerado no npm 11/Windows sem opcionais WASM) | — | — | — |
+| 2 | `a32b561` | ✗ formatação de um teste | — | — | — |
+| 3 | `5f9b28f` | ✓ | pulado (PR em rascunho) | pulado | pulado |
+| 4 | HEAD após "ready for review" | em execução no momento deste registro | — | — | — |
+
+O workflow só roda PG16 e E2E com a PR **fora de rascunho**; ela foi marcada "pronta para revisão" (não é merge) para
+disparar a prova completa. O resultado final fica nos checks da PR #48 — **não publicar antes de Gate verde**.
 
 ---
 
