@@ -34,6 +34,21 @@ interface MembershipRow {
   warehouse_ids: string[] | null;
 }
 
+/**
+ * O identificador de correlação que o cliente PODE escolher (auditoria 23/11/2026, SEG-05).
+ *
+ * O `request_id` desce até `domain_events.request_id`, e o motor de automações lê nele a
+ * marca `automacao:<regra>:<profundidade>`. Aceitá-lo cru deixava qualquer membro mandar
+ * `x-request-id: automacao:<uuid>:3` e calar todas as automações daquele evento (profundidade
+ * no teto), além de forjar a correlação da trilha de auditoria. Só letras, dígitos, `-`, `_` e
+ * `.` (até 64): serve a qualquer rastreador de verdade e nunca forma a marca, que exige `:`.
+ */
+const REQUEST_ID_ACEITO = /^[A-Za-z0-9._-]{1,64}$/;
+
+export function requestIdDoCliente(valor: string | undefined): string | null {
+  return valor && REQUEST_ID_ACEITO.test(valor) ? valor : null;
+}
+
 export class ContextResolver {
   constructor(
     private readonly db: Database,
@@ -41,7 +56,7 @@ export class ContextResolver {
   ) {}
 
   async resolve(req: IncomingRequest): Promise<RequestContext> {
-    const requestId = req.header('x-request-id') ?? newId();
+    const requestId = requestIdDoCliente(req.header('x-request-id')) ?? newId();
 
     const authorization = req.header('authorization') ?? '';
     const bearer = authorization.toLowerCase().startsWith('bearer ') ? authorization.slice(7).trim() : '';

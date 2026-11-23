@@ -39,7 +39,7 @@ import {
   type QualityKind,
   type QualityStatus,
 } from '@aurora/db';
-import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
+import { ForbiddenError, NotFoundError, ValidationError, contentMatchesDeclaredType } from '@aurora/domain';
 import { qualityCreate, qualityServiceRecords } from '@aurora/contracts';
 import { escopoRestrito } from '../common/scope-sql';
 import { parseWith } from '../common/contract-validation';
@@ -149,20 +149,25 @@ export class QualityController {
   async create(@Req() req: AuroraRequest, @Body() body: unknown): Promise<{ id: string }> {
     meuVinculo(req);
     const b = parseWith(qualityCreate.body, body);
-    const id = await withTenant(this.db, req.auroraContext!, (s) =>
-      createQualityRecord(s, {
-        kind: b.kind,
-        title: b.title,
-        customerId: b.customer_id ?? null,
-        assetId: b.asset_id ?? null,
-        procedureTemplateId: b.procedure_template_id ?? null,
-        personName: b.person_name ?? null,
-        certificateNumber: b.certificate_number ?? null,
-        issuer: b.issuer ?? null,
-        issuedAt: b.issued_at,
-        validUntil: b.valid_until ?? null,
-        note: b.note ?? null,
-      })
+    const ctx = req.auroraContext!;
+    const id = await withTenant(this.db, ctx, (s) =>
+      createQualityRecord(
+        s,
+        {
+          kind: b.kind,
+          title: b.title,
+          customerId: b.customer_id ?? null,
+          assetId: b.asset_id ?? null,
+          procedureTemplateId: b.procedure_template_id ?? null,
+          personName: b.person_name ?? null,
+          certificateNumber: b.certificate_number ?? null,
+          issuer: b.issuer ?? null,
+          issuedAt: b.issued_at,
+          validUntil: b.valid_until ?? null,
+          note: b.note ?? null,
+        },
+        escopoRestrito(ctx) ? ctx.membershipId : null
+      )
     );
     return { id };
   }
@@ -171,7 +176,10 @@ export class QualityController {
   @RequirePermissions('document.create')
   async remove(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ ok: true }> {
     meuVinculo(req);
-    await withTenant(this.db, req.auroraContext!, (s) => deleteQualityRecord(s, uuidParam(id, 'id')));
+    const ctx = req.auroraContext!;
+    await withTenant(this.db, ctx, (s) =>
+      deleteQualityRecord(s, uuidParam(id, 'id'), escopoRestrito(ctx) ? ctx.membershipId : null)
+    );
     return { ok: true };
   }
 
@@ -205,6 +213,13 @@ export class QualityController {
     }
 
     const bytes = new Uint8Array(corpo);
+    // Os BYTES têm de ser do tipo declarado (auditoria 23/11/2026, SEG-04): um HTML ou executável
+    // com `content-type: application/pdf` era guardado e servido a clientes como certificado.
+    if (!contentMatchesDeclaredType(tipo, bytes.subarray(0, 16))) {
+      throw new ValidationError('o conteúdo do arquivo não corresponde ao tipo informado', {
+        field: 'content-type',
+      });
+    }
     const sha256 = sha256De(bytes);
     const nome = nomeSeguro(nomeCru, extensao);
     const ctx = req.auroraContext!;

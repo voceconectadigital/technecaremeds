@@ -60,9 +60,33 @@ export interface QualityRecordRow {
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * O ESCOPO de um registro de qualidade para o vínculo no parâmetro `n` (auditoria 23/11/2026,
+ * SEG-02/SEG-03).
+ *
+ * Cliente: o do registro precisa estar entre os acessíveis (registro sem cliente — treinamento da
+ * equipe — segue visível a todos, como era; se isso muda é decisão de negócio). Setor: registro de
+ * EQUIPAMENTO só vale para quem enxerga o local do equipamento — a mesma regra da lista de OS e do
+ * `ScopeGuard` (equipamento sem local fica com o cliente). Nulo no parâmetro = sem restrição.
+ */
+function escopoDoRegistro(n: number): string {
+  const p = '$' + n;
+  return `(${p}::uuid IS NULL
+       OR ((q.customer_id IS NULL
+            OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids(${p})))
+           AND (q.asset_id IS NULL
+                OR EXISTS (SELECT 1 FROM aurora.assets ea
+                            WHERE ea.id = q.asset_id
+                              AND (ea.location_id IS NULL
+                                   OR ea.location_id IN (SELECT location_id
+                                                           FROM aurora.accessible_location_ids(${p})))))))`;
+}
+
 export async function createQualityRecord(
   session: TenantSession,
-  input: QualityRecordInput
+  input: QualityRecordInput,
+  /** Vínculo de quem cria: o equipamento e o cliente precisam estar no escopo dele (SEG-02). */
+  scopeMembershipId: string | null = null
 ): Promise<string> {
   if (!(QUALITY_KINDS as readonly string[]).includes(input.kind)) {
     throw new ValidationError('tipo de certificado desconhecido', { field: 'kind' });
@@ -92,15 +116,28 @@ export async function createQualityRecord(
   // O cliente do equipamento é o do certificado: dois valores independentes divergiriam.
   let customerId = input.customerId ?? null;
   if (input.assetId) {
+    // Fora do escopo = "não existe": o 404 não revela equipamento de outro cliente ou setor.
     const [a] = await session.query<{ customer_id: string }>(
-      `SELECT customer_id FROM aurora.assets WHERE id = $1 AND deleted_at IS NULL`,
-      [input.assetId]
+      `SELECT customer_id FROM aurora.assets
+        WHERE id = $1 AND deleted_at IS NULL
+          AND ($2::uuid IS NULL
+               OR (customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2))
+                   AND (location_id IS NULL
+                        OR location_id IN (SELECT location_id FROM aurora.accessible_location_ids($2)))))`,
+      [input.assetId, scopeMembershipId]
     );
     if (!a) throw new NotFoundError('Equipamento', input.assetId);
     if (customerId && customerId !== a.customer_id) {
       throw new ValidationError('o equipamento não é deste cliente', { field: 'asset_id' });
     }
     customerId = a.customer_id;
+  }
+  if (customerId && scopeMembershipId) {
+    const [visivel] = await session.query<{ ok: boolean }>(
+      `SELECT true AS ok FROM aurora.accessible_customer_ids($1) WHERE customer_id = $2`,
+      [scopeMembershipId, customerId]
+    );
+    if (!visivel) throw new NotFoundError('Cliente', customerId);
   }
 
   // O procedimento (QUA-04): uma versão que existe nesta organização — a RLS esconde a de outra,
@@ -182,9 +219,7 @@ export async function listQualityRecords(
           AND ($1::text IS NULL OR q.kind = $1)
           AND ($2::uuid IS NULL OR q.customer_id = $2)
           AND ($3::uuid IS NULL OR q.asset_id = $3)
-          AND ($4::uuid IS NULL
-               OR q.customer_id IS NULL
-               OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($4)))
+          AND ${escopoDoRegistro(4)}
      ) x
      WHERE ($5::text IS NULL OR x.status = $5)
      ORDER BY CASE x.status WHEN 'expired' THEN 0 WHEN 'expiring' THEN 1 ELSE 2 END, x.valid_until NULLS LAST, x.title
@@ -201,11 +236,18 @@ export async function listQualityRecords(
 }
 
 /** Tira o registro de cena (a linha fica, para a trilha de auditoria). */
-export async function deleteQualityRecord(session: TenantSession, id: string): Promise<void> {
+export async function deleteQualityRecord(
+  session: TenantSession,
+  id: string,
+  /** Vínculo de quem exclui: registro fora do escopo dele é "não existe" (SEG-02). */
+  scopeMembershipId: string | null = null
+): Promise<void> {
   const r = await session.query<{ id: string }>(
-    `UPDATE aurora.quality_records SET deleted_at = now(), updated_by = $2
-      WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-    [id, session.context.actorId]
+    `UPDATE aurora.quality_records q SET deleted_at = now(), updated_by = $2
+      WHERE q.id = $1 AND q.deleted_at IS NULL
+        AND ${escopoDoRegistro(3)}
+      RETURNING q.id`,
+    [id, session.context.actorId, scopeMembershipId]
   );
   if (r.length === 0) throw new NotFoundError('Registro de qualidade', id);
 }
@@ -232,9 +274,7 @@ export async function getQualityFile(
     `SELECT file_key, file_name, file_content_type, file_size
        FROM aurora.quality_records q
       WHERE q.id = $1 AND q.deleted_at IS NULL
-        AND ($2::uuid IS NULL
-             OR q.customer_id IS NULL
-             OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($2)))`,
+        AND ${escopoDoRegistro(2)}`,
     [id, scopeMembershipId]
   );
   if (!q) throw new NotFoundError('Registro de qualidade', id);
@@ -259,9 +299,7 @@ export async function setQualityFile(
         SET file_key = $2, file_name = $3, file_content_type = $4, file_size = $5, file_sha256 = $6,
             updated_by = $7
       WHERE q.id = $1 AND q.deleted_at IS NULL
-        AND ($8::uuid IS NULL
-             OR q.customer_id IS NULL
-             OR q.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($8)))
+        AND ${escopoDoRegistro(8)}
       RETURNING q.id`,
     [
       id,

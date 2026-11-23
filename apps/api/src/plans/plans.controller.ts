@@ -34,7 +34,9 @@ import {
   Req,
   Res,
   StreamableFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { RotaPesadaInterceptor } from '../common/limite-de-carga';
 import type { Response } from 'express';
 import {
   withTenant,
@@ -223,6 +225,7 @@ export class PlansController {
    * dependência). Rota de LEITURA: POST só porque os filtros vão no corpo.
    */
   @Post('compliance-report')
+  @UseInterceptors(RotaPesadaInterceptor)
   @HttpCode(200)
   @RequirePermissions('maintenance_plan.read')
   @PermissionsCheckedInHandler('rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado')

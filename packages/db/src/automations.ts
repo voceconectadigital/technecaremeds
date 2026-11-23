@@ -34,6 +34,7 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
+  ForbiddenError,
   type ConditionNode,
   type ActionKind,
   type TriggerKind,
@@ -93,6 +94,10 @@ export async function createRule(session: TenantSession, input: RuleInput): Prom
     }
   }
   if (errosDeGatilho.length > 0) throw new ValidationError(errosDeGatilho.join('; '));
+  conferirPermissoesDoAutor(
+    session,
+    input.actions.map((a) => a.kind)
+  );
   await conferirPessoasDasAcoes(session, input.actions);
   await conferirNivelDosRelatorios(session, input.actions);
 
@@ -221,6 +226,25 @@ interface RuleRow {
   simulated_at: Date | null;
 }
 
+/**
+ * Quem cria ou ATIVA a regra precisa ter, ele mesmo, a permissão de cada ação (auditoria
+ * 23/11/2026, SEG-11).
+ *
+ * A regra roda no worker com todas as permissões (é o sistema agindo); a conferência que valia na
+ * execução — "automação nunca contorna permissão" — nunca falhava ali. Um papel personalizado com
+ * `automation.create` mas sem `work_order.assign` montava uma regra que atribuía OS por ele.
+ * Conferir no autor fecha a escada: a regra não faz o que quem a ligou não poderia fazer.
+ */
+function conferirPermissoesDoAutor(session: TenantSession, kinds: readonly string[]): void {
+  for (const kind of kinds) {
+    const def = actionDefinition(kind);
+    if (!def) throw new ValidationError(`ação desconhecida: ${kind}`);
+    if (!session.context.permissions.has(def.permission)) {
+      throw new ForbiddenError(def.permission);
+    }
+  }
+}
+
 async function loadRule(session: TenantSession, id: string): Promise<RuleRow> {
   const [row] = await session.query<RuleRow>(
     `SELECT id, name, state::text AS state, trigger_kind::text AS trigger_kind, trigger_cron,
@@ -300,6 +324,14 @@ export async function simulateRule(
  */
 export async function activateRule(session: TenantSession, ruleId: string): Promise<void> {
   const regra = await loadRule(session, ruleId);
+  const acoes = await session.query<{ kind: string }>(
+    `SELECT kind FROM aurora.automation_actions WHERE rule_id = $1`,
+    [ruleId]
+  );
+  conferirPermissoesDoAutor(
+    session,
+    acoes.map((a) => a.kind)
+  );
   if (regra.simulated_at === null) {
     throw new ConflictError(
       'simule a regra antes de ativar: é a única forma de saber quantas vezes ela dispararia'

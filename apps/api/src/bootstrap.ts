@@ -35,19 +35,67 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
    * qualquer coisa perto deste número já é sinal de defeito, não de foto
    * grande.
    */
-  app.use('/v1/field/attachments', raw({ type: 'application/octet-stream', limit: '8mb' }));
+  /*
+   * `inflate: false` EM TODOS OS INTERPRETADORES (auditoria 23/11/2026, SEG-01).
+   *
+   * O padrão do body-parser descompacta `Content-Encoding: gzip`, e o teto conta
+   * o corpo JÁ descompactado: 30 kB enviados viravam 12 MB de JSON, antes de
+   * qualquer login (o interpretador roda antes do middleware de contexto). Vinte
+   * requisições dessas levavam o processo de 100 MB a mais de 1 GB — o limite do
+   * contêiner. Nenhum dos três apps manda corpo compactado; o cliente que mandar
+   * recebe 415, que é a resposta honesta.
+   */
+  const semDescompactar = { inflate: false } as const;
+  app.use(
+    '/v1/field/attachments',
+    raw({ ...semDescompactar, type: 'application/octet-stream', limit: '8mb' })
+  );
   // Certificados de qualidade: PDF e imagem, só neste caminho (conversa com o cliente, 21/10/2026).
   app.use(
     '/v1/quality-records',
-    raw({ type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], limit: '10mb' })
+    raw({
+      ...semDescompactar,
+      type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
+      limit: '10mb',
+    })
   );
   // Nota fiscal do pedido da Store: o mesmo corpo cru, só neste caminho.
   app.use(
     '/v1/store-orders',
-    raw({ type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'], limit: '10mb' })
+    raw({
+      ...semDescompactar,
+      type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'],
+      limit: '10mb',
+    })
   );
-  app.use(json({ limit: '12mb' }));
-  app.use(urlencoded({ extended: false, limit: '1mb' }));
+  /*
+   * JSON grande SÓ onde ele existe: a foto do ativo em base64 (até 8 MB → ~11 MB),
+   * a logomarca da organização, a importação (até 5 mil linhas por envio) e o
+   * pacote de sincronização do campo. O resto da API não tem corpo que passe de
+   * 2 MB — e aceitar 12 MB em toda rota era dar a qualquer origem o direito de
+   * ocupar 12 MB de memória por requisição.
+   */
+  for (const caminho of ['/v1/assets', '/v1/organizations', '/v1/imports', '/v1/field']) {
+    app.use(caminho, json({ ...semDescompactar, limit: '12mb' }));
+  }
+  app.use(json({ ...semDescompactar, limit: '2mb' }));
+  app.use(urlencoded({ ...semDescompactar, extended: false, limit: '1mb' }));
+  /*
+   * Cabeçalhos de segurança das respostas da API (SEG-09). A API só devolve JSON
+   * e arquivos baixados: nada dela deve ser emoldurado, interpretado como outro
+   * tipo ou guardado em cache compartilhado. Rotas de arquivo que já definem o
+   * próprio `cache-control` sobrescrevem este padrão.
+   */
+  const express = app.getHttpAdapter().getInstance();
+  express.disable('x-powered-by');
+  app.use((_req: unknown, res: { setHeader(n: string, v: string): void }, next: () => void) => {
+    res.setHeader('x-content-type-options', 'nosniff');
+    res.setHeader('x-frame-options', 'DENY');
+    res.setHeader('content-security-policy', "default-src 'none'; frame-ancestors 'none'");
+    res.setHeader('referrer-policy', 'no-referrer');
+    res.setHeader('cache-control', 'no-store');
+    next();
+  });
   /*
    * CORS por lista explícita, e nunca `*`.
    *
@@ -66,7 +114,9 @@ export async function createApp(deps: AppDeps): Promise<INestApplication> {
   if (origens.length > 0) {
     app.enableCors({
       origin: origens,
-      credentials: true,
+      // Sem cookies: a sessão vai no cabeçalho `Authorization` (token opaco).
+      // Liberar credenciais só ampliaria o que uma origem da lista pode fazer.
+      credentials: false,
       // Só o que a aplicação realmente manda. `x-aurora-organization` é a
       // escolha de organização; `x-request-id` correlaciona com o log.
       // `x-aurora-client-operation` carrega o identificador que o aparelho de

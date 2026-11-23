@@ -489,6 +489,10 @@ export async function sweepSlaClocks(
             target_minutes, warned_at, calendar_snapshot
        FROM aurora.sla_clocks
       WHERE state = 'running'
+        -- Já estourado não tem mais nada a fazer aqui: o UPDATE abaixo exige breached_at IS NULL
+        -- e o aviso só vale antes do estouro. Sem este filtro, cada OS atrasada custava uma ida
+        -- ao banco a cada varredura, para sempre (auditoria 23/11/2026, PERF-05).
+        AND breached_at IS NULL
       ORDER BY due_at`
   );
 

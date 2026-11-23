@@ -33,7 +33,7 @@ import {
   type Database,
   type StoreOrderStatus,
 } from '@aurora/db';
-import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
+import { ForbiddenError, NotFoundError, ValidationError, contentMatchesDeclaredType } from '@aurora/domain';
 import { storeOrderCancel, storeOrderStatus, storeOrdersCreate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
@@ -206,6 +206,13 @@ export class StoreOrdersController {
       });
     }
     const bytes = new Uint8Array(corpo);
+    // Os BYTES têm de ser do tipo declarado (auditoria 23/11/2026, SEG-04): um HTML ou executável
+    // com `content-type: application/pdf` era guardado e servido a clientes como nota fiscal.
+    if (!contentMatchesDeclaredType(tipo, bytes.subarray(0, 16))) {
+      throw new ValidationError('o conteúdo do arquivo não corresponde ao tipo informado', {
+        field: 'content-type',
+      });
+    }
     const sha256 = sha256De(bytes);
     const nome = nomeSeguro(nomeCru, extensao);
     const ctx = req.auroraContext!;
