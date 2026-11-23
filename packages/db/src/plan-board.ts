@@ -372,7 +372,7 @@ async function realItems(
        LEFT JOIN LATERAL (
          SELECT s.id, s.name FROM aurora.locations s
            JOIN aurora.location_types lt ON lt.id = s.location_type_id AND lt.key = 'setor'
-          WHERE a.location_path LIKE s.path || '%' AND s.deleted_at IS NULL
+          WHERE s.id = ANY (string_to_array(btrim(a.location_path, '/'), '/')::uuid[]) AND s.deleted_at IS NULL
           ORDER BY s.depth DESC LIMIT 1
        ) se ON true
       WHERE p.archived_at IS NULL
@@ -758,7 +758,7 @@ export async function planSchedule(
       `SELECT a.id, a.name, a.location_path, a.customer_id,
               (SELECT s.name FROM aurora.locations s
                  JOIN aurora.location_types lt ON lt.id = s.location_type_id AND lt.key = 'setor'
-                WHERE a.location_path LIKE s.path || '%' AND s.deleted_at IS NULL
+                WHERE s.id = ANY (string_to_array(btrim(a.location_path, '/'), '/')::uuid[]) AND s.deleted_at IS NULL
                 ORDER BY s.depth DESC LIMIT 1) AS sector_name
          FROM aurora.resolve_plan_task_assets($1) r
          JOIN aurora.assets a ON a.id = r.asset_id
@@ -867,7 +867,7 @@ export async function planEligibleItems(
             t.id AS task_id, t.name AS task_name, a.id AS asset_id, a.name AS asset_name,
             (SELECT s.name FROM aurora.locations s
                JOIN aurora.location_types lt ON lt.id = s.location_type_id AND lt.key = 'setor'
-              WHERE a.location_path LIKE s.path || '%' AND s.deleted_at IS NULL
+              WHERE s.id = ANY (string_to_array(btrim(a.location_path, '/'), '/')::uuid[]) AND s.deleted_at IS NULL
               ORDER BY s.depth DESC LIMIT 1) AS sector_name,
             i.work_order_id, w.number AS work_order_number
        FROM aurora.plan_cycle_items i

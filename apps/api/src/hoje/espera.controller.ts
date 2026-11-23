@@ -84,7 +84,7 @@ export class HojeEsperaController {
              LEFT JOIN LATERAL (
                SELECT s.id, s.name FROM aurora.locations s
                  JOIN aurora.location_types lt ON lt.id = s.location_type_id AND lt.key = 'setor'
-                WHERE l.path LIKE s.path || '%' AND s.deleted_at IS NULL
+                WHERE s.id = ANY (string_to_array(btrim(l.path, '/'), '/')::uuid[]) AND s.deleted_at IS NULL
                 ORDER BY s.depth DESC LIMIT 1
              ) se ON true
              LEFT JOIN LATERAL (
