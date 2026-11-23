@@ -46,7 +46,7 @@ import {
   type ContractRow,
   type ContractStatus,
 } from '@aurora/contracts';
-import { Can, useApiQuery, useUrlState } from '@aurora/app-kit';
+import { Can, fimDoDiaLocal, hojeLocal, inicioDoDiaLocal, useApiQuery, useUrlState } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { AlternadorComercial } from './alternador';
@@ -57,6 +57,7 @@ import {
   ROTULO_MODALIDADE,
   ROTULO_PAGAMENTO,
   ROTULO_PRECIFICACAO,
+  diasAteOFimDaVigencia,
   rotuloDasEquipes,
 } from './rotulos-contrato';
 
@@ -185,11 +186,13 @@ export function ContratosPage() {
  * "vigente" esconde isso (§17).
  */
 function LinhaDeContrato({ contrato: c }: { contrato: ContractRow }) {
-  const inicio = new Date(c.starts_on).getTime();
-  const fim = c.ends_on ? new Date(c.ends_on).getTime() : null;
+  // Vigência em dias de calendário locais; o último dia conta (ver
+  // `diasAteOFimDaVigencia`).
+  const inicio = inicioDoDiaLocal(c.starts_on.slice(0, 10)).getTime();
+  const fim = c.ends_on ? fimDoDiaLocal(c.ends_on.slice(0, 10)).getTime() : null;
   const agora = Date.now();
 
-  const diasParaVencer = fim === null ? null : Math.round((fim - agora) / 86_400_000);
+  const diasParaVencer = c.ends_on ? diasAteOFimDaVigencia(c.ends_on, hojeLocal()) : null;
   const decorrido =
     fim === null || fim <= inicio ? null : Math.min(Math.max((agora - inicio) / (fim - inicio), 0), 1);
 
@@ -231,7 +234,7 @@ function LinhaDeContrato({ contrato: c }: { contrato: ContractRow }) {
           )}
           {vencendo && (
             <StatusChip tone="warn" size="sm" hint="Prazo restante de vigência">
-              Vence em {diasParaVencer} d
+              {diasParaVencer === 0 ? 'Vence hoje' : `Vence em ${diasParaVencer} d`}
             </StatusChip>
           )}
           <StatusChip tone={TOM[c.status]} size="sm">

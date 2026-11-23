@@ -50,3 +50,16 @@ export const ORIGEM_DO_SLA: Record<SlaSource, string> = {
   organization: 'Padrão da organização',
   none: 'Sem política de SLA',
 };
+
+/**
+ * Dias de calendário de `hoje` até o último dia da vigência (AAAA-MM-DD), sem
+ * passar por fuso. O último dia CONTA: 0 é "vence hoje", negativo é vencido —
+ * a mesma regra de `contractTermStatus` no servidor. `new Date('2026-11-23')`
+ * é meia-noite UTC (21 h do dia 22 em Brasília) e fazia o contrato aparecer
+ * "Vencido" ao lado de "Vigente" no próprio dia final.
+ */
+export function diasAteOFimDaVigencia(endsOn: string, hoje: string): number {
+  const ms = (d: string) =>
+    Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)));
+  return Math.round((ms(endsOn.slice(0, 10)) - ms(hoje.slice(0, 10))) / 86_400_000);
+}
