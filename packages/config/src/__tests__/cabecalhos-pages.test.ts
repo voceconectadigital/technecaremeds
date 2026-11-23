@@ -31,10 +31,18 @@ describe('CSP do Pages', () => {
 
   it('sem unsafe-inline em script, sem moldura, API só onde precisa', () => {
     const p: string = politica({ apiOrigem: 'https://api.x.test', hashes: ["'sha256-abc'"] });
-    expect(p).toContain("script-src 'self' 'sha256-abc'");
+    expect(p).toContain("script-src 'self' https://static.cloudflareinsights.com 'sha256-abc'");
     expect(p).not.toMatch(/script-src[^;]*unsafe-inline/);
     expect(p).toContain("connect-src 'self' https://api.x.test");
     expect(p).toContain("frame-ancestors 'none'");
     expect(p).toContain("object-src 'none'");
+  });
+
+  it('libera só o host do Web Analytics, sem curinga e sem o Zaraz', () => {
+    const p: string = politica({ apiOrigem: null, hashes: [] });
+    const scriptSrc = p.split('; ').find((d) => d.startsWith('script-src'));
+    expect(scriptSrc).toBe("script-src 'self' https://static.cloudflareinsights.com");
+    expect(p).not.toContain('*');
+    expect(p).not.toMatch(/zaraz/i);
   });
 });
