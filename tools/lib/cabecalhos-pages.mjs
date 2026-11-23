@@ -57,6 +57,9 @@ export function politica({ apiOrigem, hashes }) {
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${api}`,
     "font-src 'self' data:",
+    // Leitor de QR do app de campo: o vídeo da câmera cai em `blob:` quando `srcObject` falha
+    // (auditoria 23/11/2026). Sem isto, a CSP bloqueante quebraria a leitura nesses aparelhos.
+    "media-src 'self' blob:",
     `connect-src 'self'${api}`,
     "worker-src 'self'",
     "manifest-src 'self'",

@@ -61,7 +61,12 @@ export interface RuntimeOptions {
   /** Conexão do pg-boss. Em teste, o adaptador do PGlite. */
   boss: PgBoss;
   logger?: JobLogger;
-  /** Quantas organizações um worker processa ao mesmo tempo. */
+  /**
+   * Quantas organizações cada FILA de tenant processa ao mesmo tempo (padrão 1).
+   *
+   * Cada vaga segura uma conexão do pool durante o job: com as 6 filas de tenant, o total é
+   * `6 × concurrency` + 2 do outbox — precisa caber em `AURORA_DB_POOL_MAX` (padrão 10).
+   */
   concurrency?: number;
   /** Quantas vezes tentar antes da carta morta. */
   retryLimit?: number;
@@ -109,7 +114,13 @@ export class JobRuntime {
     this.db = options.db;
     this.boss = options.boss;
     this.log = options.logger ?? SILENCIO;
-    this.concurrency = options.concurrency ?? 4;
+    /*
+     * Padrão 1 (auditoria 23/11/2026, PERF-08). O código passava `{ concurrency: 4 }`, mas o
+     * pg-boss 12 lê `localConcurrency` — o número nunca valeu e cada fila sempre rodou uma
+     * organização por vez. Ligar 4 de verdade daria 24 conexões simultâneas num pool de 10. O
+     * padrão agora diz o que de fato acontecia; aumentar é decisão de capacidade, não acidente.
+     */
+    this.concurrency = options.concurrency ?? 1;
     this.retryLimit = options.retryLimit ?? 5;
   }
 
@@ -180,7 +191,7 @@ export class JobRuntime {
 
       await this.boss.work(
         job.name,
-        { batchSize: 1, concurrency: this.concurrency },
+        { batchSize: 1, localConcurrency: this.concurrency },
         async (jobs: Job<TenantJobData>[]) => {
           for (const j of jobs) await this.executarTenant(job, j.data);
         }

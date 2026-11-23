@@ -18,7 +18,18 @@
  * padrão visual (painel de cartões + gráficos), e o Expert é a casca do IMR
  * (`relatorio-oficial.ts`). A planilha está em `relatorio-planilha.ts`.
  */
-import { Body, Controller, Get, Inject, Post, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Query,
+  Req,
+  Res,
+  StreamableFile,
+  UseInterceptors,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import {
   withTenant,
@@ -46,6 +57,7 @@ import {
 } from '@aurora/domain';
 import { reportsAssets, reportsGenerate } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
+import { RotaPesadaInterceptor } from '../common/limite-de-carga';
 import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
 import { DATABASE } from '../common/tokens';
 import { gerarPdf } from '../documents/pdf';
@@ -142,6 +154,7 @@ export class ReportsController {
    * A geração é LEITURA — nada é gravado.
    */
   @Post('generate')
+  @UseInterceptors(RotaPesadaInterceptor)
   @RequirePermissions('insight.read')
   @PermissionsCheckedInHandler('rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado')
   async generate(
@@ -267,6 +280,7 @@ export class ReportsController {
    * a mesma regra da ficha do ativo, aplicada na consulta.
    */
   @Post('assets')
+  @UseInterceptors(RotaPesadaInterceptor)
   @RequirePermissions('insight.read', 'asset.read')
   @PermissionsCheckedInHandler(
     'rota de LEITURA: POST só porque os filtros vão no corpo; nada é gravado. Valores financeiros só com asset.read_financials'

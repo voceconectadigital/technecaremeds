@@ -11,6 +11,14 @@
 .env
 .env.*
 !.env.example
+# Em qualquer pasta, não só na raiz (auditoria 23/11/2026, SEG-12).
+**/.env
+**/.env.*
+!**/.env.example
+# Estado local de ferramentas (worktrees, sessões) e capturas: nada disso é código.
+.claude
+capturas
+graphify-out
 .aurora
 .pgdata
 *.pglite

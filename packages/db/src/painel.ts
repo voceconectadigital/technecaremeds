@@ -290,7 +290,11 @@ export async function parkSnapshot(session: TenantSession, filters: MetricFilter
   }>(
     `SELECT s.id AS location_id, s.name, c.name AS customer_name, count(a.id)::text AS assets
        FROM aurora.assets a
-       JOIN aurora.locations s ON a.location_path LIKE s.path || '%' AND s.deleted_at IS NULL
+       -- Setores ANCESTRAIS do equipamento pelo próprio caminho ('/id/…/id/'): cada id vira linha e a
+       -- junção é por igualdade de chave. O LIKE s.path || '%' fazia o laço ativos × locais sem índice
+       -- possível — 247 ms → 32 ms com 5 mil ativos e 2,5 mil locais (auditoria 23/11/2026, PERF-02).
+       CROSS JOIN LATERAL unnest(string_to_array(btrim(a.location_path, '/'), '/')::uuid[]) AS ancestral(id)
+       JOIN aurora.locations s ON s.id = ancestral.id AND s.deleted_at IS NULL
        JOIN aurora.location_types t ON t.id = s.location_type_id AND t.key = 'setor'
        JOIN aurora.customers c ON c.id = s.customer_id
       WHERE ${filtro} AND a.status::text NOT IN ('decommissioned', 'disposed')

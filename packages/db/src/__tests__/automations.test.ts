@@ -366,6 +366,42 @@ describe('permissão', () => {
     expect(minha.outcome).toBe('failed');
     expect(minha.error).toMatch(/não tem a permissão work_order\.update/);
   });
+
+  it('quem CRIA ou ATIVA a regra precisa ter a permissão de cada ação (auditoria 23/11, SEG-11)', async () => {
+    // Pode gerir automações, mas não comentar em OS: não pode montar regra que comenta por ele.
+    const soAutomacao = buildContext({
+      organizationId: ORG,
+      actorId: USER,
+      membershipId: MEM,
+      requestId: 'so-automacao',
+      permissions: ['automation.create', 'automation.update', 'automation.read', 'work_order.read'],
+    });
+    await expect(
+      withTenant(t.db, soAutomacao, (s) =>
+        createRule(s, {
+          name: 'Escada de privilégio',
+          triggerEvent: 'work_order.validated',
+          actions: [{ kind: 'add_comment', params: { text: 'por mim' } }],
+        })
+      )
+    ).rejects.toMatchObject({ code: 'forbidden', details: { permission: 'work_order.update' } });
+
+    // Criada por quem pode, simulada — e ativada por quem não pode: recusa também.
+    const regra = await withTenant(t.db, ctx, async (s) => {
+      const id = await createRule(s, {
+        name: 'Ativação por quem não pode',
+        triggerEvent: 'work_order.validated',
+        actions: [{ kind: 'add_comment', params: { text: 'x' } }],
+      });
+      await simulateRule(s, id);
+      return id;
+    });
+    await expect(withTenant(t.db, soAutomacao, (s) => activateRule(s, regra))).rejects.toMatchObject({
+      code: 'forbidden',
+    });
+    await withTenant(t.db, ctx, (s) => activateRule(s, regra));
+    await withTenant(t.db, ctx, (s) => pauseRule(s, regra));
+  });
 });
 
 describe('ordem e listagem', () => {

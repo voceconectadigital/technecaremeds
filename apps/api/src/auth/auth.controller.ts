@@ -22,6 +22,7 @@
  *    superfície, e a resposta seria uma segunda defesa para um problema que não
  *    precisamos criar.
  */
+import { createHash } from 'node:crypto';
 import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import { LoginInput, type AuthConfig } from '@aurora/contracts';
 import { abrirSessaoPorSenha, encerrarSessao, type Database } from '@aurora/db';
@@ -112,10 +113,12 @@ export class AuthController {
        *
        * Nem a senha, nem o resumo, nem o comprimento — comprimento de senha
        * numa linha de log é um filtro a menos para quem for quebrar o resumo.
-       * O e-mail fica, porque sem ele a linha não serve para investigar nada.
+       * O e-mail entra PSEUDONIMIZADO (auditoria 23/11/2026, SEG-07): domínio e resumo.
+       * Quem investiga calcula o resumo do e-mail suspeito e acha as linhas; quem lê o log
+       * não lê o endereço — nem a senha que alguém digitou no campo errado.
        */
       this.logger.warn('entrada recusada', {
-        email: entrada.email,
+        ...emailPseudonimizado(entrada.email),
         motivo: resultado.motivo,
         origem,
       });
@@ -161,4 +164,14 @@ export class AuthController {
     const encerradas = await encerrarSessao(this.db, bearer, 'encerrada pelo portador');
     return { encerradas };
   }
+}
+
+/** Domínio + 16 hex do SHA-256 do e-mail normalizado: correlaciona sem expor o endereço. */
+export function emailPseudonimizado(email: string): { email_hash: string; email_dominio: string | null } {
+  const normalizado = email.trim().toLowerCase();
+  const arroba = normalizado.lastIndexOf('@');
+  return {
+    email_hash: createHash('sha256').update(normalizado, 'utf8').digest('hex').slice(0, 16),
+    email_dominio: arroba > 0 ? normalizado.slice(arroba + 1).slice(0, 253) : null,
+  };
 }

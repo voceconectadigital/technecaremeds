@@ -9,6 +9,7 @@
  */
 import type { RequestContext } from '@aurora/domain';
 import type { ContextResolver, IncomingRequest } from './context.resolver';
+import { requestIdDoCliente } from './context.resolver';
 import type { StructuredLogger } from './logger';
 
 export interface AuroraRequest extends IncomingRequest {
@@ -65,7 +66,7 @@ export function createContextMiddleware(resolver: ContextResolver, logger: Struc
     // originalUrl é o único que sobrevive à remontagem de rota do Express
     const path = (req.originalUrl ?? req.url ?? req.path ?? '').split('?')[0] ?? '';
     if (PUBLIC_PATH.test(path)) {
-      req.auroraRequestId = req.header('x-request-id') ?? 'health';
+      req.auroraRequestId = requestIdDoCliente(req.header('x-request-id')) ?? 'health';
       return next();
     }
     try {
@@ -79,7 +80,7 @@ export function createContextMiddleware(resolver: ContextResolver, logger: Struc
       });
       next();
     } catch (e) {
-      req.auroraRequestId = req.header('x-request-id') ?? 'unresolved';
+      req.auroraRequestId = requestIdDoCliente(req.header('x-request-id')) ?? 'unresolved';
       next(e);
     }
   };

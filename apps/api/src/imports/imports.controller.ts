@@ -5,7 +5,19 @@
  * ficam guardados; o arquivo original também. Nada aqui lê formato de sistema
  * de origem — o leitor do Arkmeds espera o arquivo real (BLOQUEADO — CLIENTE).
  */
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseInterceptors,
+} from '@nestjs/common';
+import { RotaPesadaInterceptor } from '../common/limite-de-carga';
 import {
   withTenant,
   createImportBatch,
@@ -77,6 +89,7 @@ export class ImportsController {
   }
 
   @Post(':id/run')
+  @UseInterceptors(RotaPesadaInterceptor)
   @HttpCode(200)
   @RequirePermissions('asset.import')
   async run(@Req() req: AuroraRequest, @Param('id') id: string): Promise<unknown> {

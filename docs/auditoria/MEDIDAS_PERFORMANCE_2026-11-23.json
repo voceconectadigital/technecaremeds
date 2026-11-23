@@ -1,0 +1,161 @@
+{
+  "massa": {
+    "orgs": 10,
+    "os": 68000,
+    "os_org_grande": 50000,
+    "ativos": 7700,
+    "locais": 2480,
+    "relogios": 68000,
+    "relogios_estourados_em_curso": 16670,
+    "historico": 272000,
+    "fatos": 68000
+  },
+  "reps": 15,
+  "aquecimento": 3,
+  "medidas": [
+    {
+      "fase": "antes",
+      "nome": "lista de OS sem filtro (LIMIT 100)",
+      "p50_ms": 131.02,
+      "p95_ms": 169.44,
+      "buffers": 8387,
+      "linhas": 100,
+      "plano": "Bitmap Heap Scan(work_order_statuses) › Bitmap Index Scan(wos_key_uq) › Bitmap Heap Scan(work_orders) › Bitmap Index Scan(wo_customer_status_idx) › Bitmap Heap Scan(wait_reasons)"
+    },
+    {
+      "fase": "antes",
+      "nome": "SLA cumprido no mês (stopped_at)",
+      "p50_ms": 13.53,
+      "p95_ms": 14.8,
+      "buffers": 3230,
+      "linhas": 2,
+      "plano": "Index Scan(sla_clocks_org_idx)"
+    },
+    {
+      "fase": "antes",
+      "nome": "tempo por situação no mês (changed_at)",
+      "p50_ms": 93.81,
+      "p95_ms": 165,
+      "buffers": 29512,
+      "linhas": 4,
+      "plano": "Index Scan(wos_key_uq) › Index Scan(wosh_org_idx) › Index Scan(fact_work_order_pkey)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos por setor — LIKE",
+      "p50_ms": 247.47,
+      "p95_ms": 329.6,
+      "buffers": 245,
+      "linhas": 10,
+      "plano": "Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Index Scan(location_types_id_org_uq) › Index Scan(assets_org_idx) › Index Scan(customers_id_org_uq)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos por setor — ANY",
+      "p50_ms": 1155.7,
+      "p95_ms": 1292.25,
+      "buffers": 245,
+      "linhas": 10,
+      "plano": "Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Index Scan(location_types_id_org_uq) › Index Scan(assets_org_idx) › Index Scan(customers_id_org_uq)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos por setor — UNNEST",
+      "p50_ms": 31.57,
+      "p95_ms": 41.36,
+      "buffers": 245,
+      "linhas": 10,
+      "plano": "Index Scan(assets_org_idx) › Function Scan() › Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Bitmap Heap Scan(location_types)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos sem setor — UNNEST",
+      "p50_ms": 130.24,
+      "p95_ms": 187.37,
+      "buffers": 47730,
+      "linhas": 1,
+      "plano": "Index Scan(assets_org_idx) › Function Scan() › Index Scan(locations_pkey) › Index Scan(location_types_pkey)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos sem setor — LIKE",
+      "p50_ms": 117.5,
+      "p95_ms": 177.61,
+      "buffers": 243,
+      "linhas": 1,
+      "plano": "Index Scan(assets_org_idx) › Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Bitmap Heap Scan(location_types) › Bitmap Index Scan(location_types_id_org_uq)"
+    },
+    {
+      "fase": "antes",
+      "nome": "painel: ativos sem setor — ANY",
+      "p50_ms": 580.61,
+      "p95_ms": 687.49,
+      "buffers": 243,
+      "linhas": 1,
+      "plano": "Index Scan(assets_org_idx) › Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Bitmap Heap Scan(location_types) › Bitmap Index Scan(location_types_id_org_uq)"
+    },
+    {
+      "fase": "antes",
+      "nome": "planos: setor por item (2000) — LIKE",
+      "p50_ms": 156.77,
+      "p95_ms": 252.45,
+      "buffers": 33430,
+      "linhas": 2000,
+      "plano": "Index Scan(assets_org_idx) › Bitmap Heap Scan(locations) › Bitmap Index Scan(locations_org_idx) › Index Scan(location_types_pkey)"
+    },
+    {
+      "fase": "antes",
+      "nome": "planos: setor por item (2000) — ANY",
+      "p50_ms": 53.6,
+      "p95_ms": 68.66,
+      "buffers": 27846,
+      "linhas": 2000,
+      "plano": "Index Scan(assets_org_idx) › Index Scan(locations_id_org_uq) › Index Scan(location_types_pkey)"
+    },
+    {
+      "fase": "antes",
+      "nome": "varredura SLA — todos running",
+      "p50_ms": 15.55,
+      "p95_ms": 18.6,
+      "buffers": 17749,
+      "linhas": 17638,
+      "plano": "Index Scan(sla_clocks_due_idx)"
+    },
+    {
+      "fase": "antes",
+      "nome": "varredura SLA — running sem estouro",
+      "p50_ms": 9.53,
+      "p95_ms": 10.41,
+      "buffers": 17749,
+      "linhas": 5364,
+      "plano": "Index Scan(sla_clocks_due_idx)"
+    },
+    {
+      "fase": "depois",
+      "nome": "lista de OS sem filtro (LIMIT 100)",
+      "p50_ms": 0.48,
+      "p95_ms": 0.5,
+      "buffers": 113,
+      "linhas": 100,
+      "plano": "Index Scan(wo_org_created_idx) › Bitmap Heap Scan(wait_reasons) › Bitmap Index Scan(wait_reasons_key_uq) › Index Scan(work_order_statuses_pkey)"
+    },
+    {
+      "fase": "depois",
+      "nome": "SLA cumprido no mês (stopped_at)",
+      "p50_ms": 1.79,
+      "p95_ms": 3.38,
+      "buffers": 800,
+      "linhas": 2,
+      "plano": "Bitmap Heap Scan(sla_clocks) › Bitmap Index Scan(sla_clocks_stopped_idx)"
+    },
+    {
+      "fase": "depois",
+      "nome": "tempo por situação no mês (changed_at)",
+      "p50_ms": 55.41,
+      "p95_ms": 63.75,
+      "buffers": 28345,
+      "linhas": 4,
+      "plano": "Bitmap Heap Scan(work_order_status_history) › Bitmap Index Scan(wosh_org_changed_idx) › Bitmap Heap Scan(work_order_statuses) › Bitmap Index Scan(wos_key_uq) › Index Scan(fact_work_order_pkey)"
+    }
+  ]
+}
