@@ -10,19 +10,30 @@
  * `index.html` (o tema aplicado antes de o React montar) entram por HASH,
  * calculado sobre o HTML que de fato foi publicado — nunca `'unsafe-inline'`.
  *
- * POR QUE REPORT-ONLY
+ * BLOQUEANTE DESDE 23/11/2026
  *
  * Uma CSP errada derruba a aplicação inteira, em produção, sem que nenhum teste
- * daqui perceba (o servidor de desenvolvimento e o E2E não leem `_headers`). A
- * política sai como `Content-Security-Policy-Report-Only`: o navegador avisa o
- * que bloquearia e não bloqueia nada. Depois de uma navegação limpa no ambiente
- * publicado, trocar para `Content-Security-Policy` é mudar `REPORT_ONLY` abaixo.
+ * daqui perceba (o servidor de desenvolvimento e o E2E não leem `_headers`). Por
+ * isso ela saiu primeiro como `Content-Security-Policy-Report-Only`, que só
+ * avisa. Em 23/11/2026, com o Zaraz desligado nos hosts do Téchne Care e o Web
+ * Analytics liberado, uma navegação por todas as telas do sistema publicado
+ * (mais a ficha de OS e a de equipamento, e as entradas do portal e do campo)
+ * não registrou nenhuma violação, e ela passou a BLOQUEAR.
+ *
+ * Se uma tela quebrar depois de uma publicação (console: "Refused to load…" ou
+ * "Refused to execute…"), o caminho rápido é voltar `REPORT_ONLY` para `true`,
+ * republicar e corrigir a política com calma.
  */
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const REPORT_ONLY = true;
+const REPORT_ONLY = false;
+
+/** Nome do cabeçalho que o build grava no `_headers`. */
+export const NOME_DO_CABECALHO = REPORT_ONLY
+  ? 'Content-Security-Policy-Report-Only'
+  : 'Content-Security-Policy';
 
 /** Origem (`https://host:porta`) de uma URL absoluta; `null` para caminho relativo. */
 export function origemDe(url) {
@@ -99,7 +110,7 @@ export function cabecalhosDoPages({ apiUrl } = {}) {
         apiOrigem: origemDe(apiUrl),
         hashes: hashesDosScriptsInline(readFileSync(html, 'utf8')),
       });
-      const nome = REPORT_ONLY ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy';
+      const nome = NOME_DO_CABECALHO;
       const atual = readFileSync(cabecalhos, 'utf8').replace(/\s+$/, '');
       writeFileSync(cabecalhos, `${atual}\n  ${nome}: ${csp}\n`);
     },

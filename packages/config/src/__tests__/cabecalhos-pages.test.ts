@@ -6,6 +6,8 @@ import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 // @ts-expect-error — módulo .mjs sem declaração de tipos
 import { origemDe, hashesDosScriptsInline, politica } from '../../../../tools/lib/cabecalhos-pages.mjs';
+// @ts-expect-error — módulo .mjs sem declaração de tipos
+import { NOME_DO_CABECALHO } from '../../../../tools/lib/cabecalhos-pages.mjs';
 
 describe('CSP do Pages', () => {
   it('usa só a ORIGEM da API e nada se ela for relativa', () => {
@@ -36,6 +38,10 @@ describe('CSP do Pages', () => {
     expect(p).toContain("connect-src 'self' https://api.x.test");
     expect(p).toContain("frame-ancestors 'none'");
     expect(p).toContain("object-src 'none'");
+  });
+
+  it('a política BLOQUEIA (não é mais só Report-Only)', () => {
+    expect(NOME_DO_CABECALHO).toBe('Content-Security-Policy');
   });
 
   it('libera só o host do Web Analytics, sem curinga e sem o Zaraz', () => {
