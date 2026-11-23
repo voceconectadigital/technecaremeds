@@ -48,11 +48,22 @@ export function hashesDosScriptsInline(html) {
   return hashes;
 }
 
+/**
+ * O beacon do Cloudflare Web Analytics, que a BORDA injeta nas páginas da zona
+ * `voceconecta.com.br` (não está no nosso HTML). Ele envia as medições para
+ * `/cdn-cgi/rum` na própria origem, então `connect-src 'self'` já cobre o envio.
+ * O Zaraz da zona fica DESLIGADO nos hosts do Téchne Care por uma Configuration
+ * Rule ("Téchne Care sem Zaraz", 23/11/2026): ele disparava um Facebook Pixel em
+ * toda tela do sistema, e os scripts inline dele mudam a cada página — não há
+ * hash que os libere.
+ */
+export const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
+
 export function politica({ apiOrigem, hashes }) {
   const api = apiOrigem ? ` ${apiOrigem}` : '';
   return [
     "default-src 'self'",
-    `script-src 'self'${hashes.length ? ' ' + hashes.join(' ') : ''}`,
+    `script-src 'self' ${WEB_ANALYTICS}${hashes.length ? ' ' + hashes.join(' ') : ''}`,
     // React aplica `style=` em atributos; sem isto, toda tela quebraria.
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob:${api}`,
