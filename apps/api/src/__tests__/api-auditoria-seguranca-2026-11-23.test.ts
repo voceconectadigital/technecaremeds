@@ -201,16 +201,13 @@ describe('SEG-02 · Qualidade: escrita dentro do escopo de cliente', () => {
   });
 
   it('gestor restrito NÃO cria certificado para equipamento nem cliente de fora (404, sem revelar)', async () => {
-    const peloAtivo = await http
-      .post('/v1/quality-records')
-      .set(auth(GESTOR_ALFA))
-      .send({
-        kind: 'calibration',
-        title: 'Falso',
-        asset_id: ativoBeta,
-        issued_at: '2026-01-10',
-        valid_until: '2030-01-01',
-      });
+    const peloAtivo = await http.post('/v1/quality-records').set(auth(GESTOR_ALFA)).send({
+      kind: 'calibration',
+      title: 'Falso',
+      asset_id: ativoBeta,
+      issued_at: '2026-01-10',
+      valid_until: '2030-01-01',
+    });
     expect(peloAtivo.status).toBe(404);
     const inexistente = await http
       .post('/v1/quality-records')
