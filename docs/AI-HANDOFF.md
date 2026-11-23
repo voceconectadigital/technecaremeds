@@ -24,6 +24,34 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Auditoria corretiva de segurança, performance e escalabilidade — 23/11/2026 (branch
+> `audit/seguranca-performance-2026-11-23`, PR #48; SEM merge, SEM deploy, `0091` NÃO aplicada no remoto):**
+> Relatório: `docs/auditoria/RELATORIO_SEGURANCA_PERFORMANCE.md` (APROVADA COM RESSALVAS); backlog por ocorrência
+> `docs/auditoria/BACKLOG_CORRECOES_SEGURANCA_PERFORMANCE.json` (SEG-01..17, PERF-01..17).
+> **Migration mais recente: `0091_indices_de_desempenho.sql`** (só 3 índices: `wo_org_created_idx`, `sla_clocks_stopped_idx`,
+> `wosh_org_changed_idx`; aditiva — a API anterior funciona com ela).
+> · **Corpo da requisição:** `inflate: false` em todo interpretador (gzip → 415); JSON de 12 MB só em `/v1/assets`,
+>   `/v1/organizations`, `/v1/imports`, `/v1/field`; 2 MB no resto. 413/415/400 do Express viram problem+json
+>   (`erroHttpDoExpress` em `common/error.filter.ts`). Rota nova que receba base64 grande precisa entrar na lista do `bootstrap.ts`.
+> · **Rotas caras** levam `@UseInterceptors(RotaPesadaInterceptor)` (`common/limite-de-carga.ts`): 2 simultâneas por
+>   vínculo, 4 no processo → 429. Hoje: `reports/generate`, `reports/assets`, `maintenance-plans/compliance-report`,
+>   `imports/:id/run`. Relatório/exportação nova deve usar também.
+> · **API:** cabeçalhos de segurança e `no-store` em toda resposta (rota de arquivo define o próprio `cache-control`);
+>   sem `x-powered-by`; CORS `credentials: false`; erro sem `sqlstate/table/pg_message` (vão ao log);
+>   `x-request-id` só `[A-Za-z0-9._-]{1,64}` (`requestIdDoCliente`); login recusado loga `email_hash`/`email_dominio`.
+> · **Qualidade:** `escopoDoRegistro()` (`packages/db/src/qualidade.ts`) = cliente + setor do equipamento em lista,
+>   download, upload, criar e excluir. Registro SEM cliente (treinamento) segue visível a todos — decisão pendente (SEG-17).
+>   Certificado e NF da Store conferem os bytes (`contentMatchesDeclaredType`).
+> · **Automações:** criar/ativar exige no AUTOR a permissão de cada ação (`conferirPermissoesDoAutor`). O escopo do autor
+>   não é herdado (SEG-11, pendente).
+> · **Setor do equipamento sem `LIKE` por par:** agregado → `CROSS JOIN LATERAL unnest(string_to_array(btrim(path,'/'),'/')::uuid[])`
+>   + junção por chave; subconsulta `LIMIT 1` → `s.id = ANY(...)`. Medido: `= ANY` no agregado é PIOR (não use ali).
+> · **Workers:** pg-boss 12 lê `localConcurrency` (não `concurrency`); padrão 1. Cada vaga = 1 conexão: 6 filas × N + 2 ≤ pool.
+>   Varredura de SLA ignora relógio já estourado.
+> · **Bancada de escala:** `node tools/bench/escala-medir.cjs` (PGlite em memória, 10 orgs, antes/depois sob `aurora_app`).
+> · **Abertos com motivo:** sincronização do campo com mais de 2.000 ativos perde equipamentos (PERF-03); série do Painel
+>   626 ms com 50 mil OS (PERF-13); CSP ainda Report-Only (ativar após conferir os três domínios publicados); zod 4.
+
 > **Contratos, SLA e cobrança — áudios do Anderson 10/11/2026 (PR #46, merge `186c748`; PUBLICADO EM PRODUÇÃO em 13/11/2026):**
 > API impressão `e7e464ca30f8` + só o front web (deploy `22adacf6`); portal e campo inalterados. Backup verificado `700860a1`;
 > volta: API `2b5af48` (impressão `b99006b8db42`), web `a399b7b7`. Homologação por leitura e pendências operacionais (gravar,
@@ -1592,7 +1620,9 @@ equipamento" **não está pronto** — é a solicitação NS-015.
 | Desabilitar RLS, ou criar tabela sem `FORCE` | A política vira decoração |
 | Dar `BYPASSRLS`/`SUPERUSER` ao papel da API | O boot recusa subir — e está certo |
 | Service role / chave secreta no frontend | Não existe nenhuma hoje. Mantenha assim |
-| Commitar segredo | `tools/ci/check-secrets.mjs` varre a cada commit — **mas pula `docs/`**: documentação é varrida à mão |
+| Commitar segredo | `tools/ci/check-secrets.mjs` varre a cada commit — inclusive `docs/` desde o pente-fino (PF-78) |
+| Aceitar corpo compactado ou JSON grande em rota nova | `inflate: false` e teto de 2 MB valem para toda a API; só as rotas de base64 listadas no `bootstrap.ts` têm 12 MB (auditoria 23/11) |
+| Relatório/exportação nova sem teto de concorrência | Use `RotaPesadaInterceptor`; sem ele, uma pessoa ocupa o pool de 10 conexões |
 | Escrever senha, token ou credencial (inclusive de demo) em documentação, teste ou exemplo | Uma senha de demonstração já vazou assim (commit `9398762`, num exemplo de teste). Ela continua no histórico |
 | Apontar a demo para a API, ou ligar `VITE_API_URL` no projeto Pages da demo | O build recusa os dois juntos; mantenha recusando |
 | Criar rota tipo `/admin-sem-login` ou cadastro público | Não existe, e não deve |
@@ -1613,8 +1643,11 @@ de outra organização.
 organização; tipo e teto por finalidade; `sha256` conferido (§14). **Rota
 pública única** além do login: `/q/:token`, limitada por origem e sem oráculo.
 
-**Faltando:** MFA · permissões por contrato e por ativo · criptografia de campo ·
-rotina de backup/restauração documentada · auditoria em `checklist_answers` e
+**Tempo-limite de banco (PF-75):** implementado por transação (`statement_timeout` e
+`idle_in_transaction_session_timeout` locais: 60 s na API, 300 s nos workers) — não está mais bloqueado.
+
+**Faltando:** MFA · CSP bloqueante (está Report-Only) · permissões por contrato e por ativo · criptografia de campo ·
+rotina de backup/restauração versionada (o restore drill é feito a cada deploy) · auditoria em `checklist_answers` e
 `attachments` · troca da senha da conta de demonstração local que está no
 histórico do Git (§28).
 
