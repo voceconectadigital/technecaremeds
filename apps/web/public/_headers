@@ -1,5 +1,5 @@
 # Cabeçalhos de segurança no Cloudflare Pages (pente-fino 17/10/2026).
-# A CSP (Report-Only) é ACRESCENTADA no build por tools/lib/cabecalhos-pages.mjs, com a
+# A CSP (bloqueante desde 23/11/2026) é ACRESCENTADA no build por tools/lib/cabecalhos-pages.mjs, com a
 # origem da API daquele build e o hash dos scripts inline do index.html.
 /*
   X-Content-Type-Options: nosniff
