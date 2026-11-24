@@ -8,7 +8,7 @@ ou alterado nesta rodada.
 - respostas do Anderson no WhatsApp (24/11/2026) às decisões D-1 a D-7 do relatório de 10/11
   (`RELATORIO_CONTRATOS_SLA_ANDERSON_2026-11-10.md`);
 - o vídeo de 13/11/2026 (2 min 48 s) em que ele percorre o assistente de planos e narra os problemas —
-  transcrito localmente (Whisper, sem serviço pago).
+  transcrito localmente (Whisper, sem serviço pago; transcrição automática, pode ter erro de palavra).
 
 ## 1. Estado de partida (conferido, não presumido)
 
@@ -51,13 +51,13 @@ Defeitos adicionais encontrados na auditoria do fluxo:
 | D-1 | "Sim, são pacotes." | Equipe Fixa 1…10 no contrato | Já era identificador combinável (`fixed_team_packages`); a tela passou a dizer "Pacotes de equipe fixa — combináveis; composição, quantidade e valor não definidos; a periodicidade é do contrato". Nada inventado. | `contratos-do-cliente.test.tsx` (seleção combinada) | **Concluído** (rótulo). Composição/valor = pendente |
 | D-2 | "Cada contrato tem uma periodicidade, onde a equipe não [define] a periodicidade." | Periodicidade × pacote | Confirmado o modelo existente: `service_frequency` é do contrato, independente dos pacotes. Valores preservados. | testes de 10/11 seguem verdes | **Concluído** (sem mudança de dado) |
 | D-3 | "Contrato por hora técnica é um tipo à parte … hora de preventiva e hora de corretiva … controladas pela hora de início e hora de término da OS, campo obrigatório em toda OS." | Horas reais na OS; apuração | `work_orders.service_started_at/service_ended_at` (0092). Concluir exige as duas (transição ou relatório), término > início, nada no futuro; laudo OBC isento; desligável por `settings.require_service_hours`. OS antiga concluída fica nula ("não informada", nunca zero). Apuração só leitura `GET /contracts/:id/technical-hours` (preventiva × corretiva × outras, OS a OS). "Hora técnica" segue como `billing_model = per_hour` — tipo de contrato ≠ periodicidade ≠ precificação. **Nenhuma cobrança.** | banco: 2 testes; HTTP: 1; telas: conclusão; E2E: jornada, campo, assistente, OS-17 | **Concluído** |
-| D-4 | "Quando o contrato vence ou é apertado o botão suspender atendimento ou bloquear atendimento, tudo para e fica somente consulta, ninguém abre nem fecha chamado." | Bloqueio funcional | Botões Suspender / Bloquear / Reativar (motivo obrigatório, auditado). Regra única `aurora.service_block()` aplicada **na camada de dados**: abrir/mudar solicitação, abrir OS (manual, triagem, plano, automação), toda transição de OS, toda ação de execução (checklist, cronômetro, anexo, assinatura, check-in, relatório). 409 com o motivo e o contrato. Consulta, edição e renovação do contrato seguem livres (regularizar). Plano: item do ciclo nasce **dispensado** com o motivo, sem OS. Outros clientes e contratos válidos não são afetados; encerrado não bloqueia. | banco: 6 testes; HTTP: 3; telas: 3; E2E: `contrato-atendimento.spec.ts` | **Concluído** |
+| D-4 | "Quando o contrato vence ou é apertado o botão suspender atendimento ou bloquear atendimento, tudo para e fica somente consulta, ninguém abre nem fecha chamado." | Bloqueio funcional | Botões Suspender / Bloquear / Reativar (motivo obrigatório, auditado). Regra única `aurora.service_block()` aplicada **na camada de dados**: abrir/mudar solicitação, abrir OS (manual, triagem, plano, automação), toda transição de OS, execução (checklist, início de cronômetro, anexo, assinatura, check-in, relatório), agendar/desagendar, baixa de peça, atribuição por automação e "Executar" do plano (exceções em §4.2). 409 com o motivo e o contrato. Consulta, edição e renovação do contrato seguem livres (regularizar). Plano: item do ciclo nasce **dispensado** com o motivo, sem OS. Outros clientes e contratos válidos não são afetados; encerrado não bloqueia. | banco: 7 testes; HTTP: 3; telas: 3; E2E: `contrato-atendimento.spec.ts` | **Concluído** |
 | D-5 | "Todas as modalidades gerarão cálculos no futuro." | Base para cálculo | Só dados e vínculos: OS carimbada com o contrato, horas reais por OS, natureza, histórico de renovações, `billing_model`. **Nenhum motor financeiro, fatura ou boleto.** | — | **Preparado** (cálculo = ampliação) |
 | D-6 | (sem resposta nova) | Fechamento mensal | Inalterado: a medição existente segue consultiva. | — | **Pendente** |
 | D-7 | "No cadastro do cliente informamos data de início e data de término de cada contrato." "Se possuir renovação automática, renova o ciclo se ninguém bloquear ou suspender." | Vigência e renovação | Datas por contrato já existiam no cartão do cliente; agora com "Renovação automática" (só com término). Varredura diária renova **no último dia**, pelo prazo **original** (12 meses = 12 meses), **antes** de expirar; suspenso/bloqueado não renova; `expired` não renova sozinho (renovação manual regulariza); prazo indeterminado não tem ciclo (422). Histórico `contract_renewals` (único por contrato × fim anterior = sem duplicata; SAVEPOINT desfaz se criaria sobreposição de equipamento). Vigência do cadastro do cliente continua informativa, com o aviso de divergência de 13/11; SLA segue o contrato. | banco: 4; domínio: 5; HTTP: 1 | **Concluído** |
 | PLN-V1 | "Todos vão receber o checklist de ventilador … deveria obrigar equipamento por equipamento … um maiszinho." | Procedimento por equipamento | Passo "Procedimentos" com um seletor por equipamento (obrigatório), "+ Procedimento" para os adicionais da mesma OS e "Aplicar a todos de <categoria>". API `items[]`; o servidor recusa equipamento sem procedimento e procedimento de outro tipo. | banco: OS do ventilador com `prev_ventilador+tse`, do monitor com `prev_monitor`; HTTP; tela; E2E | **Concluído** |
 | PLN-V2 | "Educação continuada … só gera um calendário … data por equipamento." | Novo tipo no assistente | `kind: education` → natureza `training` (já no catálogo, 0064); sem procedimento (recusado se vier); data obrigatória por equipamento = vencimento do 1º ciclo (`plan_tasks.first_due_on`). | banco: datas exatas, sem checklist, OS de treinamento; HTTP | **Concluído** |
-| PLN-V3 | "Tenho que vir na data do plano e clicar para abrir as OS." | Gerar OS do plano manual | Botão "Gerar OS deste ciclo (N)" na página do plano (`maintenance_plan.generate_cycle`). | banco: materializa 1; tela | **Concluído** |
+| PLN-V3 | "Tenho que vir na data do plano e clicar para abrir as OS." | Gerar OS do plano manual | Botão "Gerar OS deste ciclo (N)" na página do plano (`maintenance_plan.generate_cycle`). | banco: materializa 1. **O botão não tem teste de tela nem E2E próprio** | **Concluído** |
 | PLN-V4 | "Visualizar o plano, editar o plano … para onde vão?" | Ficha do plano | "Para onde vai este plano"; Editar plano; editar/retirar equipamento (motivo); Incluir equipamentos; Histórico; ciclo aberto já na criação. | banco: edição + histórico; HTTP: 403/404; E2E | **Concluído** |
 | PLN-A1 | (auditoria) | Data retroativa | 1º vencimento no passado → 422 no assistente (planos existentes não mudam). | banco; tela | **Concluído** |
 | PLN-A2 | (auditoria) | Unidade › Setor | Seletor mostra a cadeia de locais. | tela | **Concluído** |
@@ -73,6 +73,12 @@ Defeitos adicionais encontrados na auditoria do fluxo:
 ### 4.2 Bloqueio e suspensão de atendimento
 - "Suspender" e "Bloquear" têm o mesmo efeito funcional (o Anderson não distinguiu); ficam como dois estados para
   relatório e motivo. **Decisão pendente:** se devem diferir (por exemplo, bloqueio jurídico × financeiro).
+- **Continuam possíveis com o contrato parado** (não bloqueados, de propósito ou por definir): comentário na OS,
+  avaliação da OS e nota do portal, check-out e parada do cronômetro que já estava correndo (senão a hora ficaria
+  aberta), e orçamentos. Se o orçamento enviado/aprovado precisar mudar a situação da OS, a operação é recusada.
+  Se "somente consulta" deve incluir comentário, avaliação e orçamento, é **decisão do Anderson**.
+- Lacuna encontrada na revisão depois da abertura da PR e corrigida: agenda, baixa de peça e atribuição por
+  automação ainda passavam; o "Executar" do plano recusava sem dizer o motivo.
 - Contrato **encerrado** não bloqueia: o cliente passa a "sem contrato" e é atendido. **Decisão pendente:**
   confirmar com o Anderson (ele falou de vencido, suspenso e bloqueado).
 - Clientes com contrato antigo vencido e nenhum vigente **ficarão bloqueados** quando a API subir — é a regra
@@ -129,10 +135,10 @@ Riscos:
 
 | Verificação | Resultado |
 |---|---|
-| Testes novos — banco (`conclusao-anderson-2026-11-24.test.ts`) | **17/17** |
+| Testes novos — banco (`conclusao-anderson-2026-11-24.test.ts`) | **18/18** |
 | Testes novos — HTTP (`api-conclusao-anderson-2026-11-24.test.ts`: permissões, multi-tenant, 409, zod) | **9/9** |
 | Testes novos — domínio (`contract-service.test.ts`) | **7/7** |
-| Testes novos — telas (`conclusao-anderson-2026-11-24.test.tsx`) | **6/6** |
+| Testes novos — telas (`conclusao-anderson-2026-11-24.test.tsx`) | **7/7** |
 | Suíte completa (vitest, 3 workers) | **194 arquivos: 192 passaram, 2 pulados; 2.961 testes passaram, 32 pulados, 0 falhas** |
 | `tsc -b` (monorepo) | sem erro |
 | ESLint no código versionado | sem erro (os únicos erros locais são de `capturas/` e de uma worktree antiga em `.claude/`, fora do repositório) |

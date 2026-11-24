@@ -32,7 +32,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { addPlanTask, createPlan, generateCycle, materializeCycle } from './maintenance-plans';
-import { organizationToday } from './contract-service';
+import { assertServiceAllowed, organizationToday } from './contract-service';
 import { scopeSql } from './metrics';
 import type { MembershipScope } from './painel';
 
@@ -1503,9 +1503,10 @@ export async function executePlanItem(
     status: string;
     work_order_id: string | null;
     customer_id: string;
+    asset_id: string;
     location_path: string | null;
   }>(
-    `SELECT i.cycle_id, i.status::text AS status, i.work_order_id, a.customer_id, a.location_path
+    `SELECT i.cycle_id, i.status::text AS status, i.work_order_id, a.customer_id, a.id AS asset_id, a.location_path
        FROM aurora.plan_cycle_items i
        JOIN aurora.assets a ON a.id = i.asset_id
       WHERE i.id = $1
@@ -1516,6 +1517,8 @@ export async function executePlanItem(
   if (item.status === 'skipped') {
     throw new ValidationError('este item foi dispensado e não gera execução', { field: 'itemId' });
   }
+  // D-4: com o contrato parado, o Executar diz o motivo em vez de "não foi possível".
+  await assertServiceAllowed(session, { customerId: item.customer_id, assetId: item.asset_id });
   if (item.work_order_id) return { workOrderId: item.work_order_id, created: false };
   await materializeCycle(session, item.cycle_id);
   const [depois] = await session.query<{ work_order_id: string | null }>(

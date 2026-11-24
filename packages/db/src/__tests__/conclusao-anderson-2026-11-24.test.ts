@@ -22,6 +22,8 @@ import {
   publishChecklist,
 } from '../execution';
 import { updateServiceReport } from '../execucao-guiada';
+import { scheduleWorkOrder, unscheduleWorkOrder } from '../schedule';
+import { consumeForWorkOrder } from '../inventory';
 import {
   createContract,
   addCoverage,
@@ -43,6 +45,7 @@ import {
 import { generateCycle, materializeCycle } from '../maintenance-plans';
 import {
   createGuidedPlan,
+  executePlanItem,
   updatePlan,
   updatePlanTask,
   addGuidedPlanItems,
@@ -265,6 +268,54 @@ describe('D-4 · tudo para e fica somente consulta', () => {
         })
       )
     ).resolves.toMatchObject({ category: 'review' });
+  });
+
+  it('suspenso: agenda, peça, "Executar" do plano também param — cada um diz o motivo', async () => {
+    const c = await novoCliente('OutrosCaminhos');
+    const contrato = await contratoVigente(c.cliente);
+    const os = await abrirOs(c.cliente, c.vent);
+    const plano = await em((s) =>
+      createGuidedPlan(
+        s,
+        {
+          name: 'Plano dos outros caminhos',
+          customerId: c.cliente,
+          sectorId: c.setor,
+          assetIds: [],
+          items: [{ assetId: c.vent, checklistTemplateKey: 'prev_ventilador' }],
+          kind: 'preventive',
+          checklistTemplateKey: null,
+          frequencyUnit: 'semester',
+          frequencyInterval: 1,
+          anchorDate: new Date(`${hoje}T00:00:00Z`),
+          leadTimeDays: 0,
+          toleranceDays: 5,
+          autoGenerate: false,
+        },
+        TUDO
+      )
+    );
+    const [item] = await em((s) =>
+      s.query<{ id: string }>(`SELECT id FROM aurora.plan_cycle_items WHERE task_id = $1`, [plano.taskIds[0]])
+    );
+    await em((s) => holdContractService(s, contrato, 'suspended', 'Suspensão dos outros caminhos'));
+    const motivo = /Suspensão dos outros caminhos/;
+    const janela = { startsAt: new Date(Date.now() + 86_400_000), endsAt: new Date(Date.now() + 90_000_000) };
+    await expect(
+      em((s) => scheduleWorkOrder(s, { workOrderId: os.id, assigneeMembershipId: MEM, ...janela } as never))
+    ).rejects.toThrow(motivo);
+    await expect(em((s) => unscheduleWorkOrder(s, os.id))).rejects.toThrow(motivo);
+    await expect(em((s) => consumeForWorkOrder(s, os.id, newId(), newId(), 1))).rejects.toThrow(motivo);
+    await expect(em((s) => executePlanItem(s, item!.id, TUDO))).rejects.toThrow(motivo);
+    const [pendente] = await em((s) =>
+      s.query<{ status: string }>(`SELECT status::text FROM aurora.plan_cycle_items WHERE id = $1`, [
+        item!.id,
+      ])
+    );
+    expect(pendente!.status).toBe('pending');
+    // reativado, o Executar volta a gerar a OS
+    await em((s) => releaseContractService(s, contrato, null));
+    expect((await em((s) => executePlanItem(s, item!.id, TUDO))).created).toBe(true);
   });
 
   it('bloqueado: mesma parada; o motivo e o contrato aparecem no bloqueio', async () => {
