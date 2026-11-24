@@ -28,11 +28,13 @@ export {
 export {
   Field,
   Input,
+  PasswordInput,
   Textarea,
   Select,
   useFieldControl,
   type FieldProps,
   type InputProps,
+  type PasswordInputProps,
   type TextareaProps,
   type SelectProps,
 } from './components/field';
