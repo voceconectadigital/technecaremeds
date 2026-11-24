@@ -277,7 +277,10 @@ test.describe('Planos de manutenção', () => {
     await expect(modo.getByText('em breve')).toBeVisible();
     await d.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
     await d.getByRole('button', { name: 'Continuar' }).click();
-    await d.getByLabel('Setor').selectOption({ index: 1 });
+    // O seletor mostra "Unidade › Setor" e vem em ordem alfabética: escolhe-se pelo nome.
+    const setor = d.getByLabel('Setor');
+    const uti = await setor.locator('option', { hasText: 'UTI Alfa' }).first().getAttribute('value');
+    await setor.selectOption(uti!);
     await d.getByRole('button', { name: 'Continuar' }).click();
     await expect(d.getByText(/Todos os equipamentos de UTI Alfa/)).toBeVisible();
     await d.getByRole('button', { name: 'Continuar' }).click();

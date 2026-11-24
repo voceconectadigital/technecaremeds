@@ -26,11 +26,11 @@ test.describe('D-4/D-7 · contrato no cadastro do cliente', () => {
     const hoje = new Date();
     const fim = `${hoje.getFullYear() + 1}-12-31`;
     const inicio = `${hoje.getFullYear()}-01-01`;
-    await d.getByLabel('Início').fill(inicio);
+    await d.getByLabel('Início', { exact: true }).fill(inicio);
     // Sem término, a renovação automática não existe (prazo indeterminado não tem ciclo).
-    await d.getByLabel('Fim').fill('');
+    await d.getByLabel('Fim', { exact: true }).fill('');
     await expect(d.getByLabel(/Renovação automática/)).toBeDisabled();
-    await d.getByLabel('Fim').fill(fim);
+    await d.getByLabel('Fim', { exact: true }).fill(fim);
     await d.getByLabel(/Renovação automática/).check();
     await d.getByLabel(/Ativar agora/).check();
     await d.getByRole('button', { name: 'Salvar' }).click();
