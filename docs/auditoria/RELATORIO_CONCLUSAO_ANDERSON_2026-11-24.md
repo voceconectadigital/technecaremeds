@@ -125,4 +125,25 @@ Riscos:
 
 ## 8. Testes e CI
 
-Ver §8.1 (preenchido com a execução desta máquina) e §8.2 (CI do GitHub).
+### 8.1 Nesta máquina (Windows, PGlite = PostgreSQL real em processo)
+
+| Verificação | Resultado |
+|---|---|
+| Testes novos — banco (`conclusao-anderson-2026-11-24.test.ts`) | **17/17** |
+| Testes novos — HTTP (`api-conclusao-anderson-2026-11-24.test.ts`: permissões, multi-tenant, 409, zod) | **9/9** |
+| Testes novos — domínio (`contract-service.test.ts`) | **7/7** |
+| Testes novos — telas (`conclusao-anderson-2026-11-24.test.tsx`) | **6/6** |
+| Suíte completa (vitest, 3 workers) | **194 arquivos: 192 passaram, 2 pulados; 2.961 testes passaram, 32 pulados, 0 falhas** |
+| `tsc -b` (monorepo) | sem erro |
+| ESLint no código versionado | sem erro (os únicos erros locais são de `capturas/` e de uma worktree antiga em `.claude/`, fora do repositório) |
+| `openapi:check` | em dia |
+
+Testes existentes ajustados à regra nova (sem afrouxar asserções): as conclusões de OS em 18 arquivos de teste passaram
+a informar a hora de início e de término; a lista de tabelas ganhou `contract_renewals`; o formulário de planos
+informa a educação continuada. E2E atualizados: `jornada`, `campo` (offline), `execucao-guiada`, `os-auditoria-29-10`
+(agora conferem também a cobrança das horas) e `painel-planejamento` (procedimento por equipamento, edição);
+E2E novo: `contrato-atendimento.spec.ts`.
+
+### 8.2 CI do GitHub (PR #57)
+
+Preenchido ao fim da execução — ver o resumo da PR.
