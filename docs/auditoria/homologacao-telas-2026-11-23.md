@@ -29,5 +29,20 @@ Navegador: painel interno do app, oculto (página em segundo plano, por isso as 
    - **Causa:** dois recursos que a borda do Cloudflare injeta nas páginas da zona `voceconecta.com.br`, fora do nosso HTML. O **Zaraz** injetava scripts inline que mudam a cada página e disparava um **Facebook Pixel** (gatilho Pageview) em toda tela do sistema. O **Web Analytics** injetava o beacon `static.cloudflareinsights.com`.
    - **Zaraz:** desligado só nos hosts do Téchne Care (`technecaremeds`, `portal-`, `campo-` e `api-technecaremeds.voceconecta.com.br`) pela Configuration Rule "Téchne Care sem Zaraz". O pixel continua nos outros sites da zona.
    - **Web Analytics:** mantido de propósito e liberado em `script-src` (PR #51). Sistema, portal e campo republicados de `main` `d7884e6`.
-   - **Modo bloqueante:** antes de ligar, uma navegação pelo sistema publicado (Painel, Qualidade, Ferramentas, Solicitações, Ordens, Agenda, Planos, Clientes, Equipamentos, Usuários, Estoque, Store, Contratos, Configurações, ficha de OS e de equipamento) e pelas entradas do portal e do campo não registrou nenhuma violação. As telas logadas do portal e do campo, e a leitura de QR pela câmera, não foram exercitadas.
+   - **Modo bloqueante (PR #52):** publicado em sistema, portal e campo a partir de `main` `021c8bb`. Os três respondem com `Content-Security-Policy`, e o `Content-Security-Policy-Report-Only` saiu. Com a política já bloqueando, as mesmas telas abaixo carregaram sem violação, as fotos da ficha de equipamento apareceram e o console ficou sem erros.
+   - **Verificação antes de ligar:** uma navegação pelo sistema publicado (Painel, Qualidade, Ferramentas, Solicitações, Ordens, Agenda, Planos, Clientes, Equipamentos, Usuários, Estoque, Store, Contratos, Configurações, ficha de OS e de equipamento) e pelas entradas do portal e do campo não registrou nenhuma violação. As telas logadas do portal e do campo, e a leitura de QR pela câmera, não foram exercitadas.
    - **Se algo quebrar:** voltar `REPORT_ONLY` para `true` em `tools/lib/cabecalhos-pages.mjs` e republicar.
+
+## Publicações em produção de 23/11/2026
+
+Front publicado por upload direto no Cloudflare Pages, sempre a partir de `main`. A API não foi republicada: `GET /v1/health/version` devolveu a impressão `7fea2ba90690`, igual à de `main` em todas as publicações abaixo.
+
+| PR | Commit em `main` | Apps publicados | O que mudou no site | Conferido |
+| --- | --- | --- | --- | --- |
+| #49 | `dbe053b` | sistema | Contrato no último dia da vigência mostra "Vence hoje" em vez de "Vencido" | CT-2026-00001 com "Vence hoje" ao lado de "Vigente" |
+| #51 | `d7884e6` | sistema, portal, campo | CSP libera o Web Analytics; Zaraz desligado nos hosts do Téchne Care (regra no Cloudflare) | Nenhum script do Zaraz; console sem avisos de CSP |
+| #52 | `021c8bb` | sistema, portal, campo | CSP passa a bloquear | Cabeçalho `Content-Security-Policy` nos três; 14 telas do sistema, fichas de OS e equipamento e entradas do portal e do campo sem violação |
+
+O portal e o campo não eram publicados desde antes da auditoria; desde a PR #51 estão no mesmo código de `main` que o sistema.
+
+**Pendências de verificação:** as telas logadas do portal e do campo e a leitura de QR pela câmera não foram exercitadas com a CSP bloqueante. Quem já usa o campo pode seguir com a versão guardada pelo service worker até a próxima abertura do app.
