@@ -24,6 +24,46 @@
 (+ `operator`, `manager`) · **2208 testes de unidade/HTTP** (32 pulados sem PostgreSQL real) ·
 **121 testes de navegador** (32 arquivos)
 
+> **Respostas do Anderson de 24/11/2026 + vídeo do assistente de planos de 13/11/2026 (branch
+> `feat/conclusao-anderson-2026-11-24`; SEM merge, SEM deploy, `0092` NÃO aplicada no remoto):**
+> Relatório e matriz: `docs/auditoria/RELATORIO_CONCLUSAO_ANDERSON_2026-11-24.md`; consultas de impacto
+> (só leitura) para antes de publicar: `docs/auditoria/consultas-pre-deploy-0092.sql`.
+> **Migration mais recente: `0092_planos_por_equipamento_bloqueio_renovacao_horas.sql`** (só aditiva):
+> `plan_tasks.first_due_on`; `contracts.service_hold/_reason/_at/_by` (`suspended`|`blocked`); tabela
+> `contract_renewals` (append-only, única por contrato × fim anterior); função `service_block(cliente, ativo, dia)`;
+> `work_orders.service_started_at/service_ended_at`.
+> Estado de partida conferido: PR #48 (segurança/performance) MESCLADA em `main` (o bloco abaixo ficou com o texto
+> de antes do merge); `0091` sem confirmação de aplicação em produção.
+> · **D-4 — contrato parado = só consulta, NA CAMADA DE DADOS:** `assertServiceAllowed`/`assertWorkOrderServiceAllowed`
+>   (`packages/db/src/contract-service.ts`) em `createWorkOrder`, `transitionWorkOrder` (toda transição; só a poda de
+>   equipamento baixado usa `bypassServiceBlock`), `assertCanExecuteWorkOrder` (checklist, cronômetro, anexo,
+>   assinatura, check-in, relatório), `createServiceRequest` e `transitionRequest`. Regra única em SQL
+>   (`aurora.service_block`): vale o contrato que COBRE o equipamento (sem equipamento, qualquer do cliente); um
+>   contrato válido libera; `terminated` não bloqueia (vira "sem contrato"); a data é a do fuso da organização
+>   (`organizationToday`). 409 com `details.service_block`. Ficha da OS traz `service_block` e esconde as transições.
+>   Plano: ciclo aberto com contrato parado cria o item JÁ DISPENSADO com o motivo (sem OS, sem avalanche depois);
+>   `materializeCycle` pula o item retido. Rotas: `POST /contracts/:id/service-hold` {hold, reason≥10},
+>   `/service-release` (`contract.update`).
+> · **D-7 — renovação:** `sweepContractRenewals` roda dentro de `sweepContractAlerts` (job diário) ANTES da
+>   expiração: renova no último dia, pelo prazo ORIGINAL (`renewalTerm`: meses quando fecham, senão dias), só
+>   `active` + `auto_renew` + sem retenção; SAVEPOINT desfaz se criaria sobreposição de equipamento. `expired` não
+>   renova sozinho (rota manual `POST /contracts/:id/renew` regulariza); prazo indeterminado não tem ciclo
+>   (auto_renew sem término → 422). Histórico `GET /contracts/:id/renewals`.
+> · **D-3 — horas:** conclusão (categoria `review`) exige `service_started_at`/`service_ended_at` (na transição ou
+>   gravadas pelo relatório `PATCH /work-orders/:id/service-report`); `settings.require_service_hours=false` desliga
+>   (sem tela); laudo OBC isento. Apuração só leitura `GET /contracts/:id/technical-hours?from&to` (preventiva,
+>   corretiva, outras; OS antigas sem horário à parte; NENHUM valor). Testes que concluem OS mandam as horas.
+> · **Planos (vídeo):** assistente com UM procedimento POR EQUIPAMENTO (`items[]` no `POST /maintenance-plans`;
+>   `asset_ids` + checklist único segue aceito pela API), "+" para adicionais, "Aplicar a todos de <categoria>";
+>   setor com a unidade; educação continuada (`kind: education` → natureza `training`, sem procedimento, data por
+>   equipamento = vencimento do 1º ciclo); 1º vencimento no passado → 422; plano ativo abre na criação o ciclo já na
+>   antecedência. Página do plano: "Para onde vai", Editar plano, editar/retirar equipamento, Incluir equipamentos,
+>   "Gerar OS deste ciclo" (plano manual — o botão não existia), Histórico (trilha de auditoria). Rotas:
+>   `PATCH /maintenance-plans/:id`, `PATCH …/tasks/:taskId`, `POST …/:id/items`, `POST …/tasks/:taskId/remove`,
+>   `GET …/:id/history`. Componentes em `apps/web/src/features/planos/{novo-plano,ficha-do-plano}.tsx`.
+> · Telas de contrato: `clientes/atendimento-do-contrato.tsx` (aviso, suspender/bloquear/reativar, renovar,
+>   renovações, horas técnicas); renovação automática no formulário (só com término); "Pacotes de equipe fixa".
+
 > **Auditoria corretiva de segurança, performance e escalabilidade — 23/11/2026 (branch
 > `audit/seguranca-performance-2026-11-23`, PR #48; SEM merge, SEM deploy, `0091` NÃO aplicada no remoto):**
 > Relatório: `docs/auditoria/RELATORIO_SEGURANCA_PERFORMANCE.md` (APROVADA COM RESSALVAS); backlog por ocorrência

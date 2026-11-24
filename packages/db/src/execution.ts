@@ -26,6 +26,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { pendingPartsCount } from './inventory';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* templates                                                                   */
@@ -705,6 +706,10 @@ export async function assertCanExecuteWorkOrder(
   workOrderId: string,
   opts: { checkScope?: boolean } = {}
 ): Promise<void> {
+  // D-4 (24/11/2026): contrato vencido, suspenso ou bloqueado — a OS fica só
+  // para consulta. Toda ação de execução (checklist, cronômetro, anexo,
+  // assinatura, check-in, relatório) passa por aqui.
+  await assertWorkOrderServiceAllowed(session, workOrderId);
   const ctx = session.context;
   const restrito = executionRestrictedToAssignment(ctx.permissions);
   const conferirEscopo =

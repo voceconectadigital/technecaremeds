@@ -122,7 +122,7 @@ mudar para `EM ANÁLISE`/`PLANEJADA`, planejar, implementar, testar.
 | NS-017 | App / mobile (validação) | PARCIAL | MÉDIA | Próxima (demonstrar) |
 | NS-018 | Painel de Controle + Modo Exibição (TV) | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
 | NS-019 | Setores do hospital · Cliente → Setor → Equipamento | IMPLEMENTADA | MÉDIA | Entregue 09/10/2026 |
-| NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026 |
+| NS-020 | Planos de manutenção: criação orientada, cronograma e gráficos | IMPLEMENTADA | ALTA | Entregue 09/10/2026; refeito em 24/11/2026 (procedimento por equipamento, educação continuada, edição, gerar OS do plano manual — `docs/auditoria/RELATORIO_CONCLUSAO_ANDERSON_2026-11-24.md`) |
 | NS-021 | Reunião 16/10/2026: demandas consolidadas | IMPLEMENTADA (por item: ROADMAP) | ALTA | Entregue 16/10/2026 |
 | NS-022 | Página pública de apresentação (cliente/investidor) | IMPLEMENTADA | ALTA | Entregue 17/10/2026 |
 | NS-023 | WhatsApp 19–29/10: Store do dono, relatórios, cadastros, vitrine | IMPLEMENTADA (sem publicação) | ALTA | Entregue 29/10/2026 (PR #42) |

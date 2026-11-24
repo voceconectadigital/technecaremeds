@@ -55,6 +55,7 @@ import {
   Dialog,
   EmptyState,
   Field,
+  Input,
   Select,
   Skeleton,
   SkeletonList,
@@ -201,11 +202,19 @@ export function OrdemPage() {
   // Concluir OS de equipamento pede o parecer LIBERADO/PARADO (OS-16); o laudo, não.
   const pedeParecer = (t: WorkOrderTransition) =>
     t.category === 'review' && Boolean(data!.asset_id) && !data!.number?.startsWith('OBC-');
+  // D-3 (Anderson, 24/11/2026): hora de início e de término são obrigatórias em toda OS — pedidas
+  // na conclusão quando ainda não estão no relatório. O laudo de obsolescência segue a regra dele.
+  const pedeHoras = (t: WorkOrderTransition) =>
+    t.category === 'review' &&
+    !data!.number?.startsWith('OBC-') &&
+    (!data!.service_started_at || !data!.service_ended_at);
+  // D-4: contrato parado — a OS fica só para consulta (o servidor recusa; a tela nem oferece).
+  const bloqueada = Boolean(data.service_block);
 
   function pedir(t: WorkOrderTransition) {
     // Exige campo? Pergunta primeiro. Enviar e traduzir o 422 de volta em
     // formulário é o caminho que produz "o sistema não deixa e não diz por quê".
-    if (t.requires.length > 0 || (pedeParecer(t) && !data!.operational_result)) {
+    if (t.requires.length > 0 || (pedeParecer(t) && !data!.operational_result) || pedeHoras(t)) {
       setPedindo(t);
       return;
     }
@@ -237,7 +246,8 @@ export function OrdemPage() {
           >
             {data.number?.startsWith('OBC-') ? 'Imprimir laudo' : 'Imprimir OS'}
           </Button>
-          {EXECUTAVEL.has(data.status_category) &&
+          {!bloqueada &&
+            EXECUTAVEL.has(data.status_category) &&
             (can('work_order.execute') || can('work_order.execute_any')) &&
             (data.available_transitions.length > 0 || data.status_category === 'in_progress') && (
               <Button
@@ -251,7 +261,7 @@ export function OrdemPage() {
           {podeGerarOrcamento(data, can('quote.create')) && (
             <Button onClick={() => setOrcando(true)}>Gerar orçamento</Button>
           )}
-          {data.available_transitions.map((t) => (
+          {(bloqueada ? [] : data.available_transitions).map((t) => (
             <Button
               key={t.to}
               variant={t.category === 'done' ? 'primary' : 'secondary'}
@@ -266,6 +276,11 @@ export function OrdemPage() {
       }
     >
       <div className="flex flex-col gap-4">
+        {data.service_block && (
+          <p role="alert" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+            {data.service_block.message}
+          </p>
+        )}
         <FaixaDeDecisao os={data} />
 
         <Tabs
@@ -296,6 +311,11 @@ export function OrdemPage() {
           transicao={pedindo}
           usaOrcamento={usaOrcamento(data)}
           parecer={pedeParecer(pedindo) ? { id, atual: data.operational_result ?? null } : null}
+          horas={
+            pedeHoras(pedindo)
+              ? { inicio: data.service_started_at ?? null, fim: data.service_ended_at ?? null }
+              : null
+          }
           onFechar={() => setPedindo(null)}
           onConfirmar={(campos) => {
             transicao.mutate(
@@ -959,6 +979,7 @@ function DialogoDeTransicao({
   ocupado,
   usaOrcamento = true,
   parecer = null,
+  horas = null,
 }: {
   transicao: WorkOrderTransition;
   onFechar: () => void;
@@ -967,7 +988,12 @@ function DialogoDeTransicao({
   usaOrcamento?: boolean;
   /** Concluir OS de equipamento: o parecer LIBERADO/PARADO vai junto (OS-16). */
   parecer?: { id: string; atual: 'released' | 'stopped' | null } | null;
+  /** Concluir: hora de início e de término do atendimento (D-3), quando ainda faltam. */
+  horas?: { inicio: string | null; fim: string | null } | null;
 }) {
+  const [inicio, setInicio] = useState<string>(paraCampoDeHora(horas?.inicio ?? null));
+  const [fim, setFim] = useState<string>(paraCampoDeHora(horas?.fim ?? null));
+  const horasInvalidas = Boolean(horas) && (!inicio || !fim || new Date(fim) <= new Date(inicio));
   // A organização exige o parecer? A MESMA resposta que o servidor usa para recusar.
   const { data: conclusao } = useApiQuery(
     workOrderCompletion,
@@ -998,11 +1024,21 @@ function DialogoDeTransicao({
             loading={ocupado}
             onClick={() => {
               const faltando = transicao.requires.filter((c) => !valores[c]?.trim());
-              if (faltando.length > 0 || (exigeParecer && !resultado)) {
-                setErro('Preencha os campos obrigatórios.');
+              if (faltando.length > 0 || (exigeParecer && !resultado) || horasInvalidas) {
+                setErro(
+                  horasInvalidas
+                    ? 'Informe a hora de início e a de término (o término depois do início).'
+                    : 'Preencha os campos obrigatórios.'
+                );
                 return;
               }
               onConfirmar({
+                ...(horas
+                  ? {
+                      service_started_at: new Date(inicio).toISOString(),
+                      service_ended_at: new Date(fim).toISOString(),
+                    }
+                  : {}),
                 ...(parecer && resultado && resultado !== parecer.atual
                   ? { operational_result: resultado }
                   : {}),
@@ -1021,6 +1057,21 @@ function DialogoDeTransicao({
       }
     >
       <div className="flex flex-col gap-4">
+        {horas && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Hora de início do atendimento"
+              required
+              error={horasInvalidas ? erro : null}
+              hint="Obrigatória em toda OS: é por ela que as horas técnicas são apuradas."
+            >
+              <Input type="datetime-local" value={inicio} onChange={(e) => setInicio(e.target.value)} />
+            </Field>
+            <Field label="Hora de término do atendimento" required error={horasInvalidas ? erro : null}>
+              <Input type="datetime-local" value={fim} onChange={(e) => setFim(e.target.value)} />
+            </Field>
+          </div>
+        )}
         {parecer && (
           <Field
             label="Parecer do equipamento"
@@ -1158,4 +1209,13 @@ function formatarTamanho(bytes: string): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} kB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Instante ISO → valor de `datetime-local` (hora LOCAL do navegador, sem segundos). Nulo → vazio. */
+export function paraCampoDeHora(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }

@@ -1239,6 +1239,9 @@ async function main() {
                   resolution:
                     o.resolucao ??
                     'Componente substituído; testes funcional e de segurança elétrica aprovados.',
+                  operationalResult: 'released',
+                  serviceStartedAt: new Date(Date.now() - 2 * 3_600_000),
+                  serviceEndedAt: new Date(Date.now() - 3_600_000),
                 }
               : {}),
           })

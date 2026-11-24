@@ -11,14 +11,40 @@
  *
  * TIPO DE PLANO ≠ TIPO DE CONTRATO. O tipo aqui é a natureza do serviço
  * (preventiva, calibração, TSE, qualificação), derivada da natureza da OS e
- * do `procedure_kind` do checklist. Educação continuada não existe no
- * domínio e não é aceita.
+ * do `procedure_kind` do checklist. Educação continuada (vídeo do Anderson,
+ * 13/11/2026) é só calendário: natureza `training`, sem procedimento, com a
+ * data informada equipamento a equipamento.
  */
 import { defineOperation } from '../registry';
 import { z, Uuid, Timestamp } from '../primitives';
 import { PLAN_FREQUENCY_UNITS } from './plans';
 
-export const PLAN_KINDS = ['preventive', 'calibration', 'electrical_safety', 'qualification'] as const;
+export const PLAN_KINDS = [
+  'preventive',
+  'calibration',
+  'electrical_safety',
+  'qualification',
+  'education',
+] as const;
+
+const DiaCivil = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const ChaveDeChecklist = z.string().trim().min(2).max(64);
+
+/**
+ * Um equipamento do plano com o SEU procedimento (vídeo do Anderson, 13/11/2026:
+ * cada equipamento recebe o checklist dele, e não o mesmo para todos).
+ */
+export const PlanItemInput = z
+  .object({
+    asset_id: Uuid,
+    /** Obrigatório, exceto na educação continuada (que não leva procedimento). */
+    checklist_template_key: ChaveDeChecklist.nullable().optional(),
+    extra_checklist_template_keys: z.array(ChaveDeChecklist).max(10).optional(),
+    /** Vencimento do primeiro ciclo deste equipamento; obrigatório na educação continuada. */
+    first_due_on: DiaCivil.nullable().optional(),
+  })
+  .strict();
+export type PlanItemInput = z.infer<typeof PlanItemInput>;
 export const PROCEDURE_KINDS = ['calibration', 'electrical_safety', 'qualification', 'acceptance'] as const;
 
 /* -------------------------------------------------------------------------- */
@@ -31,7 +57,11 @@ export const plansCreate = defineOperation({
   path: '/maintenance-plans',
   summary: 'Cria um plano: cliente → setor → equipamentos → tipo → procedimento → periodicidade',
   description:
-    'Sem `asset_ids`, o alvo é o SETOR inteiro como expressão (o equipamento que chegar depois ' +
+    'Com `items` (o assistente), uma tarefa por equipamento com o procedimento DELE — obrigatório, ' +
+    'exceto na educação continuada, que exige a data de cada equipamento. O primeiro vencimento ' +
+    'não pode já ter passado. O plano ativo abre na hora o ciclo que já está na antecedência (e ' +
+    'gera as OS se a geração for automática). Forma antiga: ' +
+    'sem `asset_ids`, o alvo é o SETOR inteiro como expressão (o equipamento que chegar depois ' +
     'entra sozinho). Com `asset_ids`, uma tarefa por equipamento. O servidor confere que setor e ' +
     'equipamentos são do cliente informado e estão no escopo de quem cadastra; o procedimento ' +
     'precisa estar publicado e ser do mesmo tipo do plano.',
@@ -43,6 +73,7 @@ export const plansCreate = defineOperation({
       customer_id: Uuid,
       sector_id: Uuid,
       asset_ids: z.array(Uuid).max(500).default([]),
+      items: z.array(PlanItemInput).max(500).optional(),
       kind: z.enum(PLAN_KINDS),
       checklist_template_key: z.string().trim().min(2).max(64).nullable().optional(),
       /**
@@ -60,8 +91,122 @@ export const plansCreate = defineOperation({
       estimated_duration_min: z.number().int().min(1).max(10_000).nullable().optional(),
     })
     .strict(),
-  response: z.object({ id: Uuid, task_count: z.number().int() }),
+  response: z.object({
+    id: Uuid,
+    task_count: z.number().int(),
+    /** Ciclos abertos na criação (os que já estavam na antecedência). */
+    cycles_opened: z.number().int(),
+    /** OS geradas na criação (só com geração automática). */
+    work_orders: z.number().int(),
+  }),
   errors: ['not_found', 'validation_failed'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* edição do plano (vídeo do Anderson, 13/11/2026: "visualizar o plano,         */
+/* editar o plano")                                                             */
+/* -------------------------------------------------------------------------- */
+
+export const plansUpdate = defineOperation({
+  operationId: 'plans.update',
+  method: 'PATCH',
+  path: '/maintenance-plans/:id',
+  summary: 'Edita nome, descrição e geração automática do plano',
+  description: 'O que já foi gerado (ciclos, OS) não muda. Auditado. Exige `maintenance_plan.update`.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      name: z.string().trim().min(3).max(200).optional(),
+      description: z.string().trim().max(2000).nullable().optional(),
+      auto_generate: z.boolean().optional(),
+    })
+    .strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed', 'forbidden'],
+});
+
+export const plansUpdateTask = defineOperation({
+  operationId: 'plans.updateTask',
+  method: 'PATCH',
+  path: '/maintenance-plans/tasks/:taskId',
+  summary: 'Edita um equipamento do plano: periodicidade, prazos e procedimentos',
+  description:
+    'Periodicidade, antecedência e tolerância valem para os PRÓXIMOS ciclos; o procedimento, para as ' +
+    'OS geradas daqui em diante. O primeiro vencimento só muda antes de a tarefa abrir ciclo.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ taskId: Uuid }),
+  body: z
+    .object({
+      frequency_unit: z.enum(PLAN_FREQUENCY_UNITS).optional(),
+      frequency_interval: z.number().int().min(1).max(60).optional(),
+      lead_time_days: z.number().int().min(0).max(365).optional(),
+      tolerance_days: z.number().int().min(0).max(90).optional(),
+      checklist_template_key: ChaveDeChecklist.nullable().optional(),
+      extra_checklist_template_keys: z.array(ChaveDeChecklist).max(10).optional(),
+      first_due_on: DiaCivil.nullable().optional(),
+    })
+    .strict(),
+  response: z.object({ ok: z.literal(true) }),
+  errors: ['not_found', 'validation_failed', 'conflict', 'forbidden'],
+});
+
+export const plansAddItems = defineOperation({
+  operationId: 'plans.addItems',
+  method: 'POST',
+  path: '/maintenance-plans/:id/items',
+  summary: 'Inclui equipamentos num plano existente, cada um com o seu procedimento',
+  description:
+    'Mesmas conferências da criação. Periodicidade e prazos vêm do plano. Equipamento sem data ' +
+    'própria que entra num plano já em curso começa a contar hoje.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ items: z.array(PlanItemInput).min(1).max(500) }).strict(),
+  response: z.object({
+    task_count: z.number().int(),
+    cycles_opened: z.number().int(),
+    work_orders: z.number().int(),
+  }),
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'conflict', 'forbidden'],
+});
+
+export const plansRemoveTask = defineOperation({
+  operationId: 'plans.removeTask',
+  method: 'POST',
+  path: '/maintenance-plans/tasks/:taskId/remove',
+  summary: 'Retira um equipamento do plano (arquiva a tarefa, com motivo)',
+  description:
+    'Nada é apagado: as OS já geradas seguem, e o item ainda pendente do ciclo aberto é dispensado ' +
+    'com o motivo. O último equipamento não sai: para parar o plano, desligue-o.',
+  permissions: ['maintenance_plan.update'],
+  params: z.object({ taskId: Uuid }),
+  body: z.object({ reason: z.string().trim().min(10).max(500) }).strict(),
+  response: z.object({ ok: z.literal(true) }),
+  status: 201,
+  errors: ['not_found', 'validation_failed', 'conflict', 'forbidden'],
+});
+
+export const plansHistory = defineOperation({
+  operationId: 'plans.history',
+  method: 'GET',
+  path: '/maintenance-plans/:id/history',
+  summary: 'Histórico do plano: cada mudança do plano e dos equipamentos dele, com autor e data',
+  permissions: ['maintenance_plan.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({
+    items: z.array(
+      z.object({
+        occurred_at: Timestamp,
+        actor_name: z.string().nullable(),
+        entity: z.enum(['plan', 'task']),
+        entity_label: z.string().nullable(),
+        action: z.string(),
+        changes: z.record(z.string(), z.unknown()).nullable(),
+      })
+    ),
+  }),
+  errors: ['not_found'],
 });
 
 export const plansFormOptions = defineOperation({

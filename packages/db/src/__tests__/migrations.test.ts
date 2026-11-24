@@ -82,6 +82,7 @@ describe('migrations (EPIC-001)', () => {
       'completion_requirements',
       'contract_coverages',
       'contract_periods',
+      'contract_renewals',
       'contract_services',
       'contract_sla_overrides',
       'contracts',

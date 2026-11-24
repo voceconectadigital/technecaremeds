@@ -26,6 +26,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
+import { sweepContractRenewals } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* cadastro                                                                    */
@@ -72,7 +73,21 @@ export function normalizeFixedTeams(valor: number[] | null | undefined): number[
   return unicos;
 }
 
+/**
+ * D-7: renovação automática só existe com data de término. Prazo
+ * indeterminado não vence nem tem ciclo — "renovar" ali seria inventar um.
+ */
+function conferirRenovacao(autoRenew: boolean | undefined, endsOn: string | null | undefined): void {
+  if (autoRenew && !endsOn) {
+    throw new ValidationError(
+      'renovação automática exige data de término: contrato de prazo indeterminado não tem ciclo para renovar',
+      { field: 'autoRenew' }
+    );
+  }
+}
+
 export async function createContract(session: TenantSession, input: ContractInput): Promise<string> {
+  conferirRenovacao(input.autoRenew, input.endsOn);
   const id = newId();
   const [seq] = await session.query<{ next_number: string }>(
     `SELECT aurora.next_number($1, 'CT', $2) AS next_number`,
@@ -154,11 +169,23 @@ export async function updateContract(
   id: string,
   patch: ContractPatch
 ): Promise<void> {
-  const [atual] = await session.query<{ number: string; status: ContractStatus }>(
-    `SELECT number, status FROM aurora.contracts WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+  const [atual] = await session.query<{
+    number: string;
+    status: ContractStatus;
+    ends_on: string | null;
+    auto_renew: boolean;
+  }>(
+    `SELECT number, status, ends_on::text, auto_renew
+       FROM aurora.contracts WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
     [id]
   );
   if (!atual) throw new NotFoundError('contrato não encontrado');
+  if (patch.autoRenew !== undefined || patch.endsOn !== undefined) {
+    conferirRenovacao(
+      patch.autoRenew ?? atual.auto_renew,
+      patch.endsOn !== undefined ? patch.endsOn : atual.ends_on
+    );
+  }
   if (atual.status === 'terminated' || atual.status === 'expired') {
     throw new ConflictError(`contrato ${atual.number} está encerrado e não pode ser editado`);
   }
@@ -793,6 +820,10 @@ export async function sweepContractAlerts(
   today: IsoDate,
   period: string
 ): Promise<ContractAlert[]> {
+  // D-7: a renovação automática vem ANTES da expiração — o contrato que renova
+  // hoje não chega a ser marcado como vencido.
+  await sweepContractRenewals(session, today);
+
   const contratos = await session.query<{
     id: string;
     number: string;

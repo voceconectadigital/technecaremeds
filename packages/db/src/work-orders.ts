@@ -28,10 +28,11 @@ import {
   completionRequirementsFor,
   signWorkOrder,
 } from './execution';
-import { requiresOperationalResult } from './organization-config';
+import { requiresOperationalResult, requiresServiceHours } from './organization-config';
 import { startSlaClock, stopSlaClock, pauseSlaClocks, resumeSlaClocks, cancelSlaClocks } from './sla';
 import { releaseReservations } from './inventory';
 import { decommissionAsset } from './assets';
+import { assertServiceAllowed, assertWorkOrderServiceAllowed } from './contract-service';
 
 export interface StatusRow {
   id: string;
@@ -224,6 +225,10 @@ export async function createWorkOrder(
   session: TenantSession,
   input: WorkOrderInput
 ): Promise<{ id: string; number: string | null }> {
+  // D-4 (24/11/2026): contrato vencido, suspenso ou bloqueado — ninguém abre
+  // OS. Aqui, e não na rota, porque OS nasce por quatro caminhos (manual,
+  // triagem, plano, automação) e nenhum pode contornar o bloqueio.
+  await assertServiceAllowed(session, { customerId: input.customerId, assetId: input.assetId ?? null });
   const publica = input.publish !== false;
   const statusId = await statusIdByKey(session, publica ? 'open' : 'draft');
 
@@ -314,6 +319,14 @@ export interface WorkOrderTransitionInput {
   expectedVersion?: number;
   /** O parecer LIBERADO/PARADO, quando vem junto com a conclusão (OS-16). */
   operationalResult?: string | null;
+  /** Hora real de início e de término do atendimento (D-3), quando vêm junto com a conclusão. */
+  serviceStartedAt?: Date | null;
+  serviceEndedAt?: Date | null;
+  /**
+   * Só para caminhos DO SISTEMA (cancelar a OS de equipamento baixado). Nunca
+   * vem de uma requisição: as rotas montam o objeto campo a campo.
+   */
+  bypassServiceBlock?: boolean;
 }
 
 /**
@@ -343,9 +356,12 @@ export async function transitionWorkOrder(
     operational_result: string | null;
     asset_id: string | null;
     laudo: boolean;
+    service_started_at: Date | string | null;
+    service_ended_at: Date | string | null;
   }>(
     `SELECT s.key AS status_key, s.label AS status_label, w.status_category::text AS category,
             w.version, w.number, w.resolution, w.operational_result, w.asset_id,
+            w.service_started_at, w.service_ended_at,
             coalesce((SELECT t.system_key = 'obsolescence' FROM aurora.catalog_items t
                        WHERE t.id = w.work_order_type_id), false) AS laudo
        FROM aurora.work_orders w
@@ -355,6 +371,13 @@ export async function transitionWorkOrder(
     [workOrderId]
   );
   if (!atual) throw new NotFoundError('Ordem de serviço', workOrderId);
+
+  // D-4: com o contrato parado, a OS fica só para consulta — nenhuma mudança de
+  // situação (iniciar, concluir, cancelar, fechar) até a regularização.
+  if (!input.bypassServiceBlock) await assertWorkOrderServiceAllowed(session, workOrderId);
+
+  // D-3: hora de início e de término do atendimento, quando vêm na transição.
+  validateServiceHours(input.serviceStartedAt ?? null, input.serviceEndedAt ?? null, atual);
 
   // O parecer pode vir NA PRÓPRIA transição (quadro, aplicativo de campo): quem
   // conclui arrastando não precisa abrir o relatório só para marcar LIBERADO.
@@ -470,6 +493,25 @@ export async function transitionWorkOrder(
     );
   }
 
+  // HORA DE INÍCIO E HORA DE TÉRMINO (D-3, Anderson 24/11/2026): "campo
+  // obrigatório em toda OS". Exigida na CONCLUSÃO — é quando o atendimento
+  // terminou e as duas horas existem. A OS antiga já concluída não é tocada; a
+  // antiga ainda aberta pede as horas quando for concluída. O laudo de
+  // obsolescência não é atendimento e segue a regra própria dele.
+  if (
+    destino.category === 'review' &&
+    !atual.laudo &&
+    (!(input.serviceStartedAt ?? atual.service_started_at) ||
+      !(input.serviceEndedAt ?? atual.service_ended_at)) &&
+    (await requiresServiceHours(session))
+  ) {
+    throw new ValidationError(
+      'informe a hora de início e a hora de término do atendimento para concluir a OS — ' +
+        'são obrigatórias em toda ordem de serviço',
+      { field: 'service_hours' }
+    );
+  }
+
   // OS CANCELADA, NEGADA OU FECHADA NÃO TEM CRONÔMETRO CORRENDO.
   //
   // Fecha aqui, antes de mudar a situação, os cronômetros que ficaram abertos
@@ -506,7 +548,9 @@ export async function transitionWorkOrder(
             scheduled_end = coalesce($13, scheduled_end),
             updated_by = $14,
             operational_result = coalesce($15, operational_result),
-            service_report_updated_at = CASE WHEN $15::text IS NULL THEN service_report_updated_at ELSE now() END
+            service_report_updated_at = CASE WHEN $15::text IS NULL THEN service_report_updated_at ELSE now() END,
+            service_started_at = coalesce($16::timestamptz, service_started_at),
+            service_ended_at = coalesce($17::timestamptz, service_ended_at)
       WHERE id = $1
       RETURNING status_category::text AS status_category, version`,
     [
@@ -525,6 +569,8 @@ export async function transitionWorkOrder(
       input.scheduledEnd?.toISOString() ?? null,
       session.context.actorId,
       input.operationalResult ?? null,
+      input.serviceStartedAt?.toISOString() ?? null,
+      input.serviceEndedAt?.toISOString() ?? null,
     ]
   );
 
@@ -750,6 +796,37 @@ export type OperationalResult = (typeof OPERATIONAL_RESULTS)[number];
  * Só OS de EQUIPAMENTO (sem ativo não há o que liberar) e nunca o laudo de
  * obsolescência, que tem regra própria.
  */
+/**
+ * Confere a hora de início e de término informadas (D-3). Uma informada só
+ * vale contra a outra já gravada; término no futuro (mais de 10 minutos, para
+ * o relógio do celular) não é atendimento realizado.
+ */
+export function validateServiceHours(
+  inicio: Date | null,
+  fim: Date | null,
+  gravadas: { service_started_at: Date | string | null; service_ended_at: Date | string | null },
+  agora: Date = new Date()
+): void {
+  if (!inicio && !fim) return;
+  for (const [campo, d] of [
+    ['service_started_at', inicio],
+    ['service_ended_at', fim],
+  ] as const) {
+    if (d && Number.isNaN(d.getTime())) throw new ValidationError('hora inválida', { field: campo });
+  }
+  const i = inicio ?? (gravadas.service_started_at ? new Date(gravadas.service_started_at) : null);
+  const f = fim ?? (gravadas.service_ended_at ? new Date(gravadas.service_ended_at) : null);
+  if (i && f && f.getTime() <= i.getTime()) {
+    throw new ValidationError('a hora de término precisa ser depois da hora de início', {
+      field: 'service_ended_at',
+    });
+  }
+  const limite = agora.getTime() + 10 * 60_000;
+  if ((i && i.getTime() > limite) || (f && f.getTime() > limite)) {
+    throw new ValidationError('a hora do atendimento não pode estar no futuro', { field: 'service_hours' });
+  }
+}
+
 async function faltaParecer(
   session: TenantSession,
   os: { asset_id: string | null; laudo: boolean },

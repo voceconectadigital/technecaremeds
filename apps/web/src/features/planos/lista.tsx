@@ -48,6 +48,17 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
 import { AlternadorDeTrabalho } from './alternador';
+import {
+  DetalheDaTarefa,
+  EditarPlano,
+  EditarTarefa,
+  GerarOsDoCiclo,
+  HistoricoDoPlano,
+  IncluirEquipamentos,
+  ParaOndeVai,
+  RetirarTarefa,
+  tipoDoPlano,
+} from './ficha-do-plano';
 
 export function PlanosPage() {
   const { data, isLoading, isError, error } = useApiQuery(plansList) as {
@@ -197,8 +208,15 @@ export function PlanoPage() {
                 Inclui atrasados
               </StatusChip>
             )}
-            <span className="ml-auto">
+            <span className="ml-auto flex flex-wrap gap-2">
               <Can permission="maintenance_plan.update">
+                <EditarPlano plano={data.plan} />
+                <IncluirEquipamentos
+                  planId={data.plan.id}
+                  customerId={data.plan.customer_id}
+                  kind={tipoDoPlano(data.tasks)}
+                  jaNoPlano={data.tasks.map((t) => t.target_asset_id).filter((x): x is string => Boolean(x))}
+                />
                 <AtivacaoDoPlano planId={data.plan.id} ativo={data.plan.is_active} nome={data.plan.name} />
               </Can>
             </span>
@@ -214,6 +232,8 @@ export function PlanoPage() {
           </div>
         </Card>
 
+        <ParaOndeVai automatico={data.plan.auto_generate} ativo={data.plan.is_active} />
+
         {data.tasks.length === 0 ? (
           <Card>
             <EmptyState
@@ -223,8 +243,12 @@ export function PlanoPage() {
             />
           </Card>
         ) : (
-          data.tasks.map((t) => <Tarefa key={t.id} tarefa={t} />)
+          data.tasks.map((t) => (
+            <Tarefa key={t.id} tarefa={t} kind={tipoDoPlano(data.tasks)} unica={data.tasks.length === 1} />
+          ))
         )}
+
+        <HistoricoDoPlano planId={data.plan.id} />
       </div>
     </AppShell>
   );
@@ -299,9 +323,9 @@ function AtivacaoDoPlano({ planId, ativo, nome }: { planId: string; ativo: boole
 
 /* -------------------------------------------------------------------------- */
 
-function Tarefa({ tarefa }: { tarefa: PlanTask }) {
+function Tarefa({ tarefa, kind, unica }: { tarefa: PlanTask; kind: string; unica: boolean }) {
   return (
-    <Card>
+    <Card aria-label={`Equipamento do plano: ${tarefa.target_asset_name ?? tarefa.name}`}>
       <CardHeader
         title={tarefa.name}
         description={
@@ -334,6 +358,14 @@ function Tarefa({ tarefa }: { tarefa: PlanTask }) {
           )
         }
       />
+      <DetalheDaTarefa tarefa={tarefa} />
+      <div className="flex flex-wrap gap-2 px-4 pb-2">
+        <GerarOsDoCiclo tarefa={tarefa} />
+        <Can permission="maintenance_plan.update">
+          <EditarTarefa tarefa={tarefa} kind={kind} />
+          {!unica && <RetirarTarefa tarefa={tarefa} />}
+        </Can>
+      </div>
       {tarefa.open_cycle_id && <Cumprimento cycleId={tarefa.open_cycle_id} />}
     </Card>
   );

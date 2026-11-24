@@ -622,6 +622,8 @@ describe('Planos de manutenção — criação orientada', () => {
       calibration: true,
       electrical_safety: false,
       qualification: false,
+      // Educação continuada (vídeo de 13/11): só disponível com a natureza "Treinamento" no catálogo.
+      education: false,
     });
   });
 

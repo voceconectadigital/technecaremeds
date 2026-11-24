@@ -16,12 +16,14 @@
  * lugares: a natureza da OS (`work_order_type`, catálogo) e o tipo de
  * procedimento do checklist (`procedure_kind`, 0052). O tipo exibido é
  * derivado deles — `procedure_kind` do checklist da tarefa quando houver, a
- * natureza da OS quando não. Educação continuada NÃO existe no domínio e não é
- * oferecida (registrado em NOVAS-SOLICITACOES).
+ * natureza da OS quando não. Educação continuada (vídeo do Anderson, 13/11/2026)
+ * é só calendário: natureza `training` (0064), sem procedimento, com a data de
+ * cada equipamento (`plan_tasks.first_due_on`, 0092) — exibida como `education`.
  */
 import {
   addFrequency,
   complianceState,
+  ConflictError,
   NotFoundError,
   ValidationError,
   type ComplianceState,
@@ -29,7 +31,8 @@ import {
   type FrequencyUnit,
 } from '@aurora/domain';
 import type { TenantSession } from './client';
-import { addPlanTask, createPlan, materializeCycle } from './maintenance-plans';
+import { addPlanTask, createPlan, generateCycle, materializeCycle } from './maintenance-plans';
+import { organizationToday } from './contract-service';
 import { scopeSql } from './metrics';
 import type { MembershipScope } from './painel';
 
@@ -47,14 +50,32 @@ import type { MembershipScope } from './painel';
  * protocolo continua distinguindo os dois.
  */
 export const PLAN_KINDS = {
-  preventive: { workOrderType: 'preventive', procedureKind: null, fallback: null },
-  calibration: { workOrderType: 'calibration', procedureKind: 'calibration', fallback: null },
+  preventive: { workOrderType: 'preventive', procedureKind: null, fallback: null, calendarOnly: false },
+  calibration: {
+    workOrderType: 'calibration',
+    procedureKind: 'calibration',
+    fallback: null,
+    calendarOnly: false,
+  },
   electrical_safety: {
     workOrderType: 'electrical_safety',
     procedureKind: 'electrical_safety',
     fallback: 'inspection',
+    calendarOnly: false,
   },
-  qualification: { workOrderType: 'qualification', procedureKind: 'qualification', fallback: 'inspection' },
+  qualification: {
+    workOrderType: 'qualification',
+    procedureKind: 'qualification',
+    fallback: 'inspection',
+    calendarOnly: false,
+  },
+  /**
+   * Educação continuada (vídeo do Anderson, 13/11/2026): "só gera um
+   * calendário, ele não atribui procedimento ... é obrigado pôr a data por
+   * equipamento". Natureza de OS `training` (0064); NENHUM checklist; o
+   * vencimento do primeiro ciclo é informado equipamento a equipamento.
+   */
+  education: { workOrderType: 'training', procedureKind: null, fallback: null, calendarOnly: true },
 } as const;
 export type PlanKind = keyof typeof PLAN_KINDS;
 
@@ -63,20 +84,42 @@ const TIPO_DA_TAREFA_SQL = `COALESCE(
   (SELECT ct.procedure_kind::text FROM aurora.checklist_templates ct
     WHERE ct.key = t.checklist_template_key AND ct.status <> 'draft'
     ORDER BY ct.version DESC LIMIT 1),
-  (SELECT ci.system_key FROM aurora.catalog_items ci WHERE ci.id = t.work_order_type_id),
+  (SELECT CASE ci.system_key WHEN 'training' THEN 'education' ELSE ci.system_key END
+     FROM aurora.catalog_items ci WHERE ci.id = t.work_order_type_id),
   'other')`;
 
 /* -------------------------------------------------------------------------- */
 /* criação orientada                                                           */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Um equipamento do plano com o SEU procedimento (vídeo do Anderson,
+ * 13/11/2026: "todos vão receber o checklist de ventilador pulmonar ... ele
+ * deveria obrigar a vir equipamento por equipamento ... um maiszinho do lado de
+ * cada equipamento ... e adicionava o procedimento"). Cada item vira uma
+ * tarefa do plano, com o checklist principal e os adicionais dele.
+ */
+export interface GuidedPlanItem {
+  assetId: string;
+  checklistTemplateKey?: string | null;
+  extraChecklistTemplateKeys?: string[];
+  /** Vencimento do primeiro ciclo deste equipamento (obrigatório na educação continuada). */
+  firstDueOn?: string | null;
+}
+
 export interface GuidedPlanInput {
   name: string;
   description?: string;
   customerId: string;
   sectorId: string;
-  /** Vazio = TODOS os equipamentos do setor, como expressão (inclui os que chegarem). */
+  /**
+   * Forma antiga, mantida para quem já chama a API: vazio = TODOS os
+   * equipamentos do setor como expressão; com ids, uma tarefa por equipamento
+   * — todas com o MESMO checklist. O assistente usa `items`.
+   */
   assetIds: string[];
+  /** Forma do assistente: um procedimento por equipamento. Tem precedência sobre `assetIds`. */
+  items?: GuidedPlanItem[];
   kind: PlanKind;
   checklistTemplateKey: string | null;
   frequencyUnit: FrequencyUnit;
@@ -94,6 +137,155 @@ export interface GuidedPlanInput {
   extraChecklistTemplateKeys?: string[];
 }
 
+interface ItemConferido {
+  id: string;
+  name: string;
+  checklistTemplateKey: string | null;
+  extras: string[];
+  firstDueOn: string | null;
+}
+
+/** O procedimento principal precisa estar publicado e ser do tipo do plano. */
+async function conferirProcedimentoPrincipal(
+  session: TenantSession,
+  kind: PlanKind,
+  chave: string | null,
+  campo: string
+): Promise<void> {
+  const tipo = PLAN_KINDS[kind];
+  if (!chave) return;
+  if (tipo.calendarOnly) {
+    throw new ValidationError('educação continuada não leva procedimento: é só o calendário', {
+      field: campo,
+    });
+  }
+  const [modelo] = await session.query<{ procedure_kind: string | null }>(
+    `SELECT procedure_kind::text AS procedure_kind FROM aurora.checklist_templates
+      WHERE key = $1 AND status = 'published' ORDER BY version DESC LIMIT 1`,
+    [chave]
+  );
+  if (!modelo) {
+    throw new ValidationError('o checklist escolhido não tem versão publicada', { field: campo, key: chave });
+  }
+  if ((modelo.procedure_kind ?? null) !== tipo.procedureKind) {
+    throw new ValidationError('o procedimento escolhido é de outro tipo de plano', {
+      field: campo,
+      key: chave,
+    });
+  }
+}
+
+/** Os adicionais: publicados, sem repetir o principal. Educação continuada não leva nenhum. */
+async function conferirAdicionais(
+  session: TenantSession,
+  kind: PlanKind,
+  principal: string | null,
+  chaves: readonly string[] | undefined,
+  campo: string
+): Promise<string[]> {
+  const extras = [...new Set(chaves ?? [])].filter((k) => k && k !== principal);
+  if (extras.length > 0 && PLAN_KINDS[kind].calendarOnly) {
+    throw new ValidationError('educação continuada não leva procedimento: é só o calendário', {
+      field: campo,
+    });
+  }
+  for (const chave of extras) {
+    const [publicado] = await session.query<{ id: string }>(
+      `SELECT id FROM aurora.checklist_templates WHERE key = $1 AND status = 'published' LIMIT 1`,
+      [chave]
+    );
+    if (!publicado) {
+      throw new ValidationError('um dos procedimentos adicionais não tem versão publicada', {
+        field: campo,
+        key: chave,
+      });
+    }
+  }
+  return extras;
+}
+
+/** A natureza de OS do tipo do plano, no catálogo desta organização. */
+async function naturezaDoTipo(session: TenantSession, kind: PlanKind): Promise<string> {
+  const tipo = PLAN_KINDS[kind];
+  const [natureza] = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.catalog_items
+      WHERE catalog_key = 'work_order_type' AND archived_at IS NULL
+        AND (system_key = $1 OR system_key = $2)
+      ORDER BY (system_key = $1) DESC, position LIMIT 1`,
+    [tipo.workOrderType, tipo.fallback]
+  );
+  if (!natureza) {
+    throw new ValidationError(
+      `a natureza de OS "${tipo.workOrderType}" não está no catálogo desta organização`,
+      { field: 'kind' }
+    );
+  }
+  return natureza.id;
+}
+
+/**
+ * O primeiro vencimento não pode já ter passado.
+ *
+ * Um plano mensal com início há um ano abriria, uma por hora, doze OS já
+ * vencidas — "serviço indevido" que ninguém pediu. Quem quer registrar o que
+ * JÁ foi feito usa o histórico da OS; o plano olha para a frente.
+ */
+function conferirPrimeiroVencimento(
+  vencimento: string,
+  hoje: string,
+  campo: string,
+  extra: Record<string, unknown> = {}
+): void {
+  if (vencimento < hoje) {
+    throw new ValidationError(
+      `o primeiro vencimento (${vencimento.split('-').reverse().join('/')}) já passou — ` +
+        'informe uma data que comece a contar a partir de agora',
+      { field: campo, ...extra }
+    );
+  }
+}
+
+/** Confere equipamentos: existem, são do cliente, estão no setor e não foram baixados. */
+async function conferirEquipamentos(
+  session: TenantSession,
+  ids: readonly string[],
+  customerId: string,
+  setorPath: string
+): Promise<Map<string, string>> {
+  const nomes = new Map<string, string>();
+  if (ids.length === 0) return nomes;
+  const unicos = [...new Set(ids)];
+  if (unicos.length !== ids.length) {
+    throw new ValidationError('o mesmo equipamento apareceu duas vezes', { field: 'items' });
+  }
+  const rows = await session.query<{
+    id: string;
+    name: string;
+    customer_id: string;
+    location_path: string;
+    status: string;
+  }>(
+    `SELECT id, name, customer_id, location_path, status::text AS status
+       FROM aurora.assets WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+    [unicos]
+  );
+  for (const id of unicos) {
+    const a = rows.find((r) => r.id === id);
+    if (!a) throw new ValidationError('equipamento não encontrado', { field: 'asset_ids', id });
+    if (a.customer_id !== customerId) {
+      throw new ValidationError('o equipamento pertence a outro cliente', { field: 'asset_ids', id });
+    }
+    if (!a.location_path.startsWith(setorPath)) {
+      throw new ValidationError('o equipamento não está no setor escolhido', { field: 'asset_ids', id });
+    }
+    if (a.status === 'decommissioned' || a.status === 'disposed') {
+      throw new ValidationError('equipamento baixado não entra em plano', { field: 'asset_ids', id });
+    }
+    nomes.set(a.id, a.name);
+  }
+  return nomes;
+}
+
 /**
  * Cria o plano a partir do fluxo Cliente → Setor → Equipamentos → Tipo →
  * Procedimento → Periodicidade.
@@ -102,12 +294,19 @@ export interface GuidedPlanInput {
  * identificador de outro cliente, de outro setor ou fora do alcance de quem
  * cadastra é recusado com o campo nomeado. Identificador de outra organização
  * nem chega a ser visto (RLS) — vira "não encontrado".
+ *
+ * Depois de gravado, o plano ATIVO abre na hora o ciclo que já está na
+ * antecedência (a mesma conta da varredura horária) — quem cria vê as
+ * atividades e, se pediu geração automática, as OS. Antes disso o plano
+ * ficava "sem ciclo aberto" por até uma hora, e parecia não ter ido a lugar
+ * nenhum.
  */
 export async function createGuidedPlan(
   session: TenantSession,
   input: GuidedPlanInput,
-  scope: MembershipScope
-): Promise<{ planId: string; taskIds: string[] }> {
+  scope: MembershipScope,
+  now: Date = new Date()
+): Promise<{ planId: string; taskIds: string[]; cyclesOpened: number; workOrders: number }> {
   const [cliente] = await session.query<{ id: string }>(
     `SELECT id FROM aurora.customers WHERE id = $1 AND deleted_at IS NULL
         AND ($2::uuid[] IS NULL OR id = ANY($2::uuid[]))`,
@@ -127,82 +326,116 @@ export async function createGuidedPlan(
     throw new ValidationError('o setor pertence a outro cliente', { field: 'sector_id' });
   }
 
-  const ativos: Array<{ id: string; name: string }> = [];
-  if (input.assetIds.length > 0) {
-    const unicos = [...new Set(input.assetIds)];
-    const rows = await session.query<{
-      id: string;
-      name: string;
-      customer_id: string;
-      location_path: string;
-      status: string;
-    }>(
-      `SELECT id, name, customer_id, location_path, status::text AS status
-         FROM aurora.assets WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
-      [unicos]
-    );
-    for (const id of unicos) {
-      const a = rows.find((r) => r.id === id);
-      if (!a) throw new ValidationError('equipamento não encontrado', { field: 'asset_ids', id });
-      if (a.customer_id !== input.customerId) {
-        throw new ValidationError('o equipamento pertence a outro cliente', { field: 'asset_ids', id });
-      }
-      if (!a.location_path.startsWith(setor.path)) {
-        throw new ValidationError('o equipamento não está no setor escolhido', { field: 'asset_ids', id });
-      }
-      if (a.status === 'decommissioned' || a.status === 'disposed') {
-        throw new ValidationError('equipamento baixado não entra em plano', { field: 'asset_ids', id });
-      }
-      ativos.push({ id: a.id, name: a.name });
-    }
-  }
-
   const tipo = PLAN_KINDS[input.kind];
-  const [natureza] = await session.query<{ id: string }>(
-    `SELECT id FROM aurora.catalog_items
-      WHERE catalog_key = 'work_order_type' AND archived_at IS NULL
-        AND (system_key = $1 OR system_key = $2)
-      ORDER BY (system_key = $1) DESC, position LIMIT 1`,
-    [tipo.workOrderType, tipo.fallback]
-  );
-  if (!natureza) {
-    throw new ValidationError(
-      `a natureza de OS "${tipo.workOrderType}" não está no catálogo desta organização`,
-      { field: 'kind' }
-    );
-  }
+  const naturezaId = await naturezaDoTipo(session, input.kind);
+  const hoje = await organizationToday(session, now);
 
-  if (input.checklistTemplateKey) {
-    const [modelo] = await session.query<{ procedure_kind: string | null }>(
-      `SELECT procedure_kind::text AS procedure_kind FROM aurora.checklist_templates
-        WHERE key = $1 AND status = 'published' ORDER BY version DESC LIMIT 1`,
-      [input.checklistTemplateKey]
+  // O vencimento do primeiro ciclo pela âncora do plano.
+  const anchorDia = input.anchorDate.toISOString().slice(0, 10);
+  const vencimentoPelaAncora = addFrequency(
+    new Date(`${anchorDia}T00:00:00Z`),
+    input.frequencyUnit,
+    input.frequencyInterval
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const itens: ItemConferido[] = [];
+  if (input.items && input.items.length > 0) {
+    const nomes = await conferirEquipamentos(
+      session,
+      input.items.map((i) => i.assetId),
+      input.customerId,
+      setor.path
     );
-    if (!modelo) {
-      throw new ValidationError('o checklist escolhido não tem versão publicada', {
-        field: 'checklist_template_key',
+    for (const [n, item] of input.items.entries()) {
+      const principal = item.checklistTemplateKey ?? null;
+      if (!tipo.calendarOnly && !principal) {
+        throw new ValidationError(
+          `escolha o procedimento de "${nomes.get(item.assetId)}": cada equipamento recebe o checklist dele`,
+          { field: `items.${n}.checklist_template_key`, asset_id: item.assetId }
+        );
+      }
+      await conferirProcedimentoPrincipal(
+        session,
+        input.kind,
+        principal,
+        `items.${n}.checklist_template_key`
+      );
+      const extras = await conferirAdicionais(
+        session,
+        input.kind,
+        principal,
+        item.extraChecklistTemplateKeys,
+        `items.${n}.extra_checklist_template_keys`
+      );
+      const primeira = item.firstDueOn ?? null;
+      if (tipo.calendarOnly && !primeira) {
+        throw new ValidationError(
+          `informe a data de "${nomes.get(item.assetId)}": na educação continuada a data é por equipamento`,
+          { field: `items.${n}.first_due_on`, asset_id: item.assetId }
+        );
+      }
+      conferirPrimeiroVencimento(primeira ?? vencimentoPelaAncora, hoje, `items.${n}.first_due_on`, {
+        asset_id: item.assetId,
+      });
+      itens.push({
+        id: item.assetId,
+        name: nomes.get(item.assetId)!,
+        checklistTemplateKey: principal,
+        extras,
+        firstDueOn: primeira,
       });
     }
-    if ((modelo.procedure_kind ?? null) !== tipo.procedureKind) {
-      throw new ValidationError('o procedimento escolhido é de outro tipo de plano', {
-        field: 'checklist_template_key',
+  } else {
+    if (tipo.calendarOnly) {
+      throw new ValidationError('na educação continuada, escolha os equipamentos e a data de cada um', {
+        field: 'items',
       });
     }
-  }
-
-  const extras = [...new Set(input.extraChecklistTemplateKeys ?? [])].filter(
-    (k) => k !== input.checklistTemplateKey
-  );
-  for (const chave of extras) {
-    const [publicado] = await session.query<{ id: string }>(
-      `SELECT id FROM aurora.checklist_templates WHERE key = $1 AND status = 'published' LIMIT 1`,
-      [chave]
+    await conferirProcedimentoPrincipal(
+      session,
+      input.kind,
+      input.checklistTemplateKey,
+      'checklist_template_key'
     );
-    if (!publicado) {
-      throw new ValidationError('um dos procedimentos adicionais não tem versão publicada', {
-        field: 'extra_checklist_template_keys',
-        key: chave,
+    const extras = await conferirAdicionais(
+      session,
+      input.kind,
+      input.checklistTemplateKey,
+      input.extraChecklistTemplateKeys,
+      'extra_checklist_template_keys'
+    );
+    conferirPrimeiroVencimento(vencimentoPelaAncora, hoje, 'anchor_date');
+    const nomes = await conferirEquipamentos(session, input.assetIds, input.customerId, setor.path);
+    for (const [id, name] of nomes) {
+      itens.push({ id, name, checklistTemplateKey: input.checklistTemplateKey, extras, firstDueOn: null });
+    }
+    if (itens.length === 0) {
+      // Setor inteiro como expressão: o que chegar depois entra sozinho.
+      const planId = await createPlan(session, {
+        name: input.name,
+        description: input.description ?? '',
+        customerId: input.customerId,
+        autoGenerate: input.autoGenerate,
+        anchorDate: input.anchorDate,
       });
+      const taskId = await addPlanTask(session, {
+        planId,
+        name: input.name,
+        targetKind: 'location_subtree',
+        targetLocationId: setor.id,
+        workOrderTypeId: naturezaId,
+        frequencyUnit: input.frequencyUnit,
+        frequencyInterval: input.frequencyInterval,
+        leadTimeDays: input.leadTimeDays,
+        toleranceDays: input.toleranceDays,
+        checklistTemplateKey: input.checklistTemplateKey,
+        extraChecklistTemplateKeys: extras,
+        estimatedDurationMin: input.estimatedDurationMin ?? null,
+      });
+      const aberto = await abrirCiclosDevidos(session, [taskId], now);
+      return { planId, taskIds: [taskId], ...aberto };
     }
   }
 
@@ -213,41 +446,388 @@ export async function createGuidedPlan(
     autoGenerate: input.autoGenerate,
     anchorDate: input.anchorDate,
   });
-
-  const comum = {
-    planId,
-    workOrderTypeId: natureza.id,
-    frequencyUnit: input.frequencyUnit,
-    frequencyInterval: input.frequencyInterval,
-    leadTimeDays: input.leadTimeDays,
-    toleranceDays: input.toleranceDays,
-    checklistTemplateKey: input.checklistTemplateKey,
-    extraChecklistTemplateKeys: extras,
-    estimatedDurationMin: input.estimatedDurationMin ?? null,
-  };
   const taskIds: string[] = [];
-  if (ativos.length === 0) {
+  for (const a of itens) {
     taskIds.push(
       await addPlanTask(session, {
-        ...comum,
-        name: input.name,
-        targetKind: 'location_subtree',
-        targetLocationId: setor.id,
+        planId,
+        name: `${input.name} — ${a.name}`,
+        targetKind: 'asset',
+        targetAssetId: a.id,
+        workOrderTypeId: naturezaId,
+        frequencyUnit: input.frequencyUnit,
+        frequencyInterval: input.frequencyInterval,
+        leadTimeDays: input.leadTimeDays,
+        toleranceDays: input.toleranceDays,
+        checklistTemplateKey: a.checklistTemplateKey,
+        extraChecklistTemplateKeys: a.extras,
+        estimatedDurationMin: input.estimatedDurationMin ?? null,
+        firstDueOn: a.firstDueOn,
       })
     );
-  } else {
-    for (const a of ativos) {
-      taskIds.push(
-        await addPlanTask(session, {
-          ...comum,
-          name: `${input.name} — ${a.name}`,
-          targetKind: 'asset',
-          targetAssetId: a.id,
-        })
-      );
+  }
+  const aberto = await abrirCiclosDevidos(session, taskIds, now);
+  return { planId, taskIds, ...aberto };
+}
+
+/** Abre, para cada tarefa, o ciclo que já está na antecedência (o mesmo que a varredura faria). */
+async function abrirCiclosDevidos(
+  session: TenantSession,
+  taskIds: readonly string[],
+  now: Date
+): Promise<{ cyclesOpened: number; workOrders: number }> {
+  let cyclesOpened = 0;
+  let workOrders = 0;
+  for (const id of taskIds) {
+    const r = await generateCycle(session, id, now);
+    if (r) {
+      cyclesOpened++;
+      workOrders += r.workOrders;
     }
   }
-  return { planId, taskIds };
+  return { cyclesOpened, workOrders };
+}
+
+/* -------------------------------------------------------------------------- */
+/* edição do plano (vídeo do Anderson, 13/11/2026: "visualizar o plano,         */
+/* editar o plano")                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** O tipo do plano a partir da natureza de OS gravada nas tarefas. */
+async function tipoDoPlano(session: TenantSession, planId: string): Promise<PlanKind | null> {
+  const [t] = await session.query<{ system_key: string | null; procedure_kind: string | null }>(
+    `SELECT ci.system_key,
+            (SELECT ct.procedure_kind::text FROM aurora.checklist_templates ct
+              WHERE ct.key = t.checklist_template_key AND ct.status = 'published'
+              ORDER BY ct.version DESC LIMIT 1) AS procedure_kind
+       FROM aurora.plan_tasks t
+       JOIN aurora.catalog_items ci ON ci.id = t.work_order_type_id
+      WHERE t.plan_id = $1 AND t.archived_at IS NULL
+      ORDER BY t.position, t.name LIMIT 1`,
+    [planId]
+  );
+  if (!t) return null;
+  if (t.system_key === 'training') return 'education';
+  if (t.procedure_kind && t.procedure_kind in PLAN_KINDS) return t.procedure_kind as PlanKind;
+  if (t.system_key && t.system_key in PLAN_KINDS) return t.system_key as PlanKind;
+  return null;
+}
+
+export interface PlanPatch {
+  name?: string;
+  description?: string | null;
+  autoGenerate?: boolean;
+}
+
+/** Edita nome, descrição e geração automática. O que já foi gerado não muda. */
+export async function updatePlan(session: TenantSession, planId: string, patch: PlanPatch): Promise<void> {
+  const [p] = await session.query<{ id: string }>(
+    `SELECT id FROM aurora.maintenance_plans WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+    [planId]
+  );
+  if (!p) throw new NotFoundError('Plano de manutenção', planId);
+  const sets: string[] = [];
+  const valores: unknown[] = [planId];
+  const por = (coluna: string, valor: unknown) => {
+    valores.push(valor);
+    sets.push(`${coluna} = $${valores.length}`);
+  };
+  if (patch.name !== undefined) {
+    const nome = patch.name.trim();
+    if (nome.length < 3 || nome.length > 200) {
+      throw new ValidationError('o nome do plano tem de 3 a 200 caracteres', { field: 'name' });
+    }
+    por('name', nome);
+  }
+  if (patch.description !== undefined) por('description', patch.description?.trim() ?? '');
+  if (patch.autoGenerate !== undefined) por('auto_generate', patch.autoGenerate);
+  if (sets.length === 0) return;
+  valores.push(session.context.actorId);
+  await session.query(
+    `UPDATE aurora.maintenance_plans SET ${sets.join(', ')}, updated_by = $${valores.length} WHERE id = $1`,
+    valores
+  );
+}
+
+export interface PlanTaskPatch {
+  frequencyUnit?: FrequencyUnit;
+  frequencyInterval?: number;
+  leadTimeDays?: number;
+  toleranceDays?: number;
+  checklistTemplateKey?: string | null;
+  extraChecklistTemplateKeys?: string[];
+  firstDueOn?: string | null;
+}
+
+/**
+ * Edita uma tarefa (um equipamento do plano). Periodicidade, antecedência e
+ * tolerância valem para os PRÓXIMOS ciclos — o aberto mantém as datas dele. O
+ * procedimento vale para as OS geradas daqui em diante. O primeiro vencimento
+ * só muda enquanto a tarefa não abriu ciclo nenhum.
+ */
+export async function updatePlanTask(
+  session: TenantSession,
+  taskId: string,
+  patch: PlanTaskPatch,
+  now: Date = new Date()
+): Promise<void> {
+  const [t] = await session.query<{
+    plan_id: string;
+    checklist_template_key: string | null;
+    ciclos: number;
+  }>(
+    `SELECT t.plan_id, t.checklist_template_key,
+            (SELECT count(*)::int FROM aurora.plan_cycles c WHERE c.task_id = t.id) AS ciclos
+       FROM aurora.plan_tasks t
+      WHERE t.id = $1 AND t.archived_at IS NULL
+      FOR UPDATE OF t`,
+    [taskId]
+  );
+  if (!t) throw new NotFoundError('Tarefa de plano', taskId);
+  const kind = await tipoDoPlano(session, t.plan_id);
+
+  const sets: string[] = [];
+  const valores: unknown[] = [taskId];
+  const por = (coluna: string, valor: unknown, cast = '') => {
+    valores.push(valor);
+    sets.push(`${coluna} = $${valores.length}${cast}`);
+  };
+  if (patch.frequencyUnit !== undefined)
+    por('frequency_unit', patch.frequencyUnit, '::aurora.frequency_unit');
+  if (patch.frequencyInterval !== undefined) {
+    if (
+      !Number.isInteger(patch.frequencyInterval) ||
+      patch.frequencyInterval < 1 ||
+      patch.frequencyInterval > 60
+    ) {
+      throw new ValidationError('a periodicidade vai de 1 a 60', { field: 'frequency_interval' });
+    }
+    por('frequency_interval', patch.frequencyInterval);
+  }
+  if (patch.leadTimeDays !== undefined) por('lead_time_days', patch.leadTimeDays);
+  if (patch.toleranceDays !== undefined) por('tolerance_days', patch.toleranceDays);
+  const principal =
+    patch.checklistTemplateKey !== undefined ? patch.checklistTemplateKey : t.checklist_template_key;
+  if (patch.checklistTemplateKey !== undefined) {
+    if (kind) {
+      if (!PLAN_KINDS[kind].calendarOnly && !patch.checklistTemplateKey) {
+        throw new ValidationError('cada equipamento precisa de um procedimento', {
+          field: 'checklist_template_key',
+        });
+      }
+      await conferirProcedimentoPrincipal(
+        session,
+        kind,
+        patch.checklistTemplateKey,
+        'checklist_template_key'
+      );
+    }
+    por('checklist_template_key', patch.checklistTemplateKey);
+  }
+  if (patch.extraChecklistTemplateKeys !== undefined) {
+    const extras = await conferirAdicionais(
+      session,
+      kind ?? 'preventive',
+      principal,
+      patch.extraChecklistTemplateKeys,
+      'extra_checklist_template_keys'
+    );
+    por('extra_checklist_template_keys', extras, '::text[]');
+  }
+  if (patch.firstDueOn !== undefined) {
+    if (t.ciclos > 0) {
+      throw new ConflictError('esta tarefa já abriu ciclo: o primeiro vencimento não muda mais');
+    }
+    if (patch.firstDueOn) {
+      conferirPrimeiroVencimento(patch.firstDueOn, await organizationToday(session, now), 'first_due_on');
+    } else if (kind && PLAN_KINDS[kind].calendarOnly) {
+      throw new ValidationError('na educação continuada a data é por equipamento', { field: 'first_due_on' });
+    }
+    por('first_due_on', patch.firstDueOn, '::date');
+  }
+  if (sets.length === 0) return;
+  await session.query(`UPDATE aurora.plan_tasks SET ${sets.join(', ')} WHERE id = $1`, valores);
+}
+
+/**
+ * Inclui equipamentos num plano existente (o que chegou ao setor depois, ou o
+ * que ficou de fora). Mesmas conferências da criação; periodicidade e prazos
+ * vêm da primeira tarefa ativa do plano, para o plano continuar coerente.
+ */
+export async function addGuidedPlanItems(
+  session: TenantSession,
+  planId: string,
+  items: GuidedPlanItem[],
+  scope: MembershipScope,
+  now: Date = new Date()
+): Promise<{ taskIds: string[]; cyclesOpened: number; workOrders: number }> {
+  if (items.length === 0) throw new ValidationError('escolha ao menos um equipamento', { field: 'items' });
+  const [p] = await session.query<{ customer_id: string; name: string; anchor_date: string }>(
+    `SELECT customer_id, name, anchor_date::text FROM aurora.maintenance_plans
+      WHERE id = $1 AND archived_at IS NULL FOR UPDATE`,
+    [planId]
+  );
+  if (!p) throw new NotFoundError('Plano de manutenção', planId);
+  const [base] = await session.query<{
+    work_order_type_id: string;
+    frequency_unit: FrequencyUnit;
+    frequency_interval: number;
+    lead_time_days: number;
+    tolerance_days: number;
+    estimated_duration_min: number | null;
+    target_location_id: string | null;
+    target_asset_id: string | null;
+  }>(
+    `SELECT work_order_type_id, frequency_unit::text AS frequency_unit, frequency_interval,
+            lead_time_days, tolerance_days, estimated_duration_min, target_location_id, target_asset_id
+       FROM aurora.plan_tasks WHERE plan_id = $1 AND archived_at IS NULL
+      ORDER BY position, name LIMIT 1`,
+    [planId]
+  );
+  if (!base) throw new ConflictError('o plano não tem tarefa ativa para servir de base');
+  const kind = (await tipoDoPlano(session, planId)) ?? 'preventive';
+
+  // O setor do plano: o da tarefa de setor, ou o do primeiro equipamento.
+  const [setor] = await session.query<{ path: string }>(
+    `SELECT l.path FROM aurora.locations l
+      WHERE l.id = COALESCE($1::uuid, (SELECT a.location_id FROM aurora.assets a WHERE a.id = $2::uuid))
+        AND ${scopeSql('l.customer_id', 'l.path', 3)}`,
+    [base.target_location_id, base.target_asset_id, scope.customerIds, scope.locationPaths]
+  );
+  const caminho = setor?.path ?? '/';
+  const nomes = await conferirEquipamentos(
+    session,
+    items.map((i) => i.assetId),
+    p.customer_id,
+    base.target_location_id ? caminho : '/'
+  );
+  const ja = await session.query<{ target_asset_id: string }>(
+    `SELECT target_asset_id FROM aurora.plan_tasks
+      WHERE plan_id = $1 AND archived_at IS NULL AND target_asset_id = ANY($2::uuid[])`,
+    [planId, items.map((i) => i.assetId)]
+  );
+  if (ja.length > 0) {
+    throw new ConflictError('um dos equipamentos já está neste plano', { asset_id: ja[0]!.target_asset_id });
+  }
+  const hoje = await organizationToday(session, now);
+  const vencimentoPelaAncora = addFrequency(
+    new Date(`${p.anchor_date}T00:00:00Z`),
+    base.frequency_unit,
+    Number(base.frequency_interval)
+  )
+    .toISOString()
+    .slice(0, 10);
+  const taskIds: string[] = [];
+  for (const [n, item] of items.entries()) {
+    const principal = item.checklistTemplateKey ?? null;
+    if (!PLAN_KINDS[kind].calendarOnly && !principal) {
+      throw new ValidationError(`escolha o procedimento de "${nomes.get(item.assetId)}"`, {
+        field: `items.${n}.checklist_template_key`,
+      });
+    }
+    if (PLAN_KINDS[kind].calendarOnly && !item.firstDueOn) {
+      throw new ValidationError(`informe a data de "${nomes.get(item.assetId)}"`, {
+        field: `items.${n}.first_due_on`,
+      });
+    }
+    await conferirProcedimentoPrincipal(session, kind, principal, `items.${n}.checklist_template_key`);
+    const extras = await conferirAdicionais(
+      session,
+      kind,
+      principal,
+      item.extraChecklistTemplateKeys,
+      `items.${n}.extra_checklist_template_keys`
+    );
+    // Equipamento que entra num plano já em curso começa a contar HOJE quando
+    // não tem data própria: a âncora antiga faria o primeiro ciclo nascer vencido.
+    const primeira =
+      item.firstDueOn ??
+      (vencimentoPelaAncora < hoje
+        ? addFrequency(new Date(`${hoje}T00:00:00Z`), base.frequency_unit, Number(base.frequency_interval))
+            .toISOString()
+            .slice(0, 10)
+        : null);
+    conferirPrimeiroVencimento(primeira ?? vencimentoPelaAncora, hoje, `items.${n}.first_due_on`);
+    taskIds.push(
+      await addPlanTask(session, {
+        planId,
+        name: `${p.name} — ${nomes.get(item.assetId)}`,
+        targetKind: 'asset',
+        targetAssetId: item.assetId,
+        workOrderTypeId: base.work_order_type_id,
+        frequencyUnit: base.frequency_unit,
+        frequencyInterval: Number(base.frequency_interval),
+        leadTimeDays: Number(base.lead_time_days),
+        toleranceDays: Number(base.tolerance_days),
+        checklistTemplateKey: principal,
+        extraChecklistTemplateKeys: extras,
+        estimatedDurationMin: base.estimated_duration_min,
+        firstDueOn: primeira,
+      })
+    );
+  }
+  const aberto = await abrirCiclosDevidos(session, taskIds, now);
+  return { taskIds, ...aberto };
+}
+
+/**
+ * Tira um equipamento (tarefa) do plano. Nada é apagado: a tarefa é
+ * arquivada, as OS já geradas seguem, e o item AINDA PENDENTE do ciclo aberto é
+ * dispensado com o motivo — sem isso ele ficaria cobrando uma preventiva que
+ * ninguém mais vai fazer.
+ */
+export async function removePlanTask(session: TenantSession, taskId: string, reason: string): Promise<void> {
+  const motivo = reason.trim();
+  if (motivo.length < 10 || motivo.length > 500) {
+    throw new ValidationError('informe o motivo (de 10 a 500 caracteres)', { field: 'reason' });
+  }
+  const [t] = await session.query<{ plan_id: string; restantes: number }>(
+    `SELECT t.plan_id,
+            (SELECT count(*)::int FROM aurora.plan_tasks o
+              WHERE o.plan_id = t.plan_id AND o.archived_at IS NULL AND o.id <> t.id) AS restantes
+       FROM aurora.plan_tasks t WHERE t.id = $1 AND t.archived_at IS NULL FOR UPDATE OF t`,
+    [taskId]
+  );
+  if (!t) throw new NotFoundError('Tarefa de plano', taskId);
+  if (t.restantes === 0) {
+    throw new ConflictError('é o único equipamento do plano: para parar o plano, desligue-o');
+  }
+  await session.query(`UPDATE aurora.plan_tasks SET archived_at = now() WHERE id = $1`, [taskId]);
+  await session.query(
+    `UPDATE aurora.plan_cycle_items
+        SET status = 'skipped', skip_reason = $2, skipped_by = $3, skipped_at = now()
+      WHERE task_id = $1 AND status = 'pending'`,
+    [taskId, `Retirado do plano: ${motivo}`, session.context.actorId]
+  );
+}
+
+export interface PlanHistoryEntry {
+  occurred_at: string;
+  actor_name: string | null;
+  entity: 'plan' | 'task';
+  entity_label: string | null;
+  action: string;
+  changes: Record<string, unknown> | null;
+}
+
+/**
+ * O histórico do plano: cada mudança do plano e das tarefas dele, da trilha de
+ * auditoria (gatilhos `plans_audit` e `plan_tasks_audit`), com autor e data.
+ */
+export async function planHistory(session: TenantSession, planId: string): Promise<PlanHistoryEntry[]> {
+  return session.query<PlanHistoryEntry>(
+    `SELECT a.occurred_at, u.name AS actor_name,
+            CASE WHEN a.entity_type = 'maintenance_plans' THEN 'plan' ELSE 'task' END AS entity,
+            a.entity_label, a.action::text AS action, a.changes
+       FROM aurora.audit_logs a
+       LEFT JOIN aurora.users u ON u.id = a.actor_user_id
+      WHERE (a.entity_type = 'maintenance_plans' AND a.entity_id = $1::text)
+         OR (a.entity_type = 'plan_tasks' AND a.entity_id IN (
+               SELECT t.id::text FROM aurora.plan_tasks t WHERE t.plan_id = $1::uuid))
+      ORDER BY a.occurred_at DESC, a.id DESC
+      LIMIT 200`,
+    [planId]
+  );
 }
 
 /* -------------------------------------------------------------------------- */

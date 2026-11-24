@@ -11,6 +11,7 @@ import { newId, ConflictError, NotFoundError, ValidationError } from '@aurora/do
 import type { TenantSession } from './client';
 import { startTimer, stopTimer } from './execution';
 import { emitEvent } from './outbox';
+import { validateServiceHours } from './work-orders';
 
 /** Onde o aparelho disse que estava — ou por que não disse. */
 export interface PontoDeVisita {
@@ -266,6 +267,9 @@ export interface ServiceReportInput {
   /** Situação de USO do equipamento após o serviço — não é veredito metrológico. */
   operationalResult?: 'released' | 'stopped' | null;
   finalOpinion?: string | null;
+  /** Hora real de início e de término do atendimento (D-3). ISO 8601; nulo apaga. */
+  serviceStartedAt?: string | null;
+  serviceEndedAt?: string | null;
 }
 
 /**
@@ -301,6 +305,23 @@ export async function updateServiceReport(
       throw new ValidationError('resultado deve ser liberado ou parado', { field: 'operational_result' });
     }
     campos.push(['operational_result', input.operationalResult]);
+  }
+  if (input.serviceStartedAt !== undefined || input.serviceEndedAt !== undefined) {
+    const [gravadas] = await session.query<{
+      service_started_at: string | null;
+      service_ended_at: string | null;
+    }>(`SELECT service_started_at, service_ended_at FROM aurora.work_orders WHERE id = $1`, [workOrderId]);
+    const quando = (v: string | null | undefined) => (v ? new Date(v) : null);
+    validateServiceHours(quando(input.serviceStartedAt), quando(input.serviceEndedAt), {
+      service_started_at: input.serviceStartedAt === null ? null : (gravadas?.service_started_at ?? null),
+      service_ended_at: input.serviceEndedAt === null ? null : (gravadas?.service_ended_at ?? null),
+    });
+    if (input.serviceStartedAt !== undefined) {
+      campos.push(['service_started_at', quando(input.serviceStartedAt)?.toISOString() ?? null]);
+    }
+    if (input.serviceEndedAt !== undefined) {
+      campos.push(['service_ended_at', quando(input.serviceEndedAt)?.toISOString() ?? null]);
+    }
   }
   if (campos.length === 0) return;
   // Colunas da lista fechada acima, nunca do cliente.

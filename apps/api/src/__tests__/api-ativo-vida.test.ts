@@ -83,6 +83,8 @@ beforeAll(async () => {
     await transitionWorkOrder(s, os.id, 'in_progress');
     // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
     await transitionWorkOrder(s, os.id, 'completed', {
+      serviceStartedAt: new Date(Date.now() - 3_600_000),
+      serviceEndedAt: new Date(Date.now() - 60_000),
       resolution: 'Sensor de fluxo substituído e testado',
       operationalResult: 'released',
     });

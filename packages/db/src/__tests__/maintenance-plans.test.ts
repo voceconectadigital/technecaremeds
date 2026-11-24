@@ -377,6 +377,8 @@ describe('conformidade', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, item!.work_order_id, 'in_progress');
       await transitionWorkOrder(s, item!.work_order_id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Preventiva executada conforme procedimento',
       });

@@ -130,6 +130,9 @@ export const workOrderServiceReport = defineOperation({
       service_observations: z.string().max(5000).nullable().optional(),
       operational_result: z.enum(['released', 'stopped']).nullable().optional(),
       final_opinion: z.string().max(5000).nullable().optional(),
+      /** Hora real de início e de término do atendimento (D-3), ISO 8601; nulo apaga. */
+      service_started_at: z.string().max(40).nullable().optional(),
+      service_ended_at: z.string().max(40).nullable().optional(),
     })
     .strict(),
   response: Ok,

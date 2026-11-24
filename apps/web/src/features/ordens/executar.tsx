@@ -89,6 +89,7 @@ import {
 } from '@aurora/app-kit';
 import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
+import { paraCampoDeHora } from './ficha';
 
 const PASSOS = [
   { id: 'resumo', titulo: 'Resumo' },
@@ -1153,9 +1154,26 @@ function PassoParecer({ id, os }: { id: string; os: WorkOrderDetail }) {
   const [resultado, setResultado] = useState<'released' | 'stopped' | ''>(os.operational_result ?? '');
   const [parecer, setParecer] = useState(os.final_opinion ?? '');
   const relatorio = useRelatorio();
+  const [inicio, setInicio] = useState(paraCampoDeHora(os.service_started_at ?? null));
+  const [fim, setFim] = useState(paraCampoDeHora(os.service_ended_at ?? null));
   useEffect(() => {
     setResultado(os.operational_result ?? '');
   }, [os.operational_result]);
+  useEffect(() => {
+    setInicio(paraCampoDeHora(os.service_started_at ?? null));
+    setFim(paraCampoDeHora(os.service_ended_at ?? null));
+  }, [os.service_started_at, os.service_ended_at]);
+  /** Grava as duas horas juntas (o servidor confere término > início). */
+  function gravarHoras(i: string, f: string) {
+    if (!i || !f) return;
+    relatorio.mutate(
+      {
+        params: { id },
+        body: { service_started_at: new Date(i).toISOString(), service_ended_at: new Date(f).toISOString() },
+      },
+      { onSuccess: () => toast.success('Horário do atendimento gravado') }
+    );
+  }
   return (
     <Card>
       <CardHeader
@@ -1167,6 +1185,25 @@ function PassoParecer({ id, os }: { id: string; os: WorkOrderDetail }) {
         manutenção”; LIBERADO o devolve “em operação” se ele estava em manutenção.
       </p>
       <div className="flex flex-col gap-4 p-4">
+        {/* D-3 (Anderson, 24/11/2026): "campo obrigatório em toda OS" — a hora técnica é apurada por eles. */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Hora de início do atendimento" required>
+            <Input
+              type="datetime-local"
+              value={inicio}
+              onChange={(e) => setInicio(e.target.value)}
+              onBlur={() => gravarHoras(inicio, fim)}
+            />
+          </Field>
+          <Field label="Hora de término do atendimento" required>
+            <Input
+              type="datetime-local"
+              value={fim}
+              onChange={(e) => setFim(e.target.value)}
+              onBlur={() => gravarHoras(inicio, fim)}
+            />
+          </Field>
+        </div>
         <div role="radiogroup" aria-label="Resultado operacional" className="grid gap-2 sm:grid-cols-2">
           {(
             [
@@ -1257,6 +1294,14 @@ function PassoRevisao({ id, os }: { id: string; os: WorkOrderDetail }) {
             }
           />
           <Info rotulo="Parecer" valor={os.final_opinion} />
+          <Info
+            rotulo="Atendimento"
+            valor={
+              os.service_started_at && os.service_ended_at
+                ? `${new Date(os.service_started_at).toLocaleString('pt-BR')} → ${new Date(os.service_ended_at).toLocaleString('pt-BR')}`
+                : null
+            }
+          />
           <Info rotulo="Registros de presença" valor={`${visitas?.items.length ?? 0}`} />
           <Info
             rotulo="Fotos"
@@ -1305,12 +1350,20 @@ const ONDE: Record<string, string> = {
  * descrição já tem o tamanho que ele pede — o próprio clique a entrega.
  */
 export function faltasParaConcluir(
-  os: Pick<WorkOrderDetail, 'service_description'>,
+  os: Pick<WorkOrderDetail, 'service_description'> &
+    Partial<Pick<WorkOrderDetail, 'service_started_at' | 'service_ended_at'>>,
   conclusao: Conclusao | undefined
 ): string[] {
   const faltas: string[] = [];
   const descricao = os.service_description?.trim() ?? '';
   if (!descricao) faltas.push('Descrição do serviço (passo Preencher OS)');
+  // D-3: hora de início e de término (a ficha vinda da API sempre traz as duas chaves; nulas = faltam).
+  if (
+    (os.service_started_at !== undefined || os.service_ended_at !== undefined) &&
+    (!os.service_started_at || !os.service_ended_at)
+  ) {
+    faltas.push('Hora de início e de término do atendimento (passo Parecer final)');
+  }
   for (const m of conclusao?.missing ?? []) {
     if (typeof m === 'string') {
       faltas.push(m);

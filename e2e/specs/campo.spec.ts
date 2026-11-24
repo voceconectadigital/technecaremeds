@@ -27,7 +27,7 @@
  */
 import { test as base, expect } from '@playwright/test';
 import type { APIRequestContext, Page } from '@playwright/test';
-import { E2E, apiUrl } from '../fixtures/aurora';
+import { E2E, apiUrl, campoDeHora } from '../fixtures/aurora';
 
 const test = base.extend<{ comoTecnico: Page }>({
   comoTecnico: async ({ page }, use) => {
@@ -336,6 +336,9 @@ test.describe('CAMPO · nada é descartado em silêncio', () => {
     // OS de equipamento pede o parecer para concluir (OS-16).
     if (await page.getByLabel('Liberado para uso').count())
       await page.getByLabel('Liberado para uso').check();
+    // D-3 (24/11/2026): concluir pede a hora de início e de término do atendimento.
+    await page.getByLabel('Hora de início do atendimento').fill(campoDeHora(-90));
+    await page.getByLabel('Hora de término do atendimento').fill(campoDeHora(-15));
 
     /*
      * Ele pede uma mudança de situação — qualquer uma que o grafo ofereça a

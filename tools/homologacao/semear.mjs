@@ -501,6 +501,9 @@ async function main() {
     await db.transitionWorkOrder(s, ordens[3], 'in_progress', { note: 'Em bancada.' });
     await db.transitionWorkOrder(s, ordens[3], 'completed', {
       resolution: 'Substituído o conjunto de teclas e refeita a calibração.',
+      // D-3 (24/11/2026): hora de início e de término são obrigatórias na conclusão.
+      serviceStartedAt: new Date(Date.now() - 2 * 3_600_000),
+      serviceEndedAt: new Date(Date.now() - 3_600_000),
     });
     /*
      * E uma delas vai até o FIM: concluída, validada, fechada.

@@ -226,7 +226,12 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
 
     const os = await novaOs('Monitor sem parecer', ativoMonitor);
     await prontaParaConcluir(os);
-    const r = await transicao(os, { to: 'completed', resolution: 'Troca do sensor e teste funcional.' });
+    const r = await transicao(os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Troca do sensor e teste funcional.',
+    });
     expect(r.status).toBe(422);
     expect(r.body.details.field).toBe('operational_result');
     expect(await statusDoAtivo(ativoMonitor)).toBe('active');
@@ -253,7 +258,12 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
     const os = await novaOs('Monitor com falha de placa', ativoMonitor);
     await prontaParaConcluir(os);
     expect((await relatorio(os, { operational_result: 'stopped' })).status).toBe(200);
-    const r = await transicao(os, { to: 'completed', resolution: 'Placa-mãe condenada; aguarda peça.' });
+    const r = await transicao(os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Placa-mãe condenada; aguarda peça.',
+    });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(await statusDoAtivo(ativoMonitor)).toBe('under_maintenance');
 
@@ -282,6 +292,8 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
     await prontaParaConcluir(os);
     const r = await transicao(os, {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'Placa substituída; testes ok.',
       operational_result: 'released',
     });
@@ -299,6 +311,8 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
       (
         await transicao(reserva, {
           to: 'completed',
+          service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+          service_ended_at: new Date(Date.now() - 60_000).toISOString(),
           resolution: 'ok, revisado',
           operational_result: 'released',
         })
@@ -316,6 +330,8 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
     );
     const r = await transicao(baixa, {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'Retirado do setor.',
       operational_result: 'stopped',
     });
@@ -328,6 +344,8 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
     await prontaParaConcluir(os);
     const r = await transicao(os, {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'ok, revisado',
       operational_result: 'aprovado',
     });
@@ -337,7 +355,12 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
   it('OS sem equipamento conclui sem parecer', async () => {
     const os = await novaOs('Instalação de tomada no setor', null);
     await prontaParaConcluir(os);
-    const r = await transicao(os, { to: 'completed', resolution: 'Tomada instalada e testada.' });
+    const r = await transicao(os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Tomada instalada e testada.',
+    });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
   });
 
@@ -349,7 +372,16 @@ describe('OS-16 · ATV-16 — parecer obrigatório na conclusão, com efeito no 
     expect(desliga.body.require_operational_result).toBe(false);
     const os = await novaOs('Monitor — sem exigência', ativoReserva);
     await prontaParaConcluir(os);
-    expect((await transicao(os, { to: 'completed', resolution: 'ok, revisado' })).status).toBe(201);
+    expect(
+      (
+        await transicao(os, {
+          to: 'completed',
+          service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+          service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+          resolution: 'ok, revisado',
+        })
+      ).status
+    ).toBe(201);
     expect(await statusDoAtivo(ativoReserva)).toBe('standby');
 
     const liga = await http
@@ -396,7 +428,12 @@ describe('OS-24 · OS-12 — laudo de obsolescência assinado por quem valida; a
     const anexos = await http.get(`/v1/work-orders/${laudo}/attachments`).set(auth(GESTORA));
     expect(anexos.body.items.map((a: { purpose: string }) => a.purpose)).toContain('document');
 
-    const c = await transicao(laudo, { to: 'completed', resolution: 'Laudo emitido após inspeção.' });
+    const c = await transicao(laudo, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Laudo emitido após inspeção.',
+    });
     expect(c.status, JSON.stringify(c.body)).toBe(201);
     // Concluir não assina nem baixa: quem valida é que aceita.
     const antes = await http.get(`/v1/work-orders/${laudo}/signatures`).set(auth(GESTORA));
@@ -426,7 +463,13 @@ describe('OS-24 · OS-12 — laudo de obsolescência assinado por quem valida; a
   it('OS comum validada não ganha assinatura de laudo', async () => {
     const os = await novaOs('Monitor — validação comum', ativoReserva);
     await prontaParaConcluir(os);
-    await transicao(os, { to: 'completed', resolution: 'ok, revisado', operational_result: 'released' });
+    await transicao(os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'ok, revisado',
+      operational_result: 'released',
+    });
     expect((await transicao(os, { to: 'validated' }, GESTORA)).status).toBe(201);
     const r = await http.get(`/v1/work-orders/${os}/signatures`).set(auth(GESTORA));
     expect(r.body.items).toEqual([]);

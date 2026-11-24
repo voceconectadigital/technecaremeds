@@ -314,6 +314,8 @@ describe('▶ Executar: check-in, procedimento, OS, peças, parecer, conclusão'
   it('conclui com a descrição do serviço', async () => {
     const r = await transicao(os1, {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'Troca do sensor de pressão e recalibração do alarme.',
     });
     expect(r.status, JSON.stringify(r.body)).toBe(201);

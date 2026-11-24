@@ -53,6 +53,7 @@ import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
 import { ROTULO_CONTRATO } from '../planos/novo-plano';
 import { DialogoContrato } from '../clientes/contratos-do-cliente';
+import { AcoesDoAtendimento, AvisoDeAtendimento } from '../clientes/atendimento-do-contrato';
 import {
   ROTULO_MODALIDADE,
   ROTULO_PAGAMENTO,
@@ -291,6 +292,9 @@ interface Detalhe {
     payment_terms?: PaymentTerms | null;
     billing_model: string;
     billing_model_informed?: boolean;
+    service_hold?: 'suspended' | 'blocked' | null;
+    service_hold_reason?: string | null;
+    service_hold_at?: string | null;
     included_calls: number | null;
     included_hours: string | null;
     sla_target_percent: string | null;
@@ -411,6 +415,9 @@ export function ContratoPage() {
                 </StatusChip>
               )}
             </div>
+            {/* D-4/D-7 (Anderson, 24/11/2026): atendimento parado, renovação e horas técnicas. */}
+            <AvisoDeAtendimento contrato={{ ...c, service_hold: c.service_hold ?? null }} />
+            <AcoesDoAtendimento contrato={{ ...c, service_hold: c.service_hold ?? null }} />
 
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
               <Info

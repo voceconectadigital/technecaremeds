@@ -159,3 +159,21 @@ export async function criarSolicitacao(
 export function apiUrl(): string {
   return process.env.AURORA_E2E_API_URL ?? 'http://localhost:3311/v1';
 }
+
+/**
+ * Um horário no formato do campo `datetime-local` (hora LOCAL do navegador), deslocado em minutos de
+ * agora. D-3 (Anderson, 24/11/2026): toda OS concluída leva hora de início e de término.
+ */
+export function campoDeHora(minutos: number, agora: Date = new Date()): string {
+  const d = new Date(agora.getTime() + minutos * 60_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/** As duas horas do atendimento no corpo da API (ISO), para concluir OS pela rota. */
+export function horasDoAtendimento(): { service_started_at: string; service_ended_at: string } {
+  return {
+    service_started_at: new Date(Date.now() - 90 * 60_000).toISOString(),
+    service_ended_at: new Date(Date.now() - 15 * 60_000).toISOString(),
+  };
+}

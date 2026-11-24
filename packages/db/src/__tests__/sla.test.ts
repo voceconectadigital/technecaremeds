@@ -270,6 +270,8 @@ describe('os três relógios', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, os.id, 'in_progress');
       await transitionWorkOrder(s, os.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Trocada a placa e testado',
       });
@@ -411,6 +413,8 @@ describe('reabrir cria relógio novo — é assim que reincidência se mede', ()
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, os.id, 'in_progress');
       await transitionWorkOrder(s, os.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Ajuste executado',
       });
@@ -522,6 +526,8 @@ describe('varredura de aviso e violação', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, carimbado!.document_id, 'in_progress');
       await transitionWorkOrder(s, carimbado!.document_id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Resolvido, porém fora do prazo',
       });

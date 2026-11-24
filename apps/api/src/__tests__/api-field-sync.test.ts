@@ -373,6 +373,8 @@ describe('CAMPO-003 · a OS cancelada durante a execução offline', () => {
     const op = newId();
     const trabalho = {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'Trocada a válvula de exalação; teste de estanqueidade aprovado às 15h40.',
     };
 
@@ -407,7 +409,12 @@ describe('CAMPO-003 · a OS cancelada durante a execução offline', () => {
       .expect(201);
 
     const op = newId();
-    const corpo = { to: 'completed', resolution: 'Concluída em campo.' };
+    const corpo = {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Concluída em campo.',
+    };
 
     const um = await http
       .post(`/v1/work-orders/${os}/transitions`)
@@ -451,7 +458,12 @@ describe('CAMPO-003 · a OS cancelada durante a execução offline', () => {
     await http
       .post(`/v1/work-orders/${os}/transitions`)
       .set({ ...auth(EMAIL_TEC), ...operacao(op) })
-      .send({ to: 'completed', resolution: 'x' })
+      .send({
+        to: 'completed',
+        service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+        service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+        resolution: 'x',
+      })
       .expect(409);
 
     const nova = newId();

@@ -29,6 +29,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -48,6 +49,11 @@ import {
   membershipScope,
   assertCustomerInScope,
   createGuidedPlan,
+  updatePlan,
+  updatePlanTask,
+  addGuidedPlanItems,
+  removePlanTask,
+  planHistory,
   planBoard,
   executePlanItem,
   planSchedule,
@@ -62,11 +68,16 @@ import {
 import { ForbiddenError, NotFoundError, ValidationError } from '@aurora/domain';
 import {
   plansActivate,
+  plansAddItems,
   plansBoard,
   plansComplianceReport,
   plansCreate,
+  plansRemoveTask,
   plansSchedule,
+  plansUpdate,
+  plansUpdateTask,
   setoresDaConsulta,
+  type PlanItemInput,
 } from '@aurora/contracts';
 import { parseWith } from '../common/contract-validation';
 import { PermissionsCheckedInHandler, RequirePermissions } from '../common/permissions.guard';
@@ -103,6 +114,27 @@ async function planoNoEscopo(s: TenantSession, escopo: MembershipScope, planId: 
   );
   if (p && !escopo.customerIds.includes(p.customer_id))
     throw new NotFoundError('Plano de manutenção', planId);
+}
+
+/** A tarefa existe e o plano dela está no escopo; devolve o plano. Fora do escopo é 404. */
+async function tarefaNoEscopo(s: TenantSession, escopo: MembershipScope, taskId: string): Promise<string> {
+  const [t] = await s.query<{ plan_id: string }>(
+    `SELECT plan_id FROM aurora.plan_tasks WHERE id = $1 AND archived_at IS NULL`,
+    [taskId]
+  );
+  if (!t) throw new NotFoundError('Tarefa de plano', taskId);
+  await planoNoEscopo(s, escopo, t.plan_id);
+  return t.plan_id;
+}
+
+/** Itens do corpo (snake_case) → entrada da camada de dados. */
+function itensDoCorpo(items: PlanItemInput[] | undefined) {
+  return items?.map((i) => ({
+    assetId: i.asset_id,
+    checklistTemplateKey: i.checklist_template_key ?? null,
+    extraChecklistTemplateKeys: i.extra_checklist_template_keys ?? [],
+    firstDueOn: i.first_due_on ?? null,
+  }));
 }
 
 @Controller('maintenance-plans')
@@ -294,7 +326,7 @@ export class PlansController {
   async create(
     @Req() req: AuroraRequest,
     @Body() body: unknown
-  ): Promise<{ id: string; task_count: number }> {
+  ): Promise<{ id: string; task_count: number; cycles_opened: number; work_orders: number }> {
     const ctx = req.auroraContext!;
     const b = parseWith(plansCreate.body, body);
     const anchor = new Date(`${b.anchor_date}T00:00:00Z`);
@@ -311,6 +343,7 @@ export class PlansController {
           customerId: b.customer_id,
           sectorId: b.sector_id,
           assetIds: b.asset_ids,
+          items: itensDoCorpo(b.items),
           kind: b.kind,
           checklistTemplateKey: b.checklist_template_key ?? null,
           extraChecklistTemplateKeys: b.extra_checklist_template_keys ?? [],
@@ -324,8 +357,113 @@ export class PlansController {
         },
         escopo
       );
-      return { id: r.planId, task_count: r.taskIds.length };
+      return {
+        id: r.planId,
+        task_count: r.taskIds.length,
+        cycles_opened: r.cyclesOpened,
+        work_orders: r.workOrders,
+      };
     });
+  }
+
+  /** Edita nome, descrição e geração automática (vídeo de 13/11: "editar o plano"). */
+  @Patch(':id')
+  @RequirePermissions('maintenance_plan.update')
+  async update(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const planId = uuidParam(id, 'id');
+    const b = parseWith(plansUpdate.body, body ?? {});
+    await withTenant(this.db, ctx, async (s) => {
+      await planoNoEscopo(s, await membershipScope(s, ctx.membershipId), planId);
+      await updatePlan(s, planId, {
+        name: b.name,
+        description: b.description,
+        autoGenerate: b.auto_generate,
+      });
+    });
+    return { ok: true };
+  }
+
+  /** Histórico do plano e dos equipamentos dele (trilha de auditoria). */
+  @Get(':id/history')
+  @RequirePermissions('maintenance_plan.read')
+  async history(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const planId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, async (s) => {
+      await planoNoEscopo(s, await membershipScope(s, ctx.membershipId), planId);
+      const [existe] = await s.query(`SELECT 1 FROM aurora.maintenance_plans WHERE id = $1`, [planId]);
+      if (!existe) throw new NotFoundError('Plano de manutenção', planId);
+      return planHistory(s, planId);
+    });
+    return { items };
+  }
+
+  /** Inclui equipamentos no plano, cada um com o seu procedimento. */
+  @Post(':id/items')
+  @RequirePermissions('maintenance_plan.update')
+  async addItems(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ task_count: number; cycles_opened: number; work_orders: number }> {
+    const ctx = req.auroraContext!;
+    const planId = uuidParam(id, 'id');
+    const b = parseWith(plansAddItems.body, body);
+    return withTenant(this.db, ctx, async (s) => {
+      const escopo = await membershipScope(s, ctx.membershipId);
+      await planoNoEscopo(s, escopo, planId);
+      const r = await addGuidedPlanItems(s, planId, itensDoCorpo(b.items)!, escopo);
+      return { task_count: r.taskIds.length, cycles_opened: r.cyclesOpened, work_orders: r.workOrders };
+    });
+  }
+
+  /** Edita um equipamento do plano. */
+  @Patch('tasks/:taskId')
+  @RequirePermissions('maintenance_plan.update')
+  async updateTask(
+    @Req() req: AuroraRequest,
+    @Param('taskId') taskId: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const id = uuidParam(taskId, 'taskId');
+    const b = parseWith(plansUpdateTask.body, body ?? {});
+    await withTenant(this.db, ctx, async (s) => {
+      await tarefaNoEscopo(s, await membershipScope(s, ctx.membershipId), id);
+      await updatePlanTask(s, id, {
+        frequencyUnit: b.frequency_unit,
+        frequencyInterval: b.frequency_interval,
+        leadTimeDays: b.lead_time_days,
+        toleranceDays: b.tolerance_days,
+        checklistTemplateKey: b.checklist_template_key,
+        extraChecklistTemplateKeys: b.extra_checklist_template_keys,
+        firstDueOn: b.first_due_on,
+      });
+    });
+    return { ok: true };
+  }
+
+  /** Retira um equipamento do plano (arquiva a tarefa, com motivo). */
+  @Post('tasks/:taskId/remove')
+  @RequirePermissions('maintenance_plan.update')
+  async removeTask(
+    @Req() req: AuroraRequest,
+    @Param('taskId') taskId: string,
+    @Body() body: unknown
+  ): Promise<{ ok: true }> {
+    const ctx = req.auroraContext!;
+    const id = uuidParam(taskId, 'taskId');
+    const b = parseWith(plansRemoveTask.body, body);
+    await withTenant(this.db, ctx, async (s) => {
+      await tarefaNoEscopo(s, await membershipScope(s, ctx.membershipId), id);
+      await removePlanTask(s, id, b.reason);
+    });
+    return { ok: true };
   }
 
   /** O plano, com as tarefas e o ciclo aberto de cada uma. */
@@ -359,6 +497,21 @@ export class PlansController {
                 t.frequency_unit::text AS frequency_unit, t.frequency_interval,
                 t.lead_time_days, t.tolerance_days, t.estimated_duration_min,
                 t.default_team_id, t.default_assignee_id, t.position,
+                t.first_due_on::text AS first_due_on,
+                COALESCE(
+                  (SELECT ct.procedure_kind::text FROM aurora.checklist_templates ct
+                    WHERE ct.key = t.checklist_template_key AND ct.status <> 'draft'
+                    ORDER BY ct.version DESC LIMIT 1),
+                  (SELECT CASE ci.system_key WHEN 'training' THEN 'education' ELSE ci.system_key END
+                     FROM aurora.catalog_items ci WHERE ci.id = t.work_order_type_id),
+                  'other') AS kind,
+                (SELECT a.name FROM aurora.assets a WHERE a.id = t.target_asset_id) AS target_asset_name,
+                (SELECT ct.title FROM aurora.checklist_templates ct
+                  WHERE ct.key = t.checklist_template_key AND ct.status = 'published'
+                  ORDER BY ct.version DESC LIMIT 1) AS checklist_title,
+                (SELECT count(*)::int FROM aurora.plan_cycles c4 WHERE c4.task_id = t.id) AS cycle_count,
+                (SELECT count(*)::int FROM aurora.plan_cycle_items i4
+                  WHERE i4.cycle_id = cy.id AND i4.status = 'pending') AS pending_count,
                 -- O ciclo CORRENTE: o de maior sequência, e não "um aberto".
                 --
                 -- Nada no sistema fecha um ciclo hoje: status fica em

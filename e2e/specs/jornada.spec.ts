@@ -27,7 +27,7 @@
  * clica; o que se afirma é o que ficou gravado.
  */
 import type { Page } from '@playwright/test';
-import { test, expect, E2E, apiUrl } from '../fixtures/aurora';
+import { test, expect, E2E, apiUrl, campoDeHora } from '../fixtures/aurora';
 
 const cab = {
   authorization: `Bearer local:${E2E.emailCoordA}:${E2E.emailCoordA}`,
@@ -176,6 +176,9 @@ test.describe('JORNADA · do telefone tocando ao fechamento', () => {
     await conclusao
       .getByLabel(/resolution|resolução|o que foi feito/i)
       .fill('Trocado o módulo de carga e refeito o teste de descarga.');
+    // D-3 (Anderson, 24/11/2026): hora de início e de término são obrigatórias em toda OS.
+    await conclusao.getByLabel('Hora de início do atendimento').fill(campoDeHora(-90));
+    await conclusao.getByLabel('Hora de término do atendimento').fill(campoDeHora(-15));
     await conclusao.getByRole('button', { name: 'Concluída' }).click();
     await expect(conclusao).toBeHidden({ timeout: 20_000 });
 
@@ -183,6 +186,8 @@ test.describe('JORNADA · do telefone tocando ao fechamento', () => {
       await page.request.get(`${apiUrl()}/work-orders/${osId}`, { headers: cab })
     ).json();
     expect(concluida.completed_at, 'concluir precisa carimbar a hora').toBeTruthy();
+    expect(concluida.service_started_at, 'a hora de início do atendimento fica na OS').toBeTruthy();
+    expect(concluida.service_ended_at, 'a hora de término do atendimento fica na OS').toBeTruthy();
     expect(concluida.resolution).toContain('módulo de carga');
 
     /* ====================================================== 8 · o fechamento */
