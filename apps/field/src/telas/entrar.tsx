@@ -23,7 +23,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Card, Field, Input, Logo } from '@aurora/ui';
+import { Button, Card, Field, Input, Logo, PasswordInput } from '@aurora/ui';
 import { useSession, MARCA } from '@aurora/app-kit';
 import { API } from '../campo';
 import { lembrarUsuario } from '../identidade';
@@ -205,8 +205,7 @@ export function EntrarPage() {
                 </Field>
               ) : (
                 <Field label="Senha" required hint="A mesma senha do sistema na web.">
-                  <Input
-                    type="password"
+                  <PasswordInput
                     autoComplete="current-password"
                     value={senha}
                     disabled={enviando}

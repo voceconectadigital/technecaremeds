@@ -31,7 +31,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Button, Field, Input } from '@aurora/ui';
+import { Button, Field, Input, PasswordInput } from '@aurora/ui';
 import { useSession, useApiQuery, useApiMutation, MARCA, ApiError } from '@aurora/app-kit';
 import { authConfig, authLogin, type AuthConfig, type LoginResult } from '@aurora/contracts';
 import { MolduraDeEntrada } from './entrar-vitrine';
@@ -163,8 +163,7 @@ export function EntrarPage() {
 
         {pedeSenha && (
           <Field label="Senha" error={erroSenha} required>
-            <Input
-              type="password"
+            <PasswordInput
               name="senha"
               /*
                * `current-password`: é o que faz o gerenciador de senhas do

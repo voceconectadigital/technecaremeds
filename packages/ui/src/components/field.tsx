@@ -18,7 +18,18 @@
  *     chega a quem já saiu do campo;
  *   · obrigatório é dito por texto ("obrigatório"), não só por asterisco.
  */
-import { createContext, useContext, useId, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { cn } from '../lib/cn';
 
 interface CampoCtx {
@@ -134,6 +145,102 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 export function Input({ className, ...rest }: InputProps) {
   const campo = useFieldControl();
   return <input {...campo} {...rest} className={cn(CONTROLE_BASE, 'h-10 border-border-strong', className)} />;
+}
+
+export interface PasswordInputProps extends Omit<InputProps, 'type'> {
+  ref?: Ref<HTMLInputElement>;
+}
+
+/**
+ * Campo de senha com o olho para mostrar e esconder o que foi digitado.
+ *
+ * Quem digita a senha no celular, de luva ou com pressa, erra sem ver — e só
+ * descobre depois de o servidor recusar. O olho deixa conferir antes.
+ *
+ * O que ele garante:
+ *
+ *   · o botão é `type="button"`: clicar no olho NUNCA envia o formulário;
+ *   · o rótulo do botão diz o que o clique fará ("Mostrar senha" / "Ocultar
+ *     senha") e `aria-pressed` diz o estado, então o leitor de tela anuncia os
+ *     dois;
+ *   · o foco fica no campo, com o cursor onde estava: a pessoa confere e
+ *     continua digitando sem voltar a clicar no campo;
+ *   · `name`, `id`, `autoComplete` e o resto chegam ao `input` como vieram —
+ *     é deles que o gerenciador de senhas do navegador depende;
+ *   · o olho nativo do Edge sai de cena, para não haver dois olhos no campo.
+ */
+export function PasswordInput({ className, disabled, ref, id, ...rest }: PasswordInputProps) {
+  const campo = useFieldControl();
+  const reserva = useId();
+  const idDoCampo = id ?? campo.id ?? reserva;
+  const [visivel, setVisivel] = useState(false);
+  const campoRef = useRef<HTMLInputElement | null>(null);
+  /** A seleção de antes do clique, para devolver o cursor ao mesmo lugar. */
+  const selecao = useRef<{ inicio: number | null; fim: number | null } | null>(null);
+
+  const ligar = useCallback(
+    (el: HTMLInputElement | null) => {
+      campoRef.current = el;
+      if (typeof ref === 'function') ref(el);
+      else if (ref) ref.current = el;
+    },
+    [ref]
+  );
+
+  // Trocar o `type` pode zerar o cursor em alguns navegadores; aqui ele volta.
+  useLayoutEffect(() => {
+    const el = campoRef.current;
+    const antes = selecao.current;
+    if (!el || !antes) return;
+    selecao.current = null;
+    el.focus();
+    if (antes.inicio !== null && antes.fim !== null) el.setSelectionRange(antes.inicio, antes.fim);
+  }, [visivel]);
+
+  function alternar() {
+    const el = campoRef.current;
+    selecao.current = { inicio: el?.selectionStart ?? null, fim: el?.selectionEnd ?? null };
+    setVisivel((v) => !v);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        {...campo}
+        {...rest}
+        id={idDoCampo}
+        ref={ligar}
+        type={visivel ? 'text' : 'password'}
+        disabled={disabled}
+        className={cn(
+          CONTROLE_BASE,
+          'h-10 border-border-strong pr-11 [&::-ms-clear]:hidden [&::-ms-reveal]:hidden',
+          className
+        )}
+      />
+      <button
+        type="button"
+        aria-label={visivel ? 'Ocultar senha' : 'Mostrar senha'}
+        aria-pressed={visivel}
+        aria-controls={idDoCampo}
+        disabled={disabled}
+        // Sem isto o clique tiraria o foco do campo antes de devolvê-lo.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={alternar}
+        className={cn(
+          'absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-control text-muted',
+          'transition-colors duration-[130ms] hover:text-text',
+          'disabled:cursor-not-allowed disabled:text-subtle disabled:hover:text-subtle'
+        )}
+      >
+        {visivel ? (
+          <EyeOff aria-hidden="true" className="size-[18px]" />
+        ) : (
+          <Eye aria-hidden="true" className="size-[18px]" />
+        )}
+      </button>
+    </div>
+  );
 }
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
