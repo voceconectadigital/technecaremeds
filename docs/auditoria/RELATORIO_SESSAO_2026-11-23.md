@@ -8,8 +8,8 @@ Sessão de trabalho de 23 a 24/11/2026 (UTC), depois da auditoria corretiva de s
 - **Contrato "Vencido" no último dia da vigência:** era um erro de fuso na lista de contratos. Corrigido e publicado.
 - **Erros 422 no console:** não eram defeito. Vieram de chamadas de medição feitas à mão durante a auditoria.
 - **CSP (política de conteúdo):** os avisos vinham do Zaraz e do Web Analytics, que o Cloudflare injeta nas páginas. O Zaraz disparava um **Facebook Pixel** em toda tela do sistema. Ele foi desligado só nos endereços do Téchne Care, o Web Analytics foi liberado, e a CSP passou a **bloquear** nos três apps.
-- **Olho para mostrar a senha:** adicionado nos campos de senha do sistema e do app de campo. Está em `main`, mas ainda não foi publicado.
-- **Seis PRs** abertas e mescladas em `main` (#49 a #54). A #48, da auditoria, já tinha sido mesclada antes. O front foi publicado três vezes. A API não precisou ser republicada.
+- **Olho para mostrar a senha:** adicionado nos campos de senha do sistema e do app de campo, e publicado.
+- **Sete PRs** abertas e mescladas em `main` (#49 a #55, incluindo este relatório). A #48, da auditoria, já tinha sido mesclada antes. O front foi publicado quatro vezes. A API não precisou ser republicada.
 
 ## 1. Homologação das telas em produção
 
@@ -61,7 +61,9 @@ Pedido: todo campo de senha precisa ter o ícone de olho para mostrar a senha. A
 - **Onde entrou:** na tela de entrada do sistema (`apps/web/src/routes/entrar.tsx`) e na do app de campo (`apps/field/src/telas/entrar.tsx`). Eram os únicos campos de senha do código. O portal entra sem senha, e hoje não existe tela de troca ou redefinição de senha, porque a senha é definida pela administração.
 - **Testes:** 7 testes novos em `packages/ui/src/__tests__/password-input.test.tsx`. Os testes da biblioteca de componentes e das telas de entrada passam (156), assim como os cinco checks do CI.
 - **CSP:** a mudança não usa script inline nem recurso externo, então continua dentro da política bloqueante.
-- **Situação:** mesclada em `main` (`9aa7565`) e **ainda não publicada em produção**.
+- **Situação:** mesclada em `main` (`9aa7565`) e **publicada** no sistema e no app de campo a partir de `main` `ff02a3c`.
+- **Conferido em produção:** nas telas de entrada do app de campo e do sistema, o olho aparece dentro do campo. Um clique mostra a senha, muda o ícone para "Ocultar senha" e mantém o cursor no campo; outro clique esconde de novo. O Painel, já logado, abre normalmente na versão nova, sem bloqueios da CSP.
+- **Quem já usa o app de campo** recebe a versão nova quando abrir o app outra vez.
 
 ## 6. PRs do dia
 
@@ -73,6 +75,7 @@ Pedido: todo campo de senha precisa ter o ícone de olho para mostrar a senha. A
 | #52 | CSP passa a bloquear | `021c8bb` |
 | #53 | Homologação registra as publicações em produção | `57760d5` |
 | #54 | Olho para mostrar e esconder a senha | `9aa7565` |
+| #55 | Este relatório | `ff02a3c` |
 
 Todas passaram por Estático, PostgreSQL 16, Ponta a ponta, Gate e Cloudflare Pages antes do merge. Nas PRs só de documentação, o próprio CI pula os testes de banco e de ponta a ponta.
 
@@ -85,12 +88,12 @@ O front é publicado por upload direto no Cloudflare Pages, sempre a partir de `
 | 23/11 ~17h | `dbe053b` | sistema | selo "Vence hoje" do contrato |
 | 23/11 ~21h | `d7884e6` | sistema, portal, campo | CSP libera o Web Analytics |
 | 23/11 ~23h40 | `021c8bb` | sistema, portal, campo | CSP bloqueante |
+| 24/11 ~00h40 | `ff02a3c` | sistema, campo | olho para mostrar e esconder a senha |
 
-O olho na senha (PR #54) está em `main` mas **não foi publicado**. Para chegar ao site, o sistema e o app de campo precisam ser publicados de novo a partir de `main`.
+O portal não foi publicado na última rodada porque não tem campo de senha; ele continua em `021c8bb`.
 
 ## 8. O que ficou pendente
 
-- **Publicar o olho na senha:** está em `main`, mas o sistema e o app de campo ainda não foram publicados com ele.
 - **Portal e app de campo depois do login, e leitura de QR pela câmera:** não testados com a CSP bloqueante. Se aparecer "Refused to…" no console, é a CSP; o jeito de voltar atrás está na seção 4.
 - **Migration `0091` da auditoria:** sem confirmação de que foi aplicada no banco de produção.
 - **Auto-merge desligado no repositório:** com ele desligado, todo merge espera alguém chamar depois que os testes terminam. Ligar em Settings → General → Pull Requests → "Allow auto-merge" resolve.
