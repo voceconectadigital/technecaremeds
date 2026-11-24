@@ -139,7 +139,8 @@ Riscos:
 | Testes novos — HTTP (`api-conclusao-anderson-2026-11-24.test.ts`: permissões, multi-tenant, 409, zod) | **9/9** |
 | Testes novos — domínio (`contract-service.test.ts`) | **7/7** |
 | Testes novos — telas (`conclusao-anderson-2026-11-24.test.tsx`) | **7/7** |
-| Suíte completa (vitest, 3 workers) | **194 arquivos: 192 passaram, 2 pulados; 2.961 testes passaram, 32 pulados, 0 falhas** |
+| Suíte completa na 1ª versão (`463be39`, 3 workers) | 194 arquivos: 192 passaram, 2 pulados; 2.961 testes passaram, 32 pulados, 0 falhas |
+| Suíte completa na versão final (`2ea3922`, 1 worker) | 191 arquivos passaram, 2 pulados, **1 não rodou** (o worker caiu; antes, com 3 workers, faltou memória); 2.944 testes passaram, 32 pulados, 0 falhas. O conjunto inteiro está comprovado no CI (§8.2) |
 | `tsc -b` (monorepo) | sem erro |
 | ESLint no código versionado | sem erro (os únicos erros locais são de `capturas/` e de uma worktree antiga em `.claude/`, fora do repositório) |
 | `openapi:check` | em dia |
@@ -152,4 +153,18 @@ E2E novo: `contrato-atendimento.spec.ts`.
 
 ### 8.2 CI do GitHub (PR #57)
 
-Preenchido ao fim da execução — ver o resumo da PR.
+Commit de código `2ea3922`, run 45423698418 — **tudo verde**:
+
+| Check | Resultado |
+|---|---|
+| Estático (tipos, lint, formatação, OpenAPI) | passou |
+| PostgreSQL 16 real | **194 arquivos, 2.994/2.994 testes, nenhum pulado** |
+| Ponta a ponta (Playwright) | **239 passaram, 1 pulado** |
+| Gate | passou |
+
+Rodadas anteriores: em `48d54ad` falharam 4 E2E (fuso do runner nas horas, rótulo ambíguo, ordem do seletor de
+setor) e em `92fc6df` 1 E2E (rótulo do campo obrigatório). Eram erros dos próprios testes; o código do sistema não
+mudou por causa deles. Em `2ea3922` entraram também as correções de bloqueio da §4.2.
+
+**Sem teste próprio:** a atribuição por automação em contrato parado (o guarda é o mesmo das demais) e o botão
+"Gerar OS deste ciclo" na tela (a geração é testada no banco).
