@@ -85,9 +85,9 @@ Antes de rodar o teste, conferi no código do HostPanel (`components/pgvps/Appli
 | Folha aberta e impressão chamada | **25 de 25**, sem falha |
 | Naturezas impressas | preventiva (10), corretiva (10), **calibração (4)**, **teste de segurança elétrica (1)** |
 | Situações cobertas | Aberta, Agendada, Em execução, Aguardando, Concluída, Fechada |
-| TSE `WO-2026-0006` | cabeçalho com a organização, faixa Situação/Tipo/Prioridade, seções numeradas; "Solicitação de origem: Não se aplica" (abertura manual); campos vazios como "Não informado" |
-| Calibração `WO-2026-0024` | mesma estrutura, sem erro |
-| Seções condicionais | checklist, check-in, parecer, avaliação e assinaturas só saem quando a OS tem o dado (ex.: a corretiva concluída `WO-2026-0021` traz parecer, avaliação e assinaturas) |
+| TSE (OS de demonstração 1) | cabeçalho com a organização, faixa Situação/Tipo/Prioridade, seções numeradas; "Solicitação de origem: Não se aplica" (abertura manual); campos vazios como "Não informado" |
+| Calibração (OS de demonstração 2) | mesma estrutura, sem erro |
+| Seções condicionais | checklist, check-in, parecer, avaliação e assinaturas só saem quando a OS tem o dado (ex.: a corretiva concluída (OS de demonstração 3) traz parecer, avaliação e assinaturas) |
 | Leituras de medição | **não verificáveis em produção:** nenhuma OS de calibração ou TSE tem medição registrada (todas abertas ou agendadas). Coberto pelos testes de tela e pelo CI. Gerar uma medição seria criar registro fictício |
 
 ### 6.2 Qualidade → "Serviços concluídos"
@@ -95,7 +95,7 @@ Antes de rodar o teste, conferi no código do HostPanel (`components/pgvps/Appli
 | Verificação | Resultado |
 |---|---|
 | Aba presente, com o aviso "Não é certificado: nada é emitido nem assinado automaticamente" | sim |
-| OS listadas | **`WO-2026-0011`** (preventiva, Concluída) e **`WO-2026-0014`** (preventiva, Fechada). São exatamente as OS concluídas das naturezas autorizadas |
+| OS listadas | **OS de demonstração 4** (preventiva, Concluída) e **OS de demonstração 5** (preventiva, Fechada). São exatamente as OS concluídas das naturezas autorizadas |
 | OS que ficaram de fora, como esperado | 4 corretivas concluídas ou fechadas (`0021`, `0004`, `0012`, `0013`); calibrações e TSE ainda não concluídas |
 | Detalhes do cartão | cliente, setor, equipamento e série; "Sem plano de origem (OS avulsa)"; links "Abrir OS" e "Relatório" |
 | Gravação | nenhuma; a aba é consulta |
@@ -117,8 +117,8 @@ servidos pelo site). Nenhuma imagem fictícia foi enviada, e a organização nã
 | Passo | Resultado |
 |---|---|
 | Estado inicial | 0 logomarcas; a tela mostra as duas vagas vazias, com controles para o administrador |
-| Uma logomarca (vaga 1, "Téchne Care") | salva (200); prévia 385×148. Folha da calibração `WO-2026-0024`: só a logomarca da organização no cabeçalho, em 145×55 px (proporção preservada); a marca do produto sai; "Emitido pelo sistema Téchne Care" continua |
-| Duas logomarcas (vaga 2, "Téchne Care (versão escura)") | salva. Folha do TSE `WO-2026-0006`: as duas na ordem das vagas, 145×55 px cada, separadas por um fio |
+| Uma logomarca (vaga 1, "Téchne Care") | salva (200); prévia 385×148. Folha da calibração (OS de demonstração 2): só a logomarca da organização no cabeçalho, em 145×55 px (proporção preservada); a marca do produto sai; "Emitido pelo sistema Téchne Care" continua |
+| Duas logomarcas (vaga 2, "Téchne Care (versão escura)") | salva. Folha do TSE (OS de demonstração 1): as duas na ordem das vagas, 145×55 px cada, separadas por um fio |
 | Remoção das duas | feita; as vagas voltaram a "Nenhuma logomarca nesta vaga" |
 | Folha depois da remoção | volta a mostrar a marca do produto |
 | Erros | nenhuma chamada HTTP ≥ 400 e nenhum erro de console durante toda a homologação |

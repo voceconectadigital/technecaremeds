@@ -103,15 +103,15 @@ Proteção ativa na página: `window.prompt`, `window.confirm` e `window.print` 
 
 | Funcionalidade | Resultado | Evidência |
 |---|---|---|
-| Contratos dentro da ficha do cliente | ✅ | Cartão "Contratos" nos 4 clientes. Os 3 com contrato listam o contrato; o Hospital São Lucas mostra "Nenhum contrato no módulo", com o texto de que o SLA segue o padrão do cliente/organização. |
-| Exibição dos contratos antigos | ✅ | Santa Clara (`fixed_monthly`): precificação "Não informada". Vida Plena (`per_asset`): "Por equipamento". Instituto do Coração (`per_call`): "Por demanda (cada acionamento)". Atendimento e Pagamento: "Não informado". SLA geral: "Não definido — vale o padrão do cliente/organização". |
+| Contratos dentro da ficha do cliente | ✅ | Cartão "Contratos" nos 4 clientes. Os 3 com contrato listam o contrato; o Cliente B mostra "Nenhum contrato no módulo", com o texto de que o SLA segue o padrão do cliente/organização. |
+| Exibição dos contratos antigos | ✅ | Cliente A (`fixed_monthly`): precificação "Não informada". Cliente C (`per_asset`): "Por equipamento". Cliente D (`per_call`): "Por demanda (cada acionamento)". Atendimento e Pagamento: "Não informado". SLA geral: "Não definido — vale o padrão do cliente/organização". |
 | Criação nasce rascunho, sem ativação automática | ✅ (leitura do formulário) | "Novo contrato" aberto e **cancelado**: "Ativar agora (senão fica em rascunho)" vem **desmarcado**. "Cobre todos os equipamentos do cliente" vem marcado, com o aviso de que sem cobertura o contrato não pode ser ativado. |
 | Modalidades de atendimento | ✅ | Não informada / Anual / Semestral / Trimestral / Mensal / Quinzenal / Semanal |
 | Equipes fixas combináveis | ✅ (leitura) | 10 caixas independentes, "Equipe Fixa 1" a "Equipe Fixa 10", todas desmarcadas |
 | Precificação e pagamento (só cadastro) | ✅ | Precificação: Não informada / Valor fixo mensal / Por equipamento / Por demanda / Hora técnica / Misto. Pagamento: Não informada / Mensal / À vista. Nenhum cálculo usa esses campos. |
 | SLA geral no contrato | ✅ (leitura) | Opções: "Sem SLA geral — vale o padrão do cliente ou da organização" / "SLA hospitalar 24×7 — demonstração" (`GET /contracts/options` 200) |
-| Edição de contrato | ✅ (leitura) | "Editar CT-2026-00003" aberto e **cancelado**. Valores atuais pré-carregados (Por demanda). Início da vigência **bloqueado** em contrato vigente (só rascunho altera); fim editável. |
-| Página do contrato | ✅ | CT-2026-00003: campos novos ("Modalidade de atendimento: Não informada", "Equipe fixa: Nenhuma", "Pagamento: Não informado"); cobertura "O local e tudo que está dentro dele" com 2 ativos cobertos |
+| Edição de contrato | ✅ (leitura) | "Editar contrato do Cliente D" aberto e **cancelado**. Valores atuais pré-carregados (Por demanda). Início da vigência **bloqueado** em contrato vigente (só rascunho altera); fim editável. |
+| Página do contrato | ✅ | contrato do Cliente D: campos novos ("Modalidade de atendimento: Não informada", "Equipe fixa: Nenhuma", "Pagamento: Não informado"); cobertura "O local e tudo que está dentro dele" com 2 ativos cobertos |
 | Origem do SLA na ficha do equipamento | ✅ | Desfibrilador DF-360: "SLA hospitalar 24×7 — demonstração — **padrão do cliente**"; `GET /assets/:id/effective-sla` 200 |
 | Vigência do contrato × cadastro do cliente | ✅ | Os 4 cadastros mostram "Vigência informada no cadastro: não informada". Sem aviso de divergência, como esperado com a vigência do cadastro vazia. O selo "Vigência não informada" aparece só no cliente sem contrato. |
 | Regressões: OS, orçamentos, relatórios | ✅ | Lista e ficha de OS; lista e ficha de orçamento; Painel; Indicadores detalhados; Qualidade › Serviços concluídos. Tudo carrega. |
@@ -137,7 +137,7 @@ Fica para a operação, com um contrato real de rascunho ou de teste decidido pe
    - É ação deliberada; não roda sozinho.
    - Se clicado, **amplia a cobertura** do contrato para o cliente inteiro.
    - Recomendação: avisar o usuário antes de usar nos contratos antigos.
-3. **Santa Clara vence em 23/11/2026** (aviso "Vence em 9 d" na lista). Isso não é efeito desta rodada, mas a renovação é decisão comercial pendente.
+3. **Cliente A vence em 23/11/2026** (aviso "Vence em 9 d" na lista). Isso não é efeito desta rodada, mas a renovação é decisão comercial pendente.
 4. **`/v1/health/version` devolve `commit: null`**, como antes: o HostPanel monta a imagem sem `.git`. A versão é conferida pela `impressao`.
 5. **Volta do banco** não é trivial por causa do `ADD VALUE` do enum, mas não é necessária para voltar a API (ver §3).
 6. **Auto-fix da PR** não pôde ser ligado: a conta ativa do `gh` é diferente da autora da PR. Sem efeito na publicação.

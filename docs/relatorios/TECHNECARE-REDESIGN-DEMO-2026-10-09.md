@@ -219,7 +219,7 @@ foi removido do node em seguida.
 
 | Entidade | Quantidade |
 |---|---|
-| Clientes | 4 — Hospital Santa Clara, Hospital São Lucas, Clínica Vida Plena, Instituto do Coração |
+| Clientes | 4 fictícios |
 | Locais (unidade → prédio/andar → setor → sala) | 27 |
 | Equipamentos médicos | 15 |
 | Solicitações | 10 (5 na fila de triagem) |

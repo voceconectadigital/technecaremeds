@@ -42,7 +42,7 @@ Defeitos adicionais encontrados na auditoria do fluxo:
 
 5. **Data inicial retroativa** gerava avalanche: um plano mensal com início há um ano abriria, uma por hora, doze
    OS já vencidas.
-6. **Setor sem unidade** no seletor: dois "UTI Adulto" em unidades diferentes eram indistinguíveis.
+6. **Setor sem unidade** no seletor: dois setores de mesmo nome em unidades diferentes eram indistinguíveis.
 
 ## 3. Matriz — resposta do cliente → funcionalidade → correção → teste → situação
 
@@ -143,7 +143,7 @@ PostgreSQL 16 real e contra a regra `service_block`). Executadas em produção e
 
 | Consulta | Resultado em 25/11/2026 |
 |---|---|
-| 1, 2 | **1 contrato vencido (CT-2026-00001, fim 23/11, sem renovação automática) e 7 equipamentos param**; nenhum outro contrato válido do mesmo cliente |
+| 1, 2 | **1 contrato vencido (contrato de demonstração, fim 23/11, sem renovação automática) e 7 equipamentos param**; nenhum outro contrato válido do mesmo cliente |
 | 3, 4 | 12 OS abertas (2 em execução, nenhum cronômetro aberto) e 6 solicitações ficam só consulta |
 | 5, 5b, 5c, 5d | **nenhuma renovação na primeira varredura**; nenhuma renovação sem término; nada vence em 60 dias |
 | 6 | 25 OS ainda não concluídas passam a pedir as horas (não exclui as 12 acima) |
@@ -207,10 +207,10 @@ educação continuada no formulário), sem afrouxar asserções.
 | Ponta a ponta (Playwright, com API e PostgreSQL 16) | **240 passaram, 1 pulado** |
 | Gate | passou |
 
-**Correção:** versões anteriores deste relatório diziam que todos esses testes rodavam no servidor PostgreSQL 16. Nessa etapa
-só **37** usam o servidor (`real-postgres` e `jobs-real-postgres`); os demais usam PGlite. Os E2E usam o servidor real.
-
-Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no PostgreSQL real (`2084ec8`) — todas no próprio teste.
+`**Correção:** versões anteriores deste relatório diziam que todos esses testes rodavam no servidor PostgreSQL 16. Nessa etapa
+`só **37** usam o servidor (`real-postgres` e `jobs-real-postgres`); os demais usam PGlite. Os E2E usam o servidor real.
+`
+`Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no PostgreSQL real (`2084ec8`) — todas no próprio teste.
 `
 `## 9. Preparação do deploy (25/11/2026) — nada executado
 `
@@ -220,12 +220,12 @@ Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no
 `
 `| # | Bloqueio | Como resolver |
 `|---|---|---|
-`| B1 | Contrato CT-2026-00001 vencido: ao subir a API, 7 equipamentos, 12 OS e 6 solicitações ficam só consulta | §9.2 |
+`| B1 | Contrato de demonstração vencido: ao subir a API, 7 equipamentos, 12 OS e 6 solicitações ficam só consulta | §9.2 |
 `| B2 | **Defeito conhecido:** "Incluir equipamentos" num plano antigo (por setor ou categoria) que já alcança o equipamento gera uma segunda OS. Reproduzido em teste (2 OS) | Corrigir antes (recusar equipamento já alcançado pela tarefa do plano), ou orientar a não usar esse botão em plano antigo |
 `| B3 | Não há procedimento de PREVENTIVA publicado para monitor nem para ventilador: só para bomba de infusão e incubadora. O assistente novo exige um por equipamento | Anderson publica os procedimentos antes de recriar |
 `| B4 | Prazo na renovação: 23/11/2025 a 23/11/2026 conta 366 dias, e "Renovar" sem data leva a **24/11/2027** | Informar a data na renovação, ou decidir se "mesmo dia do ano seguinte" conta como 12 meses |
 `
-`### 9.2 Regularização do CT-2026-00001 (só com autorização)
+`### 9.2 Regularização do contrato de demonstração (só com autorização)
 `
 `Estado: serviço completo, cobertura por setor (1), 23/11/2025 a 23/11/2026, sem renovação automática, com valor mensal, sem SLA
 `geral, sem periodicidade, pacote ou pagamento informados, sem período medido. Marcado vencido pela varredura de 24/11.
@@ -244,13 +244,13 @@ Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no
 `
 `| Plano | Modelo | Situação | Orientação |
 `|---|---|---|---|
-`| Preventiva a cada 6 meses — UTI Adulto | **Antigo, por setor** | Sem principal; "calibração de ventilador" nos 5 equipamentos de 3 categorias. 5 OS abertas (WO-2026-0028 a 0032), sem resposta, visita ou hora | Recriar |
-`| Preventiva a cada 6 meses — Emergência | **Antigo, por setor** | Procedimento de bomba; alcança 0 equipamento; nenhum ciclo | Desligar; recriar se houver equipamento |
-`| Preventiva trimestral — ventiladores pulmonares | Por categoria (2 equipamentos, 1 categoria) | Sem procedimento, manual; WO-2026-0016 e 0017 abertas e 2 itens pendentes | Não mistura tipos; falta publicar e escolher o procedimento |
+`| P1 — preventiva a cada 6 meses | **Antigo, por setor** | Sem principal; "calibração de ventilador" nos 5 equipamentos de 3 categorias. 5 OS abertas (OS-01 a OS-05), sem resposta, visita ou hora | Recriar |
+`| P7 — preventiva a cada 6 meses | **Antigo, por setor** | Procedimento de bomba; alcança 0 equipamento; nenhum ciclo | Desligar; recriar se houver equipamento |
+`| P5 — preventiva trimestral | Por categoria (2 equipamentos, 1 categoria) | Sem procedimento, manual; OS-11 e OS-12 abertas e 2 itens pendentes | Não mistura tipos; falta publicar e escolher o procedimento |
 `| Calibração anual — monitores e desfibriladores | Por categoria (1 equipamento) | Sem procedimento, manual; 1 item pendente | Idem, com procedimento de calibração |
 `
-`Fora do cliente afetado há 3 planos automáticos com o procedimento de **incubadora** em outros equipamentos: Pronto-socorro
-`(desfibrilador e ventilador), Hemodinâmica (desfibrilador) e Ultrassonografia mensal (ultrassom). Revisar com o Anderson.
+`Fora do cliente afetado há 3 planos automáticos com o procedimento de **incubadora** em outros equipamentos: P2
+`(desfibrilador e ventilador), P3 (desfibrilador) e P4 (ultrassom). Revisar com o Anderson.
 `
 `**Recriação, sem apagar nada** (contrato regularizado):
 `1. Publicar os procedimentos que faltam (B3).
@@ -300,7 +300,7 @@ Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no
 `- [ ] Renovar: término 23/11/2027, aparece em Renovações, OS volta a aceitar mudança
 `- [ ] Suspender e reativar com motivo, num contrato combinado
 `- [ ] Concluir uma OS real no sistema e outra no campo: pede as duas horas; conferir em Horas técnicas
-`- [ ] Recriar o plano da UTI Adulto (§9.3); "Gerar OS deste ciclo" traz o checklist de cada equipamento
+`- [ ] Recriar o plano P1 (§9.3); "Gerar OS deste ciclo" traz o checklist de cada equipamento
 `- [ ] Editar, retirar equipamento e ver o histórico do plano
 `- [ ] Educação continuada com data por equipamento
 `- [ ] No dia seguinte: nenhuma renovação inesperada e nenhuma OS duplicada
