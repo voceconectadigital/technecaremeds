@@ -167,26 +167,35 @@ PostgreSQL 16 real e contra a regra `service_block`). **Não foram executadas em
 
 ## 8. Testes e CI
 
-### 8.1 Nesta máquina (Windows, PGlite = PostgreSQL real em processo)
+### 8.1 Testes desta rodada
 
-| Verificação | Resultado |
+| Suíte | Resultado |
 |---|---|
-| Testes novos — banco (`conclusao-anderson-2026-11-24.test.ts`) | **18/18** |
-| Testes novos — HTTP (`api-conclusao-anderson-2026-11-24.test.ts`: permissões, multi-tenant, 409, zod) | **9/9** |
-| Testes novos — domínio (`contract-service.test.ts`) | **7/7** |
-| Testes novos — telas (`conclusao-anderson-2026-11-24.test.tsx`) | **7/7** |
-| Suíte completa na 1ª versão (`463be39`, 3 workers) | 194 arquivos: 192 passaram, 2 pulados; 2.961 testes passaram, 32 pulados, 0 falhas |
-| Suíte completa na versão final (`2ea3922`, 1 worker) | 191 arquivos passaram, 2 pulados, **1 não rodou** (o worker caiu; antes, com 3 workers, faltou memória); 2.944 testes passaram, 32 pulados, 0 falhas. O conjunto inteiro está comprovado no CI (§8.2) |
-| `tsc -b` (monorepo) | sem erro |
-| ESLint no código versionado | sem erro (os únicos erros locais são de `capturas/` e de uma worktree antiga em `.claude/`, fora do repositório) |
-| `openapi:check` | em dia |
+| Banco (`conclusao-anderson-2026-11-24.test.ts`, PGlite) | 22/22 |
+| HTTP (`api-conclusao-anderson-2026-11-24.test.ts`) | 9/9 |
+| Domínio (`contract-service.test.ts`) | 7/7 |
+| Telas (`conclusao-anderson-2026-11-24.test.tsx`) | 7/7 |
+| Consultas de impacto no estado da 0091 (`consultas-pre-deploy-0092.test.ts`) | 2/2 |
+| PostgreSQL 16 real (`real-postgres.test.ts`): renovação concorrente, SAVEPOINT, RLS, plano, consultas | 5 novos (só rodam no CI) |
+| E2E: `contrato-atendimento`, `planos-gerar-os` (novos); `jornada`, `campo`, `execucao-guiada`, `os-auditoria-29-10`, `painel-planejamento` (atualizados) | passaram no CI |
 
-Testes existentes ajustados à regra nova (sem afrouxar asserções): as conclusões de OS em 18 arquivos de teste passaram
-a informar a hora de início e de término; a lista de tabelas ganhou `contract_renewals`; o formulário de planos
-informa a educação continuada. E2E atualizados: `jornada`, `campo` (offline), `execucao-guiada`, `os-auditoria-29-10`
-(agora conferem também a cobrança das horas) e `painel-planejamento` (procedimento por equipamento, edição);
-E2E novo: `contrato-atendimento.spec.ts`.
+Nesta máquina, a suíte inteira em `c55f5be` (1 worker): 2.967 passaram, 37 pulados (pedem PostgreSQL real) e 1 falhou —
+um teste antigo de log que casava "1.5" com o horário da linha; estabilizado sem mudar o que verifica.
+Testes existentes foram ajustados às regras novas (horas na conclusão, `contract_renewals` na lista de tabelas,
+educação continuada no formulário), sem afrouxar asserções.
 
 ### 8.2 CI do GitHub (PR #57)
 
-Em execução no commit de código de 25/11; ver os números ao fim.
+Último commit com mudança de código do sistema: `2084ec8`. CI completo em `c55f5be` (só testes a mais): run 45649474414, **tudo verde**.
+
+| Check | Resultado |
+|---|---|
+| Estático | passou |
+| Testes contra PostgreSQL 16 | **195 arquivos, 3.005/3.005, nenhum pulado** |
+| Ponta a ponta (Playwright, com API e PostgreSQL 16) | **240 passaram, 1 pulado** |
+| Gate | passou |
+
+**Correção:** versões anteriores deste relatório diziam que todos esses testes rodavam no servidor PostgreSQL 16. Nessa etapa
+só **37** usam o servidor (`real-postgres` e `jobs-real-postgres`); os demais usam PGlite. Os E2E usam o servidor real.
+
+Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no PostgreSQL real (`2084ec8`) — todas no próprio teste.

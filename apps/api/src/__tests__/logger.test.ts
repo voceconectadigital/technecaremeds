@@ -40,7 +40,8 @@ describe('OPS-07 · minimização no log', () => {
     logger.warn('corpo inesperado', {
       detalhe: { pessoa: { nome: 'Ana', cpf: '52998224725' }, visitas: [{ lat: 1.5, lng: 2.5 }] },
     });
-    const texto = JSON.stringify(linhas[0]);
+    // Sem o horário da linha: "31.563Z" casaria com o /1\.5/ das coordenadas, por acaso do relógio.
+    const texto = JSON.stringify({ ...linhas[0], ts: undefined });
     expect(texto).not.toContain('52998224725');
     expect(texto).not.toMatch(/1\.5|2\.5/);
     expect(texto).toContain('Ana');
