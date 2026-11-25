@@ -97,8 +97,8 @@ foi iniciada. Fora dele, 3 planos automáticos usam o procedimento de incubadora
 
 | Passo | Depende de |
 |---|---|
-| 1. Backup e `restore_drill` | **feito** (§12). O ensaio da `0092` na cópia não foi feito |
-| 2. Rodar de novo as consultas de impacto | sua autorização |
+| 1. Backup e `restore_drill` | **feito** (§12) |
+| 2. Rodar de novo as consultas de impacto | **feito** (§13) |
 | 3. Deploy da API (aplica a `0092`) | sua autorização |
 | 4. Publicar sistema e portal | sua autorização |
 | 5. Renovar o contrato de demonstração (você escolheu renovar após a API) | sua confirmação na hora; término proposto 23/11/2027, a confirmar com o contratante |
@@ -166,7 +166,7 @@ O P4 (mensal) é automático e gera outra OS errada no próximo ciclo (que come�
 ### Procedimento de publicação (cada passo com autorização)
 
 1. **Backup** e **`restore_drill`**: feitos em 25/11 (§12). Se o deploy não for no mesmo dia, gerar outro backup antes.
-2. Repetir as consultas de impacto.
+2. Consultas de impacto: repetidas em 25/11 (§13).
 3. **API:** deploy do SHA `cb712959b3908fd3d2f3763b72d0813b38e5e68b`; o manifesto roda a `0092`. Conferir `ready` 200, impressão
    **`374412eb7b9d`**, 92 migrations. Se falhar, não seguir.
 4. **Sistema**, logo em seguida; depois **portal**. Build de `cb71295` com a API de produção.
@@ -196,8 +196,70 @@ fica. Suspensões feitas no intervalo deixam de valer na API antiga. Restaurar o
 - **Produção depois:** no ar, banco respondendo, a mesma versão (`7fea2ba90690`). Nada foi restaurado nela.
 
 **O que isto não prova**
-- A chave de decifragem usada no teste foi a guardada no próprio servidor. Recuperar sem o servidor depende de haver cópia da chave
-  fora dele, o que não foi conferido.
+- A chave usada no teste foi a guardada no próprio servidor. Sobre a cópia fora dele, ver §13.
 - O teste cobre o banco. A restauração do volume de arquivos (10 KB) não aparece no resultado.
-- A `0092` não foi aplicada na cópia restaurada; ela só foi aplicada no PostgreSQL 16 do CI.
+- A `0092` não foi aplicada na cópia restaurada. O ensaio equivalente está na §13.
 - O que for gravado depois de 18:10 UTC não está neste backup.
+
+## 13. Consultas repetidas, chave do backup e ensaio da 0092 (25/11/2026, 18:21 UTC)
+
+### Impacto em produção (só leitura, transação READ ONLY)
+
+Dados idênticos aos da auditoria de 25/11, linha a linha.
+
+| O que muda ao publicar a API | Auditoria | Agora |
+|---|---|---|
+| Contratos que param | 1 (Cliente A, vencido em 23/11, sem renovação automática, sem outro válido) | 1, o mesmo |
+| Equipamentos só para consulta | 7 | 7 |
+| OS só para consulta | 12 (2 em execução, nenhum cronômetro aberto) | 12 |
+| Solicitações só para consulta | 6 | 6 |
+| Planos ativos que não geram OS até regularizar | 4 (2 automáticos: P1 e P7) | 4 |
+| Renovações na primeira varredura | 0 | 0 |
+| Contratos que vencem em 60 dias | 0 | 0 |
+| OS que passam a pedir as horas | 25 | 25 |
+| Operações do app de campo em 30 dias | 0 | 0 |
+| Contratos com Equipe Fixa 3 a 10 | 0 | 0 |
+
+Migrations: 91, última `0091`, índices válidos; `0092` ausente.
+
+### Chave do backup
+
+- O job do backup registrou a chave como guardada também fora do servidor (`keyEscrowed: true`), e o servidor tem o comprovante do
+  depósito dessa mesma chave. Nenhum conteúdo de chave foi lido ou copiado.
+- **Não provado:** decifrar este backup usando só essa cópia. O `restore_drill` deste tipo de aplicação usa a chave local quando
+  ela existe, e não tem a opção de exigir a cópia.
+- A documentação do HostPanel registra que a cadeia de recuperação externa já foi testada, mas não com esta chave.
+- **Solução:** acrescentar no HostPanel a opção de exigir a cópia no drill e rodá-lo uma vez. Não impede publicar: se o deploy der
+  errado, o servidor e a chave local continuam lá.
+
+### Ensaio da 0092
+
+A cópia restaurada é apagada pelo HostPanel ao fim do drill, e não há ambiente isolado autorizado a receber dados de produção.
+Ensaiei num PostgreSQL **16.10** local e descartável, já removido, só com a massa fictícia do repositório e um contrato vencido como
+o de produção. O banco partiu da `0091`, com os **91 checksums iguais aos de produção**.
+
+| Conferência | Resultado |
+|---|---|
+| Aplicação com o código de `cb71295` | 1 aplicada, 91 já presentes |
+| Dados existentes (116 tabelas, 2.316 linhas) | impressão idêntica antes e depois |
+| Segunda execução | nada a aplicar |
+| As 3 restrições novas, RLS do histórico de renovações | validadas; isolamento ativo; a aplicação não altera o histórico |
+| Equipamentos bloqueados: regra nova e consulta de impacto | 7 e 7 |
+| Contratos retidos ou renovados pela migration | nenhum |
+| Tempo do SQL da `0092` | 41 ms |
+| `migrate` da versão antiga no banco já migrado (volta) | aceito, nada a fazer |
+
+Não é a cópia real: produção tem mais linhas (73 mil), mas as tabelas alteradas são pequenas (32 OS, 3 contratos, 9 tarefas).
+
+### Riscos novos
+
+| Risco | Solução |
+|---|---|
+| Numa pasta do Windows, parte das migrations fica com outro fim de linha, e o `migrate` a partir dela é recusado por checksum | Não afeta o deploy, que sai do git. Nunca rodar `migrate` de produção desta máquina; fixar `*.sql eol=lf` no `.gitattributes` |
+| Os comandos de massa (homologação e demonstração) estão desatualizados: não preenchem o parecer do equipamento, hoje obrigatório. O de homologação para com erro; o de demonstração deixa OS sem concluir | Não afeta produção. Ajustar antes da próxima homologação com massa |
+| Prova da cópia da chave (acima) | Ver acima |
+
+### Conclusão
+
+Apto para a publicação controlada da API (`cb712959b3908fd3d2f3763b72d0813b38e5e68b`), com autorização própria. Se for em outro dia,
+gerar backup e repetir as consultas. Ao subir a API, o Cliente A fica só para consulta até a renovação combinada.
