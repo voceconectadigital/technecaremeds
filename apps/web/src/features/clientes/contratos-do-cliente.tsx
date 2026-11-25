@@ -59,6 +59,7 @@ import {
   ROTULO_MODALIDADE,
   ROTULO_PAGAMENTO,
   ROTULO_PRECIFICACAO,
+  descricaoDaEquipe,
   rotuloDasEquipes,
 } from '../comercial/rotulos-contrato';
 
@@ -255,6 +256,13 @@ function LinhaDoContrato({
             valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : 'Não informado'}
           />
         </dl>
+        {(c.fixed_team_packages ?? []).length > 0 && (
+          <ul className="mt-1 text-xs text-muted" aria-label={`Pacotes de ${c.number}`}>
+            {c.fixed_team_packages!.map((n) => (
+              <li key={n}>{descricaoDaEquipe(n)}</li>
+            ))}
+          </ul>
+        )}
         <AvisoDeAtendimento contrato={c} />
         <div className="mt-2">
           <AcoesDoAtendimento contrato={c} />
@@ -554,10 +562,14 @@ export function DialogoContrato({
           <div role="group" aria-label="Equipes fixas" className="flex flex-col gap-1.5">
             <span className="text-sm text-text">Pacotes de equipe fixa</span>
             <span className="text-xs text-muted">
-              São pacotes (Anderson, 24/11/2026) e podem ser combinados. O número identifica o pacote; a
-              composição, a quantidade de profissionais e o valor de cada um ainda não foram definidos. A
-              periodicidade é do contrato, não do pacote.
+              São pacotes e podem ser combinados (os pacotes não se somam). A periodicidade é do contrato, não
+              do pacote.
             </span>
+            <ul className="text-xs text-muted" aria-label="Composição dos pacotes">
+              <li>{descricaoDaEquipe(1)}.</li>
+              <li>{descricaoDaEquipe(2)}.</li>
+              <li>Equipes Fixas 3 a 10: seguem a mesma regra; composição detalhada a definir.</li>
+            </ul>
             <div className="flex flex-wrap gap-2">
               {FIXED_TEAM_PACKAGES.map((n) => (
                 <label

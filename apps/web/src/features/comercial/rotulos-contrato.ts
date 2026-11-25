@@ -31,7 +31,22 @@ export const ROTULO_PAGAMENTO: Record<PaymentTerms, string> = {
   upfront: 'À vista',
 };
 
-/** "Equipe Fixa 1 + Equipe Fixa 10" — só o identificador; a composição não está definida. */
+/**
+ * O que o Anderson CONFIRMOU sobre cada pacote (25/11/2026). Só 1 e 2 têm composição: das Equipes 3 a
+ * 10 ele disse que "seguem a mesma regra", sem detalhar — nada é deduzido do número, e pacotes
+ * combinados não são somados.
+ */
+export const DESCRICAO_DA_EQUIPE: Readonly<Record<number, string>> = {
+  1: 'um técnico, com acompanhamento de engenheiro em visitas programadas',
+  2: 'dois técnicos e engenheiro fixo na unidade',
+};
+export const EQUIPE_SEM_DETALHE = 'segue a mesma regra; composição detalhada a definir';
+
+export function descricaoDaEquipe(n: number): string {
+  return `Equipe Fixa ${n}: ${DESCRICAO_DA_EQUIPE[n] ?? EQUIPE_SEM_DETALHE}`;
+}
+
+/** "Equipe Fixa 1 + Equipe Fixa 10" — o identificador; a composição vem de `descricaoDaEquipe`. */
 export function rotuloDasEquipes(equipes: readonly number[] | null | undefined): string | null {
   if (!equipes || equipes.length === 0) return null;
   return [...equipes]

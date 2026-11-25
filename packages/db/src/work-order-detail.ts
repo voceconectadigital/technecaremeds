@@ -20,6 +20,7 @@
  * CSS significa que o dado viajou até o navegador e está no painel de rede.
  */
 import type { TenantSession } from './client';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* Comentários e notas internas                                               */
@@ -87,6 +88,9 @@ export async function addComment(session: TenantSession, input: NewComment): Pro
   if (input.visibility === 'internal' && !session.context.permissions.has('work_order.read_internal_notes')) {
     throw new Error('sem permissão para nota interna');
   }
+
+  // D-4: contrato parado é somente consulta — a conversa da OS também é escrita.
+  await assertWorkOrderServiceAllowed(session, input.workOrderId);
 
   const rows = await session.query<{ id: string }>(
     `INSERT INTO aurora.work_order_comments

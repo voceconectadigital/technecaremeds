@@ -14,14 +14,28 @@ import { createCustomer, createLocation, provisionStarterLocationTypes } from '.
 import { createCatalogItem } from '../catalogs';
 import { createAssetCategory, createAsset } from '../assets';
 import { provisionWorkOrderStates, createWorkOrder, transitionWorkOrder } from '../work-orders';
-import { createServiceRequest } from '../service-requests';
+import { createServiceRequest, transitionRequest } from '../service-requests';
 import {
   assertCanExecuteWorkOrder,
   createChecklistTemplate,
   addChecklistItem,
   publishChecklist,
 } from '../execution';
-import { updateServiceReport } from '../execucao-guiada';
+import { addCustomerPart, checkIn, updateServiceReport } from '../execucao-guiada';
+import { addComment, listComments } from '../work-order-detail';
+import { attachChecklist, answerChecklistItem, attachFile, logTime } from '../execution';
+import { signWorkOrder, startTimer, stopTimer } from '../execution';
+import { openMeasurementSession } from '../metrology';
+import {
+  createDocument,
+  provisionDocumentTypes,
+  transitionDocument,
+  updateDocumentContent,
+} from '../documents';
+import { createQualityRecord, deleteQualityRecord } from '../qualidade';
+import { addQuoteItem, createQuote, reviseQuote, setQuoteDiscount, transitionQuote } from '../quotes';
+import { portalRateRequest } from '../portal';
+import { activateRule, createRule, runAutomations, simulateRule } from '../automations';
 import { scheduleWorkOrder, unscheduleWorkOrder } from '../schedule';
 import { consumeForWorkOrder } from '../inventory';
 import {
@@ -42,7 +56,7 @@ import {
   technicalHours,
   organizationToday,
 } from '../contract-service';
-import { generateCycle, materializeCycle } from '../maintenance-plans';
+import { generateCycle, materializeCycle, restoreHeldCycleItems } from '../maintenance-plans';
 import {
   createGuidedPlan,
   executePlanItem,
@@ -316,6 +330,235 @@ describe('D-4 · tudo para e fica somente consulta', () => {
     // reativado, o Executar volta a gerar a OS
     await em((s) => releaseContractService(s, contrato, null));
     expect((await em((s) => executePlanItem(s, item!.id, TUDO))).created).toBe(true);
+  });
+
+  it('suspenso: comentário, hora, checklist, assinatura, medição, laudo, qualidade e orçamento da OS param', async () => {
+    const c = await novoCliente('Escritas');
+    const contrato = await contratoVigente(c.cliente);
+    const os = await abrirOs(c.cliente, c.vent);
+    const { modelo, resposta, tipoDoc, doc, orcamento, emAberto, registro } = await em(async (s) => {
+      await transitionWorkOrder(s, os.id, 'in_progress');
+      const [m] = await s.query<{ id: string }>(
+        `SELECT id FROM aurora.checklist_templates WHERE key = 'prev_ventilador' AND status = 'published'`
+      );
+      const aberta = await attachChecklist(s, os.id, m!.id);
+      const tipo = [...(await provisionDocumentTypes(s)).values()][0]!;
+      return {
+        modelo: m!.id,
+        resposta: aberta,
+        tipoDoc: tipo,
+        doc: await createDocument(s, { documentTypeId: tipo, title: 'Laudo', workOrderId: os.id }),
+        orcamento: await createQuote(s, { customerId: c.cliente, workOrderId: os.id }),
+        emAberto: await startTimer(s, os.id),
+        registro: await createQualityRecord(s, {
+          kind: 'calibration',
+          title: 'Certificado',
+          assetId: c.vent,
+          issuedAt: hoje,
+        }),
+      };
+    });
+    const [item] = await em((s) =>
+      s.query<{ id: string }>(`SELECT id FROM aurora.checklist_items WHERE template_id = $1 LIMIT 1`, [
+        modelo,
+      ])
+    );
+    await em((s) => holdContractService(s, contrato, 'blocked', 'Bloqueio das escritas da OS'));
+    const motivo = /Bloqueio das escritas da OS/;
+    const recusa = (f: (s: TenantSession) => Promise<unknown>) => expect(em(f)).rejects.toThrow(motivo);
+
+    await recusa((s) => addComment(s, { workOrderId: os.id, body: 'oi', visibility: 'internal' }));
+    await recusa((s) => attachChecklist(s, os.id, modelo));
+    await recusa((s) => answerChecklistItem(s, resposta, item!.id, { boolean: true } as never));
+    await recusa((s) =>
+      logTime(s, { workOrderId: os.id, startedAt: new Date(Date.now() - 3_600_000), endedAt: new Date() })
+    );
+    await recusa((s) =>
+      signWorkOrder(s, os.id, {
+        signerRole: 'customer',
+        signerName: 'Ana',
+        method: 'session',
+        signerEmail: 'a@a.test',
+      })
+    );
+    await recusa((s) =>
+      attachFile(s, {
+        workOrderId: os.id,
+        purpose: 'before',
+        fileName: 'a.jpg',
+        contentType: 'image/jpeg',
+        byteSize: 10,
+      })
+    );
+    await recusa((s) => checkIn(s, os.id, { justification: 'sem posição no subsolo' }));
+    await recusa((s) => addCustomerPart(s, os.id, { description: 'Filtro', quantity: 1 }));
+    await recusa((s) => updateServiceReport(s, os.id, { serviceDescription: 'x' }));
+    await recusa((s) => openMeasurementSession(s, { responseId: resposta, measuredOn: hoje }));
+    await recusa((s) => createDocument(s, { documentTypeId: tipoDoc, title: 'Novo', workOrderId: os.id }));
+    await recusa((s) => createDocument(s, { documentTypeId: tipoDoc, title: 'Do ativo', assetId: c.vent }));
+    await recusa((s) => updateDocumentContent(s, doc, { title: 'Outro' }));
+    await recusa((s) => transitionDocument(s, doc, 'under_review'));
+    await recusa((s) =>
+      createQualityRecord(s, { kind: 'calibration', title: 'Outro', assetId: c.vent, issuedAt: hoje })
+    );
+    await recusa((s) => deleteQualityRecord(s, registro));
+    await recusa((s) => createQuote(s, { customerId: c.cliente, workOrderId: os.id }));
+    await recusa((s) =>
+      addQuoteItem(s, {
+        quoteId: orcamento,
+        kind: 'labor',
+        description: 'Hora',
+        quantity: 1,
+        unitPriceCents: 100,
+      } as never)
+    );
+    await recusa((s) => setQuoteDiscount(s, orcamento, { percent: 5 }));
+    await recusa((s) => reviseQuote(s, orcamento));
+
+    // O que continua: ENCERRAR o que já corria, consultar, e a proposta avulsa (sem OS) que regulariza.
+    await em((s) => stopTimer(s, emAberto));
+    await em((s) => transitionQuote(s, orcamento, 'cancelled'));
+    await em((s) => createQuote(s, { customerId: c.cliente }));
+    expect(await em((s) => listComments(s, os.id))).toEqual([]);
+
+    // Outro cliente e registro sem cliente (treinamento da equipe) não são afetados.
+    const livre = await novoCliente('EscritasLivre');
+    const osLivre = await abrirOs(livre.cliente, livre.vent);
+    await em((s) => addComment(s, { workOrderId: osLivre.id, body: 'segue', visibility: 'internal' }));
+    await em((s) =>
+      createQualityRecord(s, { kind: 'training', title: 'NR-10', personName: 'João', issuedAt: hoje })
+    );
+  });
+
+  it('suspenso: a nota do portal é recusada, e liberada depois de reativar', async () => {
+    const c = await novoCliente('Nota');
+    const contrato = await contratoVigente(c.cliente);
+    const sr = await em(async (s) => {
+      const nova = await createServiceRequest(s, {
+        customerId: c.cliente,
+        summary: 'Alarme',
+        assetId: c.vent,
+      });
+      for (const passo of ['triage', 'accepted', 'in_service', 'fulfilled'] as const) {
+        await transitionRequest(s, nova.id, passo);
+      }
+      return nova;
+    });
+    await em((s) => holdContractService(s, contrato, 'suspended', 'Suspensão da avaliação'));
+    await expect(em((s) => portalRateRequest(s, MEM, sr.id, 5))).rejects.toThrow(/Suspensão da avaliação/);
+    await em((s) => releaseContractService(s, contrato, null));
+    await em((s) => portalRateRequest(s, MEM, sr.id, 5));
+  });
+
+  it('suspenso: atribuição e comentário por AUTOMAÇÃO falham com o motivo, e voltam ao reativar', async () => {
+    const c = await novoCliente('Automacao');
+    const contrato = await contratoVigente(c.cliente);
+    const os = await abrirOs(c.cliente, c.vent);
+    const regras = await em(async (s) => {
+      const ids: string[] = [];
+      for (const acao of [
+        { kind: 'assign', params: { membershipId: MEM } },
+        { kind: 'add_comment', params: { text: 'Automático' } },
+      ]) {
+        const id = await createRule(s, {
+          name: `Contrato parado ${acao.kind}`,
+          triggerEvent: 'sla.breached',
+          conditions: { all: [{ field: 'alvo', op: 'eq', value: 'contrato-parado' }] },
+          actions: [acao],
+        } as never);
+        await simulateRule(s, id);
+        await activateRule(s, id);
+        ids.push(id);
+      }
+      return ids;
+    });
+    const disparar = async () =>
+      (
+        await em((s) =>
+          runAutomations(s, {
+            type: 'sla.breached',
+            aggregateType: 'work_order',
+            aggregateId: os.id,
+            payload: { alvo: 'contrato-parado' },
+          } as never)
+        )
+      ).filter((x) => regras.includes(x.ruleId));
+    const estado = async () =>
+      (
+        await em((s) =>
+          s.query<{ dono: string | null; n: number }>(
+            `SELECT assignee_membership_id AS dono,
+                    (SELECT count(*)::int FROM aurora.work_order_comments k WHERE k.work_order_id = w.id) AS n
+               FROM aurora.work_orders w WHERE id = $1`,
+            [os.id]
+          )
+        )
+      )[0];
+    await em((s) => holdContractService(s, contrato, 'blocked', 'Bloqueio para automação'));
+    const barradas = await disparar();
+    expect(barradas).toHaveLength(2);
+    for (const e of barradas) {
+      expect(e.outcome).toBe('failed');
+      expect(e.actionsRun[0]!.detail).toMatch(/Bloqueio para automação/);
+    }
+    expect(await estado()).toEqual({ dono: null, n: 0 });
+    await em((s) => releaseContractService(s, contrato, null));
+    expect((await disparar()).map((x) => x.outcome)).toEqual(['matched', 'matched']);
+    expect(await estado()).toEqual({ dono: MEM, n: 1 });
+  });
+
+  it('plano: o item dispensado pelo contrato volta quando ele é reativado dentro da janela — e só então', async () => {
+    const c = await novoCliente('Restaura');
+    const k = await contratoVigente(c.cliente);
+    await em((s) => holdContractService(s, k, 'suspended', 'Suspensão curta do plano'));
+    const r = await em((s) =>
+      createGuidedPlan(
+        s,
+        {
+          name: 'Anual que não pode se perder',
+          customerId: c.cliente,
+          sectorId: c.setor,
+          assetIds: [],
+          items: [
+            { assetId: c.vent, checklistTemplateKey: 'prev_ventilador' },
+            { assetId: c.mon, checklistTemplateKey: 'prev_monitor' },
+          ],
+          kind: 'preventive',
+          checklistTemplateKey: null,
+          frequencyUnit: 'year',
+          frequencyInterval: 1,
+          anchorDate: new Date(`${hoje}T00:00:00Z`),
+          leadTimeDays: 0,
+          toleranceDays: 5,
+          autoGenerate: true,
+        },
+        TUDO
+      )
+    );
+    const itens = () =>
+      em((s) =>
+        s.query<{ asset_id: string; status: string }>(
+          `SELECT asset_id, status::text FROM aurora.plan_cycle_items WHERE task_id = ANY($1::uuid[])`,
+          [r.taskIds]
+        )
+      );
+    expect((await itens()).map((i) => i.status)).toEqual(['skipped', 'skipped']);
+    // Ainda suspenso: nada volta.
+    await em((s) => restoreHeldCycleItems(s));
+    expect((await itens()).map((i) => i.status)).toEqual(['skipped', 'skipped']);
+    // A dispensa feita por PESSOA não volta.
+    await em((s) =>
+      s.query(`UPDATE aurora.plan_cycle_items SET skipped_by = $2 WHERE task_id = $1`, [r.taskIds[1], USER])
+    );
+    await em((s) => releaseContractService(s, k, null));
+    // Ciclo já vencido não vira obrigação retroativa.
+    const doisAnos = new Date(Date.now() + 800 * 86_400_000);
+    expect((await em((s) => restoreHeldCycleItems(s, doisAnos))).restored).toBe(0);
+    await em((s) => restoreHeldCycleItems(s));
+    const por = Object.fromEntries((await itens()).map((i) => [i.asset_id, i.status]));
+    expect(por).toEqual({ [c.vent]: 'generated', [c.mon]: 'skipped' });
+    // Idempotente.
+    expect(await em((s) => restoreHeldCycleItems(s))).toEqual({ restored: 0, workOrders: 0 });
   });
 
   it('bloqueado: mesma parada; o motivo e o contrato aparecem no bloqueio', async () => {

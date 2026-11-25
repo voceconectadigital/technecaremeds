@@ -15,11 +15,26 @@
  * real. Sem a variável ela é pulada — e o `describe.skipIf` diz isso em vez de
  * passar em silêncio, que seria o pior dos dois mundos: cobertura aparente.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { newId, buildContext, PERMISSION_KEYS } from '@aurora/domain';
 import { pgPoolAdapter } from '../adapters';
-import { withTenant } from '../client';
+import { withTenant, type TenantSession } from '../client';
+import { activateContract, addCoverage, createContract } from '../contracts';
+import {
+  holdContractService,
+  organizationToday,
+  releaseContractService,
+  serviceBlockFor,
+  sweepContractRenewals,
+  technicalHours,
+} from '../contract-service';
+import { addChecklistItem, createChecklistTemplate, publishChecklist } from '../execution';
+import { restoreHeldCycleItems } from '../maintenance-plans';
+import { createGuidedPlan, planHistory } from '../plan-board';
+import { addComment } from '../work-order-detail';
 import { migrate, type MigrateResult } from '../migrator';
 import { syncPermissionCatalog } from '../rbac';
 import { syncCatalogDefinitions } from '../catalogs';
@@ -862,6 +877,195 @@ describe.skipIf(!rodar)('retentativa simultânea da mesma operação de campo', 
     for (const r of resultados) {
       const corpo = r.replayed ? r.body : r.value;
       expect(corpo).toEqual({ numero: 'OS-UNICA' });
+    }
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* PR #57 (Anderson, 24–25/11/2026): contrato parado, renovação, planos e horas */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(!rodar)('contrato parado, renovação e planos num servidor de verdade', () => {
+  let hoje: string;
+  const dia = (n: number) =>
+    new Date(Date.parse(`${hoje}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const emA = <T>(fn: (s: TenantSession) => Promise<T>) => withTenant(db, ctxA, fn);
+
+  beforeAll(async () => {
+    hoje = await emA((s) => organizationToday(s));
+  });
+
+  async function cenario(nome: string) {
+    return emA(async (s) => {
+      const tipos = await provisionStarterLocationTypes(s);
+      const cliente = await createCustomer(s, { name: `${nome} ${Date.now()}` });
+      const setor = await createLocation(s, {
+        customerId: cliente,
+        locationTypeId: tipos.get('setor')!,
+        name: 'UTI',
+      });
+      const cat = await createAssetCategory(s, { name: `Cat ${nome} ${Date.now()}` });
+      const ativo = await createAsset(s, {
+        name: `Equip ${nome}`,
+        customerId: cliente,
+        assetCategoryId: cat,
+        locationId: setor,
+      });
+      return { cliente, setor, ativo };
+    });
+  }
+  async function contrato(cliente: string, inicio: string, fim: string, auto: boolean) {
+    return emA(async (s) => {
+      const id = await createContract(s, {
+        customerId: cliente,
+        kind: 'full_service',
+        startsOn: inicio,
+        endsOn: fim,
+        autoRenew: auto,
+      });
+      await addCoverage(s, { contractId: id, kind: 'customer' });
+      await activateContract(s, id);
+      return id;
+    });
+  }
+
+  it('duas varreduras ao mesmo tempo renovam a vigência UMA vez', async () => {
+    const c = await cenario('Renova');
+    const k = await contrato(c.cliente, dia(-29), hoje, true);
+    const feitas = await Promise.all([
+      emA((s) => sweepContractRenewals(s, hoje)),
+      emA((s) => sweepContractRenewals(s, hoje)),
+      emA((s) => sweepContractRenewals(s, hoje)),
+    ]);
+    expect(feitas.flat().filter((f) => f.contractId === k)).toHaveLength(1);
+    const { rows } = await admin.query(
+      `SELECT r.previous_ends_on::text AS de, r.new_ends_on::text AS para, ct.ends_on::text AS fim
+         FROM aurora.contract_renewals r JOIN aurora.contracts ct ON ct.id = r.contract_id WHERE ct.id = $1`,
+      [k]
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ de: hoje, fim: rows[0].para });
+    expect(rows[0].para > hoje).toBe(true);
+  });
+
+  it('renovação que colidiria com o sucessor é desfeita (SAVEPOINT) e a varredura segue para os demais', async () => {
+    const a = await cenario('Sucedido');
+    const velho = await contrato(a.cliente, dia(-30), hoje, true);
+    await contrato(a.cliente, dia(1), dia(400), false);
+    const b = await cenario('Seguinte');
+    const outro = await contrato(b.cliente, dia(-30), hoje, true);
+    const feitas = (await emA((s) => sweepContractRenewals(s, hoje))).map((f) => f.contractId);
+    expect(feitas).toContain(outro);
+    expect(feitas).not.toContain(velho);
+    const { rows } = await admin.query(`SELECT ends_on::text AS fim FROM aurora.contracts WHERE id = $1`, [
+      velho,
+    ]);
+    expect(rows[0].fim).toBe(hoje);
+  });
+
+  it('suspenso: sob RLS real, A é barrado e B não enxerga nada; reativado, A volta', async () => {
+    const c = await cenario('Parado');
+    const k = await contrato(c.cliente, dia(-30), dia(300), false);
+    const os = await emA((s) =>
+      createWorkOrder(s, { customerId: c.cliente, workOrderTypeId: naturezaA, title: 'OS', assetId: c.ativo })
+    );
+    await emA((s) => holdContractService(s, k, 'suspended', 'Suspensão no servidor real'));
+    const motivo = /Suspensão no servidor real/;
+    await expect(
+      emA((s) =>
+        createWorkOrder(s, {
+          customerId: c.cliente,
+          workOrderTypeId: naturezaA,
+          title: 'x',
+          assetId: c.ativo,
+        })
+      )
+    ).rejects.toThrow(motivo);
+    await expect(
+      emA((s) => addComment(s, { workOrderId: os.id, body: 'oi', visibility: 'internal' }))
+    ).rejects.toThrow(motivo);
+    expect(
+      await withTenant(db, ctxB, (s) => serviceBlockFor(s, { customerId: c.cliente, assetId: c.ativo }))
+    ).toBeNull();
+    await expect(withTenant(db, ctxB, (s) => releaseContractService(s, k, null))).rejects.toThrow(
+      /não encontrado/
+    );
+    await emA((s) => releaseContractService(s, k, null));
+
+    // D-3: conclui com horário, e a apuração soma no servidor real.
+    await emA(async (s) => {
+      await transitionWorkOrder(s, os.id, 'in_progress');
+      await transitionWorkOrder(s, os.id, 'completed', {
+        resolution: 'feito',
+        operationalResult: 'released',
+        serviceStartedAt: new Date(Date.now() - 60 * 60_000),
+        serviceEndedAt: new Date(Date.now() - 15 * 60_000),
+      });
+    });
+    const horas = await emA((s) => technicalHours(s, k, dia(-1), hoje));
+    expect(horas.totals.find((x) => x.group === 'corrective')).toMatchObject({ work_orders: 1, minutes: 45 });
+  });
+
+  it('plano por equipamento: suspenso dispensa, reativado devolve e gera a OS; o histórico é lido', async () => {
+    const c = await cenario('Plano');
+    const k = await contrato(c.cliente, dia(-30), dia(300), false);
+    const chave = `prev_pg_${Date.now()}`;
+    await emA(async (s) => {
+      await createCatalogItem(s, {
+        catalogKey: 'work_order_type',
+        key: 'preventiva',
+        label: 'Preventiva',
+        systemKey: 'preventive',
+      });
+      const tpl = await createChecklistTemplate(s, { key: chave, title: 'Preventiva' });
+      await addChecklistItem(s, { templateId: tpl, kind: 'boolean', label: 'Ok?' });
+      await publishChecklist(s, tpl);
+      await holdContractService(s, k, 'blocked', 'Bloqueio curto do plano');
+    });
+    const r = await emA((s) =>
+      createGuidedPlan(
+        s,
+        {
+          name: `Plano PG ${Date.now()}`,
+          customerId: c.cliente,
+          sectorId: c.setor,
+          assetIds: [],
+          items: [{ assetId: c.ativo, checklistTemplateKey: chave }],
+          kind: 'preventive',
+          checklistTemplateKey: null,
+          frequencyUnit: 'year',
+          frequencyInterval: 1,
+          anchorDate: new Date(`${hoje}T00:00:00Z`),
+          leadTimeDays: 0,
+          toleranceDays: 5,
+          autoGenerate: true,
+        },
+        { customerIds: null, locationPaths: null }
+      )
+    );
+    expect(r).toMatchObject({ cyclesOpened: 1, workOrders: 0 });
+    await emA((s) => releaseContractService(s, k, null));
+    await emA((s) => restoreHeldCycleItems(s));
+    const { rows } = await admin.query(
+      `SELECT i.status::text AS status, cr.template_key FROM aurora.plan_cycle_items i
+         JOIN aurora.checklist_responses cr ON cr.work_order_id = i.work_order_id WHERE i.task_id = $1`,
+      [r.taskIds[0]]
+    );
+    expect(rows).toEqual([{ status: 'generated', template_key: chave }]);
+    const historico = await emA((s) => planHistory(s, r.planId));
+    expect(historico.map((h) => h.entity)).toEqual(expect.arrayContaining(['plan', 'task']));
+  });
+
+  it('as consultas de impacto da 0092 rodam inteiras, só leitura', async () => {
+    const sql = readFileSync(
+      join(__dirname, '..', '..', '..', '..', 'docs', 'auditoria', 'consultas-pre-deploy-0092.sql'),
+      'utf8'
+    ).replace(/^\\echo.*$/gm, '');
+    const c = await admin.connect();
+    try {
+      await c.query(sql);
+    } finally {
+      c.release();
     }
   });
 });

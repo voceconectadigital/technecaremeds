@@ -668,6 +668,7 @@ async function executeAction(
 
     case 'add_comment': {
       const texto = typeof params.text === 'string' ? params.text : '';
+      await assertWorkOrderServiceAllowed(session, event.aggregateId); // D-4
       await session.query(
         `INSERT INTO aurora.work_order_comments
            (id, organization_id, work_order_id, body, visibility, author_membership_id)

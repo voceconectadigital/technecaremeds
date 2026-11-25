@@ -325,49 +325,51 @@ function AtivacaoDoPlano({ planId, ativo, nome }: { planId: string; ativo: boole
 
 function Tarefa({ tarefa, kind, unica }: { tarefa: PlanTask; kind: string; unica: boolean }) {
   return (
-    <Card aria-label={`Equipamento do plano: ${tarefa.target_asset_name ?? tarefa.name}`}>
-      <CardHeader
-        title={tarefa.name}
-        description={
-          `${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}` +
-          // OS-15: os procedimentos adicionais vão na mesma OS, cada um com o seu checklist.
-          ((tarefa.extra_checklist_template_keys?.length ?? 0) > 0
-            ? ` · ${(tarefa.checklist_template_key ? 1 : 0) + tarefa.extra_checklist_template_keys!.length} procedimentos na mesma OS`
-            : '')
-        }
-        actions={
-          tarefa.open_cycle_id ? (
-            <span className="flex items-center gap-1.5 text-sm text-muted">
-              <CalendarClock aria-hidden="true" className="size-3.5" />
-              <span data-numeric>
-                ciclo {tarefa.open_cycle_seq} · vence{' '}
-                {tarefa.open_cycle_ends_at ? formatarDataRelativa(tarefa.open_cycle_ends_at) : '—'}
+    <section aria-label={`Equipamento do plano: ${tarefa.target_asset_name ?? tarefa.name}`}>
+      <Card>
+        <CardHeader
+          title={tarefa.name}
+          description={
+            `${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}` +
+            // OS-15: os procedimentos adicionais vão na mesma OS, cada um com o seu checklist.
+            ((tarefa.extra_checklist_template_keys?.length ?? 0) > 0
+              ? ` · ${(tarefa.checklist_template_key ? 1 : 0) + tarefa.extra_checklist_template_keys!.length} procedimentos na mesma OS`
+              : '')
+          }
+          actions={
+            tarefa.open_cycle_id ? (
+              <span className="flex items-center gap-1.5 text-sm text-muted">
+                <CalendarClock aria-hidden="true" className="size-3.5" />
+                <span data-numeric>
+                  ciclo {tarefa.open_cycle_seq} · vence{' '}
+                  {tarefa.open_cycle_ends_at ? formatarDataRelativa(tarefa.open_cycle_ends_at) : '—'}
+                </span>
               </span>
-            </span>
-          ) : (
-            /*
-             * "Sem ciclo aberto" NÃO é erro.
-             *
-             * Pode ainda não ter chegado a antecedência de geração. Marcá-lo
-             * como problema ensinaria a equipe a ignorar o aviso — e aí o
-             * plano realmente desligado passaria junto.
-             */
-            <span className="text-sm text-subtle">
-              sem ciclo aberto · abre {tarefa.lead_time_days} dias antes
-            </span>
-          )
-        }
-      />
-      <DetalheDaTarefa tarefa={tarefa} />
-      <div className="flex flex-wrap gap-2 px-4 pb-2">
-        <GerarOsDoCiclo tarefa={tarefa} />
-        <Can permission="maintenance_plan.update">
-          <EditarTarefa tarefa={tarefa} kind={kind} />
-          {!unica && <RetirarTarefa tarefa={tarefa} />}
-        </Can>
-      </div>
-      {tarefa.open_cycle_id && <Cumprimento cycleId={tarefa.open_cycle_id} />}
-    </Card>
+            ) : (
+              /*
+               * "Sem ciclo aberto" NÃO é erro.
+               *
+               * Pode ainda não ter chegado a antecedência de geração. Marcá-lo
+               * como problema ensinaria a equipe a ignorar o aviso — e aí o
+               * plano realmente desligado passaria junto.
+               */
+              <span className="text-sm text-subtle">
+                sem ciclo aberto · abre {tarefa.lead_time_days} dias antes
+              </span>
+            )
+          }
+        />
+        <DetalheDaTarefa tarefa={tarefa} />
+        <div className="flex flex-wrap gap-2 px-4 pb-2">
+          <GerarOsDoCiclo tarefa={tarefa} />
+          <Can permission="maintenance_plan.update">
+            <EditarTarefa tarefa={tarefa} kind={kind} />
+            {!unica && <RetirarTarefa tarefa={tarefa} />}
+          </Can>
+        </div>
+        {tarefa.open_cycle_id && <Cumprimento cycleId={tarefa.open_cycle_id} />}
+      </Card>
+    </section>
   );
 }
 

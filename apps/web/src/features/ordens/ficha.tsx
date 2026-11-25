@@ -258,7 +258,7 @@ export function OrdemPage() {
                 Executar
               </Button>
             )}
-          {podeGerarOrcamento(data, can('quote.create')) && (
+          {!bloqueada && podeGerarOrcamento(data, can('quote.create')) && (
             <Button onClick={() => setOrcando(true)}>Gerar orçamento</Button>
           )}
           {(bloqueada ? [] : data.available_transitions).map((t) => (
@@ -300,7 +300,7 @@ export function OrdemPage() {
           {aba === 'resumo' && <AbaResumo os={data} />}
           {aba === 'execucao' && <AbaExecucao id={id} />}
           {aba === 'anexos' && <AbaAnexos id={id} />}
-          {aba === 'conversa' && <AbaConversa id={id} />}
+          {aba === 'conversa' && <AbaConversa id={id} somenteLeitura={bloqueada} />}
           {aba === 'historico' && <AbaHistorico historico={data.history} />}
         </div>
       </div>
@@ -813,7 +813,7 @@ const ROTULO_ANEXO: Record<string, string> = {
  * Quem não pode ler nota interna simplesmente não recebe nenhuma do servidor,
  * e o seletor de destino nem aparece.
  */
-function AbaConversa({ id }: { id: string }) {
+function AbaConversa({ id, somenteLeitura }: { id: string; somenteLeitura: boolean }) {
   const toast = useToast();
   const [texto, setTexto] = useState('');
   const [interna, setInterna] = useState(true);
@@ -869,11 +869,13 @@ function AbaConversa({ id }: { id: string }) {
         )}
       </div>
 
+      {/* D-4: contrato parado é somente consulta — a conversa continua legível, sem o formulário. */}
       <form
-        className="flex flex-col gap-3 border-t border-border-subtle p-4"
+        hidden={somenteLeitura}
+        className={somenteLeitura ? undefined : 'flex flex-col gap-3 border-t border-border-subtle p-4'}
         onSubmit={(e) => {
           e.preventDefault();
-          if (texto.trim().length === 0) return;
+          if (somenteLeitura || texto.trim().length === 0) return;
           escrever.mutate(
             { params: { id }, body: { body: texto.trim(), visibility: destino } },
             { onSuccess: () => setTexto('') }

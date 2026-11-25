@@ -20,7 +20,7 @@ import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { createWorkOrder, transitionWorkOrder } from './work-orders';
 import { attachChecklist } from './execution';
-import { organizationToday, serviceBlockFor } from './contract-service';
+import { assertServiceAllowed, organizationToday, serviceBlockFor } from './contract-service';
 
 export interface PlanInput {
   name: string;
@@ -195,6 +195,9 @@ export interface CycleResult {
   workOrders: number;
 }
 
+/** Como termina o motivo da dispensa feita PELO SISTEMA por contrato parado. */
+const SUFIXO_DA_DISPENSA = 'na abertura do ciclo';
+
 /**
  * Abre o próximo ciclo de uma tarefa e, se o plano for automático, materializa
  * as ordens de serviço.
@@ -270,7 +273,7 @@ export async function generateCycle(
     if (b)
       retidos.set(
         assetId,
-        `Contrato ${b.contractNumber}: ${SERVICE_BLOCK_LABELS[b.reason]} na abertura do ciclo`
+        `Contrato ${b.contractNumber}: ${SERVICE_BLOCK_LABELS[b.reason]} ${SUFIXO_DA_DISPENSA}`
       );
   }
 
@@ -463,11 +466,18 @@ export async function skipCycleItem(session: TenantSession, itemId: string, reas
       field: 'reason',
     });
   }
-  const [item] = await session.query<{ work_order_id: string | null; status: string }>(
-    `SELECT work_order_id, status::text FROM aurora.plan_cycle_items WHERE id = $1`,
+  const [item] = await session.query<{
+    work_order_id: string | null;
+    status: string;
+    customer_id: string;
+    asset_id: string;
+  }>(
+    `SELECT i.work_order_id, i.status::text, a.customer_id, i.asset_id
+       FROM aurora.plan_cycle_items i JOIN aurora.assets a ON a.id = i.asset_id WHERE i.id = $1`,
     [itemId]
   );
   if (!item) throw new NotFoundError('Item de ciclo', itemId);
+  await assertServiceAllowed(session, { customerId: item.customer_id, assetId: item.asset_id }); // D-4
   if (item.status === 'done') {
     throw new ConflictError('item já concluído não é dispensável');
   }
@@ -564,6 +574,56 @@ export async function cycleCompliance(session: TenantSession, cycleId: string, n
 }
 
 /**
+ * Devolve à fila o que o CONTRATO dispensou, quando o contrato volta a atender.
+ *
+ * O item de um ciclo aberto com o contrato parado nasce dispensado pelo sistema. Se a suspensão
+ * acaba antes de o ciclo vencer, a manutenção volta a ser devida: sem isto, três dias de suspensão
+ * apagariam uma calibração anual inteira. Ciclo já vencido fica dispensado — ninguém podia fazê-lo,
+ * e reabri-lo criaria obrigação retroativa. Dispensa feita por PESSOA (`skipped_by`) nunca volta.
+ */
+export async function restoreHeldCycleItems(
+  session: TenantSession,
+  now: Date = new Date()
+): Promise<{ restored: number; workOrders: number }> {
+  const dispensados = await session.query<{
+    id: string;
+    cycle_id: string;
+    asset_id: string;
+    customer_id: string;
+    auto_generate: boolean;
+  }>(
+    `SELECT i.id, i.cycle_id, i.asset_id, p.customer_id, p.auto_generate
+       FROM aurora.plan_cycle_items i
+       JOIN aurora.plan_cycles c ON c.id = i.cycle_id
+       JOIN aurora.plan_tasks t ON t.id = i.task_id
+       JOIN aurora.maintenance_plans p ON p.id = c.plan_id
+       JOIN aurora.assets a ON a.id = i.asset_id
+      WHERE i.status = 'skipped' AND i.skipped_by IS NULL AND i.work_order_id IS NULL
+        AND i.skip_reason LIKE $1 AND c.ends_at > $2 AND c.status <> 'closed'
+        AND t.archived_at IS NULL AND p.archived_at IS NULL AND p.is_active
+        AND a.customer_id = p.customer_id AND a.deleted_at IS NULL
+        AND a.status NOT IN ('decommissioned', 'disposed')`,
+    [`%${SUFIXO_DA_DISPENSA}`, now.toISOString()]
+  );
+  if (dispensados.length === 0) return { restored: 0, workOrders: 0 };
+  const hoje = await organizationToday(session, now);
+  const ciclos = new Set<string>();
+  let restored = 0;
+  for (const i of dispensados) {
+    if (await serviceBlockFor(session, { customerId: i.customer_id, assetId: i.asset_id }, hoje)) continue;
+    await session.query(
+      `UPDATE aurora.plan_cycle_items SET status = 'pending', skip_reason = NULL, skipped_at = NULL WHERE id = $1`,
+      [i.id]
+    );
+    restored++;
+    if (i.auto_generate) ciclos.add(i.cycle_id);
+  }
+  let workOrders = 0;
+  for (const c of ciclos) workOrders += await materializeCycle(session, c);
+  return { restored, workOrders };
+}
+
+/**
  * Varredura: abre os ciclos que chegaram na antecedência.
  *
  * Roda no publicador, não numa requisição. Uma preventiva que só é gerada
@@ -583,7 +643,8 @@ export async function sweepPlans(
   );
 
   let cyclesOpened = 0;
-  let workOrders = 0;
+  // Antes de abrir o novo: o que o contrato havia dispensado e já pode ser feito.
+  let workOrders = (await restoreHeldCycleItems(session, now)).workOrders;
   for (const t of tarefas) {
     const r = await generateCycle(session, t.id, now);
     if (r) {

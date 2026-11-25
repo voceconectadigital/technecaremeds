@@ -59,7 +59,7 @@ import {
   ROTULO_PAGAMENTO,
   ROTULO_PRECIFICACAO,
   diasAteOFimDaVigencia,
-  rotuloDasEquipes,
+  descricaoDaEquipe,
 } from './rotulos-contrato';
 
 const ROTULO: Record<ContractStatus, string> = {
@@ -441,7 +441,11 @@ export function ContratoPage() {
                 valor={c.service_frequency ? ROTULO_MODALIDADE[c.service_frequency] : null}
                 vazio="Não informada"
               />
-              <Info rotulo="Equipe fixa" valor={rotuloDasEquipes(c.fixed_team_packages)} vazio="Nenhuma" />
+              <Info
+                rotulo="Equipe fixa"
+                valor={(c.fixed_team_packages ?? []).map(descricaoDaEquipe).join(' · ') || null}
+                vazio="Nenhuma"
+              />
               <Info
                 rotulo="Pagamento"
                 valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : null}

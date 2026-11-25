@@ -12,6 +12,7 @@ import type { TenantSession } from './client';
 import { startTimer, stopTimer } from './execution';
 import { emitEvent } from './outbox';
 import { validateServiceHours } from './work-orders';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /** Onde o aparelho disse que estava — ou por que não disse. */
 export interface PontoDeVisita {
@@ -119,6 +120,7 @@ export async function checkIn(
   if (!membershipId)
     throw new ValidationError('check-in exige um vínculo com a organização', { field: 'membership' });
   const os = await osDaVisita(session, workOrderId);
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4 (o check-out continua livre)
   if (ENCERRADAS.has(os.category) || os.category === 'draft' || os.category === 'review') {
     throw new ConflictError('esta OS não está em atendimento: não há check-in a fazer');
   }
@@ -286,6 +288,7 @@ export async function updateServiceReport(
   if (ENCERRADAS.has(os.category)) {
     throw new ConflictError('a OS já foi validada, fechada ou cancelada: o relatório não muda mais por aqui');
   }
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const texto = (v: string | null | undefined, campo: string): string | null | undefined => {
     if (v === undefined) return undefined;
     if (v === null) return null;
@@ -350,6 +353,7 @@ export async function addCustomerPart(
   if (ENCERRADAS.has(os.category)) {
     throw new ConflictError('a OS já foi validada, fechada ou cancelada');
   }
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const descricao = input.description.trim();
   if (descricao.length < 3 || descricao.length > 300) {
     throw new ValidationError('descreva a peça (3 a 300 caracteres)', { field: 'description' });

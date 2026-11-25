@@ -37,7 +37,7 @@
 > · **D-4 — contrato parado = só consulta, NA CAMADA DE DADOS:** `assertServiceAllowed`/`assertWorkOrderServiceAllowed`
 >   (`packages/db/src/contract-service.ts`) em `createWorkOrder`, `transitionWorkOrder` (toda transição; só a poda de
 >   equipamento baixado usa `bypassServiceBlock`), `assertCanExecuteWorkOrder` (checklist, cronômetro, anexo,
->   assinatura, check-in, relatório), `createServiceRequest`, `transitionRequest`, agenda, `consumeForWorkOrder`, `assign` de automação e `executePlanItem`. Livres: comentário, avaliação, check-out, parada de cronômetro, orçamento. Regra única em SQL
+>   assinatura, check-in, relatório), `createServiceRequest`, `transitionRequest`, agenda, `consumeForWorkOrder`, `assign` de automação e `executePlanItem`. Também: comentário, avaliação, nota do portal, metrologia, documento, registro de qualidade e orçamento DE OS (25/11). Livres: encerramento seguro (check-out, parar cronômetro, encerrar medição, cancelar documento/orçamento, faturar) e regularização (contrato, cadastros, orçamento avulso). Item dispensado por contrato volta em `restoreHeldCycleItems` (varredura horária) se o ciclo não venceu. Regra única em SQL
 >   (`aurora.service_block`): vale o contrato que COBRE o equipamento (sem equipamento, qualquer do cliente); um
 >   contrato válido libera; `terminated` não bloqueia (vira "sem contrato"); a data é a do fuso da organização
 >   (`organizationToday`). 409 com `details.service_block`. Ficha da OS traz `service_block` e esconde as transições.
