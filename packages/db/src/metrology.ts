@@ -21,6 +21,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { answerChecklistItem, attachFile, loadChecklistItems } from './execution';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 const DATA_CIVIL = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -446,11 +447,13 @@ export async function openMeasurementSession(
     });
   }
 
-  const [resp] = await session.query<{ template_id: string }>(
-    `SELECT template_id FROM aurora.checklist_responses WHERE id = $1`,
+  const [resp] = await session.query<{ template_id: string; work_order_id: string }>(
+    `SELECT template_id, work_order_id FROM aurora.checklist_responses WHERE id = $1`,
     [input.responseId]
   );
   if (!resp) throw new NotFoundError('Resposta de checklist', input.responseId);
+  // D-4: não se abre medição com o contrato parado; ENCERRAR a já aberta continua permitido.
+  await assertWorkOrderServiceAllowed(session, resp.work_order_id);
 
   const [ja] = await session.query(`SELECT 1 FROM aurora.measurement_sessions WHERE response_id = $1`, [
     input.responseId,

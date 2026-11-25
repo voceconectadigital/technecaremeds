@@ -112,6 +112,11 @@ export function OrdemPage() {
   // O parecer do equipamento (OS-16, 29/10/2026): obrigatório para concluir OS de equipamento.
   const [parecer, setParecer] = useRascunho(`os:${id}:parecer`);
   const [resolucao, setResolucao] = useRascunho(`os:${id}:resolucao`);
+  // D-3 (Anderson, 24/11/2026): hora de início e de término do atendimento, obrigatórias em toda OS.
+  // Rascunho no aparelho, no formato do campo `datetime-local` (hora local).
+  const [horaInicio, setHoraInicio] = useRascunho(`os:${id}:hora-inicio`);
+  const [horaFim, setHoraFim] = useRascunho(`os:${id}:hora-fim`);
+  const horasOk = Boolean(horaInicio && horaFim && new Date(horaFim) > new Date(horaInicio));
   const [nomeAssina, setNomeAssina] = useRascunho(`os:${id}:assina-nome`);
   const [docAssina, setDocAssina] = useRascunho(`os:${id}:assina-doc`);
 
@@ -374,6 +379,12 @@ export function OrdemPage() {
           to: para,
           ...(resolucao.trim() ? { resolution: resolucao.trim() } : {}),
           ...(parecer === 'released' || parecer === 'stopped' ? { operational_result: parecer } : {}),
+          ...(conclui.has(para) && horasOk
+            ? {
+                service_started_at: new Date(horaInicio).toISOString(),
+                service_ended_at: new Date(horaFim).toISOString(),
+              }
+            : {}),
         },
         rotulo: `${rotulos.get(para) ?? para} — ${ordemAtual.number ?? ordemAtual.title}`,
       });
@@ -391,8 +402,10 @@ export function OrdemPage() {
       await limparRascunhos(base, [`os:${id}:resolucao`]);
       setResolucao('');
       if (conclui.has(para)) {
-        await limparRascunhos(base, [`os:${id}:parecer`]);
+        await limparRascunhos(base, [`os:${id}:parecer`, `os:${id}:hora-inicio`, `os:${id}:hora-fim`]);
         setParecer('');
+        setHoraInicio('');
+        setHoraFim('');
       }
     });
   }
@@ -783,6 +796,41 @@ export function OrdemPage() {
           </p>
         </div>
 
+        {/*
+         * HORA DE INÍCIO E DE TÉRMINO (D-3): o servidor recusa concluir sem elas. Perguntar aqui evita
+         * que a conclusão volte recusada horas depois, quando a rede voltar.
+         */}
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-xs text-subtle">Horário do atendimento (obrigatório para concluir)</legend>
+          {(
+            [
+              ['Início', horaInicio, setHoraInicio],
+              ['Término', horaFim, setHoraFim],
+            ] as const
+          ).map(([rotulo, valor, mudar]) => (
+            <label key={rotulo} className="flex items-center gap-2 text-sm text-text">
+              <span className="w-16 shrink-0">{rotulo}</span>
+              <input
+                type="datetime-local"
+                aria-label={`Hora de ${rotulo.toLowerCase()} do atendimento`}
+                value={valor}
+                onChange={(e) => mudar(e.target.value)}
+                className="min-h-11 flex-1 rounded-control border border-border-subtle bg-surface px-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => mudar(agoraNoCampo())}
+                className="min-h-11 rounded-control border border-border-subtle px-3 text-xs text-text"
+              >
+                Agora
+              </button>
+            </label>
+          ))}
+          {horaInicio && horaFim && !horasOk && (
+            <p className="text-xs text-bad-text">O término precisa ser depois do início.</p>
+          )}
+        </fieldset>
+
         {ordemAtual.asset_id && (
           /*
            * O PARECER DO EQUIPAMENTO (OS-16). O servidor recusa concluir OS de equipamento sem ele;
@@ -889,18 +937,21 @@ export function OrdemPage() {
               disabled={
                 enviando !== null ||
                 situacoesNaFila.includes(t.to_key) ||
+                (conclui.has(t.to_key) && !horasOk) ||
                 (conclui.has(t.to_key) &&
                   !!ordemAtual.asset_id &&
                   parecer !== 'released' &&
                   parecer !== 'stopped')
               }
               title={
-                conclui.has(t.to_key) &&
-                ordemAtual.asset_id &&
-                parecer !== 'released' &&
-                parecer !== 'stopped'
-                  ? 'Escolha o parecer do equipamento antes de concluir'
-                  : undefined
+                conclui.has(t.to_key) && !horasOk
+                  ? 'Informe a hora de início e a de término do atendimento antes de concluir'
+                  : conclui.has(t.to_key) &&
+                      ordemAtual.asset_id &&
+                      parecer !== 'released' &&
+                      parecer !== 'stopped'
+                    ? 'Escolha o parecer do equipamento antes de concluir'
+                    : undefined
               }
               className="min-h-12 rounded-control border border-border-subtle bg-surface px-3 text-sm font-medium text-text"
             >
@@ -925,4 +976,10 @@ export function OrdemPage() {
       )}
     </div>
   );
+}
+
+/** "Agora" no formato do campo `datetime-local` (hora local do aparelho, sem segundos). */
+export function agoraNoCampo(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }

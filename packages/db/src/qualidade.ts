@@ -11,6 +11,7 @@
  */
 import { NotFoundError, ValidationError, newId } from '@aurora/domain';
 import type { TenantSession } from './client';
+import { assertServiceAllowed } from './contract-service';
 
 export const QUALITY_KINDS = ['calibration', 'electrical_safety', 'qualification', 'training'] as const;
 export type QualityKind = (typeof QUALITY_KINDS)[number];
@@ -140,6 +141,9 @@ export async function createQualityRecord(
     if (!visivel) throw new NotFoundError('Cliente', customerId);
   }
 
+  // D-4: registro de qualidade de equipamento/cliente com contrato parado é só consulta.
+  if (customerId) await assertServiceAllowed(session, { customerId, assetId: input.assetId ?? null });
+
   // O procedimento (QUA-04): uma versão que existe nesta organização — a RLS esconde a de outra,
   // e o "não existe" é o mesmo nos dois casos. Rascunho não serve: certificado não se refere a
   // procedimento que ainda pode mudar.
@@ -235,6 +239,20 @@ export async function listQualityRecords(
   );
 }
 
+/** D-4: o registro é de contrato parado? Fora do escopo não faz nada: quem chama dá o 404. */
+async function conferirAtendimentoDoRegistro(
+  session: TenantSession,
+  id: string,
+  scopeMembershipId: string | null
+): Promise<void> {
+  const [q] = await session.query<{ customer_id: string | null; asset_id: string | null }>(
+    `SELECT q.customer_id, q.asset_id FROM aurora.quality_records q
+      WHERE q.id = $1 AND q.deleted_at IS NULL AND ${escopoDoRegistro(2)}`,
+    [id, scopeMembershipId]
+  );
+  if (q?.customer_id) await assertServiceAllowed(session, { customerId: q.customer_id, assetId: q.asset_id });
+}
+
 /** Tira o registro de cena (a linha fica, para a trilha de auditoria). */
 export async function deleteQualityRecord(
   session: TenantSession,
@@ -242,6 +260,7 @@ export async function deleteQualityRecord(
   /** Vínculo de quem exclui: registro fora do escopo dele é "não existe" (SEG-02). */
   scopeMembershipId: string | null = null
 ): Promise<void> {
+  await conferirAtendimentoDoRegistro(session, id, scopeMembershipId);
   const r = await session.query<{ id: string }>(
     `UPDATE aurora.quality_records q SET deleted_at = now(), updated_by = $2
       WHERE q.id = $1 AND q.deleted_at IS NULL
@@ -294,6 +313,7 @@ export async function setQualityFile(
   meta: QualityFileMeta & { sha256: string },
   scopeMembershipId: string | null
 ): Promise<void> {
+  await conferirAtendimentoDoRegistro(session, id, scopeMembershipId);
   const r = await session.query<{ id: string }>(
     `UPDATE aurora.quality_records q
         SET file_key = $2, file_name = $3, file_content_type = $4, file_size = $5, file_sha256 = $6,

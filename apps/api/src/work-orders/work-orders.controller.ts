@@ -26,6 +26,8 @@ import {
   listParts,
   slaStatus,
   organizationUsesFeature,
+  serviceBlockFor,
+  serviceBlockView,
   type Database,
 } from '@aurora/db';
 import {
@@ -42,6 +44,14 @@ import { RequirePermissions, PermissionsCheckedInHandler } from '../common/permi
 import { escopoRestrito, filtroDeEscopo } from '../common/scope-sql';
 import { oneOf, optionalUuid, text, uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
+
+/** Hora real do atendimento (D-3) vinda no corpo: ISO 8601, ou ausente. */
+function horaDoCorpo(v: unknown, campo: string): Date | undefined {
+  if (v === undefined || v === null || v === '') return undefined;
+  const d = typeof v === 'string' ? new Date(v) : new Date(Number.NaN);
+  if (Number.isNaN(d.getTime())) throw new ValidationError('hora inválida (use ISO 8601)', { field: campo });
+  return d;
+}
 import { runFieldOperation } from '../common/client-operation';
 import type { AuroraRequest } from '../common/context.middleware';
 
@@ -280,6 +290,7 @@ export class WorkOrdersController {
                 w.wait_note, w.created_at, w.updated_at,
                 w.service_description, w.service_observations, w.operational_result,
                 w.final_opinion, w.service_report_updated_at,
+                w.service_started_at, w.service_ended_at,
                 -- O orçamento vivo desta OS (16/10/2026): é por ele que a ficha mostra
                 -- "aguardando aprovação", "aprovado" ou "reprovado" sem estado redundante.
                 (SELECT json_build_object('id', q.id, 'number', q.number, 'version', q.version,
@@ -356,6 +367,13 @@ export class WorkOrdersController {
         // A organização usa orçamento? (OS-03 · ORC-01 · CLI-07) — decide se a
         // ficha mostra "Gerar orçamento" e as etapas de aprovação do orçamento.
         uses_quotes: await organizationUsesFeature(s, 'quotes'),
+        // D-4: o contrato parou o atendimento? A ficha mostra o motivo e fica só consulta.
+        service_block: serviceBlockView(
+          await serviceBlockFor(s, {
+            customerId: String(row.customer_id),
+            assetId: (row.asset_id as string | null) ?? null,
+          })
+        ),
         history: await workOrderHistory(s, woId),
         // O SLA vem na ficha porque é o que decide a ordem do dia de quem
         // atende. Numa consulta à parte, a informação chegaria depois da
@@ -450,6 +468,8 @@ export class WorkOrdersController {
           body.operational_result === undefined || body.operational_result === null
             ? undefined
             : String(body.operational_result),
+        serviceStartedAt: horaDoCorpo(body.service_started_at, 'service_started_at'),
+        serviceEndedAt: horaDoCorpo(body.service_ended_at, 'service_ended_at'),
       })
     );
   }

@@ -426,7 +426,11 @@ describe('apontamento de horas', () => {
         locationId: setor,
       });
       await transitionWorkOrder(s, w.id, 'in_progress');
-      await transitionWorkOrder(s, w.id, 'completed', { resolution: 'concluída para o teste' });
+      await transitionWorkOrder(s, w.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
+        resolution: 'concluída para o teste',
+      });
       await transitionWorkOrder(s, w.id, 'validated');
       await transitionWorkOrder(s, w.id, 'closed');
       return w.id;
@@ -450,6 +454,8 @@ describe('anexos e assinatura', () => {
     os = await novaOsEmExecucao('Com assinatura');
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, os, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Manutenção preventiva executada',
       });
@@ -679,7 +685,11 @@ describe('o bloco de conclusão agora bloqueia a transição de verdade', () => 
 
     const erro = await withTenant(t.db, ctx, async (s) => {
       try {
-        await transitionWorkOrder(s, os, 'completed', { resolution: 'Executada conforme procedimento' });
+        await transitionWorkOrder(s, os, 'completed', {
+          serviceStartedAt: new Date(Date.now() - 3_600_000),
+          serviceEndedAt: new Date(Date.now() - 60_000),
+          resolution: 'Executada conforme procedimento',
+        });
         return null;
       } catch (e) {
         return e as Error & { details?: { missing?: Array<{ requirement: string }> } };
@@ -731,6 +741,8 @@ describe('o bloco de conclusão agora bloqueia a transição de verdade', () => 
 
     const r = await withTenant(t.db, ctx, (s) =>
       transitionWorkOrder(s, os, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         resolution: 'Substituídos os filtros e testado o conjunto',
       })
     );
@@ -749,7 +761,11 @@ describe('o bloco de conclusão agora bloqueia a transição de verdade', () => 
       return w.id;
     });
     const r = await withTenant(t.db, ctx, (s) =>
-      transitionWorkOrder(s, os, 'completed', { resolution: 'Resolvido em campo' })
+      transitionWorkOrder(s, os, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
+        resolution: 'Resolvido em campo',
+      })
     );
     expect(r.category).toBe('review');
   });

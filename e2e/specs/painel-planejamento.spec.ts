@@ -277,18 +277,43 @@ test.describe('Planos de manutenção', () => {
     await expect(modo.getByText('em breve')).toBeVisible();
     await d.getByLabel('Cliente / Hospital').selectOption({ index: 1 });
     await d.getByRole('button', { name: 'Continuar' }).click();
-    await d.getByLabel('Setor').selectOption({ index: 1 });
+    // O seletor mostra "Unidade › Setor" e vem em ordem alfabética: escolhe-se pelo nome.
+    const setor = d.getByLabel('Setor');
+    const uti = await setor.locator('option', { hasText: 'UTI Alfa' }).first().getAttribute('value');
+    await setor.selectOption(uti!);
     await d.getByRole('button', { name: 'Continuar' }).click();
     await expect(d.getByText(/Todos os equipamentos de UTI Alfa/)).toBeVisible();
     await d.getByRole('button', { name: 'Continuar' }).click();
     await d.getByRole('button', { name: /Preventiva/ }).click();
-    await expect(d.getByRole('button', { name: /Educação continuada/ })).toBeDisabled();
     await d.getByRole('button', { name: 'Continuar' }).click();
-    await d.getByLabel('Checklist / procedimento').selectOption({ index: 1 });
+
+    // Vídeo do Anderson (13/11/2026): cada equipamento recebe o SEU procedimento — e sem
+    // escolher o de todos, o assistente não avança.
+    const seletores = d.getByLabel(/^Procedimento de /);
+    await expect(seletores.first()).toBeVisible();
     await d.getByRole('button', { name: 'Continuar' }).click();
+    await expect(d.getByRole('alert')).toContainText(/Cada equipamento precisa do procedimento dele/);
+    const n = await seletores.count();
+    for (let i = 0; i < n; i++) await seletores.nth(i).selectOption({ index: 1 });
+    await expect(d.getByText('Todos prontos.')).toBeVisible();
     await d.getByRole('button', { name: 'Continuar' }).click();
+    await expect(d.getByText(/Primeiro vencimento:/)).toBeVisible();
+    await d.getByRole('button', { name: 'Continuar' }).click();
+    await expect(d.getByRole('table', { name: 'Equipamentos do plano' }).locator('tbody tr')).toHaveCount(n);
     await d.getByLabel('Nome do plano').fill(`Preventiva E2E ${Date.now() % 10_000}`);
     await d.getByRole('button', { name: 'Criar plano' }).click();
     await expect(page).toHaveURL(/\/planos\/[0-9a-f-]{36}/, { timeout: 15_000 });
+
+    // A página do plano diz para onde ele vai, deixa editar e mostra o histórico.
+    await expect(page.getByRole('list', { name: 'Caminho do plano' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Editar plano' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Incluir equipamentos' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Histórico do plano' })).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Editar plano' }).click();
+    const editar = page.getByRole('dialog', { name: 'Editar plano' });
+    await editar.getByLabel('Nome do plano').fill(`Preventiva E2E editada ${Date.now() % 10_000}`);
+    await editar.getByRole('button', { name: 'Salvar' }).click();
+    await expect(editar).toBeHidden({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('editada');
   });
 });

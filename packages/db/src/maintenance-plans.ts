@@ -4,9 +4,11 @@
 import {
   newId,
   addFrequency,
+  subtractFrequency,
   shouldOpenCycle,
   summarizeCompliance,
   complianceState,
+  SERVICE_BLOCK_LABELS,
   ValidationError,
   NotFoundError,
   ConflictError,
@@ -18,6 +20,7 @@ import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { createWorkOrder, transitionWorkOrder } from './work-orders';
 import { attachChecklist } from './execution';
+import { assertServiceAllowed, organizationToday, serviceBlockFor } from './contract-service';
 
 export interface PlanInput {
   name: string;
@@ -80,6 +83,8 @@ export interface PlanTaskInput {
    * principal e mais um por chave daqui, cada um com as próprias respostas.
    */
   extraChecklistTemplateKeys?: readonly string[];
+  /** Vencimento do PRIMEIRO ciclo desta tarefa (0092). Nulo = pela âncora do plano. */
+  firstDueOn?: string | null;
 }
 
 /**
@@ -102,9 +107,9 @@ export async function addPlanTask(session: TenantSession, input: PlanTaskInput):
         target_location_id, work_order_type_id, checklist_template_key, frequency_unit,
         frequency_interval, lead_time_days, tolerance_days, estimated_duration_min, default_team_id,
         filter_asset_model_id, filter_manufacturer_id, filter_criticality_id,
-        extra_checklist_template_keys)
+        extra_checklist_template_keys, first_due_on)
      VALUES ($1, $2, $3, $4, $5::aurora.plan_target_kind, $6, $7, $8, $9, $10,
-             $11::aurora.frequency_unit, $12, $13, $14, $15, $16, $17, $18, $19, $20::text[])`,
+             $11::aurora.frequency_unit, $12, $13, $14, $15, $16, $17, $18, $19, $20::text[], $21::date)`,
     [
       id,
       session.context.organizationId,
@@ -126,6 +131,7 @@ export async function addPlanTask(session: TenantSession, input: PlanTaskInput):
       input.filterManufacturerId ?? null,
       input.filterCriticalityId ?? null,
       extras,
+      input.firstDueOn ?? null,
     ]
   );
   return id;
@@ -189,6 +195,9 @@ export interface CycleResult {
   workOrders: number;
 }
 
+/** Como termina o motivo da dispensa feita PELO SISTEMA por contrato parado. */
+const SUFIXO_DA_DISPENSA = 'na abertura do ciclo';
+
 /**
  * Abre o próximo ciclo de uma tarefa e, se o plano for automático, materializa
  * as ordens de serviço.
@@ -215,10 +224,12 @@ export async function generateCycle(
     anchor_date: string;
     customer_id: string;
     plan_name: string;
+    first_due_on: string | null;
   }>(
     `SELECT t.plan_id, t.name, t.frequency_unit::text AS frequency_unit, t.frequency_interval,
             t.lead_time_days, t.work_order_type_id, t.default_team_id,
-            p.auto_generate, p.is_active, p.anchor_date::text, p.customer_id, p.name AS plan_name
+            p.auto_generate, p.is_active, p.anchor_date::text, p.customer_id, p.name AS plan_name,
+            t.first_due_on::text AS first_due_on
        FROM aurora.plan_tasks t
        JOIN aurora.maintenance_plans p ON p.id = t.plan_id
       WHERE t.id = $1 AND t.archived_at IS NULL AND p.archived_at IS NULL`,
@@ -232,14 +243,39 @@ export async function generateCycle(
     [taskId]
   );
 
-  const inicio = ultimo ? new Date(ultimo.ends_at) : new Date(`${task.anchor_date}T00:00:00Z`);
-  const fim = addFrequency(inicio, task.frequency_unit, Number(task.frequency_interval));
+  // Primeiro ciclo com vencimento informado por equipamento (0092): o
+  // vencimento é a data informada, e o início é um período antes dela.
+  let inicio: Date;
+  let fim: Date;
+  if (!ultimo && task.first_due_on) {
+    fim = new Date(`${task.first_due_on}T00:00:00Z`);
+    inicio = subtractFrequency(fim, task.frequency_unit, Number(task.frequency_interval));
+  } else {
+    inicio = ultimo ? new Date(ultimo.ends_at) : new Date(`${task.anchor_date}T00:00:00Z`);
+    fim = addFrequency(inicio, task.frequency_unit, Number(task.frequency_interval));
+  }
   const seq = Number(ultimo?.seq ?? 0) + 1;
 
   if (!shouldOpenCycle(inicio, Number(task.lead_time_days), now)) return null;
 
   const ativos = await resolveTargetAssets(session, taskId);
   const cycleId = newId();
+
+  // D-4 (24/11/2026): equipamento cujo contrato está vencido, suspenso ou
+  // bloqueado NÃO ganha obrigação no ciclo. O item nasce DISPENSADO, com o
+  // contrato e o motivo escritos — o ciclo segue a sequência (sem avalanche de
+  // ciclos atrasados quando o contrato voltar) e a conformidade não conta como
+  // falha o que ninguém podia fazer.
+  const hoje = await organizationToday(session, now);
+  const retidos = new Map<string, string>();
+  for (const assetId of ativos) {
+    const b = await serviceBlockFor(session, { customerId: task.customer_id, assetId }, hoje);
+    if (b)
+      retidos.set(
+        assetId,
+        `Contrato ${b.contractNumber}: ${SERVICE_BLOCK_LABELS[b.reason]} ${SUFIXO_DA_DISPENSA}`
+      );
+  }
 
   await session.query(
     `INSERT INTO aurora.plan_cycles
@@ -262,11 +298,22 @@ export async function generateCycle(
     const itemId = newId();
     // O vencimento é o fim da janela: a preventiva do ciclo precisa acontecer
     // dentro do ciclo, e é contra essa data que a tolerância é medida.
+    const retido = retidos.get(assetId) ?? null;
     await session.query(
       `INSERT INTO aurora.plan_cycle_items
-         (id, organization_id, cycle_id, task_id, asset_id, due_at, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-      [itemId, session.context.organizationId, cycleId, taskId, assetId, fim.toISOString()]
+         (id, organization_id, cycle_id, task_id, asset_id, due_at, status, skip_reason, skipped_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::aurora.cycle_item_status, $8,
+               CASE WHEN $8::text IS NULL THEN NULL ELSE now() END)`,
+      [
+        itemId,
+        session.context.organizationId,
+        cycleId,
+        taskId,
+        assetId,
+        fim.toISOString(),
+        retido ? 'skipped' : 'pending',
+        retido,
+      ]
     );
   }
 
@@ -378,6 +425,10 @@ export async function materializeCycle(session: TenantSession, cycleId: string):
      * coordena; inventar a justificativa aqui não é.
      */
     if (ativo && ativo.customer_id !== item.customer_id) continue;
+    // D-4: contrato parado desde que o ciclo abriu — o item fica PENDENTE (não
+    // vira OS) e os demais seguem. Reativado o contrato, materializar de novo
+    // gera a OS que faltou.
+    if (await serviceBlockFor(session, { customerId: item.customer_id, assetId: item.asset_id })) continue;
     const os = await createWorkOrder(session, {
       customerId: item.customer_id,
       workOrderTypeId: item.work_order_type_id,
@@ -415,11 +466,18 @@ export async function skipCycleItem(session: TenantSession, itemId: string, reas
       field: 'reason',
     });
   }
-  const [item] = await session.query<{ work_order_id: string | null; status: string }>(
-    `SELECT work_order_id, status::text FROM aurora.plan_cycle_items WHERE id = $1`,
+  const [item] = await session.query<{
+    work_order_id: string | null;
+    status: string;
+    customer_id: string;
+    asset_id: string;
+  }>(
+    `SELECT i.work_order_id, i.status::text, a.customer_id, i.asset_id
+       FROM aurora.plan_cycle_items i JOIN aurora.assets a ON a.id = i.asset_id WHERE i.id = $1`,
     [itemId]
   );
   if (!item) throw new NotFoundError('Item de ciclo', itemId);
+  await assertServiceAllowed(session, { customerId: item.customer_id, assetId: item.asset_id }); // D-4
   if (item.status === 'done') {
     throw new ConflictError('item já concluído não é dispensável');
   }
@@ -461,6 +519,7 @@ export async function pruneDecommissioned(session: TenantSession, cycleId: strin
   for (const item of fora) {
     if (item.work_order_id) {
       await transitionWorkOrder(session, item.work_order_id, 'cancelled', {
+        bypassServiceBlock: true,
         cancellationReason: `Ativo descomissionado: ${item.asset_name}`,
       });
     }
@@ -515,6 +574,56 @@ export async function cycleCompliance(session: TenantSession, cycleId: string, n
 }
 
 /**
+ * Devolve à fila o que o CONTRATO dispensou, quando o contrato volta a atender.
+ *
+ * O item de um ciclo aberto com o contrato parado nasce dispensado pelo sistema. Se a suspensão
+ * acaba antes de o ciclo vencer, a manutenção volta a ser devida: sem isto, três dias de suspensão
+ * apagariam uma calibração anual inteira. Ciclo já vencido fica dispensado — ninguém podia fazê-lo,
+ * e reabri-lo criaria obrigação retroativa. Dispensa feita por PESSOA (`skipped_by`) nunca volta.
+ */
+export async function restoreHeldCycleItems(
+  session: TenantSession,
+  now: Date = new Date()
+): Promise<{ restored: number; workOrders: number }> {
+  const dispensados = await session.query<{
+    id: string;
+    cycle_id: string;
+    asset_id: string;
+    customer_id: string;
+    auto_generate: boolean;
+  }>(
+    `SELECT i.id, i.cycle_id, i.asset_id, p.customer_id, p.auto_generate
+       FROM aurora.plan_cycle_items i
+       JOIN aurora.plan_cycles c ON c.id = i.cycle_id
+       JOIN aurora.plan_tasks t ON t.id = i.task_id
+       JOIN aurora.maintenance_plans p ON p.id = c.plan_id
+       JOIN aurora.assets a ON a.id = i.asset_id
+      WHERE i.status = 'skipped' AND i.skipped_by IS NULL AND i.work_order_id IS NULL
+        AND i.skip_reason LIKE $1 AND c.ends_at > $2 AND c.status <> 'closed'
+        AND t.archived_at IS NULL AND p.archived_at IS NULL AND p.is_active
+        AND a.customer_id = p.customer_id AND a.deleted_at IS NULL
+        AND a.status NOT IN ('decommissioned', 'disposed')`,
+    [`%${SUFIXO_DA_DISPENSA}`, now.toISOString()]
+  );
+  if (dispensados.length === 0) return { restored: 0, workOrders: 0 };
+  const hoje = await organizationToday(session, now);
+  const ciclos = new Set<string>();
+  let restored = 0;
+  for (const i of dispensados) {
+    if (await serviceBlockFor(session, { customerId: i.customer_id, assetId: i.asset_id }, hoje)) continue;
+    await session.query(
+      `UPDATE aurora.plan_cycle_items SET status = 'pending', skip_reason = NULL, skipped_at = NULL WHERE id = $1`,
+      [i.id]
+    );
+    restored++;
+    if (i.auto_generate) ciclos.add(i.cycle_id);
+  }
+  let workOrders = 0;
+  for (const c of ciclos) workOrders += await materializeCycle(session, c);
+  return { restored, workOrders };
+}
+
+/**
  * Varredura: abre os ciclos que chegaram na antecedência.
  *
  * Roda no publicador, não numa requisição. Uma preventiva que só é gerada
@@ -534,7 +643,8 @@ export async function sweepPlans(
   );
 
   let cyclesOpened = 0;
-  let workOrders = 0;
+  // Antes de abrir o novo: o que o contrato havia dispensado e já pode ser feito.
+  let workOrders = (await restoreHeldCycleItems(session, now)).workOrders;
   for (const t of tarefas) {
     const r = await generateCycle(session, t.id, now);
     if (r) {

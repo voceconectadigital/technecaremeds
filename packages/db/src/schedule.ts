@@ -29,6 +29,7 @@ import {
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { loadCalendar } from './sla';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /** Horas de diferença a partir das quais o solicitante é avisado (§13). */
 const REQUESTER_NOTICE_HOURS = 4;
@@ -285,6 +286,9 @@ export async function scheduleWorkOrder(
     throw new ValidationError('o fim da janela precisa ser depois do início', { field: 'endsAt' });
   }
 
+  // D-4: contrato parado — a OS não é agendada nem remarcada.
+  await assertWorkOrderServiceAllowed(session, proposal.workOrderId);
+
   const conflitos = await checkSchedule(session, proposal);
   const bloqueios = blockingConflicts(conflitos);
   if (bloqueios.length > 0) {
@@ -363,6 +367,7 @@ export async function scheduleWorkOrder(
 
 /** Tira a OS da agenda — o arrastar de volta para o balde. */
 export async function unscheduleWorkOrder(session: TenantSession, workOrderId: string): Promise<void> {
+  await assertWorkOrderServiceAllowed(session, workOrderId);
   const linhas = await session.query(
     `UPDATE aurora.work_orders
         SET scheduled_start = NULL, scheduled_end = NULL,

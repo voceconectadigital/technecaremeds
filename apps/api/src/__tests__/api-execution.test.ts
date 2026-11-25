@@ -209,7 +209,12 @@ describe('o técnico faz o trabalho inteiro pela API', () => {
     const r = await http
       .post(`/v1/work-orders/${os}/transitions`)
       .set(auth(EMAIL_TEC))
-      .send({ to: 'completed', resolution: 'Preventiva executada conforme procedimento' });
+      .send({
+        to: 'completed',
+        service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+        service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+        resolution: 'Preventiva executada conforme procedimento',
+      });
     expect(r.status).toBe(412);
     expect(r.body.message).toMatch(/faltam requisitos/);
 
@@ -258,11 +263,16 @@ describe('o técnico faz o trabalho inteiro pela API', () => {
     }
 
     // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
-    const conclusao = await http.post(`/v1/work-orders/${os}/transitions`).set(auth(EMAIL_TEC)).send({
-      to: 'completed',
-      resolution: 'Preventiva executada conforme procedimento',
-      operational_result: 'released',
-    });
+    const conclusao = await http
+      .post(`/v1/work-orders/${os}/transitions`)
+      .set(auth(EMAIL_TEC))
+      .send({
+        to: 'completed',
+        service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+        service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+        resolution: 'Preventiva executada conforme procedimento',
+        operational_result: 'released',
+      });
     expect(conclusao.status, JSON.stringify(conclusao.body)).toBe(201);
     expect(conclusao.body.category).toBe('review');
   });

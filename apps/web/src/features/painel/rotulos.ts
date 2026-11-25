@@ -61,6 +61,8 @@ export const ROTULO_TIPO_PLANO: Record<string, string> = {
   inspection: 'Inspeção',
   corrective: 'Corretiva',
   installation: 'Instalação',
+  education: 'Educação continuada',
+  training: 'Treinamento',
   other: 'Outro',
 };
 

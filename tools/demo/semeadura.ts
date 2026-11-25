@@ -785,7 +785,12 @@ export async function semearDemonstracao(t: TestDatabase): Promise<void> {
               : {}),
             ...(passo === 'waiting' ? { waitReasonId: motivo(o.espera ?? []) } : {}),
             ...(passo === 'completed'
-              ? { resolution: 'Componente substituído, teste funcional e de segurança aprovados.' }
+              ? {
+                  resolution: 'Componente substituído, teste funcional e de segurança aprovados.',
+                  operationalResult: 'released',
+                  serviceStartedAt: new Date(Date.now() - 2 * 3_600_000),
+                  serviceEndedAt: new Date(Date.now() - 3_600_000),
+                }
               : {}),
             ...(passo === 'cancelled' ? { cancellationReason: 'Aberta em duplicidade.' } : {}),
           })

@@ -25,6 +25,7 @@ import { emitEvent } from './outbox';
 import { reserve, releaseReservations, consume } from './inventory';
 import { transitionWorkOrder } from './work-orders';
 import { assertFeatureEnabled } from './organization-config';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* preço                                                                       */
@@ -100,6 +101,7 @@ export interface QuoteInput {
  * acordo errado é o que define o preço.
  */
 export async function createQuote(session: TenantSession, input: QuoteInput): Promise<string> {
+  if (input.workOrderId) await assertWorkOrderServiceAllowed(session, input.workOrderId); // D-4
   // Orçamento é recurso da organização (OS-03 · ORC-01 · CLI-07): o hospital que
   // opera o próprio estabelecimento não orça, salvo se ligar o recurso. Recusado
   // aqui, vale para toda porta de criação (tela, API, OS, oportunidade). Revisar
@@ -192,6 +194,7 @@ export interface QuoteItemArgs {
  * dúvida que faz a renegociação começar do zero.
  */
 export async function addQuoteItem(session: TenantSession, args: QuoteItemArgs): Promise<string> {
+  await conferirAtendimentoDoOrcamento(session, args.quoteId);
   const [quote] = await session.query<{
     status: QuoteStatus;
     customer_id: string;
@@ -332,6 +335,11 @@ export async function removeQuoteItem(
   itemId: string,
   quoteId: string | null = null
 ): Promise<void> {
+  const [linha] = await session.query<{ quote_id: string }>(
+    `SELECT quote_id FROM aurora.quote_items WHERE id = $1 AND ($2::uuid IS NULL OR quote_id = $2)`,
+    [itemId, quoteId]
+  );
+  await conferirAtendimentoDoOrcamento(session, linha?.quote_id ?? null);
   const linhas = await session.query(
     `DELETE FROM aurora.quote_items WHERE id = $1 AND ($2::uuid IS NULL OR quote_id = $2) RETURNING id`,
     [itemId, quoteId]
@@ -354,6 +362,7 @@ export async function setQuoteDiscount(
     throw new ValidationError('informe desconto geral em valor OU em percentual, não os dois');
   }
   const quote = await loadQuote(session, quoteId, { forUpdate: true });
+  await conferirAtendimentoDoOrcamento(session, quoteId);
   if (quote.status !== 'draft') {
     throw new ConflictError(
       `orçamento ${quote.number} não está em rascunho: desconto, acréscimo e imposto só mudam antes do envio — revise para criar uma versão nova`
@@ -387,6 +396,32 @@ export async function setQuoteDiscount(
 /* -------------------------------------------------------------------------- */
 /* máquina de estados                                                          */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * D-4: o orçamento DE UMA OS de contrato parado fica só para consulta. O orçamento avulso (sem OS)
+ * continua livre: é proposta comercial, inclusive a que regulariza ou renova o contrato.
+ */
+async function conferirAtendimentoDoOrcamento(session: TenantSession, quoteId: string | null): Promise<void> {
+  if (!quoteId) return;
+  const [q] = await session.query<{ work_order_id: string | null }>(
+    `SELECT work_order_id FROM aurora.quotes WHERE id = $1`,
+    [quoteId]
+  );
+  if (q?.work_order_id) await assertWorkOrderServiceAllowed(session, q.work_order_id);
+}
+
+/**
+ * Os passos que ENCERRAM o que já havia começado (recusar, cancelar, expirar, faturar o aprovado, fechar) e o
+ * registro de leitura pelo cliente. Nenhum abre serviço: seguem possíveis com o contrato parado.
+ */
+const PASSOS_DE_ENCERRAMENTO: ReadonlySet<string> = new Set([
+  'viewed',
+  'rejected',
+  'cancelled',
+  'expired',
+  'invoiced',
+  'closed',
+]);
 
 export interface QuoteRow {
   id: string;
@@ -461,6 +496,7 @@ export async function transitionQuote(
   // aprovar e recusar ao mesmo tempo deixariam o efeito de um com o estado do outro.
   const quote = await loadQuote(session, quoteId, { forUpdate: true });
   const from = currentStatus(quote);
+  if (!PASSOS_DE_ENCERRAMENTO.has(to)) await conferirAtendimentoDoOrcamento(session, quoteId);
 
   const transicao = canTransitionQuote(from, to);
   if (!transicao) {
@@ -839,6 +875,7 @@ async function resumeWorkOrder(session: TenantSession, workOrderId: string | nul
  */
 export async function reviseQuote(session: TenantSession, quoteId: string): Promise<string> {
   const quote = await loadQuote(session, quoteId, { forUpdate: true });
+  await conferirAtendimentoDoOrcamento(session, quoteId);
   if (quote.status === 'superseded') {
     throw new ConflictError(`o orçamento ${quote.number} v${quote.version} já foi revisado`);
   }

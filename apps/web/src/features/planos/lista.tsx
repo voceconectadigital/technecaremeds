@@ -48,6 +48,17 @@ import { AppShell } from '../../shell/app-shell';
 import { ErrorScreen } from '../../shell/error-boundary';
 import { formatarDataRelativa } from '../../routes/hoje';
 import { AlternadorDeTrabalho } from './alternador';
+import {
+  DetalheDaTarefa,
+  EditarPlano,
+  EditarTarefa,
+  GerarOsDoCiclo,
+  HistoricoDoPlano,
+  IncluirEquipamentos,
+  ParaOndeVai,
+  RetirarTarefa,
+  tipoDoPlano,
+} from './ficha-do-plano';
 
 export function PlanosPage() {
   const { data, isLoading, isError, error } = useApiQuery(plansList) as {
@@ -197,8 +208,20 @@ export function PlanoPage() {
                 Inclui atrasados
               </StatusChip>
             )}
-            <span className="ml-auto">
+            <span className="ml-auto flex flex-wrap gap-2">
               <Can permission="maintenance_plan.update">
+                <EditarPlano plano={data.plan} />
+                {/* Plano por SETOR já alcança o setor inteiro (e o que chegar): não há quem incluir. */}
+                {!data.tasks.some((t) => t.target_kind === 'location_subtree') && (
+                  <IncluirEquipamentos
+                    planId={data.plan.id}
+                    customerId={data.plan.customer_id}
+                    kind={tipoDoPlano(data.tasks)}
+                    jaNoPlano={data.tasks
+                      .map((t) => t.target_asset_id)
+                      .filter((x): x is string => Boolean(x))}
+                  />
+                )}
                 <AtivacaoDoPlano planId={data.plan.id} ativo={data.plan.is_active} nome={data.plan.name} />
               </Can>
             </span>
@@ -214,6 +237,14 @@ export function PlanoPage() {
           </div>
         </Card>
 
+        {data.tasks.some((t) => t.target_kind === 'location_subtree') && (
+          <p role="note" className="rounded-control bg-info-soft px-3 py-2 text-sm text-info-text">
+            Este plano é do setor inteiro e usa o mesmo procedimento para todos os equipamentos. Para ter um
+            procedimento por equipamento, desligue este plano e crie outro.
+          </p>
+        )}
+        <ParaOndeVai automatico={data.plan.auto_generate} ativo={data.plan.is_active} />
+
         {data.tasks.length === 0 ? (
           <Card>
             <EmptyState
@@ -223,8 +254,12 @@ export function PlanoPage() {
             />
           </Card>
         ) : (
-          data.tasks.map((t) => <Tarefa key={t.id} tarefa={t} />)
+          data.tasks.map((t) => (
+            <Tarefa key={t.id} tarefa={t} kind={tipoDoPlano(data.tasks)} unica={data.tasks.length === 1} />
+          ))
         )}
+
+        <HistoricoDoPlano planId={data.plan.id} />
       </div>
     </AppShell>
   );
@@ -299,43 +334,53 @@ function AtivacaoDoPlano({ planId, ativo, nome }: { planId: string; ativo: boole
 
 /* -------------------------------------------------------------------------- */
 
-function Tarefa({ tarefa }: { tarefa: PlanTask }) {
+function Tarefa({ tarefa, kind, unica }: { tarefa: PlanTask; kind: string; unica: boolean }) {
   return (
-    <Card>
-      <CardHeader
-        title={tarefa.name}
-        description={
-          `${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}` +
-          // OS-15: os procedimentos adicionais vão na mesma OS, cada um com o seu checklist.
-          ((tarefa.extra_checklist_template_keys?.length ?? 0) > 0
-            ? ` · ${(tarefa.checklist_template_key ? 1 : 0) + tarefa.extra_checklist_template_keys!.length} procedimentos na mesma OS`
-            : '')
-        }
-        actions={
-          tarefa.open_cycle_id ? (
-            <span className="flex items-center gap-1.5 text-sm text-muted">
-              <CalendarClock aria-hidden="true" className="size-3.5" />
-              <span data-numeric>
-                ciclo {tarefa.open_cycle_seq} · vence{' '}
-                {tarefa.open_cycle_ends_at ? formatarDataRelativa(tarefa.open_cycle_ends_at) : '—'}
+    <section aria-label={`Equipamento do plano: ${tarefa.target_asset_name ?? tarefa.name}`}>
+      <Card>
+        <CardHeader
+          title={tarefa.name}
+          description={
+            `${descreverFrequencia(tarefa)} · tolerância de ${tarefa.tolerance_days} ${tarefa.tolerance_days === 1 ? 'dia' : 'dias'}` +
+            // OS-15: os procedimentos adicionais vão na mesma OS, cada um com o seu checklist.
+            ((tarefa.extra_checklist_template_keys?.length ?? 0) > 0
+              ? ` · ${(tarefa.checklist_template_key ? 1 : 0) + tarefa.extra_checklist_template_keys!.length} procedimentos na mesma OS`
+              : '')
+          }
+          actions={
+            tarefa.open_cycle_id ? (
+              <span className="flex items-center gap-1.5 text-sm text-muted">
+                <CalendarClock aria-hidden="true" className="size-3.5" />
+                <span data-numeric>
+                  ciclo {tarefa.open_cycle_seq} · vence{' '}
+                  {tarefa.open_cycle_ends_at ? formatarDataRelativa(tarefa.open_cycle_ends_at) : '—'}
+                </span>
               </span>
-            </span>
-          ) : (
-            /*
-             * "Sem ciclo aberto" NÃO é erro.
-             *
-             * Pode ainda não ter chegado a antecedência de geração. Marcá-lo
-             * como problema ensinaria a equipe a ignorar o aviso — e aí o
-             * plano realmente desligado passaria junto.
-             */
-            <span className="text-sm text-subtle">
-              sem ciclo aberto · abre {tarefa.lead_time_days} dias antes
-            </span>
-          )
-        }
-      />
-      {tarefa.open_cycle_id && <Cumprimento cycleId={tarefa.open_cycle_id} />}
-    </Card>
+            ) : (
+              /*
+               * "Sem ciclo aberto" NÃO é erro.
+               *
+               * Pode ainda não ter chegado a antecedência de geração. Marcá-lo
+               * como problema ensinaria a equipe a ignorar o aviso — e aí o
+               * plano realmente desligado passaria junto.
+               */
+              <span className="text-sm text-subtle">
+                sem ciclo aberto · abre {tarefa.lead_time_days} dias antes
+              </span>
+            )
+          }
+        />
+        <DetalheDaTarefa tarefa={tarefa} />
+        <div className="flex flex-wrap gap-2 px-4 pb-2">
+          <GerarOsDoCiclo tarefa={tarefa} />
+          <Can permission="maintenance_plan.update">
+            <EditarTarefa tarefa={tarefa} kind={kind} />
+            {!unica && <RetirarTarefa tarefa={tarefa} />}
+          </Can>
+        </div>
+        {tarefa.open_cycle_id && <Cumprimento cycleId={tarefa.open_cycle_id} />}
+      </Card>
+    </section>
   );
 }
 

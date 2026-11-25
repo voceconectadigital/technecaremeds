@@ -158,7 +158,11 @@ beforeAll(async () => {
     resposta = await attachChecklist(s, osFechada, template);
     await transitionWorkOrder(s, osFechada, 'in_progress');
     await answerChecklistItem(s, resposta, item, { boolean: true });
-    await transitionWorkOrder(s, osFechada, 'completed', { resolution: 'concluída para o teste' });
+    await transitionWorkOrder(s, osFechada, 'completed', {
+      serviceStartedAt: new Date(Date.now() - 3_600_000),
+      serviceEndedAt: new Date(Date.now() - 60_000),
+      resolution: 'concluída para o teste',
+    });
     await transitionWorkOrder(s, osFechada, 'validated');
     await transitionWorkOrder(s, osFechada, 'closed');
   });

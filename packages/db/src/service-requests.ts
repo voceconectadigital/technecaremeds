@@ -22,6 +22,7 @@ import type { EventType } from '@aurora/events';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
 import { startSlaClock, stopSlaClock, cancelSlaClocks } from './sla';
+import { assertServiceAllowed } from './contract-service';
 
 export interface ServiceRequestInput {
   customerId: string;
@@ -66,6 +67,8 @@ export async function createServiceRequest(
   session: TenantSession,
   input: ServiceRequestInput
 ): Promise<{ id: string; number: string }> {
+  // D-4: com o contrato parado, ninguém abre chamado — nem pelo portal, nem por QR.
+  await assertServiceAllowed(session, { customerId: input.customerId, assetId: input.assetId ?? null });
   const id = newId();
   const ano = new Date().getUTCFullYear();
   const [seq] = await session.query<{ next_number: string }>(
@@ -220,11 +223,22 @@ export async function transitionRequest(
   // FOR UPDATE: duas transições simultâneas (dois aceites do mesmo pedido, por
   // exemplo) leriam o mesmo estado e passariam as duas. Com a linha travada, a
   // segunda espera a primeira terminar e já lê o estado novo — e é recusada.
-  const [atual] = await session.query<{ status: RequestStatus; version: number; number: string }>(
-    `SELECT status::text AS status, version, number FROM aurora.service_requests WHERE id = $1 FOR UPDATE`,
+  const [atual] = await session.query<{
+    status: RequestStatus;
+    version: number;
+    number: string;
+    customer_id: string;
+    asset_id: string | null;
+  }>(
+    `SELECT status::text AS status, version, number, customer_id, asset_id
+       FROM aurora.service_requests WHERE id = $1 FOR UPDATE`,
     [requestId]
   );
   if (!atual) throw new NotFoundError('Solicitação', requestId);
+
+  // D-4: contrato parado — a solicitação fica só para consulta (ninguém aceita,
+  // recusa, encerra ou reabre o chamado até a regularização).
+  await assertServiceAllowed(session, { customerId: atual.customer_id, assetId: atual.asset_id });
 
   if (input.expectedVersion !== undefined && input.expectedVersion !== atual.version) {
     throw new ValidationError('a solicitação mudou desde que você a carregou; recarregue e tente de novo', {

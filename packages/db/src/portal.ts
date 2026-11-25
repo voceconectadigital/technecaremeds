@@ -36,6 +36,7 @@
 import { NotFoundError, ConflictError, ValidationError } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { transitionQuote } from './quotes';
+import { assertServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* O recorte                                                                  */
@@ -523,8 +524,13 @@ export async function portalRateRequest(
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     throw new ValidationError('a avaliação vai de 1 a 5', { field: 'rating' });
   }
-  const [r] = await session.query<{ status: string; rating: number | null }>(
-    `SELECT sr.status::text AS status, sr.rating
+  const [r] = await session.query<{
+    status: string;
+    rating: number | null;
+    customer_id: string;
+    asset_id: string | null;
+  }>(
+    `SELECT sr.status::text AS status, sr.rating, sr.customer_id, sr.asset_id
        FROM aurora.service_requests sr
       WHERE sr.id = $2
         AND sr.customer_id IN (SELECT customer_id FROM aurora.accessible_customer_ids($1))
@@ -537,6 +543,7 @@ export async function portalRateRequest(
     throw new ConflictError('a avaliação abre quando o atendimento termina');
   }
   if (r.rating !== null) throw new ConflictError('este atendimento já foi avaliado');
+  await assertServiceAllowed(session, { customerId: r.customer_id, assetId: r.asset_id }); // D-4
 
   await session.query(`UPDATE aurora.service_requests SET rating = $2, rating_comment = $3 WHERE id = $1`, [
     requestId,

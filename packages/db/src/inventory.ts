@@ -11,6 +11,7 @@
 import { newId, ValidationError, NotFoundError, ConflictError } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 export type MovementKind =
   'receipt' | 'issue' | 'adjustment' | 'transfer_out' | 'transfer_in' | 'consumption' | 'return' | 'scrap';
@@ -440,6 +441,8 @@ export async function consumeForWorkOrder(
   qty: number
 ): Promise<{ movementId: string; reservationId: string }> {
   if (!(qty > 0)) throw new ValidationError('a quantidade consumida deve ser positiva', { field: 'qty' });
+  // D-4: contrato parado — a OS não recebe peça.
+  await assertWorkOrderServiceAllowed(session, workOrderId);
 
   // `FOR KEY SHARE`: não bloqueia outro lançamento nem a edição comum da OS,
   // mas enfileira com a APROVAÇÃO de orçamento (que trava a OS em `FOR UPDATE`

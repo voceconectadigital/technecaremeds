@@ -251,11 +251,17 @@ describe('ciclo de vida pela API', () => {
   });
 
   it('concluir sem resolução é recusado; com resolução, passa', async () => {
-    const sem = await mover(EMAIL_TEC, os, { to: 'completed' });
+    const sem = await mover(EMAIL_TEC, os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+    });
     expect(sem.status).toBe(409);
     // OS-16 (29/10/2026): OS de equipamento conclui com o parecer LIBERADO/PARADO.
     const com = await mover(EMAIL_TEC, os, {
       to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
       resolution: 'Trocada a fonte de alimentação e testado',
       operational_result: 'released',
     });

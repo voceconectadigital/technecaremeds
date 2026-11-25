@@ -74,6 +74,20 @@ export async function requiresOperationalResult(session: TenantSession): Promise
 }
 
 /**
+ * A conclusão exige a hora de início e a de término do atendimento? (D-3,
+ * Anderson 24/11/2026: "campo obrigatório em toda OS".) Mora em
+ * `organizations.settings.require_service_hours`, ligada por padrão — só um
+ * `false` gravado desliga, como o parecer.
+ */
+export async function requiresServiceHours(session: TenantSession): Promise<boolean> {
+  const [row] = await session.query<{ exige: boolean | null }>(
+    `SELECT (settings ->> 'require_service_hours')::boolean AS exige
+       FROM aurora.organizations WHERE deleted_at IS NULL`
+  );
+  return row?.exige !== false;
+}
+
+/**
  * A organização do contexto usa este recurso?
  *
  * Lê o modo junto com a lista: nunca configurada, a lista é a do MODO

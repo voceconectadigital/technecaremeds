@@ -11,7 +11,7 @@
  * O arranjo é pela API (o mesmo caminho da tela); a verificação é pelo navegador.
  */
 import type { Page } from '@playwright/test';
-import { test, expect, E2E, apiUrl } from '../fixtures/aurora';
+import { test, expect, E2E, apiUrl, horasDoAtendimento } from '../fixtures/aurora';
 
 const cab = {
   authorization: `Bearer local:${E2E.emailCoordA}:${E2E.emailCoordA}`,
@@ -122,6 +122,17 @@ test.describe('OS — auditoria de 29/10/2026', () => {
     await page.request.patch(`${apiUrl()}/work-orders/${id}/service-report`, {
       headers: cab,
       data: { service_description: 'Troca do fusível e teste funcional.' },
+    });
+    await page.reload();
+    // D-3 (24/11/2026): sem a hora de início e de término, ainda não conclui — e a lista diz onde.
+    await expect(page.getByRole('list', { name: 'O que falta para concluir' })).toContainText(
+      'Hora de início e de término',
+      { timeout: 15_000 }
+    );
+    await expect(concluir).toBeDisabled();
+    await page.request.patch(`${apiUrl()}/work-orders/${id}/service-report`, {
+      headers: cab,
+      data: horasDoAtendimento(),
     });
     await page.reload();
     await expect(concluir).toBeEnabled({ timeout: 15_000 });

@@ -26,6 +26,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { pendingPartsCount } from './inventory';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* templates                                                                   */
@@ -338,6 +339,7 @@ export async function attachChecklist(
   templateId: string,
   responseId?: string
 ): Promise<string> {
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const id = responseId ?? newId();
   await session.query(
     `INSERT INTO aurora.checklist_responses
@@ -366,6 +368,9 @@ export async function answerChecklistItem(
     provenance?: MeasurementProvenance;
   } = {}
 ): Promise<{ verdict: string; answerId: string; revision: number }> {
+  // D-4: aqui também passa a medição (metrologia), que não usa `assertCanExecuteWorkOrder`.
+  const woDaResposta = await workOrderOfChecklistResponse(session, responseId);
+  if (woDaResposta) await assertWorkOrderServiceAllowed(session, woDaResposta);
   /*
    * OS VALIDADA, FECHADA OU CANCELADA NÃO TEM CHECKLIST REABERTO POR AQUI.
    *
@@ -705,6 +710,10 @@ export async function assertCanExecuteWorkOrder(
   workOrderId: string,
   opts: { checkScope?: boolean } = {}
 ): Promise<void> {
+  // D-4 (24/11/2026): contrato vencido, suspenso ou bloqueado — a OS fica só
+  // para consulta. Toda ação de execução (checklist, cronômetro, anexo,
+  // assinatura, check-in, relatório) passa por aqui.
+  await assertWorkOrderServiceAllowed(session, workOrderId);
   const ctx = session.context;
   const restrito = executionRestrictedToAssignment(ctx.permissions);
   const conferirEscopo =
@@ -793,6 +802,10 @@ export async function startTimer(
       throw new ConflictError('este identificador de apontamento já está em uso', { field: 'id' });
     }
   }
+
+  // D-4: contrato parado não abre hora nova. PARAR a que já corria continua
+  // permitido (`stopTimer`): encerramento seguro do que já havia começado.
+  await assertWorkOrderServiceAllowed(session, workOrderId);
 
   // UM CRONÔMETRO ABERTO POR PESSOA (índice `te_one_open_per_person`, 0025).
   // Conferido aqui para a recusa dizer ONDE está o cronômetro aberto, em vez de
@@ -896,6 +909,7 @@ export async function logTime(
   if (!membership) {
     throw new ValidationError('apontar hora exige identificar a pessoa', { field: 'membership_id' });
   }
+  await assertWorkOrderServiceAllowed(session, input.workOrderId); // D-4
   if (input.endedAt <= input.startedAt) {
     throw new ValidationError('o fim do apontamento precisa ser depois do início', { field: 'ended_at' });
   }
@@ -978,6 +992,17 @@ export async function attachFile(
     ['import_batch_id', 'import-batches', input.importBatchId],
   ] as const;
   const informados = donos.filter(([, , v]) => Boolean(v));
+  // D-4: anexo em OS (direto, na resposta ou na sessão de medição) de contrato parado.
+  if (input.workOrderId) await assertWorkOrderServiceAllowed(session, input.workOrderId);
+  else if (input.checklistAnswerId || input.measurementSessionId) {
+    const [dono] = await session.query<{ work_order_id: string }>(
+      `SELECT r.work_order_id FROM aurora.checklist_responses r
+        WHERE r.id = (SELECT a.response_id FROM aurora.checklist_answers a WHERE a.id = $1)
+           OR r.id = (SELECT m.response_id FROM aurora.measurement_sessions m WHERE m.id = $2)`,
+      [input.checklistAnswerId ?? null, input.measurementSessionId ?? null]
+    );
+    if (dono) await assertWorkOrderServiceAllowed(session, dono.work_order_id);
+  }
   if (informados.length === 0) {
     throw new ValidationError('o anexo precisa pertencer a uma ordem de serviço ou a uma resposta', {
       field: 'work_order_id',
@@ -1107,6 +1132,7 @@ export async function signWorkOrder(
     attachmentId?: string | null;
   }
 ): Promise<{ id: string; digest: string }> {
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const [os] = await session.query<{
     number: string | null;
     title: string;

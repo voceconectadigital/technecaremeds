@@ -99,6 +99,17 @@ export const PlanTask = z.object({
   default_team_id: Uuid.nullable(),
   default_assignee_id: Uuid.nullable(),
   position: z.number().int(),
+  /** Tipo da tarefa: o procedimento manda; sem ele, a natureza da OS (`training` → `education`). */
+  kind: z.string().optional(),
+  /** Vencimento do primeiro ciclo informado para este equipamento (0092). */
+  first_due_on: z.string().nullable().optional(),
+  /** Equipamento alvo e o título do procedimento principal, para a tela. */
+  target_asset_name: z.string().nullable().optional(),
+  checklist_title: z.string().nullable().optional(),
+  /** Quantos ciclos a tarefa já abriu (o primeiro vencimento só muda antes do primeiro). */
+  cycle_count: z.number().int().optional(),
+  /** Itens do ciclo aberto que ainda não viraram OS (plano sem geração automática). */
+  pending_count: z.number().int().optional(),
 
   /* O ciclo ABERTO desta tarefa, quando há um. */
   open_cycle_id: Uuid.nullable(),

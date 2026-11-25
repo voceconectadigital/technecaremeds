@@ -72,6 +72,27 @@ export function addFrequency(from: Date, unit: FrequencyUnit, interval: number):
   );
 }
 
+/**
+ * Volta uma frequência a partir de uma data (o início do ciclo que VENCE nela).
+ *
+ * Usado quando a pessoa informa o primeiro vencimento de um equipamento (0092,
+ * `first_due_on`): o vencimento é exatamente a data informada, e o início só
+ * decide quando o ciclo abre (antecedência). O dia é grampeado como em
+ * `addFrequency`.
+ */
+export function subtractFrequency(to: Date, unit: FrequencyUnit, interval: number): Date {
+  if (!Number.isInteger(interval) || interval <= 0) {
+    throw new RangeError(`intervalo de frequência inválido: ${interval}`);
+  }
+  if (unit === 'day') return new Date(to.getTime() - interval * 86_400_000);
+  if (unit === 'week') return new Date(to.getTime() - interval * 7 * 86_400_000);
+  const meses = (MONTHS_PER_UNIT[unit] ?? 1) * interval;
+  const ano = to.getUTCFullYear();
+  const mes = to.getUTCMonth() - meses;
+  const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes, Math.min(to.getUTCDate(), ultimo)));
+}
+
 /** Quantos ciclos de uma frequência cabem em um ano — para estimativa de carga. */
 export function cyclesPerYear(unit: FrequencyUnit, interval: number): number {
   const porAno: Record<FrequencyUnit, number> = {

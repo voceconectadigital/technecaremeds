@@ -53,11 +53,13 @@ import {
 import { ApiError, Can, useApiMutation, useApiQuery } from '@aurora/app-kit';
 import { ROTULO_DO_RELATORIO, SeloDoContrato, periodoDoContrato } from './contrato';
 import { ROTULO_CONTRATO } from '../planos/novo-plano';
+import { AcoesDoAtendimento, AvisoDeAtendimento } from './atendimento-do-contrato';
 import { formatarData } from '../comercial/orcamentos';
 import {
   ROTULO_MODALIDADE,
   ROTULO_PAGAMENTO,
   ROTULO_PRECIFICACAO,
+  descricaoDaEquipe,
   rotuloDasEquipes,
 } from '../comercial/rotulos-contrato';
 
@@ -208,6 +210,16 @@ function LinhaDoContrato({
           <StatusChip tone={s.tom} size="sm">
             {s.rotulo}
           </StatusChip>
+          {c.service_hold && (
+            <StatusChip tone={c.service_hold === 'blocked' ? 'bad' : 'warn'} size="sm">
+              {c.service_hold === 'blocked' ? 'Atendimento bloqueado' : 'Atendimento suspenso'}
+            </StatusChip>
+          )}
+          {c.auto_renew && c.ends_on && (
+            <StatusChip tone="info" size="sm">
+              Renovação automática
+            </StatusChip>
+          )}
         </div>
         <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <Par
@@ -244,6 +256,17 @@ function LinhaDoContrato({
             valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : 'Não informado'}
           />
         </dl>
+        {(c.fixed_team_packages ?? []).length > 0 && (
+          <ul className="mt-1 text-xs text-muted" aria-label={`Pacotes de ${c.number}`}>
+            {c.fixed_team_packages!.map((n) => (
+              <li key={n}>{descricaoDaEquipe(n)}</li>
+            ))}
+          </ul>
+        )}
+        <AvisoDeAtendimento contrato={c} />
+        <div className="mt-2">
+          <AcoesDoAtendimento contrato={c} />
+        </div>
         {c.status === 'draft' && (
           <p className="mt-2 text-xs text-muted">
             Rascunho: o SLA geral ainda não vale para os equipamentos.{' '}
@@ -345,6 +368,8 @@ export function DialogoContrato({
     contrato?.billing_model_informed ? contrato.billing_model : ''
   );
   const [pagamento, setPagamento] = useState<string>(contrato?.payment_terms ?? '');
+  // D-7: renovação automática — só com data de término (prazo indeterminado não tem ciclo).
+  const [autoRenovar, setAutoRenovar] = useState<boolean>(contrato?.auto_renew ?? false);
   const [observacoes, setObservacoes] = useState('');
   const [cobreTudo, setCobreTudo] = useState(true);
   // Rascunho por padrão: ativar é decisão deliberada (o contrato ativo passa a valer no SLA).
@@ -380,6 +405,7 @@ export function DialogoContrato({
     const comum = {
       title: titulo.trim() || null,
       endsOn: fim || null,
+      autoRenew: fim ? autoRenovar : false,
       slaPolicyId: sla || null,
       serviceFrequency: (modalidade || null) as ServiceFrequency | null,
       fixedTeamPackages: equipes.length > 0 ? equipes : null,
@@ -486,6 +512,23 @@ export function DialogoContrato({
           <Field label="Fim" error={erroDe('endsOn')} hint="Vazio = sem data de término.">
             <Input type="date" value={fim} onChange={(e) => setFim(e.target.value)} />
           </Field>
+          <label className="flex items-start gap-2 text-sm text-text sm:col-span-2">
+            <input
+              type="checkbox"
+              className="mt-1"
+              disabled={!fim}
+              checked={Boolean(fim) && autoRenovar}
+              onChange={(e) => setAutoRenovar(e.target.checked)}
+            />
+            <span>
+              Renovação automática
+              <span className="block text-xs text-muted">
+                {fim
+                  ? 'No fim da vigência, renova pelo mesmo prazo — se o atendimento não estiver suspenso nem bloqueado. Cada renovação fica no histórico.'
+                  : 'Só com data de término: contrato sem fim não tem ciclo para renovar.'}
+              </span>
+            </span>
+          </label>
         </fieldset>
 
         <Field
@@ -517,11 +560,16 @@ export function DialogoContrato({
             </Select>
           </Field>
           <div role="group" aria-label="Equipes fixas" className="flex flex-col gap-1.5">
-            <span className="text-sm text-text">Equipe fixa</span>
+            <span className="text-sm text-text">Pacotes de equipe fixa</span>
             <span className="text-xs text-muted">
-              Pode combinar mais de uma. O número identifica o pacote; a composição de cada um ainda não está
-              definida.
+              São pacotes e podem ser combinados (os pacotes não se somam). A periodicidade é do contrato, não
+              do pacote.
             </span>
+            <ul className="text-xs text-muted" aria-label="Composição dos pacotes">
+              <li>{descricaoDaEquipe(1)}.</li>
+              <li>{descricaoDaEquipe(2)}.</li>
+              <li>Equipes Fixas 3 a 10: seguem a mesma regra; composição detalhada a definir.</li>
+            </ul>
             <div className="flex flex-wrap gap-2">
               {FIXED_TEAM_PACKAGES.map((n) => (
                 <label

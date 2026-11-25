@@ -343,6 +343,8 @@ describe('máquina de estados', () => {
     await withTenant(t.db, ctxA, async (s) => {
       await transitionWorkOrder(s, os.id, 'in_progress');
       await transitionWorkOrder(s, os.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'Trocada a fonte e testado em bancada',
         causeFailureCodeId: causa,

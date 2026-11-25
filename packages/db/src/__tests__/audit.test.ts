@@ -69,6 +69,8 @@ beforeAll(async () => {
 
     await transitionWorkOrder(s, os, 'in_progress');
     await transitionWorkOrder(s, os, 'completed', {
+      serviceStartedAt: new Date(Date.now() - 3_600_000),
+      serviceEndedAt: new Date(Date.now() - 60_000),
       operationalResult: 'released',
       resolution: 'trocado o filtro e testado',
     });

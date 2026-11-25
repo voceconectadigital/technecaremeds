@@ -153,6 +153,8 @@ async function os(opts: {
     if (opts.concluir) {
       await transitionWorkOrder(s, w.id, 'in_progress');
       await transitionWorkOrder(s, w.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'trocado o filtro e testado',
       });
@@ -298,6 +300,8 @@ describe('backlog', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, id, 'in_progress');
       await transitionWorkOrder(s, id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         resolution: 'resolvido em campo',
         operationalResult: 'released',
       });
@@ -376,6 +380,8 @@ describe('onde o fluxo trava', () => {
     await withTenant(t.db, ctx, async (s) => {
       await transitionWorkOrder(s, id, 'in_progress');
       await transitionWorkOrder(s, id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         operationalResult: 'released',
         resolution: 'concluída para medir o tempo',
       });

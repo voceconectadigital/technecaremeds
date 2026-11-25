@@ -27,6 +27,7 @@ import {
 } from '@aurora/domain';
 import type { TenantSession } from './client';
 import { emitEvent } from './outbox';
+import { assertServiceAllowed, assertWorkOrderServiceAllowed } from './contract-service';
 
 /* -------------------------------------------------------------------------- */
 /* provisionamento                                                             */
@@ -165,6 +166,11 @@ export async function createDocument(session: TenantSession, input: DocumentInpu
     });
   }
   const clienteId = input.customerId ?? clientesDaOrigem[0] ?? null;
+  await conferirAtendimentoDoDocumento(session, {
+    work_order_id: input.workOrderId ?? null,
+    customer_id: clienteId,
+    asset_id: input.assetId ?? null,
+  });
   await session.query(
     `INSERT INTO aurora.documents
        (id, organization_id, document_type_id, title, asset_id, work_order_id, customer_id,
@@ -219,6 +225,21 @@ export async function loadDocument(session: TenantSession, id: string): Promise<
 }
 
 /**
+ * D-4: laudo e certificado de contrato parado ficam só para consulta — criar, editar, emitir,
+ * assinar, liberar e substituir são recusados. CANCELAR continua possível: é a correção segura de um
+ * documento emitido por engano, e não produz serviço.
+ */
+async function conferirAtendimentoDoDocumento(
+  session: TenantSession,
+  doc: { work_order_id: string | null; customer_id: string | null; asset_id: string | null }
+): Promise<void> {
+  if (doc.work_order_id) await assertWorkOrderServiceAllowed(session, doc.work_order_id);
+  else if (doc.customer_id) {
+    await assertServiceAllowed(session, { customerId: doc.customer_id, assetId: doc.asset_id });
+  }
+}
+
+/**
  * Atualiza o conteúdo do rascunho.
  *
  * O guarda do banco recusa a alteração de documento já assinado. Aqui a recusa
@@ -232,6 +253,7 @@ export async function updateDocumentContent(
   patch: { payload?: Record<string, unknown>; verdict?: DocumentVerdict | null; title?: string | null }
 ): Promise<void> {
   const doc = await loadDocument(session, id);
+  await conferirAtendimentoDoDocumento(session, doc);
   if (doc.status !== 'draft' && doc.status !== 'under_review') {
     throw new ConflictError(
       `documento ${doc.number ?? doc.id} está em "${doc.status}": o conteúdo não se altera, emita uma versão nova`
@@ -474,6 +496,7 @@ async function allocateNumber(
  */
 export async function issueDocument(session: TenantSession, id: string): Promise<string> {
   const doc = await loadDocument(session, id);
+  await conferirAtendimentoDoDocumento(session, doc);
   if (doc.status !== 'under_review') {
     throw new ConflictError(`só se emite documento em revisão; este está em "${doc.status}"`);
   }
@@ -532,6 +555,7 @@ export async function transitionDocument(
   options: DocumentTransitionOptions = {}
 ): Promise<void> {
   const doc = await loadDocument(session, id);
+  if (to !== 'cancelled') await conferirAtendimentoDoDocumento(session, doc);
 
   if (to === 'issued') {
     await issueDocument(session, id);
@@ -617,6 +641,7 @@ export async function transitionDocument(
  */
 export async function superseDocument(session: TenantSession, id: string): Promise<string> {
   const doc = await loadDocument(session, id);
+  await conferirAtendimentoDoDocumento(session, doc);
   if (doc.status === 'superseded') {
     throw new ConflictError('este documento já foi substituído');
   }
@@ -679,6 +704,7 @@ export async function signDocument(session: TenantSession, input: SignInput): Pr
   if (faltas.length > 0) {
     throw new ValidationError(`não é possível assinar: ${faltas.join('; ')}`);
   }
+  await conferirAtendimentoDoDocumento(session, await loadDocument(session, input.documentId));
 
   const id = newId();
   await session.query(

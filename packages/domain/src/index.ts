@@ -13,6 +13,7 @@ export * from './checklists';
 export * from './business-time';
 export * from './maintenance-plans';
 export * from './contracts';
+export * from './contract-service';
 export * from './quotes';
 export * from './schedule';
 export * from './documents';

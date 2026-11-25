@@ -143,6 +143,8 @@ export class ExecucaoGuiadaController {
         serviceObservations: b.service_observations,
         operationalResult: b.operational_result,
         finalOpinion: b.final_opinion,
+        serviceStartedAt: b.service_started_at,
+        serviceEndedAt: b.service_ended_at,
       });
     });
     return { ok: true as const };

@@ -53,12 +53,13 @@ import { AlternadorComercial } from './alternador';
 import { formatarData } from './orcamentos';
 import { ROTULO_CONTRATO } from '../planos/novo-plano';
 import { DialogoContrato } from '../clientes/contratos-do-cliente';
+import { AcoesDoAtendimento, AvisoDeAtendimento } from '../clientes/atendimento-do-contrato';
 import {
   ROTULO_MODALIDADE,
   ROTULO_PAGAMENTO,
   ROTULO_PRECIFICACAO,
   diasAteOFimDaVigencia,
-  rotuloDasEquipes,
+  descricaoDaEquipe,
 } from './rotulos-contrato';
 
 const ROTULO: Record<ContractStatus, string> = {
@@ -291,6 +292,9 @@ interface Detalhe {
     payment_terms?: PaymentTerms | null;
     billing_model: string;
     billing_model_informed?: boolean;
+    service_hold?: 'suspended' | 'blocked' | null;
+    service_hold_reason?: string | null;
+    service_hold_at?: string | null;
     included_calls: number | null;
     included_hours: string | null;
     sla_target_percent: string | null;
@@ -411,6 +415,9 @@ export function ContratoPage() {
                 </StatusChip>
               )}
             </div>
+            {/* D-4/D-7 (Anderson, 24/11/2026): atendimento parado, renovação e horas técnicas. */}
+            <AvisoDeAtendimento contrato={{ ...c, service_hold: c.service_hold ?? null }} />
+            <AcoesDoAtendimento contrato={{ ...c, service_hold: c.service_hold ?? null }} />
 
             <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
               <Info
@@ -434,7 +441,11 @@ export function ContratoPage() {
                 valor={c.service_frequency ? ROTULO_MODALIDADE[c.service_frequency] : null}
                 vazio="Não informada"
               />
-              <Info rotulo="Equipe fixa" valor={rotuloDasEquipes(c.fixed_team_packages)} vazio="Nenhuma" />
+              <Info
+                rotulo="Equipe fixa"
+                valor={(c.fixed_team_packages ?? []).map(descricaoDaEquipe).join(' · ') || null}
+                vazio="Nenhuma"
+              />
               <Info
                 rotulo="Pagamento"
                 valor={c.payment_terms ? ROTULO_PAGAMENTO[c.payment_terms] : null}

@@ -136,7 +136,13 @@ describe('PF-14 · executar exige ser o responsável, da equipe, ou ter execute_
           .post(`/v1/work-orders/${os}/customer-parts`)
           .set(auth(tecB.email))
           .send({ description: 'Peça do cliente', quantity: 1 }),
-      () => mover(tecB.email, os, { to: 'completed', resolution: 'feito por quem não devia' }),
+      () =>
+        mover(tecB.email, os, {
+          to: 'completed',
+          service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+          service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+          resolution: 'feito por quem não devia',
+        }),
     ];
     const recusas = [];
     for (const t of tentativas) recusas.push(await t());
@@ -463,7 +469,12 @@ describe('PF-41 · OS-16 · parecer obrigatório na conclusão da OS de equipame
     expect(atual.body.require_operational_result).toBe(true);
     const os = await novaOs('Sem equipamento, sem parecer', { responsavel: tecA.mem });
     await mover(tecA.email, os, { to: 'in_progress' });
-    const r = await mover(tecA.email, os, { to: 'completed', resolution: 'Troca do sensor.' });
+    const r = await mover(tecA.email, os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Troca do sensor.',
+    });
     expect(r.status, JSON.stringify(r.body)).toBe(201);
   });
 
@@ -484,7 +495,12 @@ describe('PF-41 · OS-16 · parecer obrigatório na conclusão da OS de equipame
 
     const os = await novaOs('Com exigência', { responsavel: tecA.mem, ativo });
     await mover(tecA.email, os, { to: 'in_progress' });
-    const sem = await mover(tecA.email, os, { to: 'completed', resolution: 'Troca do sensor.' });
+    const sem = await mover(tecA.email, os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Troca do sensor.',
+    });
     expect(sem.status).toBe(422);
     expect(sem.body.details.field).toBe('operational_result');
     expect(sem.body.message).toMatch(/LIBERADO ou PARADO/);
@@ -494,7 +510,12 @@ describe('PF-41 · OS-16 · parecer obrigatório na conclusão da OS de equipame
       .set(auth(tecA.email))
       .send({ operational_result: 'released' })
       .expect(200);
-    const com = await mover(tecA.email, os, { to: 'completed', resolution: 'Troca do sensor.' });
+    const com = await mover(tecA.email, os, {
+      to: 'completed',
+      service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+      resolution: 'Troca do sensor.',
+    });
     expect(com.status, JSON.stringify(com.body)).toBe(201);
 
     const desliga = await http
@@ -504,7 +525,16 @@ describe('PF-41 · OS-16 · parecer obrigatório na conclusão da OS de equipame
     expect(desliga.body.require_operational_result).toBe(false);
     const outra = await novaOs('Depois de desligar', { responsavel: tecA.mem, ativo });
     await mover(tecA.email, outra, { to: 'in_progress' });
-    expect((await mover(tecA.email, outra, { to: 'completed', resolution: 'ok' })).status).toBe(201);
+    expect(
+      (
+        await mover(tecA.email, outra, {
+          to: 'completed',
+          service_started_at: new Date(Date.now() - 3_600_000).toISOString(),
+          service_ended_at: new Date(Date.now() - 60_000).toISOString(),
+          resolution: 'ok',
+        })
+      ).status
+    ).toBe(201);
   });
 
   it('ligar a exigência não apaga a marca nem o domínio guardados em settings', async () => {

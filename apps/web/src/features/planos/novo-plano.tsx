@@ -1,18 +1,28 @@
 /**
  * Aurora — criar plano de manutenção, passo a passo.
  *
- * Cliente → Setor → Equipamentos → Tipo → Procedimento → Periodicidade → Revisão.
+ * Cliente → Setor → Equipamentos → Tipo → Procedimentos → Periodicidade → Revisão.
  *
  * A ORDEM É A DO MUNDO: primeiro ONDE (o hospital e o setor), depois O QUÊ (os
- * equipamentos e o tipo de serviço), depois COMO (o checklist) e QUANDO (a
- * periodicidade). Cada passo só oferece o que cabe no anterior — os setores
- * do cliente escolhido, os equipamentos do setor, os procedimentos do tipo —
- * e o servidor confere tudo de novo ao salvar.
+ * equipamentos e o tipo de serviço), depois COMO (o checklist de CADA
+ * equipamento) e QUANDO (a periodicidade). Cada passo só oferece o que cabe no
+ * anterior — os setores do cliente escolhido, os equipamentos do setor, os
+ * procedimentos do tipo — e o servidor confere tudo de novo ao salvar.
  *
- * O CONTEXTO CONTRATUAL APARECE, MAS NÃO DECIDE NADA. Mostrar "sem contrato"
- * ou "serviço completo" ajuda quem cadastra; regras automáticas por nível de
- * contrato (Básico/Completo/Expert) NÃO existem nesta rodada. E tipo de
- * contrato não é tipo de procedimento.
+ * UM PROCEDIMENTO POR EQUIPAMENTO (vídeo do Anderson, 13/11/2026): "dentre os
+ * equipamentos do setor tem outros tipos de equipamento, então todos vão
+ * receber o checklist de ventilador pulmonar ... ele deveria obrigar a vir
+ * equipamento por equipamento ... um maiszinho do lado de cada equipamento".
+ * Antes, o passo Procedimento tinha UM checklist para o plano inteiro — e o
+ * monitor, o eletrocardiógrafo e o respirador recebiam o mesmo. Agora cada
+ * equipamento escolhe o seu (obrigatório), com o "+" para os adicionais e um
+ * atalho para aplicar a escolha aos da mesma categoria.
+ *
+ * EDUCAÇÃO CONTINUADA: só calendário, sem procedimento, com a data de cada
+ * equipamento (mesmo vídeo).
+ *
+ * O CONTEXTO CONTRATUAL APARECE, MAS NÃO DECIDE NADA. Tipo de contrato não é
+ * tipo de procedimento.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
@@ -21,9 +31,11 @@ import {
   Check,
   ClipboardCheck,
   GraduationCap,
+  Plus,
   ShieldCheck,
   Thermometer,
   Wrench,
+  X,
   Zap,
 } from 'lucide-react';
 import { Button, Dialog, Field, Input, Select, StatusChip, cn, useToast } from '@aurora/ui';
@@ -45,10 +57,10 @@ import {
 import { ApiError, hojeLocal, useApiMutation, useApiQuery, usePermissions } from '@aurora/app-kit';
 import { rotuloTipo } from '../painel/rotulos';
 
-type Tipo = 'preventive' | 'calibration' | 'electrical_safety' | 'qualification';
+type Tipo = 'preventive' | 'calibration' | 'electrical_safety' | 'qualification' | 'education';
 type Unidade = 'day' | 'week' | 'month' | 'quarter' | 'semester' | 'year';
 
-interface FormOptions {
+export interface FormOptions {
   kinds: Array<{ key: Tipo; available: boolean; work_order_type: string; procedure_kind: string | null }>;
   templates: Array<{
     key: string;
@@ -59,17 +71,24 @@ interface FormOptions {
   }>;
 }
 
+/** O que cada equipamento recebe: o procedimento principal, os adicionais e (educação) a data. */
+export interface EscolhaDoEquipamento {
+  principal: string;
+  adicionais: string[];
+  data: string;
+}
+
 const PASSOS = [
   'Cliente',
   'Setor',
   'Equipamentos',
   'Tipo',
-  'Procedimento',
+  'Procedimentos',
   'Periodicidade',
   'Revisão',
 ] as const;
 
-const TIPOS: Array<{ key: Tipo | 'education'; titulo: string; texto: string; icone: typeof Wrench }> = [
+const TIPOS: Array<{ key: Tipo; titulo: string; texto: string; icone: typeof Wrench }> = [
   { key: 'preventive', titulo: 'Preventiva', texto: 'Inspeção e manutenção programada', icone: Wrench },
   { key: 'calibration', titulo: 'Calibração', texto: 'Protocolo com pontos de medição', icone: Thermometer },
   { key: 'electrical_safety', titulo: 'TSE', texto: 'Teste de segurança elétrica', icone: Zap },
@@ -77,18 +96,18 @@ const TIPOS: Array<{ key: Tipo | 'education'; titulo: string; texto: string; ico
   {
     key: 'education',
     titulo: 'Educação continuada',
-    texto: 'Treinamento — ainda não suportado',
+    texto: 'Só calendário: uma data por equipamento, sem procedimento',
     icone: GraduationCap,
   },
 ];
 
-const UNIDADES: Array<{ v: Unidade; um: string; varios: string }> = [
-  { v: 'week', um: 'semana', varios: 'semanas' },
-  { v: 'month', um: 'mês', varios: 'meses' },
-  { v: 'quarter', um: 'trimestre', varios: 'trimestres' },
-  { v: 'semester', um: 'semestre', varios: 'semestres' },
-  { v: 'year', um: 'ano', varios: 'anos' },
-  { v: 'day', um: 'dia', varios: 'dias' },
+const UNIDADES: Array<{ v: Unidade; um: string; varios: string; meses: number; dias: number }> = [
+  { v: 'week', um: 'semana', varios: 'semanas', meses: 0, dias: 7 },
+  { v: 'month', um: 'mês', varios: 'meses', meses: 1, dias: 0 },
+  { v: 'quarter', um: 'trimestre', varios: 'trimestres', meses: 3, dias: 0 },
+  { v: 'semester', um: 'semestre', varios: 'semestres', meses: 6, dias: 0 },
+  { v: 'year', um: 'ano', varios: 'anos', meses: 12, dias: 0 },
+  { v: 'day', um: 'dia', varios: 'dias', meses: 0, dias: 1 },
 ];
 
 /** Natureza do contrato (enum `contract_kind`, 0031) → rótulo de tela. */
@@ -101,9 +120,52 @@ export const ROTULO_CONTRATO: Record<string, string> = {
   warranty: 'Garantia',
 };
 
-/** Hoje no calendário local (PF-72) — e não em UTC, que às 22 h já é amanhã. */
-function hojeIso(): string {
-  return hojeLocal();
+/** O primeiro vencimento pela âncora: a mesma conta do servidor (o dia é grampeado no fim do mês). */
+export function primeiroVencimento(inicio: string, unidade: Unidade, intervalo: number): string {
+  const [a, m, d] = inicio.split('-').map(Number) as [number, number, number];
+  const u = UNIDADES.find((x) => x.v === unidade)!;
+  if (u.dias > 0) {
+    return new Date(Date.UTC(a, m - 1, d + u.dias * intervalo)).toISOString().slice(0, 10);
+  }
+  const mes = m - 1 + u.meses * intervalo;
+  const ultimo = new Date(Date.UTC(a, mes + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(a, mes, Math.min(d, ultimo))).toISOString().slice(0, 10);
+}
+
+export function dataBr(dia: string): string {
+  return dia ? dia.split('-').reverse().join('/') : '—';
+}
+
+/** "UTI Adulto" vira "Bloco A › UTI Adulto": dois setores de mesmo nome em unidades diferentes se distinguem. */
+export function rotuloDoSetor(setor: CustomerLocation, todos: CustomerLocation[]): string {
+  const porId = new Map(todos.map((l) => [l.id, l]));
+  const nomes: string[] = [setor.name];
+  let pai = setor.parent_id ? porId.get(setor.parent_id) : undefined;
+  while (pai) {
+    nomes.unshift(pai.name);
+    pai = pai.parent_id ? porId.get(pai.parent_id) : undefined;
+  }
+  return nomes.join(' › ');
+}
+
+/** O que ainda falta para cada equipamento (vazio = completo). */
+export function faltasDosEquipamentos(
+  ids: readonly string[],
+  escolhas: Record<string, EscolhaDoEquipamento>,
+  educacao: boolean,
+  hoje: string
+): Map<string, string> {
+  const faltas = new Map<string, string>();
+  for (const id of ids) {
+    const e = escolhas[id];
+    if (educacao) {
+      if (!e?.data) faltas.set(id, 'informe a data');
+      else if (e.data < hoje) faltas.set(id, 'a data já passou');
+    } else if (!e?.principal) {
+      faltas.set(id, 'escolha o procedimento');
+    }
+  }
+  return faltas;
 }
 
 export function NovoPlanoDialog({
@@ -126,11 +188,10 @@ export function NovoPlanoDialog({
   const [todos, setTodos] = useState(true);
   const [escolhidos, setEscolhidos] = useState<Set<string>>(new Set());
   const [tipo, setTipo] = useState<Tipo | ''>('');
-  const [modelo, setModelo] = useState('');
-  const [adicionais, setAdicionais] = useState<Set<string>>(new Set());
+  const [escolhas, setEscolhas] = useState<Record<string, EscolhaDoEquipamento>>({});
   const [intervalo, setIntervalo] = useState(6);
   const [unidade, setUnidade] = useState<Unidade>('month');
-  const [inicio, setInicio] = useState(hojeIso());
+  const [inicio, setInicio] = useState(hojeLocal());
   const [antecedencia, setAntecedencia] = useState(15);
   const [tolerancia, setTolerancia] = useState(5);
   const [automatico, setAutomatico] = useState(true);
@@ -146,11 +207,10 @@ export function NovoPlanoDialog({
     setTodos(true);
     setEscolhidos(new Set());
     setTipo('');
-    setModelo('');
-    setAdicionais(new Set());
+    setEscolhas({});
     setIntervalo(6);
     setUnidade('month');
-    setInicio(hojeIso());
+    setInicio(hojeLocal());
     setAntecedencia(15);
     setTolerancia(5);
     setAutomatico(true);
@@ -183,39 +243,98 @@ export function NovoPlanoDialog({
     data: FormOptions | undefined;
   };
 
-  const setores = useMemo(() => (det?.locations ?? []).filter((l) => l.location_type_key === 'setor'), [det]);
+  const locais = useMemo(() => det?.locations ?? [], [det]);
+  const setores = useMemo(
+    () =>
+      locais
+        .filter((l) => l.location_type_key === 'setor')
+        .map((l) => ({ ...l, rotulo: rotuloDoSetor(l, locais) }))
+        .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR')),
+    [locais]
+  );
   const listaAtivos = useMemo(
     () => (ativos?.items ?? []).filter((a) => a.status !== 'decommissioned' && a.status !== 'disposed'),
     [ativos]
   );
+  const alvo = useMemo(
+    () => (todos ? listaAtivos : listaAtivos.filter((a) => escolhidos.has(a.id))),
+    [todos, listaAtivos, escolhidos]
+  );
+  const educacao = tipo === 'education';
   const tipoInfo = opcoes?.kinds.find((k) => k.key === tipo);
   const modelos = (opcoes?.templates ?? []).filter(
     (t) => (t.procedure_kind ?? null) === (tipoInfo?.procedure_kind ?? null)
   );
+  const todosModelos = opcoes?.templates ?? [];
+  const tituloDe = (k: string) => todosModelos.find((t) => t.key === k)?.title ?? k;
   const nomeCliente = clientes?.items.find((c) => c.id === cliente)?.name ?? '';
   const nomeSetor = setores.find((s) => s.id === setor)?.name ?? '';
   const vigentes = (contratos?.items ?? []).filter((c) => c.status === 'active');
   const un = UNIDADES.find((u) => u.v === unidade)!;
   const periodicidade = `a cada ${intervalo === 1 ? un.um : `${intervalo} ${un.varios}`}`;
+  const hoje = hojeLocal();
+  const vencimento = inicio ? primeiroVencimento(inicio, unidade, intervalo) : '';
+  const faltas = faltasDosEquipamentos(
+    alvo.map((a) => a.id),
+    escolhas,
+    educacao,
+    hoje
+  );
 
   // Nome sugerido, até a pessoa mexer nele.
   useEffect(() => {
     if (nomeTocado || !tipo) return;
-    setNome(`${rotuloTipo(tipo)} ${periodicidade}${nomeSetor ? ` — ${nomeSetor}` : ''}`);
-  }, [tipo, periodicidade, nomeSetor, nomeTocado]);
+    setNome(
+      `${educacao ? 'Educação continuada' : rotuloTipo(tipo)} ${periodicidade}${nomeSetor ? ` — ${nomeSetor}` : ''}`
+    );
+  }, [tipo, educacao, periodicidade, nomeSetor, nomeTocado]);
 
   const criar = useApiMutation(plansCreate, {
     invalidates: [plansList, plansBoard, plansSchedule],
     onError: (e: ApiError) => setErro(e.problem.message),
   });
 
+  function escolher(id: string, mudanca: Partial<EscolhaDoEquipamento>) {
+    setEscolhas((atual) => ({
+      ...atual,
+      [id]: { principal: '', adicionais: [], data: '', ...atual[id], ...mudanca },
+    }));
+  }
+
+  /** Aplica a escolha de um equipamento aos da mesma categoria (só onde ainda não há escolha). */
+  function aplicarNaCategoria(origem: AssetRow) {
+    const e = escolhas[origem.id];
+    if (!e) return;
+    setEscolhas((atual) => {
+      const novo = { ...atual };
+      for (const a of alvo) {
+        if (a.id === origem.id || a.asset_category_id !== origem.asset_category_id) continue;
+        novo[a.id] = { principal: e.principal, adicionais: [...e.adicionais], data: e.data };
+      }
+      return novo;
+    });
+  }
+
   function podeAvancar(): string | null {
     if (passo === 0 && !cliente) return 'Escolha o cliente.';
     if (passo === 1 && !setor) return 'Escolha o setor.';
-    if (passo === 2 && !todos && escolhidos.size === 0)
-      return 'Escolha ao menos um equipamento, ou "todos do setor".';
+    if (passo === 2) {
+      if (listaAtivos.length === 0) return `${nomeSetor} não tem equipamento ativo para entrar no plano.`;
+      if (!todos && escolhidos.size === 0) return 'Escolha ao menos um equipamento, ou todos do setor.';
+    }
     if (passo === 3 && !tipo) return 'Escolha o tipo de plano.';
-    if (passo === 5 && (intervalo < 1 || !inicio)) return 'Informe a periodicidade e a data de início.';
+    if (passo === 4 && faltas.size > 0) {
+      return educacao
+        ? `Informe uma data de hoje em diante para cada equipamento (faltam ${faltas.size}).`
+        : `Cada equipamento precisa do procedimento dele (faltam ${faltas.size}).`;
+    }
+    if (passo === 5) {
+      if (intervalo < 1) return 'Informe a periodicidade.';
+      if (!educacao && !inicio) return 'Informe a data de início.';
+      if (!educacao && vencimento < hoje) {
+        return `Com esse início, o primeiro vencimento (${dataBr(vencimento)}) já passou. Use uma data mais recente.`;
+      }
+    }
     return null;
   }
 
@@ -228,24 +347,30 @@ export function NovoPlanoDialog({
           name: nome.trim(),
           customer_id: cliente,
           sector_id: setor,
-          asset_ids: todos ? [] : [...escolhidos],
           kind: tipo as Tipo,
-          checklist_template_key: modelo || null,
-          ...(adicionais.size > 0
-            ? { extra_checklist_template_keys: [...adicionais].filter((k) => k !== modelo) }
-            : {}),
+          items: alvo.map((a) => {
+            const e = escolhas[a.id];
+            return educacao
+              ? { asset_id: a.id, first_due_on: e?.data ?? null }
+              : {
+                  asset_id: a.id,
+                  checklist_template_key: e?.principal || null,
+                  extra_checklist_template_keys: (e?.adicionais ?? []).filter((k) => k !== e?.principal),
+                };
+          }),
           frequency_unit: unidade,
           frequency_interval: intervalo,
-          anchor_date: inicio,
+          anchor_date: educacao ? hoje : inicio,
           lead_time_days: antecedencia,
           tolerance_days: tolerancia,
           auto_generate: automatico,
         },
-      })) as { id: string; task_count: number };
-      toast.success(
-        'Plano criado',
-        `${r.task_count} ${r.task_count === 1 ? 'tarefa' : 'tarefas'} — as atividades aparecem no cronograma.`
-      );
+      })) as { id: string; task_count: number; cycles_opened: number; work_orders: number };
+      const partes = [`${r.task_count} ${r.task_count === 1 ? 'equipamento' : 'equipamentos'}`];
+      if (r.cycles_opened > 0)
+        partes.push(`${r.cycles_opened} ${r.cycles_opened === 1 ? 'ciclo aberto' : 'ciclos abertos'} agora`);
+      if (r.work_orders > 0) partes.push(`${r.work_orders} OS ${r.work_orders === 1 ? 'gerada' : 'geradas'}`);
+      toast.success('Plano criado', `${partes.join(' · ')}. Acompanhe e edite na página do plano.`);
       onOpenChange(false);
       void navigate({ to: '/planos/$id', params: { id: r.id } });
     } catch {
@@ -289,10 +414,8 @@ export function NovoPlanoDialog({
     >
       <div className="flex flex-col gap-5">
         {/*
-         * COMO CRIAR O PLANO (conversa com o cliente, 21/10/2026: "criar plano com ajuda de IA ou
-         * criar plano manualmente"). A IA AINDA NÃO EXISTE no produto — a escolha aparece para o
-         * cliente ver o caminho, desabilitada e dita como "em breve", e o plano manual segue como
-         * o único modo. Fingir um assistente que não há seria pior do que não mostrá-lo.
+         * COMO CRIAR O PLANO (conversa com o cliente, 21/10/2026). A IA AINDA NÃO EXISTE: a escolha
+         * aparece desabilitada e dita como "em breve", e o plano manual segue como o único modo.
          */}
         {passo === 0 && (
           <div role="radiogroup" aria-label="Como criar o plano" className="grid gap-2 sm:grid-cols-2">
@@ -337,12 +460,7 @@ export function NovoPlanoDialog({
                 aria-current={i === passo ? 'step' : undefined}
                 className="flex w-full flex-col gap-1 text-left disabled:cursor-default"
               >
-                <span
-                  className={cn(
-                    'h-1 rounded-full',
-                    i < passo ? 'bg-accent' : i === passo ? 'bg-accent' : 'bg-surface-sunken'
-                  )}
-                />
+                <span className={cn('h-1 rounded-full', i <= passo ? 'bg-accent' : 'bg-surface-sunken')} />
                 <span
                   className={cn(
                     'truncate text-2xs',
@@ -366,6 +484,7 @@ export function NovoPlanoDialog({
                   setCliente(e.target.value);
                   setSetor('');
                   setEscolhidos(new Set());
+                  setEscolhas({});
                 }}
               >
                 <option value="">Escolha o cliente</option>
@@ -386,14 +505,20 @@ export function NovoPlanoDialog({
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {vigentes.map((c) => (
-                      <StatusChip key={c.id} tone="info" size="sm">
+                      <StatusChip key={c.id} tone={c.service_hold ? 'warn' : 'info'} size="sm">
                         {c.number} · {ROTULO_CONTRATO[c.kind] ?? c.kind}
+                        {c.service_hold
+                          ? c.service_hold === 'blocked'
+                            ? ' · atendimento bloqueado'
+                            : ' · atendimento suspenso'
+                          : ''}
                       </StatusChip>
                     ))}
                   </div>
                 )}
                 <p className="mt-1 text-xs text-subtle">
-                  Informativo: o tipo de contrato não muda as regras do plano.
+                  Informativo: o tipo de contrato não muda as regras do plano. Com o atendimento suspenso,
+                  bloqueado ou o contrato vencido, o plano não gera OS para os equipamentos do contrato.
                 </p>
               </div>
             )}
@@ -407,7 +532,7 @@ export function NovoPlanoDialog({
             hint={
               setores.length === 0
                 ? `${nomeCliente} ainda não tem setores — crie em Clientes › ${nomeCliente} › Setores.`
-                : undefined
+                : 'A unidade aparece antes do setor.'
             }
           >
             <Select
@@ -415,12 +540,13 @@ export function NovoPlanoDialog({
               onChange={(e) => {
                 setSetor(e.target.value);
                 setEscolhidos(new Set());
+                setEscolhas({});
               }}
             >
               <option value="">Escolha o setor</option>
               {setores.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name} {s.asset_count !== undefined ? `(${s.asset_count})` : ''}
+                  {s.rotulo} {s.asset_count !== undefined ? `(${s.asset_count})` : ''}
                 </option>
               ))}
             </Select>
@@ -442,7 +568,8 @@ export function NovoPlanoDialog({
                   Todos os equipamentos de {nomeSetor}
                 </span>
                 <span className="block text-xs text-muted">
-                  {listaAtivos.length} hoje — e os que chegarem ao setor depois entram sozinhos.
+                  {listaAtivos.length} hoje — cada um recebe o procedimento dele no próximo passo. O que
+                  chegar ao setor depois entra pela página do plano (Incluir equipamentos).
                 </span>
               </span>
             </label>
@@ -456,7 +583,7 @@ export function NovoPlanoDialog({
               />
               <span>
                 <span className="block text-sm font-semibold text-text">Escolher equipamentos</span>
-                <span className="block text-xs text-muted">Uma tarefa por equipamento.</span>
+                <span className="block text-xs text-muted">Só os marcados entram no plano.</span>
               </span>
             </label>
             {!todos && (
@@ -500,8 +627,7 @@ export function NovoPlanoDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             {TIPOS.map((t) => {
               const info = opcoes?.kinds.find((k) => k.key === t.key);
-              const suportado = t.key !== 'education';
-              const disponivel = suportado && info?.available;
+              const disponivel = Boolean(info?.available);
               const Icone = t.icone;
               return (
                 <button
@@ -510,8 +636,8 @@ export function NovoPlanoDialog({
                   disabled={!disponivel}
                   aria-pressed={tipo === t.key}
                   onClick={() => {
-                    setTipo(t.key as Tipo);
-                    setModelo('');
+                    setTipo(t.key);
+                    setEscolhas({});
                   }}
                   className={cn(
                     'flex items-start gap-3 rounded-card border p-3 text-left transition-colors',
@@ -530,11 +656,7 @@ export function NovoPlanoDialog({
                   <span>
                     <span className="block text-sm font-semibold text-text">{t.titulo}</span>
                     <span className="block text-xs text-muted">
-                      {!suportado
-                        ? 'Não suportado pelo domínio atual'
-                        : info && !info.available
-                          ? 'Natureza de OS não cadastrada no catálogo'
-                          : t.texto}
+                      {info && !info.available ? 'Natureza de OS não cadastrada no catálogo' : t.texto}
                     </span>
                   </span>
                 </button>
@@ -545,55 +667,43 @@ export function NovoPlanoDialog({
 
         {passo === 4 && (
           <div className="flex flex-col gap-3">
-            <Field
-              label="Checklist / procedimento"
-              hint={
-                modelos.length === 0
-                  ? `Nenhum procedimento de ${rotuloTipo(tipo).toLowerCase()} publicado. Crie em "Procedimentos e checklists" — ou siga sem checklist.`
-                  : 'A versão publicada mais recente é anexada a cada OS gerada.'
-              }
-            >
-              <Select value={modelo} onChange={(e) => setModelo(e.target.value)}>
-                <option value="">Sem checklist</option>
-                {modelos.map((m) => (
-                  <option key={m.key} value={m.key}>
-                    {m.title} · v{m.version} · {m.item_count} itens
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            {/* OS-15: procedimentos que vão JUNTO na mesma OS — cada um com o seu checklist e as
-                suas respostas. Qualquer tipo publicado (é para combinar, ex.: preventiva + TSE). */}
-            {(opcoes?.templates ?? []).filter((t) => t.key !== modelo).length > 0 && (
-              <fieldset className="flex flex-col gap-1.5">
-                <legend className="text-sm font-medium text-text">Procedimentos adicionais (opcional)</legend>
-                <p className="text-xs text-muted">
-                  Cada um vira um checklist próprio na mesma OS; as respostas não se misturam.
-                </p>
-                <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-                  {(opcoes?.templates ?? [])
-                    .filter((t) => t.key !== modelo)
-                    .map((t) => (
-                      <label key={t.key} className="flex items-center gap-2 text-sm text-text">
-                        <input
-                          type="checkbox"
-                          checked={adicionais.has(t.key)}
-                          onChange={() =>
-                            setAdicionais((atual) => {
-                              const novo = new Set(atual);
-                              if (novo.has(t.key)) novo.delete(t.key);
-                              else novo.add(t.key);
-                              return novo;
-                            })
-                          }
-                        />
-                        {t.title} · {rotuloTipo(t.procedure_kind ?? 'preventive')} · v{t.version}
-                      </label>
-                    ))}
-                </div>
-              </fieldset>
+            <p className="text-sm text-muted">
+              {educacao
+                ? 'Educação continuada não leva procedimento: informe a data de cada equipamento.'
+                : `Escolha o procedimento de CADA equipamento (${rotuloTipo(tipo).toLowerCase()}). Use “+” para juntar outros procedimentos na mesma OS.`}{' '}
+              {faltas.size > 0 ? (
+                <strong className="text-warn-text">Faltam {faltas.size}.</strong>
+              ) : (
+                <strong className="text-good-text">Todos prontos.</strong>
+              )}
+            </p>
+            {!educacao && modelos.length === 0 && (
+              <p role="alert" className="rounded-control bg-warn-soft px-3 py-2 text-sm text-warn-text">
+                Nenhum procedimento de {rotuloTipo(tipo).toLowerCase()} publicado. Crie em “Procedimentos e
+                checklists” antes de criar o plano.
+              </p>
             )}
-            {tipo && tipo !== 'preventive' && (
+            <ul className="flex max-h-[26rem] flex-col overflow-y-auto rounded-card border border-border-subtle">
+              {alvo.map((a, i) => (
+                <LinhaDoEquipamento
+                  key={a.id}
+                  ativo={a}
+                  primeiro={i === 0}
+                  educacao={educacao}
+                  escolha={escolhas[a.id]}
+                  falta={faltas.get(a.id)}
+                  modelos={modelos}
+                  todosModelos={todosModelos}
+                  hoje={hoje}
+                  temMesmaCategoria={alvo.some(
+                    (b) => b.id !== a.id && b.asset_category_id === a.asset_category_id
+                  )}
+                  onEscolher={(m) => escolher(a.id, m)}
+                  onAplicarNaCategoria={() => aplicarNaCategoria(a)}
+                />
+              ))}
+            </ul>
+            {tipo && tipo !== 'preventive' && !educacao && (
               <p className="flex gap-2 rounded-control bg-info-soft px-3 py-2 text-xs text-info-text">
                 <ClipboardCheck className="size-4 shrink-0" aria-hidden="true" />
                 Nominal e tolerâncias do protocolo são registrados como dado. A conformidade da medição não é
@@ -611,11 +721,16 @@ export function NovoPlanoDialog({
                   type="number"
                   min={1}
                   max={60}
+                  aria-label="Intervalo"
                   value={intervalo}
                   onChange={(e) => setIntervalo(Math.max(1, Number(e.target.value) || 1))}
                   className="w-20"
                 />
-                <Select value={unidade} onChange={(e) => setUnidade(e.target.value as Unidade)}>
+                <Select
+                  aria-label="Unidade"
+                  value={unidade}
+                  onChange={(e) => setUnidade(e.target.value as Unidade)}
+                >
                   {UNIDADES.map((u) => (
                     <option key={u.v} value={u.v}>
                       {intervalo === 1 ? u.um : u.varios}
@@ -624,14 +739,24 @@ export function NovoPlanoDialog({
                 </Select>
               </div>
             </Field>
+            {educacao ? (
+              <p className="text-sm text-muted">
+                A primeira data de cada equipamento foi informada no passo anterior; as próximas seguem a
+                periodicidade a partir dela.
+              </p>
+            ) : (
+              <Field
+                label="Começa a contar em"
+                required
+                hint={vencimento ? `Primeiro vencimento: ${dataBr(vencimento)}.` : undefined}
+              >
+                <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
+              </Field>
+            )}
             <Field
-              label="Começa a contar em"
-              required
-              hint="O primeiro ciclo vence um período depois desta data."
+              label="Antecedência (dias)"
+              hint="Quantos dias antes do início do ciclo ele abre: é quando as atividades aparecem no cronograma e, com geração automática, as OS são abertas."
             >
-              <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
-            </Field>
-            <Field label="Antecedência (dias)" hint="Quantos dias antes do ciclo as atividades são geradas.">
               <Input
                 type="number"
                 min={0}
@@ -652,9 +777,19 @@ export function NovoPlanoDialog({
                 onChange={(e) => setTolerancia(Number(e.target.value) || 0)}
               />
             </Field>
-            <label className="flex items-center gap-2 text-sm text-text sm:col-span-2">
-              <input type="checkbox" checked={automatico} onChange={(e) => setAutomatico(e.target.checked)} />
-              Gerar as ordens de serviço automaticamente quando o ciclo abrir
+            <label className="flex items-start gap-2 text-sm text-text sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={automatico}
+                onChange={(e) => setAutomatico(e.target.checked)}
+              />
+              <span>
+                Gerar as ordens de serviço automaticamente quando o ciclo abrir
+                <span className="block text-xs text-muted">
+                  Desmarcado, as OS são geradas na página do plano, no botão “Gerar OS deste ciclo”.
+                </span>
+              </span>
             </label>
           </div>
         )}
@@ -672,32 +807,45 @@ export function NovoPlanoDialog({
             </Field>
             <dl className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-card border border-border-subtle bg-surface-subtle p-4 text-sm sm:grid-cols-2">
               <Resumo r="Cliente" v={nomeCliente} />
-              <Resumo r="Setor" v={nomeSetor} />
-              <Resumo
-                r="Equipamentos"
-                v={todos ? `Todos do setor (${listaAtivos.length} hoje)` : `${escolhidos.size} escolhidos`}
-              />
-              <Resumo r="Tipo" v={rotuloTipo(tipo)} />
-              <Resumo r="Procedimento" v={modelos.find((m) => m.key === modelo)?.title ?? 'Sem checklist'} />
-              {adicionais.size > 0 && (
-                <Resumo
-                  r="Adicionais"
-                  v={(opcoes?.templates ?? [])
-                    .filter((t) => adicionais.has(t.key) && t.key !== modelo)
-                    .map((t) => t.title)
-                    .join(', ')}
-                />
-              )}
+              <Resumo r="Setor" v={setores.find((s) => s.id === setor)?.rotulo ?? ''} />
+              <Resumo r="Tipo" v={educacao ? 'Educação continuada' : rotuloTipo(tipo)} />
+              <Resumo r="Equipamentos" v={`${alvo.length}`} />
               <Resumo
                 r="Periodicidade"
-                v={`${periodicidade}, desde ${new Date(`${inicio}T00:00:00Z`).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`}
+                v={educacao ? periodicidade : `${periodicidade} · 1º vencimento ${dataBr(vencimento)}`}
               />
               <Resumo r="Antecedência / tolerância" v={`${antecedencia} / ${tolerancia} dias`} />
               <Resumo
                 r="Ordens de serviço"
-                v={automatico ? 'geradas automaticamente' : 'geradas à mão, após revisão'}
+                v={automatico ? 'geradas automaticamente' : 'geradas à mão, na página do plano'}
               />
             </dl>
+            <table className="w-full text-left text-sm" aria-label="Equipamentos do plano">
+              <thead className="text-xs text-muted">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">Equipamento</th>
+                  <th className="py-1 font-medium">{educacao ? 'Primeira data' : 'Procedimentos'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alvo.map((a) => {
+                  const e = escolhas[a.id];
+                  return (
+                    <tr key={a.id} className="border-t border-border-subtle">
+                      <td className="py-1.5 pr-3 text-text">{a.name}</td>
+                      <td className="py-1.5 text-muted">
+                        {educacao
+                          ? dataBr(e?.data ?? '')
+                          : [e?.principal, ...(e?.adicionais ?? [])]
+                              .filter(Boolean)
+                              .map((k) => tituloDe(k!))
+                              .join(' + ')}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -708,6 +856,149 @@ export function NovoPlanoDialog({
         )}
       </div>
     </Dialog>
+  );
+}
+
+/**
+ * Uma linha do passo Procedimentos: o equipamento, o procedimento principal
+ * (do tipo do plano), o "+" dos adicionais (qualquer tipo publicado) e o atalho
+ * para a mesma categoria. Na educação continuada, a data no lugar do procedimento.
+ */
+export function LinhaDoEquipamento({
+  ativo,
+  primeiro,
+  educacao,
+  escolha,
+  falta,
+  modelos,
+  todosModelos,
+  hoje,
+  temMesmaCategoria,
+  onEscolher,
+  onAplicarNaCategoria,
+}: {
+  ativo: AssetRow;
+  primeiro: boolean;
+  educacao: boolean;
+  escolha: EscolhaDoEquipamento | undefined;
+  falta: string | undefined;
+  modelos: FormOptions['templates'];
+  todosModelos: FormOptions['templates'];
+  hoje: string;
+  temMesmaCategoria: boolean;
+  onEscolher: (m: Partial<EscolhaDoEquipamento>) => void;
+  onAplicarNaCategoria: () => void;
+}) {
+  const [adicionando, setAdicionando] = useState(false);
+  const adicionais = escolha?.adicionais ?? [];
+  const disponiveisParaAdicionar = todosModelos.filter(
+    (t) => t.key !== escolha?.principal && !adicionais.includes(t.key)
+  );
+  const pronto = escolha && (educacao ? Boolean(escolha.data) : Boolean(escolha.principal));
+  return (
+    <li
+      className={cn('flex flex-col gap-2 px-3 py-2.5', !primeiro && 'border-t border-border-subtle')}
+      aria-label={`Equipamento ${ativo.name}`}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-text">{ativo.name}</span>
+          <span className="block truncate text-xs text-muted">
+            {[ativo.category_name, ativo.model_name, ativo.tag].filter(Boolean).join(' · ')}
+          </span>
+        </span>
+        {falta ? (
+          <StatusChip tone="warn" size="sm">
+            {falta}
+          </StatusChip>
+        ) : (
+          <StatusChip tone="good" size="sm">
+            pronto
+          </StatusChip>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {educacao ? (
+          <Input
+            type="date"
+            min={hoje}
+            aria-label={`Data de ${ativo.name}`}
+            value={escolha?.data ?? ''}
+            onChange={(e) => onEscolher({ data: e.target.value })}
+            className="w-44"
+          />
+        ) : (
+          <>
+            <Select
+              aria-label={`Procedimento de ${ativo.name}`}
+              value={escolha?.principal ?? ''}
+              onChange={(e) => onEscolher({ principal: e.target.value })}
+              className="min-w-56 flex-1"
+            >
+              <option value="">Escolha o procedimento</option>
+              {modelos.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.title} · v{m.version} · {m.item_count} itens
+                </option>
+              ))}
+            </Select>
+            {disponiveisParaAdicionar.length > 0 && (
+              <Button
+                size="sm"
+                icon={<Plus className="size-4" />}
+                aria-label={`Adicionar procedimento a ${ativo.name}`}
+                onClick={() => setAdicionando((v) => !v)}
+              >
+                Procedimento
+              </Button>
+            )}
+          </>
+        )}
+        {pronto && temMesmaCategoria && (
+          <Button size="sm" variant="ghost" onClick={onAplicarNaCategoria}>
+            Aplicar a todos de {ativo.category_name}
+          </Button>
+        )}
+      </div>
+      {!educacao && adicionando && (
+        <Select
+          aria-label={`Procedimento adicional de ${ativo.name}`}
+          value=""
+          onChange={(e) => {
+            if (!e.target.value) return;
+            onEscolher({ adicionais: [...adicionais, e.target.value] });
+            setAdicionando(false);
+          }}
+        >
+          <option value="">Escolha o procedimento adicional (vai na mesma OS)</option>
+          {disponiveisParaAdicionar.map((t) => (
+            <option key={t.key} value={t.key}>
+              {t.title} · {rotuloTipo(t.procedure_kind ?? 'preventive')} · v{t.version}
+            </option>
+          ))}
+        </Select>
+      )}
+      {!educacao && adicionais.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {adicionais.map((k) => (
+            <span
+              key={k}
+              className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-text"
+            >
+              + {todosModelos.find((t) => t.key === k)?.title ?? k}
+              <button
+                type="button"
+                aria-label={`Tirar ${todosModelos.find((t) => t.key === k)?.title ?? k}`}
+                onClick={() => onEscolher({ adicionais: adicionais.filter((x) => x !== k) })}
+                className="text-muted hover:text-text"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
 

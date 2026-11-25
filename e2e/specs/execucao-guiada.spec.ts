@@ -7,7 +7,7 @@
  * navegador, com a localização do aparelho concedida e fixada.
  */
 import type { Page } from '@playwright/test';
-import { test, expect, E2E, apiUrl } from '../fixtures/aurora';
+import { test, expect, E2E, apiUrl, campoDeHora } from '../fixtures/aurora';
 
 const cab = {
   authorization: `Bearer local:${E2E.emailCoordA}:${E2E.emailCoordA}`,
@@ -104,6 +104,11 @@ async function percorrerAssistente(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Documento ou manual' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Avançar' }).click(); // parecer
+  // D-3 (24/11/2026): hora de início e de término do atendimento — o blur grava as duas.
+  await page.getByLabel('Hora de início do atendimento').fill(campoDeHora(-90));
+  await page.getByLabel('Hora de término do atendimento').fill(campoDeHora(-15));
+  await page.getByLabel('Parecer técnico').click();
+  await expect(page.getByText('Horário do atendimento gravado')).toBeVisible({ timeout: 15_000 });
   await page.getByRole('radio', { name: /LIBERADO/ }).check();
 
   await page.getByRole('button', { name: 'Avançar' }).click(); // revisão

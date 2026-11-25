@@ -159,3 +159,32 @@ export async function criarSolicitacao(
 export function apiUrl(): string {
   return process.env.AURORA_E2E_API_URL ?? 'http://localhost:3311/v1';
 }
+
+/**
+ * Um horário no formato do campo `datetime-local` (hora LOCAL do navegador), deslocado em minutos de
+ * agora. D-3 (Anderson, 24/11/2026): toda OS concluída leva hora de início e de término.
+ */
+export function campoDeHora(minutos: number, agora: Date = new Date()): string {
+  // No fuso do NAVEGADOR dos testes (`timezoneId` em playwright.config.mts), e não no do runner:
+  // no CI o runner está em UTC, e a hora "de agora" em UTC lida em Brasília cai 3 h no futuro.
+  const d = new Date(agora.getTime() + minutos * 60_000);
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const v = (t: string) => partes.find((x) => x.type === t)!.value;
+  return `${v('year')}-${v('month')}-${v('day')}T${v('hour')}:${v('minute')}`;
+}
+
+/** As duas horas do atendimento no corpo da API (ISO), para concluir OS pela rota. */
+export function horasDoAtendimento(): { service_started_at: string; service_ended_at: string } {
+  return {
+    service_started_at: new Date(Date.now() - 90 * 60_000).toISOString(),
+    service_ended_at: new Date(Date.now() - 15 * 60_000).toISOString(),
+  };
+}

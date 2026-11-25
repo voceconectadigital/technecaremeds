@@ -86,6 +86,8 @@ async function concluida(
   });
   await transitionWorkOrder(s, w.id, 'in_progress');
   await transitionWorkOrder(s, w.id, 'completed', {
+    serviceStartedAt: new Date(Date.now() - 3_600_000),
+    serviceEndedAt: new Date(Date.now() - 60_000),
     resolution: 'Serviço executado conforme o procedimento',
     operationalResult: 'released',
   });
@@ -184,6 +186,8 @@ beforeAll(async () => {
     respostaPrev2 = await attachChecklist(s, wPrev.id, tse);
     await transitionWorkOrder(s, wPrev.id, 'in_progress');
     await transitionWorkOrder(s, wPrev.id, 'completed', {
+      serviceStartedAt: new Date(Date.now() - 3_600_000),
+      serviceEndedAt: new Date(Date.now() - 60_000),
       resolution: 'Preventiva executada',
       operationalResult: 'released',
     });
@@ -387,6 +391,8 @@ describe('idempotência e histórico', () => {
     expect(ids(await servicos(GESTORA))).not.toContain(os.qual!.id);
     await withTenant(t.db, sistema(ORG_A), async (s) => {
       await transitionWorkOrder(s, os.qual!.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
         resolution: 'Qualificação refeita',
         operationalResult: 'released',
       });

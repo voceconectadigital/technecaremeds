@@ -11,6 +11,8 @@ import { newId, ConflictError, NotFoundError, ValidationError } from '@aurora/do
 import type { TenantSession } from './client';
 import { startTimer, stopTimer } from './execution';
 import { emitEvent } from './outbox';
+import { validateServiceHours } from './work-orders';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 
 /** Onde o aparelho disse que estava — ou por que não disse. */
 export interface PontoDeVisita {
@@ -118,6 +120,7 @@ export async function checkIn(
   if (!membershipId)
     throw new ValidationError('check-in exige um vínculo com a organização', { field: 'membership' });
   const os = await osDaVisita(session, workOrderId);
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4 (o check-out continua livre)
   if (ENCERRADAS.has(os.category) || os.category === 'draft' || os.category === 'review') {
     throw new ConflictError('esta OS não está em atendimento: não há check-in a fazer');
   }
@@ -266,6 +269,9 @@ export interface ServiceReportInput {
   /** Situação de USO do equipamento após o serviço — não é veredito metrológico. */
   operationalResult?: 'released' | 'stopped' | null;
   finalOpinion?: string | null;
+  /** Hora real de início e de término do atendimento (D-3). ISO 8601; nulo apaga. */
+  serviceStartedAt?: string | null;
+  serviceEndedAt?: string | null;
 }
 
 /**
@@ -282,6 +288,7 @@ export async function updateServiceReport(
   if (ENCERRADAS.has(os.category)) {
     throw new ConflictError('a OS já foi validada, fechada ou cancelada: o relatório não muda mais por aqui');
   }
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const texto = (v: string | null | undefined, campo: string): string | null | undefined => {
     if (v === undefined) return undefined;
     if (v === null) return null;
@@ -301,6 +308,23 @@ export async function updateServiceReport(
       throw new ValidationError('resultado deve ser liberado ou parado', { field: 'operational_result' });
     }
     campos.push(['operational_result', input.operationalResult]);
+  }
+  if (input.serviceStartedAt !== undefined || input.serviceEndedAt !== undefined) {
+    const [gravadas] = await session.query<{
+      service_started_at: string | null;
+      service_ended_at: string | null;
+    }>(`SELECT service_started_at, service_ended_at FROM aurora.work_orders WHERE id = $1`, [workOrderId]);
+    const quando = (v: string | null | undefined) => (v ? new Date(v) : null);
+    validateServiceHours(quando(input.serviceStartedAt), quando(input.serviceEndedAt), {
+      service_started_at: input.serviceStartedAt === null ? null : (gravadas?.service_started_at ?? null),
+      service_ended_at: input.serviceEndedAt === null ? null : (gravadas?.service_ended_at ?? null),
+    });
+    if (input.serviceStartedAt !== undefined) {
+      campos.push(['service_started_at', quando(input.serviceStartedAt)?.toISOString() ?? null]);
+    }
+    if (input.serviceEndedAt !== undefined) {
+      campos.push(['service_ended_at', quando(input.serviceEndedAt)?.toISOString() ?? null]);
+    }
   }
   if (campos.length === 0) return;
   // Colunas da lista fechada acima, nunca do cliente.
@@ -329,6 +353,7 @@ export async function addCustomerPart(
   if (ENCERRADAS.has(os.category)) {
     throw new ConflictError('a OS já foi validada, fechada ou cancelada');
   }
+  await assertWorkOrderServiceAllowed(session, workOrderId); // D-4
   const descricao = input.description.trim();
   if (descricao.length < 3 || descricao.length > 300) {
     throw new ValidationError('descreva a peça (3 a 300 caracteres)', { field: 'description' });

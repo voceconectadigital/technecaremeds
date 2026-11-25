@@ -364,7 +364,11 @@ describe('checklist de OS fechada', () => {
       resposta = await attachChecklist(s, os.id, template);
       await transitionWorkOrder(s, os.id, 'in_progress');
       await answerChecklistItem(s, resposta, item, { boolean: true });
-      await transitionWorkOrder(s, os.id, 'completed', { resolution: 'concluída para o teste' });
+      await transitionWorkOrder(s, os.id, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
+        resolution: 'concluída para o teste',
+      });
       await transitionWorkOrder(s, os.id, 'validated');
       await transitionWorkOrder(s, os.id, 'closed');
     });

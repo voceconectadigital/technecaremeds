@@ -44,6 +44,7 @@ import type { TenantSession } from './client';
 import { routeEvent, deliverAutomationNotice } from './notifications';
 import { organizationTimezone } from './indicator-targets';
 import { transitionWorkOrder, createWorkOrder } from './work-orders';
+import { assertWorkOrderServiceAllowed } from './contract-service';
 import { buildReport } from './relatorios';
 import { clienteDoRecorte, excessoDeNivel, tetoDoRelatorioAgendado } from './nivel-de-relatorio';
 
@@ -648,6 +649,8 @@ async function executeAction(
     case 'assign': {
       const alvo = typeof params.membershipId === 'string' ? params.membershipId : null;
       if (!alvo) throw new ValidationError('assign exige membershipId');
+      // D-4: automação também não mexe em OS de contrato parado.
+      await assertWorkOrderServiceAllowed(session, event.aggregateId);
       await session.query(`UPDATE aurora.work_orders SET assignee_membership_id = $2 WHERE id = $1`, [
         event.aggregateId,
         alvo,
@@ -665,6 +668,7 @@ async function executeAction(
 
     case 'add_comment': {
       const texto = typeof params.text === 'string' ? params.text : '';
+      await assertWorkOrderServiceAllowed(session, event.aggregateId); // D-4
       await session.query(
         `INSERT INTO aurora.work_order_comments
            (id, organization_id, work_order_id, body, visibility, author_membership_id)

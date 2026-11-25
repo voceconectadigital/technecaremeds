@@ -28,6 +28,11 @@ import {
   saveMeasurement,
   closePeriod,
   sweepContractAlerts,
+  holdContractService,
+  releaseContractService,
+  renewContract,
+  contractRenewals,
+  technicalHours,
   type Database,
   type TenantSession,
 } from '@aurora/db';
@@ -45,6 +50,13 @@ import {
   type ServiceFrequency,
   type PaymentTerms,
 } from '@aurora/domain';
+import {
+  contractsHoldService,
+  contractsReleaseService,
+  contractsRenew,
+  contractsTechnicalHours,
+} from '@aurora/contracts';
+import { parseWith } from '../common/contract-validation';
 import { RequirePermissions } from '../common/permissions.guard';
 import { uuidParam } from '../common/params';
 import { DATABASE } from '../common/tokens';
@@ -282,7 +294,10 @@ export class ContractsController {
                 ct.sla_policy_id, sp.name AS sla_policy_name, ct.service_frequency,
                 ct.fixed_team_packages::int[] AS fixed_team_packages, ct.payment_terms,
                 EXISTS (SELECT 1 FROM aurora.contract_coverages cv
-                         WHERE cv.contract_id = ct.id AND cv.kind = 'customer') AS covers_all_assets
+                         WHERE cv.contract_id = ct.id AND cv.kind = 'customer') AS covers_all_assets,
+                ct.service_hold, ct.service_hold_reason, ct.service_hold_at,
+                (SELECT count(*)::int FROM aurora.contract_renewals r WHERE r.contract_id = ct.id)
+                  AS renewal_count
            FROM aurora.contracts ct
            LEFT JOIN aurora.sla_policies sp ON sp.id = ct.sla_policy_id
           WHERE ct.archived_at IS NULL
@@ -329,6 +344,8 @@ export class ContractsController {
                 sla_target_percent::text AS sla_target_percent,
                 plan_target_percent::text AS plan_target_percent,
                 notes, archived_at, created_at, updated_at,
+                service_hold, service_hold_reason, service_hold_at,
+                (SELECT u.name FROM aurora.users u WHERE u.id = service_hold_by) AS service_hold_by_name,
                 CASE WHEN $2::boolean THEN monthly_value::text END AS monthly_value,
                 CASE WHEN $2::boolean THEN currency END AS currency,
                 CASE WHEN $2::boolean THEN overage_call_rate::text END AS overage_call_rate,
@@ -457,6 +474,77 @@ export class ContractsController {
     }
     await withTenant(this.db, ctx, (s) => terminateContract(s, uuidParam(id, 'id'), body.reason as string));
     return { status: 'terminated' };
+  }
+
+  /**
+   * D-4: suspende ou bloqueia o atendimento ("tudo para e fica somente consulta").
+   * A regra vale nas funções de dados — esta rota só liga a retenção.
+   */
+  @Post(':id/service-hold')
+  @RequirePermissions('contract.update')
+  async hold(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ changed: boolean }> {
+    const ctx = req.auroraContext!;
+    const b = parseWith(contractsHoldService.body, body);
+    return withTenant(this.db, ctx, (s) => holdContractService(s, uuidParam(id, 'id'), b.hold, b.reason));
+  }
+
+  /** D-4: reativa o atendimento. */
+  @Post(':id/service-release')
+  @RequirePermissions('contract.update')
+  async release(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ changed: boolean }> {
+    const ctx = req.auroraContext!;
+    const b = parseWith(contractsReleaseService.body, body ?? {});
+    return withTenant(this.db, ctx, (s) => releaseContractService(s, uuidParam(id, 'id'), b.reason ?? null));
+  }
+
+  /** D-7: renovação à mão — também o caminho para regularizar contrato vencido. */
+  @Post(':id/renew')
+  @RequirePermissions('contract.update')
+  async renew(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Body() body: unknown
+  ): Promise<{ previous_ends_on: string; new_ends_on: string }> {
+    const ctx = req.auroraContext!;
+    const b = parseWith(contractsRenew.body, body ?? {});
+    return withTenant(this.db, ctx, (s) =>
+      renewContract(s, uuidParam(id, 'id'), { newEndsOn: b.newEndsOn ?? null, note: b.note ?? null })
+    );
+  }
+
+  /** D-7: histórico das renovações. */
+  @Get(':id/renewals')
+  @RequirePermissions('contract.read')
+  async renewals(@Req() req: AuroraRequest, @Param('id') id: string): Promise<{ items: unknown[] }> {
+    const ctx = req.auroraContext!;
+    const contractId = uuidParam(id, 'id');
+    const items = await withTenant(this.db, ctx, async (s) => {
+      const [c] = await s.query(`SELECT id FROM aurora.contracts WHERE id = $1`, [contractId]);
+      if (!c) throw new NotFoundError('contrato não encontrado');
+      return contractRenewals(s, contractId);
+    });
+    return { items };
+  }
+
+  /** D-3: horas de preventiva e de corretiva das OS do contrato (só apuração). */
+  @Get(':id/technical-hours')
+  @RequirePermissions('contract.read')
+  async technicalHours(
+    @Req() req: AuroraRequest,
+    @Param('id') id: string,
+    @Query() query: unknown
+  ): Promise<unknown> {
+    const ctx = req.auroraContext!;
+    const q = parseWith(contractsTechnicalHours.query, query);
+    return withTenant(this.db, ctx, (s) => technicalHours(s, uuidParam(id, 'id'), q.from, q.to));
   }
 
   /** Mede sem gravar — é a tela do mês em curso. */

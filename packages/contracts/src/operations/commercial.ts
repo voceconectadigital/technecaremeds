@@ -177,6 +177,8 @@ export const quoteTransition = defineOperation({
 /* -------------------------------------------------------------------------- */
 
 export const CONTRACT_STATUSES = ['draft', 'active', 'suspended', 'expired', 'terminated'] as const;
+/** D-4: as duas retenções que alguém aciona no contrato (o vencimento é a data). */
+export const SERVICE_HOLDS = ['suspended', 'blocked'] as const;
 export type ContractStatus = (typeof CONTRACT_STATUSES)[number];
 
 /**
@@ -229,6 +231,15 @@ export const ContractRow = z.object({
   payment_terms: z.enum(PAYMENT_TERMS).nullable().optional(),
   /** Cobertura `customer`: todos os equipamentos do cliente. */
   covers_all_assets: z.boolean().optional(),
+  /**
+   * D-4 (24/11/2026): atendimento SUSPENSO ou BLOQUEADO por quem administra. Nulo = livre.
+   * Com retenção (ou vencido), ninguém abre, executa nem conclui chamado/OS do contrato.
+   */
+  service_hold: z.enum(SERVICE_HOLDS).nullable().optional(),
+  service_hold_reason: z.string().nullable().optional(),
+  service_hold_at: Timestamp.nullable().optional(),
+  /** Quantas vezes a vigência foi renovada (D-7). */
+  renewal_count: z.number().int().optional(),
 });
 export type ContractRow = z.infer<typeof ContractRow>;
 
@@ -304,6 +315,10 @@ export const contractDetail = defineOperation({
       archived_at: Timestamp.nullable(),
       created_at: Timestamp,
       updated_at: Timestamp,
+      service_hold: z.enum(SERVICE_HOLDS).nullable().optional(),
+      service_hold_reason: z.string().nullable().optional(),
+      service_hold_at: Timestamp.nullable().optional(),
+      service_hold_by_name: z.string().nullable().optional(),
       /* Só para quem tem `contract.read_financials`. */
       monthly_value: z.string().nullable().optional(),
       currency: z.string().nullable().optional(),
@@ -439,6 +454,136 @@ export const contractsActivate = defineOperation({
   response: z.object({ status: z.literal('active') }),
   status: 201,
   errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* D-4 — suspender / bloquear / reativar o atendimento                         */
+/* -------------------------------------------------------------------------- */
+
+export const contractsHoldService = defineOperation({
+  operationId: 'contracts.holdService',
+  method: 'POST',
+  path: '/contracts/:id/service-hold',
+  summary: 'Suspende ou bloqueia o atendimento do contrato (tudo para, fica só consulta)',
+  description:
+    'Anderson, 24/11/2026: "tudo para e fica somente consulta, ninguém abre nem fecha chamado". ' +
+    'Vale na API para abrir, executar, concluir ou mudar a situação de solicitações e OS do contrato, ' +
+    'para a geração de planos e para as automações. Só contrato vigente; motivo obrigatório. ' +
+    'Suspenso ou bloqueado, o contrato não renova sozinho.',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ hold: z.enum(SERVICE_HOLDS), reason: z.string().trim().min(10).max(500) }).strict(),
+  response: z.object({ changed: z.boolean() }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+export const contractsReleaseService = defineOperation({
+  operationId: 'contracts.releaseService',
+  method: 'POST',
+  path: '/contracts/:id/service-release',
+  summary: 'Reativa o atendimento do contrato (tira a suspensão ou o bloqueio)',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z.object({ reason: z.string().trim().max(500).nullable().optional() }).strict(),
+  response: z.object({ changed: z.boolean() }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* D-7 — renovação                                                             */
+/* -------------------------------------------------------------------------- */
+
+export const ContractRenewal = z.object({
+  id: Uuid,
+  seq: z.number().int(),
+  previous_ends_on: z.string(),
+  new_ends_on: z.string(),
+  mode: z.enum(['automatic', 'manual']),
+  note: z.string().nullable(),
+  created_at: Timestamp,
+  created_by_name: z.string().nullable(),
+});
+export type ContractRenewal = z.infer<typeof ContractRenewal>;
+
+export const contractsRenewals = defineOperation({
+  operationId: 'contracts.renewals',
+  method: 'GET',
+  path: '/contracts/:id/renewals',
+  summary: 'Histórico das renovações da vigência (automáticas e manuais)',
+  permissions: ['contract.read'],
+  params: z.object({ id: Uuid }),
+  response: z.object({ items: z.array(ContractRenewal) }),
+  errors: ['not_found'],
+});
+
+export const contractsRenew = defineOperation({
+  operationId: 'contracts.renew',
+  method: 'POST',
+  path: '/contracts/:id/renew',
+  summary: 'Renova a vigência à mão (inclusive de contrato vencido, para regularizar)',
+  description:
+    'Sem `newEndsOn`, renova pelo prazo ORIGINAL do contrato (12 meses continuam 12 meses). ' +
+    'Prazo indeterminado não tem ciclo (409). A renovação automática é da varredura diária: ' +
+    'acontece no último dia da vigência, se ninguém suspendeu nem bloqueou.',
+  permissions: ['contract.update'],
+  params: z.object({ id: Uuid }),
+  body: z
+    .object({
+      newEndsOn: DataIso.nullable().optional(),
+      note: z.string().trim().max(500).nullable().optional(),
+    })
+    .strict(),
+  response: z.object({ previous_ends_on: z.string(), new_ends_on: z.string() }),
+  status: 201,
+  errors: ['validation_failed', 'forbidden', 'not_found', 'conflict'],
+});
+
+/* -------------------------------------------------------------------------- */
+/* D-3 — horas técnicas (só apuração; nenhuma tarifa, nenhum valor)            */
+/* -------------------------------------------------------------------------- */
+
+export const TECHNICAL_HOUR_GROUPS = ['preventive', 'corrective', 'other'] as const;
+
+export const contractsTechnicalHours = defineOperation({
+  operationId: 'contracts.technicalHours',
+  method: 'GET',
+  path: '/contracts/:id/technical-hours',
+  summary: 'Horas de preventiva e de corretiva das OS do contrato, pela hora de início e de término',
+  description:
+    'D-3 (Anderson, 24/11/2026): a hora técnica é controlada pela hora de início e de término da OS. ' +
+    'Conta as OS do contrato cujo atendimento terminou no período; separa preventiva, corretiva e ' +
+    'outras naturezas. OS sem as duas horas (as antigas) aparecem à parte, como "não informadas" — ' +
+    'nunca como zero. Só apuração: nenhuma tarifa nem valor é calculado.',
+  permissions: ['contract.read'],
+  params: z.object({ id: Uuid }),
+  query: z.object({ from: DataIso, to: DataIso }),
+  response: z.object({
+    period: z.object({ from: z.string(), to: z.string() }),
+    totals: z.array(
+      z.object({
+        group: z.enum(TECHNICAL_HOUR_GROUPS),
+        work_orders: z.number().int(),
+        minutes: z.number().int(),
+      })
+    ),
+    /** OS concluídas no período sem hora de início/término (anteriores à regra). */
+    without_hours: z.number().int(),
+    items: z.array(
+      z.object({
+        work_order_id: Uuid,
+        number: z.string().nullable(),
+        title: z.string(),
+        work_order_type: z.string().nullable(),
+        group: z.enum(TECHNICAL_HOUR_GROUPS),
+        service_started_at: Timestamp,
+        service_ended_at: Timestamp,
+        minutes: z.number().int(),
+      })
+    ),
+  }),
+  errors: ['validation_failed', 'not_found'],
 });
 
 export const contractsOptions = defineOperation({

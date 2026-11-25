@@ -140,6 +140,11 @@ export const EVENT_TYPES = [
   'contract.expired',
   'contract.terminated',
   'contract.period_closed',
+  // D-4/D-7 (24/11/2026): retenção do atendimento e renovação da vigência.
+  'contract.service_suspended',
+  'contract.service_blocked',
+  'contract.service_released',
+  'contract.renewed',
 
   // --- documents (EPIC-018) -----------------------------------------------
   'document.issued',

@@ -132,7 +132,11 @@ describe('concluir e validar o laudo', () => {
     });
     await expect(
       withTenant(t.db, ctx, (s) =>
-        transitionWorkOrder(s, laudo, 'completed', { resolution: 'Laudo emitido.' })
+        transitionWorkOrder(s, laudo, 'completed', {
+          serviceStartedAt: new Date(Date.now() - 3_600_000),
+          serviceEndedAt: new Date(Date.now() - 60_000),
+          resolution: 'Laudo emitido.',
+        })
       )
     ).rejects.toThrow(/ao menos uma foto/);
   });
@@ -145,7 +149,11 @@ describe('concluir e validar o laudo', () => {
       [newId(), ORG, laudo, `orgs/${ORG}/os/${laudo}/foto.jpg`, USER]
     );
     await withTenant(t.db, ctx, (s) =>
-      transitionWorkOrder(s, laudo, 'completed', { resolution: 'Laudo emitido.' })
+      transitionWorkOrder(s, laudo, 'completed', {
+        serviceStartedAt: new Date(Date.now() - 3_600_000),
+        serviceEndedAt: new Date(Date.now() - 60_000),
+        resolution: 'Laudo emitido.',
+      })
     );
     // Concluído ainda não baixa: quem valida é que aceita o laudo.
     expect(await statusDoAtivo(ativo)).toBe('active');

@@ -285,6 +285,25 @@ export const WorkOrderDetail = z.object({
    * Opcional por causa da demonstração.
    */
   uses_quotes: z.boolean().optional(),
+  /** Hora real de início e de término do atendimento (D-3). Nulas nas OS antigas. */
+  service_started_at: z.string().nullable().optional(),
+  service_ended_at: z.string().nullable().optional(),
+  /**
+   * D-4: o contrato parou o atendimento (vencido, suspenso ou bloqueado). Com isso a OS é só
+   * consulta: a API recusa (409) qualquer mudança de situação e toda ação de execução.
+   */
+  service_block: z
+    .object({
+      contract_id: Uuid,
+      contract_number: z.string(),
+      reason: z.enum(['suspended', 'blocked', 'expired']),
+      held_at: z.string().nullable(),
+      hold_reason: z.string().nullable(),
+      ends_on: z.string().nullable(),
+      message: z.string(),
+    })
+    .nullable()
+    .optional(),
   /** O orçamento vivo ligado a esta OS, se houver. */
   quote_summary: z
     .object({
@@ -374,6 +393,12 @@ export const workOrderTransition = defineOperation({
     version: z.number().int().optional(),
     /** O parecer LIBERADO/PARADO junto com a conclusão (OS-16) — o quadro e o campo não abrem o relatório. */
     operational_result: z.enum(['released', 'stopped']).nullable().optional(),
+    /**
+     * Hora real de início e de término do atendimento (D-3, Anderson 24/11/2026: "campo
+     * obrigatório em toda OS"). Exigidas na conclusão quando ainda não estão na OS.
+     */
+    service_started_at: z.string().nullable().optional(),
+    service_ended_at: z.string().nullable().optional(),
   }),
   response: z.object({
     status: z.string(),
