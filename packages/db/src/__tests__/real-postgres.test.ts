@@ -899,8 +899,14 @@ describe.skipIf(!rodar)('contrato parado, renovação e planos num servidor de v
     return emA(async (s) => {
       const tipos = await provisionStarterLocationTypes(s);
       const cliente = await createCustomer(s, { name: `${nome} ${Date.now()}` });
+      const unidade = await createLocation(s, {
+        customerId: cliente,
+        locationTypeId: tipos.get('unidade')!,
+        name: 'Unidade',
+      });
       const setor = await createLocation(s, {
         customerId: cliente,
+        parentId: unidade,
         locationTypeId: tipos.get('setor')!,
         name: 'UTI',
       });
@@ -967,7 +973,12 @@ describe.skipIf(!rodar)('contrato parado, renovação e planos num servidor de v
     const c = await cenario('Parado');
     const k = await contrato(c.cliente, dia(-30), dia(300), false);
     const os = await emA((s) =>
-      createWorkOrder(s, { customerId: c.cliente, workOrderTypeId: naturezaA, title: 'OS', assetId: c.ativo })
+      createWorkOrder(s, {
+        customerId: c.cliente,
+        workOrderTypeId: naturezaA,
+        title: 'Atendimento',
+        assetId: c.ativo,
+      })
     );
     await emA((s) => holdContractService(s, k, 'suspended', 'Suspensão no servidor real'));
     const motivo = /Suspensão no servidor real/;
