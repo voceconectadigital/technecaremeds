@@ -1001,6 +1001,27 @@ describe('planos · um procedimento por equipamento, educação continuada e edi
     expect(historico.filter((h) => h.entity === 'task').length).toBeGreaterThanOrEqual(3);
   });
 
+  it('plano por setor (modelo antigo): incluir quem ele já alcança é recusado — sem segunda OS', async () => {
+    const c = await novoCliente('SetorAntigo');
+    const r = await em((s) =>
+      createGuidedPlan(s, { ...base(c), leadTimeDays: 0, checklistTemplateKey: 'prev_ventilador' }, TUDO)
+    );
+    expect(r.workOrders).toBe(2);
+    await expect(
+      em((s) =>
+        addGuidedPlanItems(s, r.planId, [{ assetId: c.mon, checklistTemplateKey: 'prev_monitor' }], TUDO)
+      )
+    ).rejects.toThrow(/já está neste plano.*setor ou a categoria inteira/s);
+    const [n] = await em((s) =>
+      s.query<{ os: number; tarefas: number }>(
+        `SELECT (SELECT count(*)::int FROM aurora.work_orders WHERE customer_id = $1) AS os,
+                (SELECT count(*)::int FROM aurora.plan_tasks WHERE plan_id = $2) AS tarefas`,
+        [c.cliente, r.planId]
+      )
+    );
+    expect(n).toEqual({ os: 2, tarefas: 1 });
+  });
+
   it('plano manual: o ciclo abre sem OS; "gerar OS deste ciclo" materializa', async () => {
     const c = await novoCliente('PlanoManual');
     const r = await em((s) =>

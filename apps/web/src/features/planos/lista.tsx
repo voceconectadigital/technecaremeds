@@ -211,12 +211,17 @@ export function PlanoPage() {
             <span className="ml-auto flex flex-wrap gap-2">
               <Can permission="maintenance_plan.update">
                 <EditarPlano plano={data.plan} />
-                <IncluirEquipamentos
-                  planId={data.plan.id}
-                  customerId={data.plan.customer_id}
-                  kind={tipoDoPlano(data.tasks)}
-                  jaNoPlano={data.tasks.map((t) => t.target_asset_id).filter((x): x is string => Boolean(x))}
-                />
+                {/* Plano por SETOR já alcança o setor inteiro (e o que chegar): não há quem incluir. */}
+                {!data.tasks.some((t) => t.target_kind === 'location_subtree') && (
+                  <IncluirEquipamentos
+                    planId={data.plan.id}
+                    customerId={data.plan.customer_id}
+                    kind={tipoDoPlano(data.tasks)}
+                    jaNoPlano={data.tasks
+                      .map((t) => t.target_asset_id)
+                      .filter((x): x is string => Boolean(x))}
+                  />
+                )}
                 <AtivacaoDoPlano planId={data.plan.id} ativo={data.plan.is_active} nome={data.plan.name} />
               </Can>
             </span>
@@ -232,6 +237,12 @@ export function PlanoPage() {
           </div>
         </Card>
 
+        {data.tasks.some((t) => t.target_kind === 'location_subtree') && (
+          <p role="note" className="rounded-control bg-info-soft px-3 py-2 text-sm text-info-text">
+            Este plano é do setor inteiro e usa o mesmo procedimento para todos os equipamentos. Para ter um
+            procedimento por equipamento, desligue este plano e crie outro.
+          </p>
+        )}
         <ParaOndeVai automatico={data.plan.auto_generate} ativo={data.plan.is_active} />
 
         {data.tasks.length === 0 ? (

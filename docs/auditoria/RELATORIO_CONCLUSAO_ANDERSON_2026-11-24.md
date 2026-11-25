@@ -183,7 +183,7 @@ Ver §9.6 (ordem definitiva).
 
 | Suíte | Resultado |
 |---|---|
-| Banco (`conclusao-anderson-2026-11-24.test.ts`, PGlite) | 22/22 |
+| Banco (`conclusao-anderson-2026-11-24.test.ts`, PGlite) | 23/23 |
 | HTTP (`api-conclusao-anderson-2026-11-24.test.ts`) | 9/9 |
 | Domínio (`contract-service.test.ts`) | 7/7 |
 | Telas (`conclusao-anderson-2026-11-24.test.tsx`) | 7/7 |

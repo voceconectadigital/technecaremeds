@@ -701,13 +701,25 @@ export async function addGuidedPlanItems(
     p.customer_id,
     base.target_location_id ? caminho : '/'
   );
-  const ja = await session.query<{ target_asset_id: string }>(
-    `SELECT target_asset_id FROM aurora.plan_tasks
-      WHERE plan_id = $1 AND archived_at IS NULL AND target_asset_id = ANY($2::uuid[])`,
+  // "Já está no plano" é o que as tarefas ALCANÇAM, e não só as que nomeiam o equipamento: nos planos
+  // por setor ou categoria, comparar pelo nome criaria uma segunda tarefa — e uma segunda OS por ciclo.
+  const ja = await session.query<{ asset_id: string; por_expressao: boolean }>(
+    `SELECT r.asset_id, bool_or(t.target_kind <> 'asset') AS por_expressao
+       FROM aurora.plan_tasks t
+      CROSS JOIN LATERAL aurora.resolve_plan_task_assets(t.id) r
+      WHERE t.plan_id = $1 AND t.archived_at IS NULL AND r.asset_id = ANY($2::uuid[])
+      GROUP BY r.asset_id`,
     [planId, items.map((i) => i.assetId)]
   );
   if (ja.length > 0) {
-    throw new ConflictError('um dos equipamentos já está neste plano', { asset_id: ja[0]!.target_asset_id });
+    const nome = nomes.get(ja[0]!.asset_id);
+    throw new ConflictError(
+      ja[0]!.por_expressao
+        ? `"${nome}" já está neste plano: ele alcança o setor ou a categoria inteira, com um procedimento só. ` +
+            'Para ter um procedimento por equipamento, desligue este plano e crie outro.'
+        : `"${nome}" já está neste plano`,
+      { asset_id: ja[0]!.asset_id }
+    );
   }
   const hoje = await organizationToday(session, now);
   const vencimentoPelaAncora = addFrequency(
