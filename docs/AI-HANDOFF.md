@@ -33,7 +33,7 @@
 > `contract_renewals` (append-only, única por contrato × fim anterior); função `service_block(cliente, ativo, dia)`;
 > `work_orders.service_started_at/service_ended_at`.
 > Estado de partida conferido: PR #48 (segurança/performance) MESCLADA em `main` (o bloco abaixo ficou com o texto
-> de antes do merge); `0091` sem confirmação de aplicação em produção.
+> de antes do merge); `0091` aplicada em produção (confirmado no banco em 25/11).
 > · **D-4 — contrato parado = só consulta, NA CAMADA DE DADOS:** `assertServiceAllowed`/`assertWorkOrderServiceAllowed`
 >   (`packages/db/src/contract-service.ts`) em `createWorkOrder`, `transitionWorkOrder` (toda transição; só a poda de
 >   equipamento baixado usa `bypassServiceBlock`), `assertCanExecuteWorkOrder` (checklist, cronômetro, anexo,

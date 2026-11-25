@@ -15,7 +15,7 @@ ou alterado nesta rodada.
 | Item | Situação encontrada |
 |---|---|
 | PR #48 (segurança e performance) | **Mesclada** em `main`; o bloco do `AI-HANDOFF.md` ainda dizia "sem merge" (corrigido no bloco novo). |
-| Migration `0091` | No repositório; **sem confirmação** de aplicação em produção (relatório de 23/11, §8). |
+| Migration `0091` | **Aplicada** em produção em 23/11 (confirmado no banco em 25/11, §7.1). |
 | PRs #49 a #56 | Mescladas; front publicado em 23–24/11 (CSP bloqueante, olho na senha). |
 | PRs abertas antigas (#31, #32, #33, #43) | Não tocadas. |
 
@@ -130,8 +130,8 @@ manual materializado pelo botão, edição/inclusão/retirada com histórico, co
 ### 7.1 Migration 0091
 - A API de produção responde impressão `7fea2ba90690` (construída em 23/11, `GET /v1/health/version`), igual à calculada
   em `main` `d772b49`. O cálculo inclui a pasta de migrations, e o manifesto de produção roda `migrate` no deploy.
-- Conclusão: **muito provavelmente aplicada, não confirmada no banco.** A confirmação é a consulta 0 do arquivo abaixo
-  (leitura do banco de produção, que depende de autorização). A 0091 só cria índices: se faltar, o próximo deploy a aplica.
+- **Confirmada no banco em 25/11/2026** (leitura autorizada, transação READ ONLY): aplicada em 23/11/2026 12:52 UTC; 91
+  migrations; os três índices existem e são válidos. A `0092` não está aplicada.
 
 ### 7.2 Migration 0092
 `0092_planos_por_equipamento_bloqueio_renovacao_horas.sql` — só aditiva. Roda no próprio deploy da API; a API anterior
@@ -139,7 +139,21 @@ funciona com ela, então voltar a API não exige desfazê-la. O `ALTER` e os `CH
 escrita por um instante.
 
 Consultas: `docs/auditoria/consultas-pre-deploy-0092.sql` (transação READ ONLY; testadas no estado da 0091, no
-PostgreSQL 16 real e contra a regra `service_block`). **Não foram executadas em produção: os números ainda não existem.**
+PostgreSQL 16 real e contra a regra `service_block`). Executadas em produção em 25/11/2026, só leitura, com autorização:
+
+| Consulta | Resultado em 25/11/2026 |
+|---|---|
+| 1, 2 | **1 contrato vencido (CT-2026-00001, fim 23/11, sem renovação automática) e 7 equipamentos param**; nenhum outro contrato válido do mesmo cliente |
+| 3, 4 | 12 OS abertas (2 em execução, nenhum cronômetro aberto) e 6 solicitações ficam só consulta |
+| 5, 5b, 5c, 5d | **nenhuma renovação na primeira varredura**; nenhuma renovação sem término; nada vence em 60 dias |
+| 6 | 25 OS ainda não concluídas passam a pedir as horas (não exclui as 12 acima) |
+| 7 | nenhuma operação do app de campo em 30 dias: risco de app antigo em uso é baixo |
+| 8 | 4 planos ativos (2 automáticos) não geram OS até regularizar |
+| 9 | nenhum contrato com Equipe Fixa 3 a 10 |
+
+Consequência prática: o contrato afetado é o do cliente de demonstração, o que o Anderson usa para testar. Vencido não se edita na
+API atual; depois de publicar, **Renovar** na ficha do cliente libera tudo. Planos criados pelo assistente antigo como "todos do
+setor" **não são convertidos**: continuam com um procedimento só para todos; para ter um por equipamento, desligar e recriar.
 
 | Impacto | Consulta | O que fazer |
 |---|---|---|
