@@ -291,3 +291,24 @@ recusado para todos os clientes**. O app de campo já tem os campos. No Cliente 
 
 **Retorno:** imagem anterior `00a01c8cb505` preservada no servidor (impressão `7fea2ba90690`). Voltar é um novo deploy de
 `d772b49edbb004a3cdb9c7cbc7c63b186908cf51`; a `0092` fica. Backup `9a27a8ee…` preservado.
+
+## 15. Publicação do sistema e do portal (25/11/2026)
+
+Compilados de `cb712959` com a API de produção; a impressão do commit (`374412eb7b9d`) é a mesma da API no ar.
+
+| | Sistema | Portal |
+|---|---|---|
+| Deploy (Cloudflare Pages) | `8c46c89e` | `506abd79` |
+| Arquivo principal no ar | `index-BSAbADB0.js` | `index-DL1f50Ze.js` |
+| Página | 200; tela de entrada carrega | 200; tela de entrada carrega |
+| CSP | bloqueante, sem violações no console | bloqueante, sem violações no console |
+
+- O sistema agora envia as horas de início e término: **concluir OS pelo sistema volta a funcionar** (exceto no Cliente A até a renovação).
+- API depois: `ready` 200, mesma impressão, rota protegida 401, CORS do sistema 204. Campo segue em `cb71295`.
+- Não verificado com login em produção: a tela de conclusão com os campos de hora e o aviso de bloqueio. Ambos estão no build publicado e
+  cobertos pelos testes do mesmo commit.
+- Observação anterior a esta rodada: a tela de entrada do portal mostra um aviso de "ambiente de desenvolvimento" (já estava em `021c8bb`).
+  A API recusa esse modo fora de desenvolvimento, mas o texto não deveria aparecer em produção.
+
+**Retorno:** recompilar e publicar `ff02a3c` no sistema (deploy anterior `813eafb8`, `index-Bf9fp0AT.js`) e `021c8bb` no portal
+(`e4564a32`, `index-CBnkkRzW.js`). Voltar o sistema sem voltar a API faz a conclusão de OS ser recusada de novo.
