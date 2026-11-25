@@ -10,13 +10,14 @@ Respostas do contratante (D-1 a D-7) e correção do assistente de planos. Detal
 | Código | PR #57 **mesclada** em `main` (`cb71295`), 88 arquivos |
 | CI do commit mesclado (`751038d`) | verde: 3.006 de 3.006 testes; 240 de ponta a ponta (1 pulado) |
 | App de campo | **publicado** em produção |
-| API, sistema e portal | **não publicados** (API na impressão `7fea2ba90690`) |
+| API | **publicada** em 25/11, impressão `374412eb7b9d` (§14) |
+| Sistema e portal | **não publicados** |
 | Migration `0091` | aplicada em 23/11, conferida no banco |
-| Migration `0092` | **não aplicada** |
+| Migration `0092` | **aplicada** em 25/11, 19:22:36 UTC (§14) |
 | Backup e `restore_drill` | **feitos e aprovados em 25/11** (§12) |
 | Dados de produção | nenhum alterado; só leituras autorizadas e um backup |
 
-Para o cliente, só o app de campo mudou. O resto entra quando a API e o sistema forem publicados.
+O app de campo e a API já mudaram. As telas novas entram quando o sistema e o portal forem publicados.
 
 ## 2. Linha do tempo
 
@@ -99,7 +100,7 @@ foi iniciada. Fora dele, 3 planos automáticos usam o procedimento de incubadora
 |---|---|
 | 1. Backup e `restore_drill` | **feito** (§12) |
 | 2. Rodar de novo as consultas de impacto | **feito** (§13) |
-| 3. Deploy da API (aplica a `0092`) | sua autorização |
+| 3. Deploy da API (aplica a `0092`) | **feito** (§14) |
 | 4. Publicar sistema e portal | sua autorização |
 | 5. Renovar o contrato de demonstração (você escolheu renovar após a API) | sua confirmação na hora; término proposto 23/11/2027, a confirmar com o contratante |
 | 6. Homologação (checklist na §9.7 do relatório de conclusão) | Contratante |
@@ -263,3 +264,30 @@ Não é a cópia real: produção tem mais linhas (73 mil), mas as tabelas alter
 
 Apto para a publicação controlada da API (`cb712959b3908fd3d2f3763b72d0813b38e5e68b`), com autorização própria. Se for em outro dia,
 gerar backup e repetir as consultas. Ao subir a API, o Cliente A fica só para consulta até a renovação combinada.
+
+## 14. Deploy da API (25/11/2026)
+
+Antes: backup do dia íntegro e com drill aprovado, nenhum registro criado ou alterado desde ele e impacto idêntico.
+
+| Item | Resultado |
+|---|---|
+| Job | `53b72851-c43a-4849-bfc3-c67a89deccfe`, sucesso, 19:18:57 a 19:23:06 UTC |
+| Commit | `cb712959b3908fd3d2f3763b72d0813b38e5e68b` |
+| Migration `0092` | aplicada às 19:22:36 UTC, checksum igual ao do repositório; etapa completa de migração em 4,2 s |
+| Migrations | 92 |
+| Health | `ready` 200, banco ok |
+| Impressão | `374412eb7b9d`, a esperada |
+| API e workers | em execução, sem reinício e sem erro nos logs; jobs concluindo. Banco sem erro |
+| Dados existentes | 116 tabelas com conteúdo idêntico antes e depois |
+| Retenções, renovações e horas criadas | nenhuma |
+| Bloqueio no banco de produção | 7 equipamentos e 12 OS do Cliente A (vencido); os outros 8 equipamentos livres |
+| Sistema, portal e campo | respondem 200; rota protegida sem login responde 401 |
+
+A recusa pela API não foi exercitada com login em produção, porque isso exigiria tentar uma escrita. Ela é coberta pelos testes do
+mesmo commit.
+
+**Até publicar o sistema:** a tela atual não tem os campos de hora e a API passou a exigi-los, então **concluir OS pelo sistema é
+recusado para todos os clientes**. O app de campo já tem os campos. No Cliente A, as escritas de atendimento ficam recusadas até a renovação.
+
+**Retorno:** imagem anterior `00a01c8cb505` preservada no servidor (impressão `7fea2ba90690`). Voltar é um novo deploy de
+`d772b49edbb004a3cdb9c7cbc7c63b186908cf51`; a `0092` fica. Backup `9a27a8ee…` preservado.
