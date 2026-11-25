@@ -173,11 +173,9 @@ setor" **não são convertidos**: continuam com um procedimento só para todos; 
 - O app se atualiza ao abrir com rede; aparelho que ficar offline continua no antigo até abrir.
 - Trabalho feito offline antes de um bloqueio chega depois e é recusado (409), também preservado em "Precisa da sua atenção".
 
-### 7.4 Ordem proposta (nada disto foi executado)
-1. Autorizar e rodar as consultas; decidir caso a caso com o Anderson.
-2. Publicar o **app de campo** e pedir que os técnicos abram com rede e sincronizem.
-3. Backup verificado → deploy da **API** (aplica a 0092) → conferir a impressão.
-4. Publicar o **sistema** e o **portal**. O sistema novo precisa da API nova.
+### 7.4 Ordem
+
+Ver §9.6 (ordem definitiva).
 
 ## 8. Testes e CI
 
@@ -213,3 +211,96 @@ educação continuada no formulário), sem afrouxar asserções.
 só **37** usam o servidor (`real-postgres` e `jobs-real-postgres`); os demais usam PGlite. Os E2E usam o servidor real.
 
 Falhas corrigidas no caminho: 4 E2E (`48d54ad`), 1 E2E (`92fc6df`) e 4 testes no PostgreSQL real (`2084ec8`) — todas no próprio teste.
+`
+`## 9. Preparação do deploy (25/11/2026) — nada executado
+`
+`Leitura de produção em transação READ ONLY (`consultas-pre-deploy-0092.sql` e `consultas-pre-deploy-0092-detalhe.sql`).
+`
+`### 9.1 Bloqueios operacionais
+`
+`| # | Bloqueio | Como resolver |
+`|---|---|---|
+`| B1 | Contrato CT-2026-00001 vencido: ao subir a API, 7 equipamentos, 12 OS e 6 solicitações ficam só consulta | §9.2 |
+`| B2 | **Defeito conhecido:** "Incluir equipamentos" num plano antigo (por setor ou categoria) que já alcança o equipamento gera uma segunda OS. Reproduzido em teste (2 OS) | Corrigir antes (recusar equipamento já alcançado pela tarefa do plano), ou orientar a não usar esse botão em plano antigo |
+`| B3 | Não há procedimento de PREVENTIVA publicado para monitor nem para ventilador: só para bomba de infusão e incubadora. O assistente novo exige um por equipamento | Anderson publica os procedimentos antes de recriar |
+`| B4 | Prazo na renovação: 23/11/2025 a 23/11/2026 conta 366 dias, e "Renovar" sem data leva a **24/11/2027** | Informar a data na renovação, ou decidir se "mesmo dia do ano seguinte" conta como 12 meses |
+`
+`### 9.2 Regularização do CT-2026-00001 (só com autorização)
+`
+`Estado: serviço completo, cobertura por setor (1), 23/11/2025 a 23/11/2026, sem renovação automática, com valor mensal, sem SLA
+`geral, sem periodicidade, pacote ou pagamento informados, sem período medido. Marcado vencido pela varredura de 24/11.
+`
+`- **Opção A — renovar (depois da API):** ficha do cliente > Renovar > novo término **23/11/2027** e observação com o motivo.
+`  Muda só o término e a situação; número, início, cobertura e valor ficam; a renovação entra no histórico. Efeitos: a vigência
+`  fica contínua desde 23/11/2026 e a renovação automática continua desligada. Há bloqueio entre subir a API e renovar.
+`- **Opção B — contrato novo (antes da API):** ficha do cliente > Novo contrato, com a data real de início, a mesma cobertura e
+`  condições. Não há janela de bloqueio e o vencido fica como histórico. O formulário só cobre "todos os equipamentos";
+`  cobertura por setor só pela API.
+`- **Opção C — deixar vencido:** testar o bloqueio com o Anderson e depois aplicar A.
+`
+`Nenhuma opção cria dado fictício. Datas e condições reais são do Anderson.
+`
+`### 9.3 Planos do cliente afetado
+`
+`| Plano | Modelo | Situação | Orientação |
+`|---|---|---|---|
+`| Preventiva a cada 6 meses — UTI Adulto | **Antigo, por setor** | Sem principal; "calibração de ventilador" nos 5 equipamentos de 3 categorias. 5 OS abertas (WO-2026-0028 a 0032), sem resposta, visita ou hora | Recriar |
+`| Preventiva a cada 6 meses — Emergência | **Antigo, por setor** | Procedimento de bomba; alcança 0 equipamento; nenhum ciclo | Desligar; recriar se houver equipamento |
+`| Preventiva trimestral — ventiladores pulmonares | Por categoria (2 equipamentos, 1 categoria) | Sem procedimento, manual; WO-2026-0016 e 0017 abertas e 2 itens pendentes | Não mistura tipos; falta publicar e escolher o procedimento |
+`| Calibração anual — monitores e desfibriladores | Por categoria (1 equipamento) | Sem procedimento, manual; 1 item pendente | Idem, com procedimento de calibração |
+`
+`Fora do cliente afetado há 3 planos automáticos com o procedimento de **incubadora** em outros equipamentos: Pronto-socorro
+`(desfibrilador e ventilador), Hemodinâmica (desfibrilador) e Ultrassonografia mensal (ultrassom). Revisar com o Anderson.
+`
+`**Recriação, sem apagar nada** (contrato regularizado):
+`1. Publicar os procedimentos que faltam (B3).
+`2. **Desligar** o plano antigo, com motivo. Ciclos e OS ficam como histórico.
+`3. Cancelar, com justificativa, as OS geradas com o procedimento errado que não foram iniciadas. No sistema atual dá para
+`   cancelar já; depois da API, só com o contrato regularizado.
+`4. Criar o novo: preventiva, 6 meses, início **13/11/2026** (mantém o vencimento em 13/05/2027), um procedimento por equipamento.
+`   Começar com a geração automática **desmarcada**, conferir, e gerar por equipamento.
+`
+`Criar o novo antes de desligar o antigo duplica as OS.
+`
+`### 9.4 App de campo antes da API: confirmado por leitura do código
+`
+`- A única mudança do app é a tela da OS; ela acrescenta duas horas ao corpo da mudança de situação.
+`- A API em produção (mesma impressão de \`main\`) lê esse corpo campo a campo e ignora o que não conhece. Até a API subir, as horas
+`  digitadas no campo **não são gravadas**. Não foi ensaiado contra a API antiga em execução.
+`- Nenhum uso do app em 30 dias: risco baixo. A publicação sai de \`main\`, então depende do merge.
+`
+`### 9.5 Migration 0092: pronta
+`
+`Só aditiva, inalterada desde o primeiro commit da PR; aplicada no PostgreSQL 16 do CI (do zero). Roda como \`migrate\` no deploy da
+`API. Aplicá-la na cópia do \`restore_drill\` antes é o ensaio que falta. Voltar a API não exige desfazê-la, mas **a API antiga não
+`respeita suspensão nem bloqueio** feitos no intervalo.
+`
+`### 9.6 Ordem definitiva
+`
+`1. Decisões B1 a B4 e autorização. Merge da PR com CI verde.
+`2. Publicar o **campo** a partir de \`main\`; abrir com rede em um aparelho.
+`3. **Backup** novo, \`restore_drill\` verificado e, se possível, \`0092\` aplicada na cópia.
+`4. Rodar de novo as consultas de impacto (os números mudam a cada dia).
+`5. Deploy da **API** no SHA do merge (roda a \`0092\`). Conferir \`health/ready\`, impressão igual à de \`npm run versao\` e 92 migrations.
+`6. Publicar **sistema** e **portal**.
+`7. Regularizar o contrato (opção A), se for a escolhida.
+`8. Testes reais (§9.7). Volta: API no SHA anterior e front anterior.
+`
+`### 9.7 Checklist de homologação
+`
+`Sem gravar (quem publica):
+`- [ ] Login, Painel, OS, Contratos, Planos, Qualidade abrem sem erro no console nem violação de CSP
+`- [ ] Ficha do contrato mostra vencido; ficha de OS do cliente mostra o motivo e não oferece mudança de situação
+`- [ ] Formulário do contrato descreve as Equipes Fixas 1 e 2
+`- [ ] Assistente de plano abre e mostra um procedimento por equipamento (sem salvar)
+`- [ ] Portal e campo entram
+`
+`Com gravação (Anderson, ou com autorização dele; registros reais):
+`- [ ] Abrir chamado no cliente vencido é recusado com o motivo
+`- [ ] Renovar: término 23/11/2027, aparece em Renovações, OS volta a aceitar mudança
+`- [ ] Suspender e reativar com motivo, num contrato combinado
+`- [ ] Concluir uma OS real no sistema e outra no campo: pede as duas horas; conferir em Horas técnicas
+`- [ ] Recriar o plano da UTI Adulto (§9.3); "Gerar OS deste ciclo" traz o checklist de cada equipamento
+`- [ ] Editar, retirar equipamento e ver o histórico do plano
+`- [ ] Educação continuada com data por equipamento
+`- [ ] No dia seguinte: nenhuma renovação inesperada e nenhuma OS duplicada
