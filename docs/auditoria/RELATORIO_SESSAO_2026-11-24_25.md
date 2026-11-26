@@ -312,3 +312,19 @@ Compilados de `cb712959` com a API de produção; a impressão do commit (`37441
 
 **Retorno:** recompilar e publicar `ff02a3c` no sistema (deploy anterior `813eafb8`, `index-Bf9fp0AT.js`) e `021c8bb` no portal
 (`e4564a32`, `index-CBnkkRzW.js`). Voltar o sistema sem voltar a API faz a conclusão de OS ser recusada de novo.
+
+## 16. Renovação do contrato de demonstração (26/11/2026)
+
+Feita pela tela do sistema (ficha do contrato → **Renovar**), com o novo término informado e uma única confirmação. Sessão aberta
+pelo contratante; nenhuma senha digitada pelo assistente.
+
+| | Antes | Depois |
+|---|---|---|
+| Situação | Expirado ("somente consulta") | Vigente |
+| Vigência | 23/11/2025 → 23/11/2026 | 23/11/2025 → 23/11/2027 |
+| Histórico de renovações | nenhuma | 1: de 23/11/2026 para 23/11/2027, manual, 26/11/2026 |
+
+- O aviso de bloqueio sumiu da ficha do contrato, da ficha do Cliente A e das OS dele; os 7 equipamentos seguem cobertos.
+- O término foi informado à mão. Sem ele, o prazo original (23/11/2025 a 23/11/2026, 366 dias) daria 24/11/2027.
+- Nenhuma outra alteração: OS, planos, datas e demais contratos intocados. As OS e planos a corrigir (§§ anteriores) continuam pendentes.
+- Não verificado: concluir uma OS com as horas, porque exigiria gravar em OS real.
