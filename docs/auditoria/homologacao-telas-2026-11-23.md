@@ -7,7 +7,7 @@ Navegador: painel interno do app, oculto (página em segundo plano, por isso as 
 
 | Tela | Rota | Resultado | Observação |
 |---|---|---|---|
-| Ordens de serviço | `/ordens` | OK | Lista carrega com 12 abertas visíveis (WO-2026-0032 … 0015), equipamento e setor preenchidos |
+| Ordens de serviço | `/ordens` | OK | Lista carrega com 12 abertas visíveis, equipamento e setor preenchidos |
 | Painel de Controle | `/painel` | OK | Disponibilidade 93,3% (14/15), SLA 33,3% (1 no prazo, 2 estourados), backlog 25 (mais antiga há 53 dias), 7 abertos/1 concluído em 30 dias; MTTR/MTBF sem dados suficientes (esperado) |
 | Qualidade | `/qualidade` | OK | Abas Calibração, Segurança elétrica, Qualificação, Treinamento, Serviços concluídos; estado vazio "Nenhum certificado ainda" |
 | Equipamentos | `/ativos` | OK | Filtros de local, situação, cliente, família, nome, criticidade, chip e ANVISA; lista com 15 ativos |
@@ -17,10 +17,10 @@ Navegador: painel interno do app, oculto (página em segundo plano, por isso as 
 
 ## Pontos para olhar
 
-1. **CT-2026-00001 (Hospital Santa Clara) aparece com "Vencido" e "Vigente" ao mesmo tempo.** A vigência termina em 23/11/2026, ou seja, hoje.
+1. **Um contrato de demonstração aparece com "Vencido" e "Vigente" ao mesmo tempo.** A vigência termina em 23/11/2026, ou seja, hoje.
    **Causa:** `LinhaDeContrato` (`apps/web/src/features/comercial/contratos.tsx`) fazia `new Date(c.ends_on)`, que lê `2026-11-23` como meia-noite UTC (21 h do dia 22 em Brasília). A partir de ~9 h do último dia o arredondamento dava −1 e acendia "Vencido". O servidor (`contractTermStatus`) conta o último dia como vigente, por isso o selo "Vigente" ao lado.
    **Correção:** dias contados por calendário local com `diasAteOFimDaVigencia` (em `rotulos-contrato.ts`), barra de vigência com início/fim do dia local, e "Vence hoje" no último dia. Teste novo `apps/web/src/__tests__/vigencia-contrato.test.ts` compara a regra da tela com a do servidor.
-   **Situação:** mesclada em `main` pela PR #49 (`dbe053b`) e publicada no front de produção (`technecare-web`) em 23/11/2026. Conferido no site: o CT-2026-00001 mostra "Vence hoje" ao lado de "Vigente".
+   **Situação:** mesclada em `main` pela PR #49 (`dbe053b`) e publicada no front de produção (`technecare-web`) em 23/11/2026. Conferido no site: o contrato mostra "Vence hoje" ao lado de "Vigente".
 2. **Console: um 401 e dois 422 de recursos da API.** **Resolvido, não é defeito do sistema.** Os erros vieram de chamadas de medição feitas à mão na mesma aba durante a auditoria, não das telas. O console do navegador guarda mensagens de páginas anteriores, por isso apareceram junto da navegação.
    - Os dois 422 eram `GET /v1/insights/control-panel` sem `from` e `to`. A API respondeu com a validação esperada (`from`/`to`: "expected string, received undefined"). A tela do Painel sempre envia o período e recebe 200.
    - O 401 corresponde a uma chamada sem credencial ("Credencial ausente").
@@ -39,7 +39,7 @@ Front publicado por upload direto no Cloudflare Pages, sempre a partir de `main`
 
 | PR | Commit em `main` | Apps publicados | O que mudou no site | Conferido |
 | --- | --- | --- | --- | --- |
-| #49 | `dbe053b` | sistema | Contrato no último dia da vigência mostra "Vence hoje" em vez de "Vencido" | CT-2026-00001 com "Vence hoje" ao lado de "Vigente" |
+| #49 | `dbe053b` | sistema | Contrato no último dia da vigência mostra "Vence hoje" em vez de "Vencido" | contrato com "Vence hoje" ao lado de "Vigente" |
 | #51 | `d7884e6` | sistema, portal, campo | CSP libera o Web Analytics; Zaraz desligado nos hosts do Téchne Care (regra no Cloudflare) | Nenhum script do Zaraz; console sem avisos de CSP |
 | #52 | `021c8bb` | sistema, portal, campo | CSP passa a bloquear | Cabeçalho `Content-Security-Policy` nos três; 14 telas do sistema, fichas de OS e equipamento e entradas do portal e do campo sem violação |
 

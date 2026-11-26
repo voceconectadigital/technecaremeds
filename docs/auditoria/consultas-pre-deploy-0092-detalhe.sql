@@ -1,5 +1,5 @@
 -- Téchne Care — detalhe do contrato e dos planos afetados pela 0092 (25/11/2026). SOMENTE LEITURA.
--- Complementa consultas-pre-deploy-0092.sql. Mesmo modo de rodar. Não lê valores financeiros nem dados de pessoas.
+-- Complementa consultas-pre-deploy-0092.sql. Mesmo modo de rodar, informando o contrato: psql -v contrato=NUMERO. Não lê valores financeiros nem dados de pessoas.
 BEGIN TRANSACTION READ ONLY;
 SET LOCAL statement_timeout = '30s';
 
@@ -58,7 +58,7 @@ SELECT w.number, w.status_category::text AS situacao, w.source::text AS origem,
        w.scheduled_start::date AS agendada
   FROM aurora.work_orders w
  WHERE w.status_category NOT IN ('closed', 'cancelled', 'done', 'review')
-   AND w.customer_id IN (SELECT customer_id FROM aurora.contracts WHERE number = 'CT-2026-00001')
+   AND w.customer_id IN (SELECT customer_id FROM aurora.contracts WHERE number = :'contrato')
  ORDER BY w.number;
 
 ROLLBACK;

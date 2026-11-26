@@ -19,14 +19,14 @@ O resultado detalhado está em `docs/auditoria/homologacao-telas-2026-11-23.md`.
 
 ## 2. Contrato aparecia "Vencido" e "Vigente" ao mesmo tempo
 
-- **Sintoma:** o CT-2026-00001 (Hospital Santa Clara), com vigência até 23/11/2026, aparecia na lista com os dois selos no próprio último dia.
+- **Sintoma:** o contrato de demonstração, com vigência até 23/11/2026, aparecia na lista com os dois selos no próprio último dia.
 - **Causa:** `apps/web/src/features/comercial/contratos.tsx` lia a data final com `new Date('AAAA-MM-DD')`. O JavaScript entende isso como meia-noite UTC, que no Brasil é 21h do dia anterior. A partir de umas 9h do último dia, a conta dava −1 dia. O servidor conta o último dia como vigente, por isso o "Vigente" ao lado.
 - **Correção (PR #49):**
   - os dias passaram a ser contados pelo calendário (`diasAteOFimDaVigencia` em `rotulos-contrato.ts`);
   - a barra de vigência usa o dia local;
   - no último dia aparece "Vence hoje";
   - um teste novo confere que a tela e o servidor aplicam a mesma regra.
-- **Em produção:** publicado. O CT-2026-00001 mostrou "Vence hoje" ao lado de "Vigente".
+- **Em produção:** publicado. O contrato mostrou "Vence hoje" ao lado de "Vigente".
 
 ## 3. Erros 401 e 422 no console
 
